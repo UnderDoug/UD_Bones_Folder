@@ -1,0 +1,14 @@
+{
+    "id": "UD_Bones_Folder",
+    "title": "Bones",
+    "description": "Allows past Moon Kings to invade from beyond the veil.",
+    "version": "0.0.1",
+    "author": "{{K-g-G-Y-G-g-K alternation|UnderDoug}}",
+    "tags": "Feature,Expansion,Content",
+    "PreviewImage": "preview.png",
+    "Directories": [
+        {
+            "Paths": [ "/Common/", "/Textures/" ]
+        }
+    ]
+}
