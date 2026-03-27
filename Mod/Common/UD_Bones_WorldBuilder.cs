@@ -47,11 +47,11 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (BonesManager.GetSavedBonesInfo() is not IEnumerable<SaveGameInfo> savedBonesInfos
+            if (BonesManager.GetSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 
-            var saveWeights = new Dictionary<SaveGameInfo, int?>();
+            var saveWeights = new Dictionary<SaveBonesInfo, int?>();
             foreach (var savedBonesInfo in savedBonesInfos)
             {
                 if (savedBonesInfo.ModsEnabled.IsNullOrEmpty())
@@ -75,25 +75,45 @@ namespace XRL.World.WorldBuilders
                 saveWeights[savedBonesInfo] = Math.Max(1, saveWeight);
             }
 
-            int maxWeight = saveWeights.Aggregate(0, (a, n) => n.Value.GetValueOrDefault() > a ? n.Value.GetValueOrDefault() : a);
-            var bonesInfoBag = new BallBag<SaveGameInfo>();
+            int maxWeight = saveWeights.Aggregate(
+                seed: 0,
+                func: delegate (int accumulator, KeyValuePair<SaveBonesInfo, int?> next)
+                {
+                    if (next.Value is int value
+                        && value > accumulator)
+                        return value;
+                    return accumulator;
+                });
+
+            var bonesInfoBag = new BallBag<SaveBonesInfo>();
 
             foreach ((var savedBones, var bonesWeight) in saveWeights)
                 bonesInfoBag.Add(savedBones, bonesWeight ?? maxWeight);
 
-            if (bonesInfoBag.PluckOne() is not SaveGameInfo pluckedBonesInfo)
+            if (bonesInfoBag.PluckOne() is not SaveBonesInfo pluckedBonesInfo)
                 return;
 
-            if (BonesManager.ExhumeMoonKing(pluckedBonesInfo) is not BonesData bonesData)
-                return;
-
-            Location2D bonesParasang = Location2D.Get(bonesData.BonesZone.wX, bonesData.BonesZone.wY);
-            Location2D bonesZone = Location2D.Get(bonesParasang.X * 3 + bonesData.BonesZone.X, bonesParasang.Y * 3 + +bonesData.BonesZone.Y);
-            BoneZoneID = bonesData.BonesZone.ZoneID;
+            BoneZoneID = pluckedBonesInfo.ZoneID;
+            if (pluckedBonesInfo.ZoneRequest is ZoneRequest pluckedZR
+                && pluckedZR.Z > 20)
+            {
+                BoneZoneID = ZoneID.Assemble(
+                    World: pluckedZR.WorldID,
+                    ParasangX: pluckedZR.WorldX,
+                    ParasangY: pluckedZR.WorldY,
+                    ZoneX: pluckedZR.X,
+                    ZoneY: pluckedZR.Y,
+                    ZoneZ: Stat.Random(15, 20));
+            }
 
             The.ZoneManager.ClearZoneBuilders(BoneZoneID);
             The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);
-            The.ZoneManager.AddZoneBuilder(BoneZoneID, 4500, nameof(BoneZoneBuilder), nameof(BoneZoneBuilder.BonesData), bonesData);
+            The.ZoneManager.AddZoneBuilder(
+                ZoneID: BoneZoneID,
+                Priority: 4500,
+                Class: nameof(BonesZoneBuilder),
+                Key1: nameof(BonesZoneBuilder.SavedBonesInfo), Value1: pluckedBonesInfo,
+                Key2: nameof(BonesZoneBuilder.SavedBonesInfo), Value2: pluckedBonesInfo);
         }
     }
 }

@@ -15,16 +15,30 @@ namespace XRL.World.Effects
     {
         public const int MAX_DIST = 9999;
 
+        public const string REGAL_TITLE = "{{rainbow|Moon Regent}}";
+
+        public static string[] MoonKingColors = new string[7] { "r", "R", "W", "G", "B", "b", "m", };
+
         private int OriginalMaxKillDistance;
 
         private bool AlreadyUninfluencable;
 
         private bool AlreadyPreacher;
 
+        public string RegalTitle;
+
         public MoonKingFever()
         {
-            DisplayName = "{{rainbow|Moon King}} {{r|fever}}";
+            RegalTitle = REGAL_TITLE;
+            DisplayName = $"{RegalTitle} {"fever".Color("r")}";
             Duration = 1;
+        }
+
+        public MoonKingFever(string RegalTerm)
+            : this()
+        {
+            RegalTitle = $"Moon {RegalTerm ?? "Regent"}".Color("rainbow");
+            DisplayName = $"{$"{RegalTitle}"} {"fever".Color("r")}";
         }
 
         public override int GetEffectType()

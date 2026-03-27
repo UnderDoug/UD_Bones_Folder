@@ -47,8 +47,7 @@ namespace XRL.World.Parts
             if (E.Dying == ParentObject
                 && ParentObject == The.Player)
             {
-                ParentObject.SetIntProperty(BonesName, 1);
-                BonesManager.CollectBones(BonesName, ParentObject);
+                BonesManager.CollectBones(BonesName, E);
                 return true;
             }
             return false;

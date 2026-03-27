@@ -12,6 +12,9 @@
     <EmbeddedResource Remove="obj\**" />
     <None Remove="obj\**" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Mod\Textures\" />
+  </ItemGroup>
   <Import Project="../Mods.csproj" />
   <Import Project="../UD_Modding_Toolbox.csproj" />
 </Project>

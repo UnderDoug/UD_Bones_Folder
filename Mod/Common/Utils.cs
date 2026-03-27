@@ -16,8 +16,15 @@ namespace Bones.Mod
             => ThisMod.Error(Message)
             ;
 
+        public static void Error(object Context, Exception X)
+            => Error($"{Context}: {X}")
+            ;
+
         public static void Warn(object Message)
             => ThisMod.Warn(Message)
             ;
+
+        public static void Log(object Message)
+            => UnityEngine.Debug.Log(Message);
     }
 }

@@ -8,6 +8,9 @@ using XRL.Collections;
 using XRL.UI;
 using XRL.World;
 using XRL.World.AI.Pathfinding;
+using XRL.World.Capabilities;
+using XRL.World.Effects;
+using XRL.World.Parts;
 using XRL.World.ZoneParts;
 
 namespace Bones.Mod
@@ -52,6 +55,16 @@ namespace Bones.Mod
                 if (cellObjects[j] is GameObject gameObject
                     && Cell.ShouldWrite(gameObject))
                 {
+                    if (gameObject.IsPlayer())
+                    {
+                        gameObject.RestorePristineHealth(SkipEffects: true);
+
+                        gameObject = BonesManager.CreateMoonKing(
+                            Player: gameObject,
+                            TargetCell: Cell);
+                        gameObject.ApplyEffect(new MoonKingFever());
+                    }
+
                     Writer.WriteGameObject(gameObject);
                 }
             }
@@ -160,6 +173,64 @@ namespace Bones.Mod
             return GameObject;
         }
 
+        public static void WriteBonesZonePart(this SerializationWriter Writer, IZonePart ZonePart)
+        {
+            if (ZonePart == null)
+                throw new ArgumentNullException(nameof(ZonePart));
+
+            if (Writer == null)
+                throw new ArgumentNullException(nameof(Writer));
+
+            var block = Writer.StartBlock();
+            var type = ZonePart.GetType();
+            try
+            {
+                Writer.WriteTokenized(type);
+                ZonePart.Write(ZonePart.ParentZone, Writer);
+            }
+            catch (Exception x)
+            {
+                block.Reset();
+                MetricsManager.LogAssemblyError(type, "Skipping failed serialization of zone part '" + type.FullName + "': " + x);
+            }
+            finally
+            {
+                block.Dispose();
+            }
+        }
+
+        public static IZonePart ReadBonesZonePart(this SerializationReader Reader, Zone Zone)
+        {
+
+            if (Reader == null)
+                throw new ArgumentNullException(nameof(Reader));
+
+            Reader.StartBlock(out var Position, out var Length);
+            if (Length == 0)
+                return null;
+
+            if (Zone == null)
+                throw new ArgumentNullException(nameof(Reader));
+
+            Type type = null;
+            IZonePart zonePart = null;
+            try
+            {
+                type = Reader.ReadTokenizedType();
+                zonePart = Activator.CreateInstance(type) as IZonePart;
+                zonePart.ParentZone = Zone;
+                zonePart.Read(Zone, Reader);
+            }
+            catch (Exception exception)
+            {
+                if (zonePart == null
+                    || !zonePart.ReadError(exception, Reader, Position, Length))
+                    Reader.SkipBlock(exception, type, Position, Length);
+            }
+
+            return zonePart;
+        }
+
         public static void WriteBonesZone(this Zone Zone, SerializationWriter Writer)
         {
             if (Zone == null)
@@ -232,15 +303,8 @@ namespace Bones.Mod
                 Zone.Parts = new List<IZonePart>(partsCount);
                 for (int i = 0; i < partsCount; i++)
                 {
-                    try
-                    {
-                        if (IZonePart.Load(Zone, Reader) is IZonePart zonePart)
-                            Zone.Parts.Add(zonePart);
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Error(x);
-                    }
+                    if (IZonePart.Load(Zone, Reader) is IZonePart zonePart)
+                        Zone.Parts.Add(zonePart);
                 }
             }
             return Zone;
@@ -248,8 +312,16 @@ namespace Bones.Mod
 
         public static Zone ReadBonesZone(this SerializationReader Reader, string ZoneID = null)
         {
-            Type type = Reader.ReadTokenizedType();
-            Zone zone = Activator.CreateInstance(type, nonPublic: true) as Zone;
+            if (Reader == null)
+                throw new ArgumentNullException(nameof(Reader));
+
+            var type = Reader.ReadTokenizedType();
+
+            if (Activator.CreateInstance(type, nonPublic: true) is not Zone zone)
+            {
+                Utils.Error($"Failed to create instance of {nameof(Zone)} during Deserialization.");
+                return null;
+            }
 
             if (!ZoneID.IsNullOrEmpty())
                 zone.ZoneID = ZoneID;

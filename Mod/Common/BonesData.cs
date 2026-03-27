@@ -5,8 +5,13 @@ using System.Text;
 
 using Genkit;
 
+using Qud.API;
+
+using XRL;
 using XRL.Rules;
 using XRL.World;
+using XRL.World.AI;
+using XRL.World.AI.GoalHandlers;
 using XRL.World.Capabilities;
 using XRL.World.Effects;
 using XRL.World.Parts;
@@ -16,46 +21,42 @@ using static XRL.World.Cell;
 
 namespace Bones.Mod
 {
-    public class BonesData
+    [Serializable]
+    public class BonesData : IComposite
     {
+        public static BonesManager BonesManager => BonesManager.System;
         public string BonesID;
         public string ZoneID;
         public Zone BonesZone;
-        public GameObject MoonKing;
 
         public BonesData()
         { }
 
-        public BonesData(string BonesID, SerializationReader Reader)
+        public BonesData(string BonesID, string ZoneID, Zone BonesZone)
             : this()
         {
             this.BonesID = BonesID;
-            ZoneID = Reader.ReadOptimizedString();
-
-            try
-            {
-                if (Reader.ReadBonesZone(ZoneID) is Zone loadedZone)
-                {
-                    BonesZone = loadedZone;
-                    if (BonesZone.Z > 21)
-                        BonesZone.Z = Stat.Random(16, 21);
-                }
-            }
-            catch (Exception x)
-            {
-                Utils.Error(x);
-            }
+            this.ZoneID = ZoneID;
+            this.BonesZone = BonesZone;
         }
 
-        public bool Apply(Zone Zone)
+        public static BonesData GetFromSavedBonesInfo(string ZoneID, SaveBonesInfo SavedBonesInfo)
+            => BonesManager?.ExhumeMoonKing(ZoneID, SavedBonesInfo)
+            ;
+
+        public bool Apply(Zone Zone, out GameObject MoonKing)
         {
+            MoonKing = null;
             if (BonesZone == null)
                 return false;
 
-            foreach (var zonePart in BonesZone.Parts ?? Enumerable.Empty<IZonePart>())
+            if (BonesZone.Parts != null)
             {
-                Zone.Parts ??= new();
-                Zone.AddPart(zonePart, true);
+                foreach (var zonePart in BonesZone.Parts)
+                {
+                    Zone.Parts ??= new();
+                    Zone.AddPart(zonePart, true);
+                }
             }
 
             foreach (var cell in Zone.GetCells())
@@ -76,33 +77,32 @@ namespace Bones.Mod
 
                 foreach (var bonesObject in bonesObjects)
                 {
-                    if (bonesObject.TryGetIntProperty(BonesSaver.BonesName, out int result)
-                        && result == 1)
+                    if (bonesObject.GetStringProperty(BonesSaver.BonesName, "false").EqualsNoCase("true"))
                     {
-                        MoonKing = Cloning.GenerateClone(
-                            Original: bonesObject,
-                            Cell: cell,
-                            DuplicateGear: true,
-                            BecomesCompanion: false,
-                            Budded: false,
-                            Context: BonesSaver.BonesName);
+                        MoonKing = bonesObject;
+                        MoonKing?.AddOpinion<OpinionMollify>(The.Player);
+                        The.Player.AddOpinion<OpinionMollify>(MoonKing);
 
-                        MoonKing.RestorePristineHealth(SkipEffects: true);
+                        if (MoonKing.TryGetPart<Description>(out var description))
+                            description.Short = "It was you.";
+
+                        if (The.Player.FireEvent(Event.New("EvilTwinAttitudeSetup")
+                            .SetParameter("Original", The.Player)
+                            .SetParameter("Twin", MoonKing)
+                            .SetParameter("Actor", The.Player)))
+                        {
+                            var brain = MoonKing.Brain;
+                            brain?.PushGoal(new Kill(The.Player));
+                            BonesManager.ApplyHostility(The.Player, brain, 0);
+                        }
+
+                        if (MoonKing.Render is Render render)
+                            render.Visible = true;
                     }
-                    else
-                        cell.AddObject(bonesObject.DeepCopy(true));
+                    cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
 
                     bonesObject?.Obliterate();
                 }
-
-            }
-            if (MoonKing != null)
-            {
-                if (MoonKing.GetPartsDescendedFrom<IPlayerPart>() is IEnumerable<IPlayerPart> playerParts)
-                    foreach (var playerPart in playerParts)
-                        MoonKing.RemovePart(playerPart);
-
-                MoonKing.ApplyEffect(new MoonKingFever());
             }
             return true;
         }
