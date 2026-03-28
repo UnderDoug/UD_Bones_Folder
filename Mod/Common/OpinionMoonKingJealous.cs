@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 using XRL;
 using XRL.World;
 using XRL.World.AI;
+using XRL.World.Effects;
 
 namespace Bones.Mod
 {
@@ -30,7 +29,7 @@ namespace Bones.Mod
         }
 
         public override string GetText(GameObject Actor)
-            => "Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {{rainbow|Moon King}} but =subject.subjective= not me!"
+            => $"Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {MoonKingFever.REGAL_TITLE} but =subject.subjective= not me!"
                 .StartReplace()
                 .AddObject(Actor)
                 .ToString()

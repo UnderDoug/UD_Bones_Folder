@@ -1,21 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-using Genkit;
-
-using Qud.API;
 
 using XRL;
-using XRL.Rules;
 using XRL.World;
 using XRL.World.AI;
 using XRL.World.AI.GoalHandlers;
-using XRL.World.Capabilities;
-using XRL.World.Effects;
 using XRL.World.Parts;
-using XRL.World.ZoneParts;
 
 using static XRL.World.Cell;
 
@@ -86,10 +75,10 @@ namespace Bones.Mod
                         if (MoonKing.TryGetPart<Description>(out var description))
                             description.Short = "It was you.";
 
-                        if (The.Player.FireEvent(Event.New("EvilTwinAttitudeSetup")
-                            .SetParameter("Original", The.Player)
-                            .SetParameter("Twin", MoonKing)
-                            .SetParameter("Actor", The.Player)))
+                        if (The.Player.FireEvent(Event.New($"{nameof(BonesSaver.BonesName)}AttitudeSetup")
+                                .SetParameter(nameof(MoonKing), MoonKing)
+                                .SetParameter(nameof(The.Player), The.Player))
+                            )
                         {
                             var brain = MoonKing.Brain;
                             brain?.PushGoal(new Kill(The.Player));
@@ -98,6 +87,10 @@ namespace Bones.Mod
 
                         if (MoonKing.Render is Render render)
                             render.Visible = true;
+
+                        MoonKing.Energy.BaseValue = 0;
+
+
                     }
                     cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
 
@@ -108,7 +101,7 @@ namespace Bones.Mod
         }
 
         public void Cremate()
-            => BonesManager.System?.CremateMoonKing(BonesID)
+            => BonesManager?.CremateMoonKing(BonesID)
             ;
     }
 }

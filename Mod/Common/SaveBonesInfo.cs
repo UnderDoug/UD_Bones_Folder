@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 using Platform.IO;
 
 using Qud.API;
+
+using UnityEngine;
 
 using XRL;
 using XRL.World;
@@ -25,6 +26,13 @@ namespace Bones.Mod
 
         public string ZoneID;
         public string ThirdPersonDeathReason;
+
+        public string FileName;
+
+        public string Pending => GetBonesJSON()?.Pending;
+
+        public bool IsPending => Pending?.EqualsNoCase($"{false}") is not true;
+
 
         public ZoneRequest ZoneRequest => new(ZoneID);
 
@@ -80,7 +88,34 @@ namespace Bones.Mod
                   Source: Source)
         { }
 
-        public static SaveBonesInfo GetSaveBonesInfo(string Directory)
+        public static async Task SetPending(SaveBonesInfo BonesInfo, string Pending)
+        {
+            if (Pending.IsNullOrEmpty())
+                Pending = $"{false}";
+
+            if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            {
+                Utils.Warn($"Attempted to set {nameof(SaveBonesJSON)}.{nameof(Pending)} to {Pending ?? $"{false}"} for null {nameof(SaveBonesJSON)}.");
+                return;
+            }
+
+            if (bonesJSON.Pending.EqualsNoCase($"{false}") != Pending.EqualsNoCase($"{false}"))
+            {
+                bonesJSON.Pending = Pending;
+                string bonesFilePath = Path.Combine(BonesInfo.Directory, BonesInfo.FileName);
+                if (await File.ExistsAsync(bonesFilePath))
+                    File.WriteAllText(bonesFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
+            }
+            else
+            {
+                string toValue = "a GameID when it already has one";
+                if (bonesJSON.Pending.EqualsNoCase($"{false}"))
+                    toValue = $"\"{false}\" when it already is";
+                Utils.Warn($"Attempted to set {DataManager.SanitizePathForDisplay(BonesInfo.Directory)} {nameof(SaveBonesJSON)}.{nameof(Pending)} to {toValue}.");
+            }
+        }
+
+        public static async Task<SaveBonesInfo> GetSaveBonesInfo(string Directory)
         {
             try
             {
@@ -93,22 +128,22 @@ namespace Bones.Mod
                     if (Path.Combine(Directory, infoFile) is string path
                         && File.Exists(path))
                     {
-                        return SaveBonesJSON.ReadSaveBonesJson(Directory, path).Result;
+                        return await SaveBonesJSON.ReadSaveBonesJson(Directory, path);
                     }
                 }
-                if (!System.IO.Directory.EnumerateFileSystemEntries(Directory).Any(f => !f.EndsWith("Cache.db")))
+                if (!Platform.IO.Directory.EnumerateFiles(Directory).Any(f => !f.EndsWith("Cache.db")))
                 {
                     try
                     {
-                        System.IO.Directory.Delete(Directory, recursive: true);
+                        Platform.IO.Directory.Delete(Directory);
                     }
-                    catch (Exception message)
+                    catch (Exception x)
                     {
-                        MetricsManager.LogWarning(message);
+                        Utils.Warn(x);
                     }
                 }
                 else
-                    MetricsManager.LogWarning($"Weird bones directory with no .json file present: {DataManager.SanitizePathForDisplay(Directory)}");
+                    Utils.Warn($"Weird bones directory with no .json file present: {DataManager.SanitizePathForDisplay(Directory)}");
 
             }
             catch (ThreadInterruptedException x)
@@ -117,9 +152,17 @@ namespace Bones.Mod
             }
             catch (Exception x)
             {
-                MetricsManager.LogWarning(x);
+                Utils.Warn(x);
             }
             return null;
+        }
+
+        public SaveBonesJSON GetBonesJSON()
+            => json as SaveBonesJSON;
+
+        public void Cremate()
+        {
+            BonesManager.DeleteBonesInfoDirectory(Directory);
         }
     }
 }

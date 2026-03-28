@@ -62,7 +62,6 @@ namespace Bones.Mod
                         gameObject = BonesManager.CreateMoonKing(
                             Player: gameObject,
                             TargetCell: Cell);
-                        gameObject.ApplyEffect(new MoonKingFever());
                     }
 
                     Writer.WriteGameObject(gameObject);

@@ -1,19 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 
-using Genkit;
-
-using Qud.API;
-
-using XRL.Language;
 using XRL.Rules;
 using XRL.UI;
 using XRL.Wish;
-using XRL.World.Parts;
 using XRL.World.ZoneBuilders;
 
 using Bones.Mod;
-using System.Linq;
 
 namespace XRL.World.WorldBuilders
 {
@@ -47,7 +41,7 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (BonesManager.GetSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
+            if (BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 
@@ -106,14 +100,15 @@ namespace XRL.World.WorldBuilders
                     ZoneZ: Stat.Random(15, 20));
             }
 
-            The.ZoneManager.ClearZoneBuilders(BoneZoneID);
-            The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);
-            The.ZoneManager.AddZoneBuilder(
+            SaveBonesInfo.SetPending(pluckedBonesInfo, The.Game?.GameID).Wait();
+
+            // The.ZoneManager.ClearZoneBuilders(BoneZoneID);
+            // The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);
+            The.ZoneManager.AddZonePostBuilder(
                 ZoneID: BoneZoneID,
-                Priority: 4500,
                 Class: nameof(BonesZoneBuilder),
-                Key1: nameof(BonesZoneBuilder.SavedBonesInfo), Value1: pluckedBonesInfo,
-                Key2: nameof(BonesZoneBuilder.SavedBonesInfo), Value2: pluckedBonesInfo);
+                Key1: nameof(BonesZoneBuilder.SaveBonesInfoID), Value1: pluckedBonesInfo.ID,
+                Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pluckedBonesInfo.ZoneID);
         }
     }
 }

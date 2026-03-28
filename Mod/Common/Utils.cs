@@ -12,6 +12,11 @@ namespace Bones.Mod
 
         public static ModInfo ThisMod => ModManager.GetMod(MOD_ID);
 
+        public static string BothBonesLocations 
+            => $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSyncPath)} -OR- " +
+            $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSavePath)}"
+            ;
+
         public static void Error(object Message)
             => ThisMod.Error(Message)
             ;
@@ -22,6 +27,10 @@ namespace Bones.Mod
 
         public static void Warn(object Message)
             => ThisMod.Warn(Message)
+            ;
+
+        public static void Info(object Message)
+            => MetricsManager.LogModInfo(ThisMod, Message)
             ;
 
         public static void Log(object Message)

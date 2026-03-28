@@ -1,17 +1,6 @@
 ﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 using Bones.Mod;
-
-using Qud.API;
-
-using XRL.UI;
 
 namespace XRL.World.Parts
 {
@@ -47,7 +36,7 @@ namespace XRL.World.Parts
             if (E.Dying == ParentObject
                 && ParentObject == The.Player)
             {
-                BonesManager.CollectBones(BonesName, E);
+                BonesManager.HoardBones(BonesName, E);
                 return true;
             }
             return false;

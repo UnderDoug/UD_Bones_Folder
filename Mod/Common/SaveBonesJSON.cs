@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 using System.Threading.Tasks;
+
+using Platform.IO;
 
 using Qud.API;
 
@@ -16,9 +16,13 @@ namespace Bones.Mod
         public string ZoneID;
         public string ThirdPersonDeathReason;
 
+        public string Pending;
+
         public SaveBonesJSON()
             : base()
-        { }
+        { 
+            Pending = $"{false}";
+        }
 
         public SaveBonesJSON(
             string ZoneID,
@@ -90,7 +94,7 @@ namespace Bones.Mod
             SaveBonesJSON json = null;
             try
             {
-                json = await Platform.IO.File.ReadAllJsonAsync<SaveBonesJSON>(FilePath);
+                json = await File.ReadAllJsonAsync<SaveBonesJSON>(FilePath);
             }
             catch (Exception x)
             {
@@ -121,6 +125,7 @@ namespace Bones.Mod
                 SaveTime = json.SaveTime,
                 ModsEnabled = json.ModsEnabled,
                 ZoneID = json.ZoneID,
+                FileName = FilePath,
             };
             if (json.SaveVersion < 395
                 || json.SaveVersion > 400)

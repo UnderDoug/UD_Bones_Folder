@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
@@ -9,6 +8,8 @@ using System.Threading.Tasks;
 
 using Cysharp.Text;
 
+using Platform;
+using Platform.IO;
 using UnityEngine;
 
 using Qud.API;
@@ -16,30 +17,42 @@ using Qud.UI;
 
 using XRL;
 using XRL.Collections;
-using XRL.Core;
 using XRL.Rules;
 using XRL.UI;
 using XRL.Wish;
 using XRL.World;
 using XRL.World.AI;
-using XRL.World.AI.GoalHandlers;
 using XRL.World.Effects;
 using XRL.World.Parts;
-using XRL.World.Parts.Mutation;
 
 using GameObject = XRL.World.GameObject;
 using ColorUtility = ConsoleLib.Console.ColorUtility;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
-using Event = XRL.World.Event;
+using System.Threading;
 
 namespace Bones.Mod
 {
+    [HasModSensitiveStaticCache]
     [HasGameBasedStaticCache]
     [HasWishCommand]
     [Serializable]
     public class BonesManager : IScribedSystem
     {
-        internal static string BonesPath => DataManager.SavePath("Bones");
+        public static string BonesSyncPath => DataManager.SyncedPath("Bones");
+
+        public static string BonesSavePath => DataManager.SavePath("Bones");
+
+        [GameBasedStaticCache]
+        private static List<string> _SaveGameIDs = null;
+
+        public static IEnumerable<string> SaveGameIDs => _SaveGameIDs ??= SavesAPI.GetSavedGameInfo()?.Result?.Select(info => info.ID)?.ToList();
+
+
+        protected static string[] BonesPaths = new string[]
+        {
+            BonesSyncPath,
+            BonesSavePath,
+        };
 
         [GameBasedStaticCache(CreateInstance = false)]
         public static BonesManager System;
@@ -72,35 +85,45 @@ namespace Bones.Mod
             else
                 The.Game?.AddSystem(System);
 
-            bool success = false;
-            try
-            {
-                if (System != null)
-                    Loading.LoadTask($"Preparing Bones", System.PrepareBonesPile);
-
-                success = true;
-            }
-            catch (Exception x)
-            {
-                MetricsManager.LogCallingModError($"{nameof(BonesManagerSystemInit)}: {x}");
-                success = false;
-            }
-            finally
-            {
-                if (The.Game != null)
-                    MetricsManager.LogModInfo(ModManager.GetMod(), $"{nameof(BonesManager)}.{nameof(BonesManagerSystemInit)} finished... {(success ? "success!" : "failure!")}");
-            }
+            if (System != null)
+                Loading.LoadTask($"Preparing Bones", System.PrepareBonesPile);
+            else
+            if (The.Game != null)
+                Utils.Error($"Failed to load {nameof(BonesManager)}.");
         }
+
         public void PrepareBonesPile()
         {
             RunningMods = ModManager.GetRunningMods().ToList();
+
+            // TidyBonesPile();
+        }
+
+        // [ModSensitiveCacheInit]
+        public static void TidyBonesPile()
+        {
+            using var saveGameInfoIDs = ScopeDisposedList<string>.GetFromPool();
+
+            foreach (var saveInfo in SavesAPI.GetSavedGameInfo().Result)
+                saveGameInfoIDs.Add(saveInfo.ID);
+
+            var bonesInfos = GetPendingSaveBonesInfoAsync().Result;
+
+            foreach (var bonesInfo in bonesInfos)
+            {
+                if (!saveGameInfoIDs.Contains(bonesInfo.Pending))
+                {
+                    Utils.Info($"Save file {bonesInfo.Pending} missing without encountering bones; bones no longer pending.");
+                    SaveBonesInfo.SetPending(bonesInfo, $"{false}").Wait();
+                }
+            }
         }
 
         public string GetBonesDirectory(string FileName = null)
         {
             if (BonesDirectory == null)
             {
-                string path = Path.Combine(BonesPath, The.Game.GameID);
+                string path = Path.Combine(BonesSyncPath, The.Game.GameID);
                 try
                 {
                     Directory.CreateDirectory(path);
@@ -122,133 +145,214 @@ namespace Bones.Mod
             => GetBonesDirectory($"{FileName}.sav.gz")
             ;
 
-        public string GetCacheFileFullPath(string FileName)
+        public string GetInfoFileFullPath(string FileName)
             => GetBonesDirectory($"{FileName}.json")
             ;
 
-        public Task CollectBones(string GameName, IDeathEvent DeathEvent)
+        public Task HoardBones(string GameName, IDeathEvent DeathEvent)
         {
-            var task = SaveTask;
-
-            if (task != null
-                && !task.IsCompleted)
-                return null;
-
-            string message = "Hoarding Bones";
-
-            Loading.Status status = Loading.StartTask(message);
-
-            if (The.Game is XRLGame game
-                && DeathEvent?.Dying?.CurrentZone is Zone currentZone
-                && SerializationWriter.Get() is SerializationWriter writer)
+            using (DelayShutdown.AutoScopeForceMainThread())
             {
-                // Clear object ID's so they get a new one once re-serialzed (hopefully this works...)
-                foreach (var zoneGO in currentZone.GetObjects())
-                {
-                    zoneGO._BaseID = 0;
-                    zoneGO.RemoveStringProperty("id");
-                }
+                var task = SaveTask;
 
-                string bonesFilePath = GetSaveFileFullPath(GameName);
-                string bonesCachePath = GetCacheFileFullPath(GameName);
-                try
+                if (task != null
+                    && !task.IsCompleted)
+                    return null;
+
+                string message = "Hoarding Bones";
+
+                Loading.Status status = Loading.StartTask(message);
+
+                if (The.Game is XRLGame game
+                    && DeathEvent?.Dying?.CurrentZone is Zone currentZone
+                    && SerializationWriter.Get() is SerializationWriter writer)
                 {
-                    if (game.WallTime != null)
+                    // Clear object ID's so they get a new one once re-serialzed (hopefully this works...)
+                    foreach (var zoneGO in currentZone.GetObjects())
                     {
-                        game._walltime += game.WallTime.ElapsedTicks;
-                        game.WallTime.Reset();
-                        game.WallTime.Start();
-                    }
-                    else
-                    {
-                        game.WallTime = new Stopwatch();
-                        game.WallTime.Start();
+                        zoneGO._BaseID = 0;
+                        zoneGO.RemoveStringProperty("id");
                     }
 
-                    var saveBonesInfo = new SaveBonesJSON(DeathEvent, The.Game.SaveGameInfo());
-
-                    writer.Start(400);
-                    writer.Write(123457);
-
-                    writer.Write(The.Game.GetType().Assembly.GetName().Version.ToString());
-
-                    writer.WriteBonesZone(currentZone);
-
-                    writer.FinalizeWrite();
-
-                    MetricsManager.LogInfo($"Done {message} in {game.WallTime.ElapsedMilliseconds}ms");
-                    bool restoreBackup = false;
+                    string bonesFilePath = GetSaveFileFullPath(GameName);
+                    string bonesInfoPath = GetInfoFileFullPath(GameName);
                     try
                     {
-                        File.WriteAllText(bonesCachePath, JsonUtility.ToJson(saveBonesInfo, prettyPrint: true));
-                        if (File.Exists(bonesFilePath))
+                        if (game.WallTime != null)
                         {
-                            File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
-                            restoreBackup = true;
+                            game._walltime += game.WallTime.ElapsedTicks;
+                            game.WallTime.Reset();
+                            game.WallTime.Start();
                         }
-                        using (var bonesFile = File.Create(bonesFilePath))
+                        else
                         {
-                            using var gZipStream = new GZipStream(bonesFile, CompressionLevel.Fastest);
-                            byte[] buffer = writer.Stream.GetBuffer();
-                            gZipStream.Write(buffer, 0, (int)writer.Stream.Position);
+                            game.WallTime = new Stopwatch();
+                            game.WallTime.Start();
                         }
 
-                        game.CheckSave(bonesFilePath);
+                        var saveBonesJSON = new SaveBonesJSON(DeathEvent, The.Game.SaveGameInfo());
+
+                        writer.Start(400);
+                        writer.Write(123457);
+
+                        writer.Write(The.Game.GetType().Assembly.GetName().Version.ToString());
+
+                        writer.WriteBonesZone(currentZone);
+
+                        writer.FinalizeWrite();
+
+                        bool restoreBackup = false;
+                        try
+                        {
+                            File.WriteAllText(bonesInfoPath, JsonUtility.ToJson(saveBonesJSON, prettyPrint: true));
+                            if (File.Exists(bonesFilePath))
+                            {
+                                File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
+                                restoreBackup = true;
+                            }
+                            using (var memoryStream = new System.IO.MemoryStream())
+                            {
+                                using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
+                                {
+                                    byte[] buffer = writer.Stream.GetBuffer();
+                                    gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
+                                }
+                                File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
+                            }
+                            MemoryHelper.GCCollect();
+                            game.CheckSave(bonesFilePath);
+                        }
+                        catch (Exception x)
+                        {
+                            BonesHoardError(bonesFilePath, x, restoreBackup);
+                        }
+                        finally
+                        {
+                            SerializationWriter.Release(writer);
+                        }
+                        task = null;
                     }
                     catch (Exception x)
                     {
-                        game.SaveGameError(bonesFilePath, x, restoreBackup);
+                        SerializationWriter.Release(writer);
+                        BonesHoardError(bonesFilePath, x);
+                        task = SaveTask = Task.FromException(x);
                     }
                     finally
                     {
-                        SerializationWriter.Release(writer);
+                        MemoryHelper.GCCollectMax();
+                        status.Dispose();
                     }
-                    task = null;
+                }
+                return task;
+            }
+        }
+
+        public void BonesHoardError(
+            string Path,
+            Exception Exception,
+            bool RestoreBackup = false
+            )
+        {
+            Utils.Error(nameof(HoardBones), Exception);
+            if (RestoreBackup
+                && File.Exists(Path + ".bak"))
+            {
+                try
+                {
+                    File.Copy(Path + ".bak", Path, overwrite: true);
                 }
                 catch (Exception x)
                 {
-                    SerializationWriter.Release(writer);
-                    game.SaveGameError(bonesFilePath, x);
-                    task = (SaveTask = Task.FromException(x));
-                }
-                finally
-                {
-                    MemoryHelper.GCCollectMax();
-                    status.Dispose();
+                    Utils.Warn($"Failed to restore backup bones file. {x}");
                 }
             }
-            return task;
+
+            Popup.ShowFailAsync($"There was a fatal exception attempting to save some bones. {Utils.ThisMod.DisplayTitle} attempted to recover them.\n" +
+                $"You ought to check out your bones folder for recent changes ({Utils.BothBonesLocations})\n\n" +
+                $"It'd be helpful if you could contact {Utils.ThisMod.Manifest.Author}, either via GitHub or on the steam workshop, because they'll probably want a copy of the problem bones.");
         }
 
-        public IEnumerable<SaveBonesInfo> GetSavedBonesInfo()
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSavedBonesInfoAsync(Predicate<SaveBonesInfo> Where, bool TidyPending = false)
         {
-            using var saveGameInfo = ScopeDisposedList<SaveBonesInfo>.GetFromPool();
-            try
+            var saveBonesInfos = new List<SaveBonesInfo>();
+            string currentPath = null;
+            
+            foreach (string bonesPath in BonesPaths)
             {
-                if (!Directory.Exists(BonesPath))
-                    yield break;
+                try
+                {
+                    currentPath = bonesPath;
+                    if (!Directory.Exists(bonesPath))
+                        continue;
 
-                foreach (string bonesFolder in Directory.EnumerateDirectories(BonesPath))
-                    if (SaveBonesInfo.GetSaveBonesInfo(bonesFolder) is SaveBonesInfo bonesInfo)
-                        saveGameInfo.Add(bonesInfo);
-            }
-            catch (Exception x)
-            {
-                SeriousBonesError(x, BonesPath);
-                saveGameInfo.Clear();
+                    var enumerationResult = await Folder.EnumerateDirectoriesAsync(bonesPath);
+                    enumerationResult.LogErrorIfFailed();
+
+                    string[] directories = enumerationResult.directories;
+
+                    for (int i = 0; i < directories.Length; i++)
+                    {
+                        if (directories[i] is string bonesFolder
+                            && await SaveBonesInfo.GetSaveBonesInfo(bonesFolder) is SaveBonesInfo bonesInfo)
+                        {
+                            if (TidyPending
+                                && SaveGameIDs?.Contains(bonesInfo.Pending) is false)
+                                SaveBonesInfo.SetPending(bonesInfo, null).Wait();
+
+                            if (Where?.Invoke(bonesInfo) is not false)
+                                saveBonesInfos.Add(bonesInfo);
+                        }
+                    }
+                }
+                catch (Exception x)
+                {
+                    SeriousBonesError(x, currentPath);
+                    saveBonesInfos.Clear();
+                }
             }
 
-            if (!saveGameInfo.IsNullOrEmpty())
-                foreach (var bonesInfo in saveGameInfo)
-                    yield return bonesInfo;
+            return saveBonesInfos;
         }
+
+        public static IEnumerable<SaveBonesInfo> GetSavedBonesInfo(Predicate<SaveBonesInfo> Where)
+            => GetSavedBonesInfoAsync(Where)?.Result
+            ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
+
+        public static async Task<IEnumerable<SaveBonesInfo>> GetPendingSaveBonesInfoAsync()
+            => await GetSavedBonesInfoAsync(bones => bones.IsPending)
+            ;
+
+        public static IEnumerable<SaveBonesInfo> GetPendingSaveBonesInfo()
+            => GetPendingSaveBonesInfoAsync()?.Result
+            ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
+
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSavedBonesInfoAsync()
+            => await GetSavedBonesInfoAsync(null)
+            ;
+
+        public static IEnumerable<SaveBonesInfo> GetSavedBonesInfo()
+            => GetSavedBonesInfoAsync()?.Result
+            ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
+
+        public static async Task<IEnumerable<SaveBonesInfo>> GetAvailableSavedBonesInfoAsync()
+            => await GetSavedBonesInfoAsync(bones => !bones.IsPending, TidyPending: true)
+            ;
+
+        public static IEnumerable<SaveBonesInfo> GetAvailableSavedBonesInfo()
+            => GetAvailableSavedBonesInfoAsync()?.Result
+            ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
 
         private static void SeriousBonesError(Exception Ex, string Path)
         {
             MetricsManager.LogError("Error checking for save files", Ex);
             using var sB = ZString.CreateStringBuilder();
             if (Ex is UnauthorizedAccessException
-                || Ex is IOException)
+                || Ex is System.IO.IOException)
             {
                 sB.AppendLine("There was a permission error while trying to access your bones directory.");
                 sB.AppendLine();
@@ -278,26 +382,29 @@ namespace Bones.Mod
                 title: "Error reading bones location.");
         }
 
-        public BonesData ExhumeMoonKing(
+        public async Task<BonesData> ExhumeMoonKingAsync(
             string ZoneID,
             SaveBonesInfo SaveBonesInfo
             )
         {
             string savGz = $"{BonesSaver.BonesName}.sav.gz";
             string savGzBak = $"{savGz}.bak";
+
             string fullBonesPath = Path.Combine(SaveBonesInfo.Directory, savGz);
             string fullBonesBak = Path.Combine(SaveBonesInfo.Directory, savGzBak);
             string bonesBakDisplay = DataManager.SanitizePathForDisplay(fullBonesBak);
             string directoryDisplay = DataManager.SanitizePathForDisplay(SaveBonesInfo.Directory);
+
             int versionNumber = -1;
             string versionString = "{unknown}";
+
             BonesData bonesData = null;
             try
             {
-                if (!File.Exists(fullBonesPath))
+                if (!await File.ExistsAsync(fullBonesPath))
                 {
                     fullBonesPath = Path.Combine(SaveBonesInfo.Directory, $"{BonesSaver.BonesName}.sav");
-                    if (!File.Exists(fullBonesPath))
+                    if (!await File.ExistsAsync(fullBonesPath))
                     {
                         Utils.Error($"No saved game exists. ({directoryDisplay})");
                         return bonesData;
@@ -310,31 +417,19 @@ namespace Bones.Mod
 
                 try
                 {
-                    using (FileStream fileStream = File.OpenRead(fullBonesPath))
-                    {
-                        var stream = reader.Stream;
-                        bool isGZip = false;
-                        if (fileStream.Length >= 2)
-                        {
-                            Span<byte> buffer = stackalloc byte[2];
-                            fileStream.Read(buffer);
+                    using var stream = File.OpenRead(fullBonesPath);
+                    var memory = reader.Stream;
 
-                            if (buffer[0] == 31
-                                && buffer[1] == 139)
-                                isGZip = true;
+                    if (stream.Length >= 2
+                        && stream.ReadByte() == 31)
+                        stream.ReadByte();
 
-                            fileStream.Position = 0L;
-                        }
-                        if (isGZip)
-                        {
-                            using var gZipStream = new GZipStream(fileStream, CompressionMode.Decompress);
-                            gZipStream.CopyTo(stream);
-                        }
-                        else
-                            fileStream.CopyTo(stream);
+                    stream.Position = 0L;
 
-                        stream.Position = 0L;
-                    }
+                    using var gZipStream = new GZipStream(stream, CompressionMode.Decompress);
+                    await gZipStream.CopyToAsync(memory);
+
+                    memory.Position = 0L;
 
                     reader.Start();
                     if (reader.ReadInt32() != 123457)
@@ -455,13 +550,24 @@ namespace Bones.Mod
 
                 throw;
             }
+            finally
+            {
+                // DataManager.CloseCacheConnection();
+            }
 
             return bonesData;
         }
 
-        public SaveBonesInfo GetSavedBonesByID(string BonesID)
+        public BonesData ExhumeMoonKing(string ZoneID, SaveBonesInfo DeathEvent)
         {
-            foreach (var savedBones in GetSavedBonesInfo())
+            var exhumation = ExhumeMoonKingAsync(ZoneID, DeathEvent);
+            exhumation.Wait();
+            return exhumation.Result;
+        }
+
+        public async Task<SaveBonesInfo> GetSavedBonesByIDAsync(string BonesID)
+        {
+            foreach (var savedBones in await GetSavedBonesInfoAsync())
             {
                 if (savedBones.ID == BonesID)
                     return savedBones;
@@ -469,14 +575,43 @@ namespace Bones.Mod
             return null;
         }
 
-        public bool TryGetSavedBonesByID(string BonesID, out SaveGameInfo SavedBonesInfo)
+        public SaveBonesInfo GetSavedBonesByID(string BonesID)
+            => GetSavedBonesByIDAsync(BonesID)?.Result
+            ;
+
+        public static void DeleteBonesInfoDirectory(string Directory)
+        {
+            int attempts = 0;
+            while (true)
+            {
+                try
+                {
+                    Platform.IO.Directory.Delete(Directory);
+                    break;
+                }
+                catch (Exception x)
+                {
+                    if (attempts++ < 20)
+                    {
+                        Thread.Sleep(50);
+                        continue;
+                    }
+
+                    Utils.Error("Error deleting saved bones", x);
+                    break;
+                }
+            }
+            // DataManager.CloseCacheConnection();
+        }
+
+        public bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SavedBonesInfo)
             => (SavedBonesInfo = GetSavedBonesByID(BonesID)) != null
             ;
 
         public void CremateMoonKing(string BonesID)
         {
-            if (TryGetSavedBonesByID(BonesID, out var savedBones))
-                savedBones.Delete();
+            if (TryGetSaveBonesByID(BonesID, out var savedBones))
+                savedBones.Cremate();
         }
 
         public static GameObject CreateMoonKing(
@@ -484,28 +619,6 @@ namespace Bones.Mod
             Cell TargetCell
             )
         {
-            string prefix = "Moon";
-            string regalTerm = "Regent";
-            if (Player.GetGender() is Gender playerGender)
-            {
-                switch (playerGender.Name)
-                {
-                    case "Female":
-                    case "female":
-                        regalTerm = "Queen";
-                        break;
-                    case "Male":
-                    case "male":
-                        regalTerm = "King";
-                        break;
-                    default:
-                        break;
-                }
-                if (playerGender.Plural)
-                    regalTerm = regalTerm.Pluralize();
-            }
-            prefix = $"{prefix} {regalTerm}";
-
             if (!Player.CanBeReplicated(Player, BonesSaver.BonesName, Temporary: false))
                 return null;
 
@@ -528,6 +641,7 @@ namespace Bones.Mod
             brain.Factions = factions;
             brain.Allegiance.Hostile = true;
             brain.Allegiance.Calm = false;
+
             brain.PerformEquip();
 
             if (Player != null)
@@ -536,7 +650,9 @@ namespace Bones.Mod
                 Player.AddOpinion<OpinionMollify>(moonKing);
             }
 
-            moonKing.DisplayName = $"{prefix} {moonKing.DisplayNameOnlyDirect}";
+            string regalTitle = LunarRegent.GetRegalTitle(Player);
+
+            moonKing.RequirePart<Titles>().Primary = regalTitle;
 
             if (TargetCell == null)
             {
@@ -547,9 +663,12 @@ namespace Bones.Mod
             if (moonKing.Render is Render render)
                 render.Visible = false;
 
-            TargetCell.AddObject(moonKing);
+            var lunarRegentPart = moonKing.RequirePart<LunarRegent>();
 
-            moonKing.ApplyEffect(new MoonKingFever(regalTerm));
+            lunarRegentPart.RegalTitle = regalTitle;
+            lunarRegentPart.Onset();
+
+            TargetCell.AddObject(moonKing);
 
             moonKing.MakeActive();
             

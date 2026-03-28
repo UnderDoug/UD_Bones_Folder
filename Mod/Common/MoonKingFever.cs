@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-using XRL.World.AI.Pathfinding;
-
-using Bones.Mod;
-using XRL.Core;
+﻿using XRL.Core;
 using XRL.World.Parts;
 using XRL.World.AI.GoalHandlers;
+
+using Bones.Mod;
 
 namespace XRL.World.Effects
 {
@@ -30,15 +25,16 @@ namespace XRL.World.Effects
         public MoonKingFever()
         {
             RegalTitle = REGAL_TITLE;
-            DisplayName = $"{RegalTitle} {"fever".Color("r")}";
-            Duration = 1;
+            SetDisplayName();
+            Duration = 999;
         }
 
-        public MoonKingFever(string RegalTerm)
+        public MoonKingFever(string RegalTitle)
             : this()
         {
-            RegalTitle = $"Moon {RegalTerm ?? "Regent"}".Color("rainbow");
-            DisplayName = $"{$"{RegalTitle}"} {"fever".Color("r")}";
+            if (!RegalTitle.IsNullOrEmpty())
+                this.RegalTitle = RegalTitle;
+            SetDisplayName();
         }
 
         public override int GetEffectType()
@@ -56,6 +52,10 @@ namespace XRL.World.Effects
             if (!Object.FireEvent(Event.New($"Apply{nameof(MoonKingFever)}")))
                 return false;
 
+            RegalTitle = Object.GetStringProperty(nameof(RegalTitle), RegalTitle);
+
+            SetDisplayName();
+
             ApplyChanges();
             return base.Apply(Object);
         }
@@ -64,6 +64,11 @@ namespace XRL.World.Effects
         {
             UnapplyChanges();
             base.Remove(Object);
+        }
+
+        public void SetDisplayName()
+        {
+            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).Color("rainbow")} {"fever".Color("r")}";
         }
 
         private void ApplyChanges()
@@ -104,6 +109,34 @@ namespace XRL.World.Effects
                 Object.RemovePart<Preacher>();
         }
 
+        public bool FocusOnUsurper(GameObject Usurper)
+        {
+            if (Object?.Brain == null)
+                return false;
+
+            if (Usurper == null)
+                return false;
+
+            Object.AddOpinion<OpinionMoonKingJealous>(Usurper);
+            Object.Brain.WantToKill(
+                Subject: Usurper,
+                Because: ($"=subject.subjective= =subject.verb:think= =subject.subjective==subject.verb:'re:afterpronoun= the {REGAL_TITLE} " +
+                    $"but =subject.subjective==subject.verb:'re:afterpronoun= not me!")
+                        .StartReplace()
+                        .AddObject(Usurper)
+                        .ToString()
+                );
+
+            if (!AlreadyPreacher
+                && Object.TryGetPart(out Preacher preacher))
+            {
+                preacher.PreacherHomily(true);
+            }
+
+            AIHelpBroadcastEvent.Send(Object, Usurper);
+            return true;
+        }
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register("AfterDeepCopyWithoutEffects");
@@ -126,12 +159,26 @@ namespace XRL.World.Effects
                 E.Result = E.Target1.IsPlayer().CompareTo(E.Target2.IsPlayer());
                 return true;
             }
+            if (E.Target1.HasEffect<MoonKingFever>()
+                || E.Target2.HasEffect<MoonKingFever>())
+            { 
+                E.Result = E.Target1.HasEffect<MoonKingFever>().CompareTo(E.Target2.HasEffect<MoonKingFever>());
+                return true;
+            }
+            if (E.Target1.HasPart<LunarRegent>()
+                || E.Target2.HasPart<LunarRegent>())
+            { 
+                E.Result = E.Target1.HasPart<LunarRegent>().CompareTo(E.Target2.HasPart<LunarRegent>());
+                return true;
+            }
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(GetFeelingEvent E)
         {
-            if (E.Target.IsPlayer())
+            if (E.Target.IsPlayer()
+                || E.Target.HasEffect<MoonKingFever>()
+                || E.Target.HasPart<LunarRegent>())
             {
                 E.Feeling = -100;
                 return false;
@@ -141,20 +188,31 @@ namespace XRL.World.Effects
 
         public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
         {
-            if (!Object.Brain.HasGoal(nameof(Kill))
-                || !Object.Target.IsPlayer())
+            if (Object?.Brain != null)
             {
-
-                Object.AddOpinion<OpinionMoonKingJealous>(The.Player);
-                Object.Target = The.Player;
-
-                if (!AlreadyPreacher
-                    && Object.TryGetPart(out Preacher preacher))
+                if (Object.Brain.FindGoal(nameof(Kill)) is not Kill killGoal
+                    || !killGoal.Target.IsPlayer()
+                    || !killGoal.Target.HasEffect<MoonKingFever>()
+                    || !killGoal.Target.HasPart<LunarRegent>())
                 {
-                    preacher.PreacherHomily(true);
-                }
+                    if (FocusOnUsurper(The.Player))
+                        return true;
 
-                AIHelpBroadcastEvent.Send(Object, The.Player);
+                    var radiusCells = Object.CurrentCell.IterateAdjacent(MAX_DIST);
+                    foreach (var radiusCell in radiusCells)
+                    {
+                        foreach (var moonKingFever in radiusCell.GetObjectsWithEffect(nameof(MoonKingFever)))
+                            if (FocusOnUsurper(moonKingFever))
+                                return true;
+                    }
+
+                    foreach (var radiusCell in radiusCells)
+                    {
+                        foreach (var lunarRegent in radiusCell.GetObjectsWithPart(nameof(LunarRegent)))
+                            if (FocusOnUsurper(lunarRegent))
+                                return true;
+                    }
+                }
             }
             return base.HandleEvent(E);
         }
@@ -172,7 +230,7 @@ namespace XRL.World.Effects
 
         public override bool Render(RenderEvent E)
         {
-            if (Duration > 0)
+            if (Object?.Render?.Visible is not false)
             {
                 int frame = XRLCore.CurrentFrame % 60;
                 if (frame > 5
@@ -181,8 +239,9 @@ namespace XRL.World.Effects
                     E.RenderString = "@";
                     E.ColorString = Crayons.GetRandomColorAll();
                 }
+                return true;
             }
-            return true;
+            return Render(E);
         }
     }
 }
