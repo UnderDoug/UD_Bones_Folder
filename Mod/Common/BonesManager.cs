@@ -297,6 +297,7 @@ namespace Bones.Mod
                             && await SaveBonesInfo.GetSaveBonesInfo(bonesFolder) is SaveBonesInfo bonesInfo)
                         {
                             if (TidyPending
+                                && !bonesInfo.Pending.EqualsNoCase($"{false}")
                                 && SaveGameIDs?.Contains(bonesInfo.Pending) is false)
                                 SaveBonesInfo.SetPending(bonesInfo, null).Wait();
 
@@ -622,23 +623,16 @@ namespace Bones.Mod
             if (!Player.CanBeReplicated(Player, BonesSaver.BonesName, Temporary: false))
                 return null;
 
-            string factions = "Entropic-100,Mean-100,Playerhater-99";
-
             var moonKing = Player.DeepCopy();
 
-            if (Player.IsPlayer())
-                moonKing.SetStringProperty("PlayerCopy", "true");
-
-            moonKing.SetStringProperty("EvilTwin", "true");
-            moonKing.SetStringProperty(BonesSaver.BonesName, "true");
-            moonKing.SetIntProperty("Entropic", 1);
+            moonKing.SetStringProperty(BonesSaver.BonesName, The.Game.GameID);
 
             var brain = moonKing.Brain;
             brain.PartyLeader = null;
             brain.Hibernating = false;
             brain.Staying = false;
             brain.Passive = false;
-            brain.Factions = factions;
+            brain.Factions = "Mean-100,Playerhater-99";
             brain.Allegiance.Hostile = true;
             brain.Allegiance.Calm = false;
 
@@ -652,7 +646,7 @@ namespace Bones.Mod
 
             string regalTitle = LunarRegent.GetRegalTitle(Player);
 
-            moonKing.RequirePart<Titles>().Primary = regalTitle;
+            moonKing.RequirePart<Honorifics>().Primary = regalTitle.Color("rainbow");
 
             if (TargetCell == null)
             {
@@ -686,6 +680,26 @@ namespace Bones.Mod
                     ApplyHostility(Effect.Dominator, Brain, Depth + 1);
                 }
             }
+        }
+
+        [WishCommand(Command = "cremate bones")]
+        public static bool ClearBones_WishHandler()
+        {
+            bool success = true;
+            try
+            {
+                if (GetSavedBonesInfo() is IEnumerable<SaveBonesInfo> saveBonesInfos)
+                {
+                    foreach (var bonesInfo in saveBonesInfos)
+                        bonesInfo.Cremate();
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed to cremate all bones", x);
+                success = false;
+            }
+            return success;
         }
     }
 }

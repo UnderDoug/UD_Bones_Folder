@@ -97,7 +97,7 @@ namespace Bones.Mod
                     bonesObject?.Obliterate();
                 }
             }
-            return true;
+            return MoonKing != null;
         }
 
         public void Cremate()

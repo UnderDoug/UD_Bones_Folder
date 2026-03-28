@@ -17,23 +17,10 @@ namespace XRL.World.Parts
 
         public string Title;
         public string Message;
-        public Renderable Renderable;
 
         public MoonKingAnnouncer()
             : base()
         { }
-
-        public MoonKingAnnouncer(
-            string Title,
-            string Message,
-            IRenderable Renderable
-            )
-            : base()
-        {
-            this.Title = Title;
-            this.Message = Message;
-            this.Renderable = new (Renderable);
-        }
 
         public void Announce()
         {
@@ -43,12 +30,12 @@ namespace XRL.World.Parts
             if (ParentObject.CurrentZone == The.Player.CurrentZone
                 && !Title.IsNullOrEmpty()
                 && !Message.IsNullOrEmpty()
-                && Renderable != null)
+                && ParentObject.CurrentZone.GetFirstObject(go => go.GetStringProperty(BonesSaver.BonesName) == BonesID) is GameObject moonKing)
             {
                 Popup.ShowSpace(
                     Message: Message,
                     Title: Title,
-                    AfterRender: new (Renderable),
+                    AfterRender: new (moonKing.RenderForUI()),
                     PopupID: $"{nameof(BonesZoneBuilder)}::{BonesSaver.BonesName}");
 
                 ParentObject.Obliterate();

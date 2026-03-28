@@ -1,0 +1,8 @@
+{
+  "WorkshopId": 3693957923,
+  "Title": "Bones (beta test)",
+  "Description": "Adds a Bones folder to the game's sync directory which gets filled with the bones of runs that end too soon, so that they might have one last shot at the moon.\n\nBeta test for what amounts to a prototype. Requires the current beta version (won't work on main, won't work on lang).",
+  "Tags": "Prototype,System,Expansion",
+  "Visibility": "1",
+  "ImagePath": "preview.png"
+}

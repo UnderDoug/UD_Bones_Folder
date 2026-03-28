@@ -62,7 +62,6 @@ namespace XRL.World.ZoneBuilders
                                 .StartReplace()
                                 .AddObject(MoonKing)
                                 .ToString(),
-                            Renderable = new(MoonKing.RenderForUI()),
                             BonesID = bonesData.BonesID,
                         }
                     );
