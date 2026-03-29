@@ -6,6 +6,7 @@ using Qud.API;
 using UD_Bones_Folder.Mod;
 
 using XRL.Collections;
+using XRL.World.AI;
 using XRL.World.Effects;
 
 namespace XRL.World.Parts
@@ -17,7 +18,7 @@ namespace XRL.World.Parts
         : IPlayerPart
         , IPlayerMutator
     {
-        public static UD_Bones_BonesManager BonesManager => UD_Bones_BonesManager.System;
+        public static BonesManager BonesManager => BonesManager.System;
 
         public static string BonesName => "LunarRegent";
 
@@ -33,6 +34,65 @@ namespace XRL.World.Parts
                 MetricsManager.LogCallingModError($"Failed to add {nameof(UD_Bones_BonesSaver)} to player.");
         }
 
+
+
+        public static GameObject AscendMoonKing(
+            GameObject Player,
+            Cell TargetCell
+            )
+        {
+            if (!Player.CanBeReplicated(Player, UD_Bones_BonesSaver.BonesName, Temporary: false))
+                return null;
+
+            var moonKing = Player.DeepCopy();
+
+            moonKing.RestorePristineHealth();
+
+            moonKing.SetStringProperty(UD_Bones_BonesSaver.BonesName, The.Game.GameID);
+            moonKing.SetStringProperty("UD_Bones_NoWrite", null, true);
+
+            var brain = moonKing.Brain;
+            brain.PartyLeader = null;
+            brain.Hibernating = false;
+            brain.Staying = false;
+            brain.Passive = false;
+            brain.Factions = "Mean-100,Playerhater-99";
+            brain.Allegiance.Hostile = true;
+            brain.Allegiance.Calm = false;
+
+            brain.PerformEquip();
+
+            if (Player != null)
+            {
+                brain.AddOpinion<OpinionMollify>(Player);
+                Player.AddOpinion<OpinionMollify>(moonKing);
+            }
+
+            string regalTitle = UD_Bones_LunarRegent.GetRegalTitle(Player);
+
+            moonKing.RequirePart<Honorifics>().Primary = regalTitle.WithColor("rainbow");
+
+            if (TargetCell == null)
+            {
+                moonKing.Obliterate();
+                return null;
+            }
+
+            if (moonKing.Render is Render render)
+                render.Visible = false;
+
+            var lunarRegentPart = moonKing.RequirePart<UD_Bones_LunarRegent>();
+
+            lunarRegentPart.RegalTitle = regalTitle;
+            lunarRegentPart.Onset();
+
+            TargetCell.AddObject(moonKing);
+
+            moonKing.MakeActive();
+
+            return moonKing;
+        }
+
         public void mutate(GameObject player)
             => PreparePlayer(player)
             ;
@@ -42,7 +102,7 @@ namespace XRL.World.Parts
             UnityEngine.Debug.Log(E.GetType().Name);
             if (E.Dying == ParentObject)
             {
-                var moonKing = UD_Bones_BonesManager.AscendMoonKing(ParentObject, ParentObject.CurrentCell);
+                var moonKing = AscendMoonKing(ParentObject, ParentObject.CurrentCell);
                 using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
                 foreach (var moonKingItem in moonKingInventory)
                 {
@@ -58,7 +118,7 @@ namespace XRL.World.Parts
 
                     EquipmentAPI.DropObject(moonKingItem);
                 }
-                BonesManager.HoardBones(BonesName, E);
+                BonesManager.HoardBones(BonesName, E, moonKing);
                 return true;
             }
             return false;

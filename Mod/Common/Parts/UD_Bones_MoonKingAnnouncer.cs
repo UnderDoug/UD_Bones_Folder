@@ -53,8 +53,8 @@ namespace XRL.World.Parts
         public override bool HandleEvent(ZoneActivatedEvent E)
         {
             if (!Cremated
-                && UD_Bones_BonesManager.System != null
-                && UD_Bones_BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
+                && BonesManager.System != null
+                && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
                 bonesInfo.Cremate();
                 Cremated = true;

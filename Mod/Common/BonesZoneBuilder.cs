@@ -16,7 +16,7 @@ namespace XRL.World.ZoneBuilders
         public string ZoneID;
 
         private SaveBonesInfo _SaveBonesInfo;
-        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= UD_Bones_BonesManager.System?.GetSavedBonesByID(SaveBonesInfoID);
+        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= BonesManager.System?.GetSavedBonesByID(SaveBonesInfoID);
 
         public BonesZoneBuilder()
         { }
@@ -50,7 +50,7 @@ namespace XRL.World.ZoneBuilders
                 string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
                 if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                    regalTitle = moonKingFever.RegalTitle.Color("rainbow");
+                    regalTitle = moonKingFever.RegalTitle.WithColor("rainbow");
 
                 Z.GetCell(0, 0)
                     ?.AddObject("Widget")

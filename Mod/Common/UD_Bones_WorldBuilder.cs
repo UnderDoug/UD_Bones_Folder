@@ -16,7 +16,7 @@ namespace XRL.World.WorldBuilders
     [JoppaWorldBuilderExtension]
     public class UD_Bones_WorldBuilder : IJoppaWorldBuilderExtension
     {
-        public static UD_Bones_BonesManager BonesManager => UD_Bones_BonesManager.System;
+        public static BonesManager BonesManager => BonesManager.System;
 
         public JoppaWorldBuilder Builder;
 
@@ -41,7 +41,7 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (UD_Bones_BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
+            if (BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 

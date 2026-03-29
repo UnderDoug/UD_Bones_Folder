@@ -13,8 +13,17 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
+        public string ModVersion;
+
         public string ZoneID;
         public string DeathReason;
+
+        public string GenotypeName;
+        public string SubtypeName;
+
+        public string ZoneTerrainType;
+        public int ZoneTier;
+        public string ZoneRegion;
 
         public string Pending;
 
@@ -105,8 +114,8 @@ namespace UD_Bones_Folder.Mod
             {
                 return new SaveBonesInfo
                 {
-                    Name = "&RCorrupt info file",
-                    Size = "Total size: " + GetDirectorySize(DirPath) / 1000000 + "mb",
+                    Name = "Corrupt info file".WithColor("R"),
+                    Size = $"Total size: {GetDirectorySize(DirPath) / 1000000}mb",
                     Info = "",
                     Directory = DirPath
                 };
@@ -116,7 +125,7 @@ namespace UD_Bones_Folder.Mod
             {
                 json = json,
                 Directory = DirPath,
-                Size = "Total size: " + GetDirectorySize(DirPath) / 1000000 + "mb",
+                Size = $"Total size: {GetDirectorySize(DirPath) / 1000000}mb",
                 ID = json.ID,
                 Version = json.GameVersion,
                 Name = json.Name,
@@ -124,14 +133,15 @@ namespace UD_Bones_Folder.Mod
                 Info = $"{json.Location}, {json.InGameTime} turn {json.Turn}",
                 SaveTime = json.SaveTime,
                 ModsEnabled = json.ModsEnabled,
-                ZoneID = json.ZoneID,
-                DeathReason = json.DeathReason,
+
+                ModVersion = Utils.ThisMod.Assembly.GetName().Version.ToString(),
+
                 FileName = FilePath,
             };
             if (json.SaveVersion < 395
                 || json.SaveVersion > 400)
             {
-                string olderVersionString = $"Older Version ({json.GameVersion})".Color("R");
+                string olderVersionString = $"Older Version ({json.GameVersion})".WithColor("R");
                 saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
             }
 

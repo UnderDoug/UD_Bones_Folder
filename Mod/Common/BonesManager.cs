@@ -18,6 +18,7 @@ using Qud.API;
 using Qud.UI;
 
 using XRL;
+using XRL.Core;
 using XRL.Collections;
 using XRL.Messages;
 using XRL.Rules;
@@ -32,7 +33,6 @@ using GameObject = XRL.World.GameObject;
 using ColorUtility = ConsoleLib.Console.ColorUtility;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
 using Event = XRL.World.Event;
-using XRL.Core;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -40,7 +40,7 @@ namespace UD_Bones_Folder.Mod
     [HasGameBasedStaticCache]
     [HasWishCommand]
     [Serializable]
-    public class UD_Bones_BonesManager : IScribedSystem
+    public class BonesManager : IScribedSystem
     {
         public static string BonesSyncPath => DataManager.SyncedPath("Bones");
 
@@ -59,9 +59,10 @@ namespace UD_Bones_Folder.Mod
         };
 
         [GameBasedStaticCache(CreateInstance = false)]
-        public static UD_Bones_BonesManager System;
+        public static BonesManager System;
 
-        public List<string> RunningMods;
+        private static List<string> _RunningMods;
+        public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
 
         public bool Initialized;
 
@@ -71,10 +72,10 @@ namespace UD_Bones_Folder.Mod
         [NonSerialized]
         public Task SaveTask;
 
-        public UD_Bones_BonesManager()
+        public BonesManager()
         { }
 
-        private static UD_Bones_BonesManager InitializeSystem() => new();
+        private static BonesManager InitializeSystem() => new();
 
         [GameBasedCacheInit]
         public static void BonesManagerSystemInit()
@@ -93,13 +94,11 @@ namespace UD_Bones_Folder.Mod
                 Loading.LoadTask($"Preparing Bones", System.PrepareBonesPile);
             else
             if (The.Game != null)
-                Utils.Error($"Failed to load {nameof(UD_Bones_BonesManager)}.");
+                Utils.Error($"Failed to load {nameof(BonesManager)}.");
         }
 
         public void PrepareBonesPile()
         {
-            RunningMods = ModManager.GetRunningMods().ToList();
-
             // TidyBonesPile();
         }
 
@@ -155,7 +154,8 @@ namespace UD_Bones_Folder.Mod
 
         public Task HoardBones(
             string GameName,
-            IDeathEvent DeathEvent
+            IDeathEvent DeathEvent,
+            GameObject MoonKing
             )
         {
             using (DelayShutdown.AutoScopeForceMainThread())
@@ -197,12 +197,12 @@ namespace UD_Bones_Folder.Mod
                             game.WallTime.Start();
                         }
 
-                        var saveBonesJSON = new SaveBonesJSON(DeathEvent, The.Game.SaveGameInfo());
+                        var saveBonesJSON = The.Game.CreateSaveBonesJSON(DeathEvent, MoonKing);
 
                         writer.Start(400);
                         writer.Write(123457);
 
-                        writer.Write(The.Game.GetType().Assembly.GetName().Version.ToString());
+                        writer.Write(saveBonesJSON.GameVersion);
 
                         writer.WriteBonesZone(currentZone);
 
@@ -275,9 +275,11 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            Popup.ShowFailAsync($"There was a fatal exception attempting to save some bones. {Utils.ThisMod.DisplayTitle} attempted to recover them.\n" +
+            Popup.ShowFailAsync($"There was a fatal exception attempting to save some bones. " +
+                $"{Utils.ThisMod.DisplayTitle} attempted to recover them.\n" +
                 $"You ought to check out your bones folder for recent changes ({Utils.BothBonesLocations})\n\n" +
-                $"It'd be helpful if you could contact {Utils.ThisMod.Manifest.Author}, either via GitHub or on the steam workshop, because they'll probably want a copy of the problem bones.");
+                $"It'd be helpful if you could contact {Utils.ThisMod.Manifest.Author}, either via GitHub or on the steam workshop, " +
+                $"because they'll probably want a copy of the problem bones.");
         }
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetSavedBonesInfoAsync(Predicate<SaveBonesInfo> Where, bool TidyPending = false)
@@ -326,6 +328,14 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<SaveBonesInfo> GetSavedBonesInfo(Predicate<SaveBonesInfo> Where)
             => GetSavedBonesInfoAsync(Where)?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
+
+        public static async Task<bool> HasSavedBonesAsync()
+            => !(await GetSavedBonesInfoAsync(null)).IsNullOrEmpty()
+            ;
+
+        public static bool HasSavedBones()
+            => HasSavedBonesAsync().Result
             ;
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetPendingSaveBonesInfoAsync()
@@ -418,7 +428,7 @@ namespace UD_Bones_Folder.Mod
                     fullBonesPath = Path.Combine(SaveBonesInfo.Directory, $"{UD_Bones_BonesSaver.BonesName}.sav");
                     if (!await File.ExistsAsync(fullBonesPath))
                     {
-                        Utils.Error($"No saved game exists. ({directoryDisplay})");
+                        Utils.Error($"No saved bones exists. ({directoryDisplay})");
                         return bonesData;
                     }
                 }
@@ -481,31 +491,13 @@ namespace UD_Bones_Folder.Mod
                     Zone loadedZone = null;
                     try
                     {
-                        loadedZone = reader.ReadBonesZone(/*ZoneID*/);
+                        loadedZone = reader.ReadBonesZone();
                         if (loadedZone != null
                             && loadedZone.Z > 21)
-                        {
                             loadedZone.Z = Stat.Random(16, 21);
-                        }
+
                         reader.FinalizeRead();
-                        /*
-                        if (loadedZone != null)
-                        {
-                            if (The.ActionManager is ActionManager actionManager
-                                && actionManager.ActionQueue is RingDeque<GameObject> actionQueue)
-                            {
-                                foreach (var loadedObject in loadedZone.GetObjects())
-                                {
-                                    if (actionQueue.Contains(loadedObject))
-                                    {
-                                        loadedObject.ApplyActiveRegistrar();
-                                        if (loadedObject.Abilities != null)
-                                            actionManager.AbilityObjects.Add(loadedObject);
-                                    }
-                                }
-                            }
-                        }
-                        */
+
                         bonesData = new(bonesID, ZoneID, loadedZone);
                     }
                     catch (Exception x)
@@ -555,7 +547,7 @@ namespace UD_Bones_Folder.Mod
                         message = $"That bones file looks like it's from a newer save format revision ({versionString}).\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
 
-                    MetricsManager.LogException($"{nameof(UD_Bones_BonesManager)}.{nameof(ExhumeMoonKing)}::", x, "serialization_error");
+                    MetricsManager.LogException($"{nameof(BonesManager)}.{nameof(ExhumeMoonKing)}::", x, "serialization_error");
                 }
 
                 Utils.Error(message);
@@ -649,77 +641,6 @@ namespace UD_Bones_Folder.Mod
         {
             if (TryGetSaveBonesByID(BonesID, out var savedBones))
                 savedBones.Cremate();
-        }
-
-        public static GameObject AscendMoonKing(
-            GameObject Player,
-            Cell TargetCell
-            )
-        {
-            if (!Player.CanBeReplicated(Player, UD_Bones_BonesSaver.BonesName, Temporary: false))
-                return null;
-
-            var moonKing = Player.DeepCopy();
-
-            moonKing.RestorePristineHealth();
-
-            moonKing.SetStringProperty(UD_Bones_BonesSaver.BonesName, The.Game.GameID);
-            moonKing.SetStringProperty("UD_Bones_NoWrite", null, true);
-
-            var brain = moonKing.Brain;
-            brain.PartyLeader = null;
-            brain.Hibernating = false;
-            brain.Staying = false;
-            brain.Passive = false;
-            brain.Factions = "Mean-100,Playerhater-99";
-            brain.Allegiance.Hostile = true;
-            brain.Allegiance.Calm = false;
-
-            brain.PerformEquip();
-
-            if (Player != null)
-            {
-                brain.AddOpinion<OpinionMollify>(Player);
-                Player.AddOpinion<OpinionMollify>(moonKing);
-            }
-
-            string regalTitle = UD_Bones_LunarRegent.GetRegalTitle(Player);
-
-            moonKing.RequirePart<Honorifics>().Primary = regalTitle.Color("rainbow");
-
-            if (TargetCell == null)
-            {
-                moonKing.Obliterate();
-                return null;
-            }
-
-            if (moonKing.Render is Render render)
-                render.Visible = false;
-
-            var lunarRegentPart = moonKing.RequirePart<UD_Bones_LunarRegent>();
-
-            lunarRegentPart.RegalTitle = regalTitle;
-            lunarRegentPart.Onset();
-
-            // TargetCell.RemoveObject(Player);
-            TargetCell.AddObject(moonKing);
-
-            moonKing.MakeActive();
-            
-            return moonKing;
-        }
-
-        public static void ApplyHostility(GameObject Actor, Brain Brain, int Depth)
-        {
-            if (Actor != null && Depth < 100)
-            {
-                Brain.AddOpinion<OpinionInscrutable>(Actor);
-                ApplyHostility(Actor.PartyLeader, Brain, Depth + 1);
-                if (Actor.TryGetEffect<Dominated>(out var Effect))
-                {
-                    ApplyHostility(Effect.Dominator, Brain, Depth + 1);
-                }
-            }
         }
 
         [WishCommand(Command = "cremate bones")]

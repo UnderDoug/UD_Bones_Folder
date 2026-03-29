@@ -79,21 +79,17 @@ namespace UD_Bones_Folder.Mod
         private static bool IsEligibleForWrite(this Cell Cell, ObjectRack ObjectRack, int ObjectIndex, out GameObject Object)
         {
             Object = ObjectRack[ObjectIndex];
-            if (Object == null)
-                return false;
-
             return Cell.ShouldWrite(Object)
-                && !Object.HasStringProperty("UD_Bones_NoWrite");
+                && (Object == null 
+                    || !Object.IsPlayer());
         }
 
         private static bool IsEligibleForBlueprintWrite(this Cell Cell, ObjectRack ObjectRack, int ObjectIndex, out GameObject Object)
         {
             Object = ObjectRack[ObjectIndex];
-            if (Object == null)
-                return false;
-
             return !Cell.ShouldWrite(Object)
-                && !Object.HasStringProperty("UD_Bones_NoWrite");
+                && (Object == null
+                    || !Object.IsPlayer());
         }
 
         public static void LogInvalidPhysics(this Cell Cell, GameObject Object)
@@ -321,7 +317,7 @@ namespace UD_Bones_Folder.Mod
             return Zone;
         }
 
-        public static Zone ReadBonesZone(this SerializationReader Reader, string ZoneID = null)
+        public static Zone ReadBonesZone(this SerializationReader Reader)
         {
             if (Reader == null)
                 throw new ArgumentNullException(nameof(Reader));
@@ -333,9 +329,6 @@ namespace UD_Bones_Folder.Mod
                 Utils.Error($"Failed to create instance of {nameof(Zone)} during Deserialization.");
                 return null;
             }
-
-            if (!ZoneID.IsNullOrEmpty())
-                zone.ZoneID = ZoneID;
 
             Reader.ReadTypeFields(zone, type);
             zone.Built = false;

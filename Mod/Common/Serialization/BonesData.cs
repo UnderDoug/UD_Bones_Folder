@@ -4,6 +4,7 @@ using XRL;
 using XRL.World;
 using XRL.World.AI;
 using XRL.World.AI.GoalHandlers;
+using XRL.World.Effects;
 using XRL.World.Parts;
 
 using static XRL.World.Cell;
@@ -13,7 +14,7 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesData : IComposite
     {
-        public static UD_Bones_BonesManager BonesManager => UD_Bones_BonesManager.System;
+        public static BonesManager BonesManager => BonesManager.System;
         public string BonesID;
         public string ZoneID;
         public Zone BonesZone;
@@ -83,7 +84,7 @@ namespace UD_Bones_Folder.Mod
                         {
                             var brain = MoonKing.Brain;
                             brain?.PushGoal(new Kill(The.Player));
-                            UD_Bones_BonesManager.ApplyHostility(The.Player, brain, 0);
+                            ApplyHostility(The.Player, brain, 0);
                         }
 
                         if (MoonKing.Render is Render render)
@@ -100,6 +101,21 @@ namespace UD_Bones_Folder.Mod
                 }
             }
             return MoonKing != null;
+        }
+
+        public static void ApplyHostility(GameObject Actor, Brain Brain, int Depth)
+        {
+            if (Actor == null)
+                return;
+            if (Depth >= 100)
+                return;
+
+            Brain.AddOpinion<OpinionInscrutable>(Actor);
+
+            ApplyHostility(Actor.PartyLeader, Brain, Depth + 1);
+
+            if (Actor.TryGetEffect<Dominated>(out var Effect))
+                ApplyHostility(Effect.Dominator, Brain, Depth + 1);
         }
 
         public void Cremate()

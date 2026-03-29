@@ -71,7 +71,7 @@ namespace XRL.World.Effects
 
         public void SetDisplayName()
         {
-            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).Color("rainbow")} {"fever".Color("r")}";
+            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).WithColor("rainbow")} {"fever".WithColor("r")}";
         }
 
         private void ApplyChanges()
@@ -218,7 +218,7 @@ namespace XRL.World.Effects
 
         public override bool Render(RenderEvent E)
         {
-            if (Object?.Render?.Visible is not false)
+            if (Object?.Render?.Visible is true)
             {
                 int frame = XRLCore.CurrentFrame % 60;
                 if (frame > 5

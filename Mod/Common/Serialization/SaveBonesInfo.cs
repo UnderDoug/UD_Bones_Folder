@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +11,8 @@ using Qud.API;
 using UnityEngine;
 
 using XRL;
+using XRL.Collections;
+using XRL.UI;
 using XRL.World;
 using XRL.World.Parts;
 
@@ -23,9 +26,17 @@ namespace UD_Bones_Folder.Mod
             $"{UD_Bones_BonesSaver.BonesName}.json",
             $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
+        public string ModVersion;
 
         public string ZoneID;
         public string DeathReason;
+
+        public string GenotypeName;
+        public string SubtypeName;
+
+        public string ZoneTerrainType;
+        public int ZoneTier;
+        public string ZoneRegion;
 
         public string FileName;
 
@@ -38,54 +49,6 @@ namespace UD_Bones_Folder.Mod
 
         public SaveBonesInfo()
             : base()
-        { }
-
-        public SaveBonesInfo(
-            string ZoneID,
-            string DeathReason
-            )
-            : this()
-        {
-            this.ZoneID = ZoneID;
-            this.DeathReason = DeathReason;
-        }
-
-        public SaveBonesInfo(IDeathEvent DeathEvent)
-            : this(
-                  ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  DeathReason: DeathEvent?.Reason)
-        { }
-
-        public SaveBonesInfo(
-            string ZoneID,
-            string DeathReason,
-            SaveGameInfo Source
-            )
-            : this(ZoneID, DeathReason)
-        {
-            if (Source != null)
-            {
-                ID = Source.ID;
-                Name = Source.Name;
-                Description = Source.Description;
-                SaveTime = Source.SaveTime;
-                Info = Source.Info;
-                Version = Source.Version;
-                json = new SaveBonesJSON(ZoneID, DeathReason, Source.json);
-                Directory = Source.Directory;
-                Size = Source.Size;
-                ModsEnabled = Source.ModsEnabled;
-            }
-        }
-
-        public SaveBonesInfo(
-            IDeathEvent DeathEvent,
-            SaveBonesInfo Source
-            )
-            : this(
-                  ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  DeathReason: DeathEvent?.Reason,
-                  Source: Source)
         { }
 
         public static async Task SetPending(SaveBonesInfo BonesInfo, string Pending)
@@ -162,7 +125,39 @@ namespace UD_Bones_Folder.Mod
 
         public void Cremate()
         {
-            UD_Bones_BonesManager.DeleteBonesInfoDirectory(Directory);
+            BonesManager.DeleteBonesInfoDirectory(Directory);
+        }
+
+        public async Task<bool> TryRestoreModsAsync()
+        {
+            await The.UiContext;
+            if (await The.Core.RestoreModsLoadedAsync(ModsEnabled))
+            {
+                var unionizedMods = Utils.GetCriticalWarningUnion(BonesManager.RunningMods, ModsEnabled);
+                
+                if (unionizedMods.IsNullOrEmpty())
+                {
+                    Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
+                    return false;
+                }
+
+                string message = "The below mods are now enabled:\n";
+                if (unionizedMods.Count != BonesManager.RunningMods.Count()
+                    || unionizedMods.Count == ModsEnabled.Count)
+                {
+                    message = "Of the below mods,\n" +
+                        "\tthe {{R|red}} are enabled in the bones file but are not loaded,\n" +
+                        "\t the {{Y|yellow}} are loaded but missing from the bones file:\n";
+                }
+
+                return Popup.ShowAsync(
+                    Message: unionizedMods.Aggregate(
+                        seed: message,
+                        func: Utils.NewLineDelimitedAggregator)
+                    ).IsCompletedSuccessfully;
+            }
+
+            return false;
         }
     }
 }
