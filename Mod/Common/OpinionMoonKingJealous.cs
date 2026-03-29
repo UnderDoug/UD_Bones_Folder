@@ -5,7 +5,7 @@ using XRL.World;
 using XRL.World.AI;
 using XRL.World.Effects;
 
-namespace Bones.Mod
+namespace UD_Bones_Folder.Mod
 {
     [Serializable]
     public class OpinionMoonKingJealous : IOpinionSubject
@@ -29,7 +29,7 @@ namespace Bones.Mod
         }
 
         public override string GetText(GameObject Actor)
-            => $"Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {MoonKingFever.REGAL_TITLE} but =subject.subjective= not me!"
+            => $"Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {UD_Bones_MoonKingFever.REGAL_TITLE} but =subject.subjective= not me!"
                 .StartReplace()
                 .AddObject(Actor)
                 .ToString()

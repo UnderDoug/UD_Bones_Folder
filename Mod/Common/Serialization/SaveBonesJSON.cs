@@ -8,13 +8,13 @@ using Qud.API;
 
 using XRL.World;
 
-namespace Bones.Mod
+namespace UD_Bones_Folder.Mod
 {
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
         public string ZoneID;
-        public string ThirdPersonDeathReason;
+        public string DeathReason;
 
         public string Pending;
 
@@ -26,18 +26,18 @@ namespace Bones.Mod
 
         public SaveBonesJSON(
             string ZoneID,
-            string ThirdPersonDeathReason
+            string DeathReason
             )
             : this()
         {
             this.ZoneID = ZoneID;
-            this.ThirdPersonDeathReason = ThirdPersonDeathReason;
+            this.DeathReason = DeathReason;
         }
 
         public SaveBonesJSON(IDeathEvent DeathEvent)
             : this(
                   ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  ThirdPersonDeathReason: DeathEvent?.ThirdPersonReason)
+                  DeathReason: DeathEvent?.Reason)
         { }
 
         public SaveBonesJSON(
@@ -74,7 +74,7 @@ namespace Bones.Mod
             )
             : this(
                   ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  ThirdPersonDeathReason: DeathEvent?.ThirdPersonReason,
+                  ThirdPersonDeathReason: DeathEvent?.Reason,
                   Source: Source)
         { }
 
@@ -125,6 +125,7 @@ namespace Bones.Mod
                 SaveTime = json.SaveTime,
                 ModsEnabled = json.ModsEnabled,
                 ZoneID = json.ZoneID,
+                DeathReason = json.DeathReason,
                 FileName = FilePath,
             };
             if (json.SaveVersion < 395

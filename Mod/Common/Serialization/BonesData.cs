@@ -8,12 +8,12 @@ using XRL.World.Parts;
 
 using static XRL.World.Cell;
 
-namespace Bones.Mod
+namespace UD_Bones_Folder.Mod
 {
     [Serializable]
     public class BonesData : IComposite
     {
-        public static BonesManager BonesManager => BonesManager.System;
+        public static UD_Bones_BonesManager BonesManager => UD_Bones_BonesManager.System;
         public string BonesID;
         public string ZoneID;
         public Zone BonesZone;
@@ -66,7 +66,7 @@ namespace Bones.Mod
 
                 foreach (var bonesObject in bonesObjects)
                 {
-                    if (bonesObject.GetStringProperty(BonesSaver.BonesName, "false").EqualsNoCase("true"))
+                    if (bonesObject.GetStringProperty(UD_Bones_BonesSaver.BonesName, "").EqualsNoCase(BonesID))
                     {
                         MoonKing = bonesObject;
                         MoonKing?.AddOpinion<OpinionMollify>(The.Player);
@@ -75,24 +75,26 @@ namespace Bones.Mod
                         if (MoonKing.TryGetPart<Description>(out var description))
                             description.Short = "It was you.";
 
-                        if (The.Player.FireEvent(Event.New($"{nameof(BonesSaver.BonesName)}AttitudeSetup")
-                                .SetParameter(nameof(MoonKing), MoonKing)
-                                .SetParameter(nameof(The.Player), The.Player))
-                            )
+                        var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
+                            .SetParameter(nameof(MoonKing), MoonKing)
+                            .SetParameter(nameof(The.Player), The.Player);
+
+                        if (The.Player.FireEvent(attitudeSetup))
                         {
                             var brain = MoonKing.Brain;
                             brain?.PushGoal(new Kill(The.Player));
-                            BonesManager.ApplyHostility(The.Player, brain, 0);
+                            UD_Bones_BonesManager.ApplyHostility(The.Player, brain, 0);
                         }
 
                         if (MoonKing.Render is Render render)
                             render.Visible = true;
 
                         MoonKing.Energy.BaseValue = 0;
-
-
                     }
-                    cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
+                    var bonesObjectCopy = cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
+
+                    if (bonesObjectCopy.Energy is Statistic energyCopy)
+                        energyCopy.BaseValue = 0;
 
                     bonesObject?.Obliterate();
                 }

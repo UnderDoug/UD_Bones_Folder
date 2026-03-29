@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Bones.Mod
+namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
     {

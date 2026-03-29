@@ -1,12 +1,15 @@
-﻿using XRL.Core;
+﻿using System;
+
+using XRL.Core;
 using XRL.World.Parts;
 using XRL.World.AI.GoalHandlers;
 
-using Bones.Mod;
+using UD_Bones_Folder.Mod;
 
 namespace XRL.World.Effects
 {
-    public class MoonKingFever : IScribedEffect
+    [Serializable]
+    public class UD_Bones_MoonKingFever : IScribedEffect
     {
         public const int MAX_DIST = 9999;
 
@@ -22,14 +25,14 @@ namespace XRL.World.Effects
 
         public string RegalTitle;
 
-        public MoonKingFever()
+        public UD_Bones_MoonKingFever()
         {
             RegalTitle = REGAL_TITLE;
             SetDisplayName();
             Duration = 999;
         }
 
-        public MoonKingFever(string RegalTitle)
+        public UD_Bones_MoonKingFever(string RegalTitle)
             : this()
         {
             if (!RegalTitle.IsNullOrEmpty())
@@ -46,10 +49,10 @@ namespace XRL.World.Effects
 
         public override bool Apply(GameObject Object)
         {
-            if (Object.HasEffect<MoonKingFever>())
+            if (Object.HasEffect<UD_Bones_MoonKingFever>())
                 return false;
 
-            if (!Object.FireEvent(Event.New($"Apply{nameof(MoonKingFever)}")))
+            if (!Object.FireEvent(Event.New($"Apply{nameof(UD_Bones_MoonKingFever)}")))
                 return false;
 
             RegalTitle = Object.GetStringProperty(nameof(RegalTitle), RegalTitle);
@@ -82,8 +85,9 @@ namespace XRL.World.Effects
             if (!AlreadyUninfluencable)
             {
                 var noInfluence = Object.AddPart<CannotBeInfluenced>();
-                noInfluence.Messages = "Beguiling::=subject.T= knows there is only one {{rainbow|Moon King}}. =subject.Subjective= also knows it's =subject.objective=!;;" +
-                    "Persuasion_Proselytize::Are you sure you don't want to join =subject.t= instead? Well... there can only be one!;;" +
+                noInfluence.Messages = 
+                    $"Beguiling::=subject.T= knows there is only one {{rainbow|Moon King}}. =subject.Subjective= also knows it's =subject.objective=!;;" +
+                    $"Persuasion_Proselytize::Are you sure you don't want to join =subject.t= instead? Well... there can only be one!;;" +
                     $"LoveTonicApplicator::The tonic failed to cure =subject.t= of =subject.possessive= {DisplayName}!;;" +
                     $"default::=subject.T's= {DisplayName} makes =subject.objective= insensible to your blandishments!";
             }
@@ -117,6 +121,9 @@ namespace XRL.World.Effects
             if (Usurper == null)
                 return false;
 
+            if (Object.Target == Usurper)
+                return true;
+
             Object.AddOpinion<OpinionMoonKingJealous>(Usurper);
             Object.Brain.WantToKill(
                 Subject: Usurper,
@@ -129,9 +136,7 @@ namespace XRL.World.Effects
 
             if (!AlreadyPreacher
                 && Object.TryGetPart(out Preacher preacher))
-            {
-                preacher.PreacherHomily(true);
-            }
+                preacher.PreacherHomily(Dialog: false);
 
             AIHelpBroadcastEvent.Send(Object, Usurper);
             return true;
@@ -159,16 +164,16 @@ namespace XRL.World.Effects
                 E.Result = E.Target1.IsPlayer().CompareTo(E.Target2.IsPlayer());
                 return true;
             }
-            if (E.Target1.HasEffect<MoonKingFever>()
-                || E.Target2.HasEffect<MoonKingFever>())
+            if (E.Target1.HasEffect<UD_Bones_MoonKingFever>()
+                || E.Target2.HasEffect<UD_Bones_MoonKingFever>())
             { 
-                E.Result = E.Target1.HasEffect<MoonKingFever>().CompareTo(E.Target2.HasEffect<MoonKingFever>());
+                E.Result = E.Target1.HasEffect<UD_Bones_MoonKingFever>().CompareTo(E.Target2.HasEffect<UD_Bones_MoonKingFever>());
                 return true;
             }
-            if (E.Target1.HasPart<LunarRegent>()
-                || E.Target2.HasPart<LunarRegent>())
+            if (E.Target1.HasPart<UD_Bones_LunarRegent>()
+                || E.Target2.HasPart<UD_Bones_LunarRegent>())
             { 
-                E.Result = E.Target1.HasPart<LunarRegent>().CompareTo(E.Target2.HasPart<LunarRegent>());
+                E.Result = E.Target1.HasPart<UD_Bones_LunarRegent>().CompareTo(E.Target2.HasPart<UD_Bones_LunarRegent>());
                 return true;
             }
             return base.HandleEvent(E);
@@ -177,8 +182,8 @@ namespace XRL.World.Effects
         public override bool HandleEvent(GetFeelingEvent E)
         {
             if (E.Target.IsPlayer()
-                || E.Target.HasEffect<MoonKingFever>()
-                || E.Target.HasPart<LunarRegent>())
+                || E.Target.HasEffect<UD_Bones_MoonKingFever>()
+                || E.Target.HasPart<UD_Bones_LunarRegent>())
             {
                 E.Feeling = -100;
                 return false;
@@ -191,27 +196,10 @@ namespace XRL.World.Effects
             if (Object?.Brain != null)
             {
                 if (Object.Brain.FindGoal(nameof(Kill)) is not Kill killGoal
-                    || !killGoal.Target.IsPlayer()
-                    || !killGoal.Target.HasEffect<MoonKingFever>()
-                    || !killGoal.Target.HasPart<LunarRegent>())
+                    || !killGoal.Target.IsPlayer())
                 {
                     if (FocusOnUsurper(The.Player))
                         return true;
-
-                    var radiusCells = Object.CurrentCell.IterateAdjacent(MAX_DIST);
-                    foreach (var radiusCell in radiusCells)
-                    {
-                        foreach (var moonKingFever in radiusCell.GetObjectsWithEffect(nameof(MoonKingFever)))
-                            if (FocusOnUsurper(moonKingFever))
-                                return true;
-                    }
-
-                    foreach (var radiusCell in radiusCells)
-                    {
-                        foreach (var lunarRegent in radiusCell.GetObjectsWithPart(nameof(LunarRegent)))
-                            if (FocusOnUsurper(lunarRegent))
-                                return true;
-                    }
                 }
             }
             return base.HandleEvent(E);

@@ -8,7 +8,8 @@
     "PreviewImage": "preview.png",
     "Directories": [
         {
-            "Paths": [ "/Common/", "/Textures/" ]
+            "Paths": [ "/Common/", "/Textures/" ],
+            "Build": "2.0.211.36 - 2.0.211.*"
         }
     ]
 }

@@ -13,19 +13,19 @@ using XRL;
 using XRL.World;
 using XRL.World.Parts;
 
-namespace Bones.Mod
+namespace UD_Bones_Folder.Mod
 {
     [Serializable]
     public class SaveBonesInfo : SaveGameInfo
     {
         private static readonly string[] InfoFiles = new string[2]
         {
-            $"{BonesSaver.BonesName}.json",
-            $"{BonesSaver.BonesName}.sav.json"
+            $"{UD_Bones_BonesSaver.BonesName}.json",
+            $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
 
         public string ZoneID;
-        public string ThirdPersonDeathReason;
+        public string DeathReason;
 
         public string FileName;
 
@@ -42,26 +42,26 @@ namespace Bones.Mod
 
         public SaveBonesInfo(
             string ZoneID,
-            string ThirdPersonDeathReason
+            string DeathReason
             )
             : this()
         {
             this.ZoneID = ZoneID;
-            this.ThirdPersonDeathReason = ThirdPersonDeathReason;
+            this.DeathReason = DeathReason;
         }
 
         public SaveBonesInfo(IDeathEvent DeathEvent)
             : this(
                   ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  ThirdPersonDeathReason: DeathEvent?.ThirdPersonReason)
+                  DeathReason: DeathEvent?.Reason)
         { }
 
         public SaveBonesInfo(
             string ZoneID,
-            string ThirdPersonDeathReason,
+            string DeathReason,
             SaveGameInfo Source
             )
-            : this(ZoneID, ThirdPersonDeathReason)
+            : this(ZoneID, DeathReason)
         {
             if (Source != null)
             {
@@ -71,7 +71,7 @@ namespace Bones.Mod
                 SaveTime = Source.SaveTime;
                 Info = Source.Info;
                 Version = Source.Version;
-                json = new SaveBonesJSON(ZoneID, ThirdPersonDeathReason, Source.json);
+                json = new SaveBonesJSON(ZoneID, DeathReason, Source.json);
                 Directory = Source.Directory;
                 Size = Source.Size;
                 ModsEnabled = Source.ModsEnabled;
@@ -84,7 +84,7 @@ namespace Bones.Mod
             )
             : this(
                   ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  ThirdPersonDeathReason: DeathEvent?.ThirdPersonReason,
+                  DeathReason: DeathEvent?.Reason,
                   Source: Source)
         { }
 
@@ -162,7 +162,7 @@ namespace Bones.Mod
 
         public void Cremate()
         {
-            BonesManager.DeleteBonesInfoDirectory(Directory);
+            UD_Bones_BonesManager.DeleteBonesInfoDirectory(Directory);
         }
     }
 }

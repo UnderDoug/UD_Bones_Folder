@@ -13,11 +13,15 @@ using XRL.World.Effects;
 using XRL.World.Parts;
 using XRL.World.ZoneParts;
 
-namespace Bones.Mod
+using static XRL.World.Cell;
+
+namespace UD_Bones_Folder.Mod
 {
     public static class SerializationExtensions
     {
-        public static void WriteBonesCell(this Cell Cell, SerializationWriter Writer)
+        public static void WriteBonesCell(
+            this Cell Cell,
+            SerializationWriter Writer)
         {
             if (Cell == null)
                 throw new ArgumentNullException(nameof(Cell));
@@ -27,8 +31,8 @@ namespace Bones.Mod
 
             var cellObjects = Cell.Objects;
 
-            int writtenObjects = 0;
-            int skippedObjects = 0;
+            int writeObjectsCount = 0;
+            int writeBlueprintsCount = 0;
 
             for (int i = 0; i < cellObjects.Count; i++)
             {
@@ -41,43 +45,25 @@ namespace Bones.Mod
                         cellObjects.RemoveAt(i--);
                     }
                     else
-                    if (!Cell.ShouldWrite(gameObject))
-                        skippedObjects++;
-                    else
-                        writtenObjects++;
-                }
-            }
-
-            Writer.Write(writtenObjects);
-            int j = 0;
-            for (int count = cellObjects.Count; j < count; j++)
-            {
-                if (cellObjects[j] is GameObject gameObject
-                    && Cell.ShouldWrite(gameObject))
-                {
                     if (gameObject.IsPlayer())
-                    {
-                        gameObject.RestorePristineHealth(SkipEffects: true);
+                        continue;
+                    else
+                    if (!Cell.ShouldWrite(gameObject))
+                        writeBlueprintsCount++;
+                    else
+                        writeObjectsCount++;
+                }
+            }
 
-                        gameObject = BonesManager.CreateMoonKing(
-                            Player: gameObject,
-                            TargetCell: Cell);
-                    }
-
+            Writer.Write(writeObjectsCount);
+            for (int i = 0; i < cellObjects.Count; i++)
+                if (Cell.IsEligibleForWrite(cellObjects, i, out var gameObject))
                     Writer.WriteGameObject(gameObject);
-                }
-            }
 
-            Writer.Write(skippedObjects);
-            int k = 0;
-            for (int count2 = cellObjects.Count; k < count2; k++)
-            {
-                if (cellObjects[k] is GameObject gameObject
-                    && !Cell.ShouldWrite(gameObject))
-                {
+            Writer.Write(writeBlueprintsCount);
+            for (int i = 0; i < cellObjects.Count; i++)
+                if (Cell.IsEligibleForBlueprintWrite(cellObjects, i, out var gameObject))
                     Writer.Write(gameObject.Blueprint);
-                }
-            }
 
             Writer.Write(Cell.PaintTile);
             Writer.Write(Cell.PaintTileColor);
@@ -88,6 +74,26 @@ namespace Bones.Mod
             Writer.Write(Cell.SemanticTags?.Count ?? 0);
             foreach (string semanticTag in Cell?.SemanticTags ?? Enumerable.Empty<string>())
                 Writer.Write(semanticTag);
+        }
+
+        private static bool IsEligibleForWrite(this Cell Cell, ObjectRack ObjectRack, int ObjectIndex, out GameObject Object)
+        {
+            Object = ObjectRack[ObjectIndex];
+            if (Object == null)
+                return false;
+
+            return Cell.ShouldWrite(Object)
+                && !Object.HasStringProperty("UD_Bones_NoWrite");
+        }
+
+        private static bool IsEligibleForBlueprintWrite(this Cell Cell, ObjectRack ObjectRack, int ObjectIndex, out GameObject Object)
+        {
+            Object = ObjectRack[ObjectIndex];
+            if (Object == null)
+                return false;
+
+            return !Cell.ShouldWrite(Object)
+                && !Object.HasStringProperty("UD_Bones_NoWrite");
         }
 
         public static void LogInvalidPhysics(this Cell Cell, GameObject Object)
@@ -230,7 +236,10 @@ namespace Bones.Mod
             return zonePart;
         }
 
-        public static void WriteBonesZone(this Zone Zone, SerializationWriter Writer)
+        public static void WriteBonesZone(
+            this Zone Zone,
+            SerializationWriter Writer
+            )
         {
             if (Zone == null)
                 throw new ArgumentNullException(nameof(Zone));
@@ -249,7 +258,10 @@ namespace Bones.Mod
                     IZonePart.Save(zonePart, Writer);
         }
 
-        public static void WriteBonesZone(this SerializationWriter Writer, Zone Zone)
+        public static void WriteBonesZone(
+            this SerializationWriter Writer,
+            Zone Zone
+            )
         {
             if (Zone == null)
                 throw new ArgumentNullException(nameof(Zone));

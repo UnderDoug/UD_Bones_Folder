@@ -2,21 +2,22 @@
 using System.Collections.Generic;
 using System.Text;
 
-using Bones.Mod;
-
 using XRL.World.Effects;
+
+using UD_Bones_Folder.Mod;
 
 namespace XRL.World.Parts
 {
-    public class LunarRegent :IScribedPart
+    [Serializable]
+    public class UD_Bones_LunarRegent :IScribedPart
     {
         public string BonesID;
         public bool Cremated;
 
         public string RegalTitle
         {
-            get => ParentObject?.GetStringProperty(nameof(MoonKingFever.RegalTitle), GetRegalTitle(ParentObject));
-            set => ParentObject?.SetStringProperty(nameof(MoonKingFever.RegalTitle), value);
+            get => ParentObject?.GetStringProperty(nameof(UD_Bones_MoonKingFever.RegalTitle), GetRegalTitle(ParentObject));
+            set => ParentObject?.SetStringProperty(nameof(UD_Bones_MoonKingFever.RegalTitle), value);
         }
 
         public static string GetRegalTitle(GameObject LunarRegent)
@@ -48,7 +49,7 @@ namespace XRL.World.Parts
 
         public void Onset()
         {
-            ParentObject.ApplyEffect(new MoonKingFever(RegalTitle));
+            ParentObject.ApplyEffect(new UD_Bones_MoonKingFever(RegalTitle));
         }
 
         public override bool WantEvent(int ID, int Cascade)
@@ -59,17 +60,20 @@ namespace XRL.World.Parts
         public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
         {
             if (!Cremated
-                && BonesManager.System != null
-                && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo) is true)
+                && UD_Bones_BonesManager.System != null
+                && UD_Bones_BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
                 bonesInfo.Cremate();
                 Cremated = true;
-                Utils.Log($"{nameof(LunarRegent)} did cremation!");
             }
             if (ParentObject != null
                 && !ParentObject.IsPlayer()
-                && !ParentObject.HasEffect<MoonKingFever>())
+                && !ParentObject.HasEffect<UD_Bones_MoonKingFever>())
                 Onset();
+
+            if (ParentObject.Render is Render lunarRender
+                && !lunarRender.Visible)
+                lunarRender.Visible = true;
 
             return base.HandleEvent(E);
         }

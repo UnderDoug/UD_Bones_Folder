@@ -7,7 +7,7 @@ using XRL.UI;
 using XRL.Wish;
 using XRL.World.ZoneBuilders;
 
-using Bones.Mod;
+using UD_Bones_Folder.Mod;
 
 namespace XRL.World.WorldBuilders
 {
@@ -16,7 +16,7 @@ namespace XRL.World.WorldBuilders
     [JoppaWorldBuilderExtension]
     public class UD_Bones_WorldBuilder : IJoppaWorldBuilderExtension
     {
-        public static BonesManager BonesManager => BonesManager.System;
+        public static UD_Bones_BonesManager BonesManager => UD_Bones_BonesManager.System;
 
         public JoppaWorldBuilder Builder;
 
@@ -41,7 +41,7 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
+            if (UD_Bones_BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 

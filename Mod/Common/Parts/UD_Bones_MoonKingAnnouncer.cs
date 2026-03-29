@@ -1,16 +1,16 @@
 ﻿using System;
 
-using Bones.Mod;
-
 using ConsoleLib.Console;
 
 using XRL.UI;
 using XRL.World.ZoneBuilders;
 
+using UD_Bones_Folder.Mod;
+
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class MoonKingAnnouncer : IScribedPart
+    public class UD_Bones_MoonKingAnnouncer : IScribedPart
     {
         public string BonesID;
         public bool Cremated;
@@ -18,7 +18,9 @@ namespace XRL.World.Parts
         public string Title;
         public string Message;
 
-        public MoonKingAnnouncer()
+        public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetStringProperty(UD_Bones_BonesSaver.BonesName) == BonesID);
+
+        public UD_Bones_MoonKingAnnouncer()
             : base()
         { }
 
@@ -30,13 +32,13 @@ namespace XRL.World.Parts
             if (ParentObject.CurrentZone == The.Player.CurrentZone
                 && !Title.IsNullOrEmpty()
                 && !Message.IsNullOrEmpty()
-                && ParentObject.CurrentZone.GetFirstObject(go => go.GetStringProperty(BonesSaver.BonesName) == BonesID) is GameObject moonKing)
+                && MoonKing != null)
             {
                 Popup.ShowSpace(
                     Message: Message,
                     Title: Title,
-                    AfterRender: new (moonKing.RenderForUI()),
-                    PopupID: $"{nameof(BonesZoneBuilder)}::{BonesSaver.BonesName}");
+                    AfterRender: new (MoonKing.RenderForUI()),
+                    PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
 
                 ParentObject.Obliterate();
             }
@@ -51,14 +53,15 @@ namespace XRL.World.Parts
         public override bool HandleEvent(ZoneActivatedEvent E)
         {
             if (!Cremated
-                && BonesManager.System != null
-                && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo) is true)
+                && UD_Bones_BonesManager.System != null
+                && UD_Bones_BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
                 bonesInfo.Cremate();
                 Cremated = true;
-                Utils.Log($"{nameof(MoonKingAnnouncer)} did cremation!");
+                if (MoonKing?.GetPart<UD_Bones_LunarRegent>() is UD_Bones_LunarRegent lunarRegentPart)
+                    lunarRegentPart.Cremated = true;
+
             }
-            // Announce();
             return base.HandleEvent(E);
         }
 

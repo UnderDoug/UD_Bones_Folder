@@ -5,7 +5,7 @@ using Qud.API;
 using XRL.World.Effects;
 using XRL.World.Parts;
 
-using Bones.Mod;
+using UD_Bones_Folder.Mod;
 
 namespace XRL.World.ZoneBuilders
 {
@@ -16,7 +16,7 @@ namespace XRL.World.ZoneBuilders
         public string ZoneID;
 
         private SaveBonesInfo _SaveBonesInfo;
-        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= BonesManager.System?.GetSavedBonesByID(SaveBonesInfoID);
+        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= UD_Bones_BonesManager.System?.GetSavedBonesByID(SaveBonesInfoID);
 
         public BonesZoneBuilder()
         { }
@@ -28,7 +28,7 @@ namespace XRL.World.ZoneBuilders
                 Utils.Error(
                     Context: $"{nameof(BonesZoneBuilder)}.{nameof(BuildZone)}", 
                     X: new InvalidOperationException(
-                        $"Missing ${nameof(Bones.Mod.SaveBonesInfo)}." +
+                        $"Missing ${nameof(UD_Bones_Folder.Mod.SaveBonesInfo)}." +
                         $"Has the Bones folder been tampered with?\n" +
                         Utils.BothBonesLocations)
                     );
@@ -39,7 +39,7 @@ namespace XRL.World.ZoneBuilders
             if (savedBones.Pending != gameID)
             {
                 string pending = savedBones.Pending.EqualsNoCase($"{false}") ? "none (this is an error)" : savedBones.Pending;
-                Utils.Warn($"Loading mismatched {nameof(Bones.Mod.SaveBonesInfo)} for this {nameof(SaveGameInfo)}: " +
+                Utils.Warn($"Loading mismatched {nameof(UD_Bones_Folder.Mod.SaveBonesInfo)} for this {nameof(SaveGameInfo)}: " +
                     $"expected {pending}, got {gameID}. " +
                     $"Zone may be nonsensically placed.");
             }
@@ -47,15 +47,15 @@ namespace XRL.World.ZoneBuilders
             if (BonesData.GetFromSavedBonesInfo(ZoneID, savedBones) is BonesData bonesData
                 && bonesData.Apply(Z, out var MoonKing) is true)
             {
-                string regalTitle = MoonKingFever.REGAL_TITLE;
+                string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
-                if (MoonKing.TryGetEffect(out MoonKingFever moonKingFever))
+                if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
                     regalTitle = moonKingFever.RegalTitle.Color("rainbow");
 
                 Z.GetCell(0, 0)
                     ?.AddObject("Widget")
                     ?.AddPart(
-                        P: new MoonKingAnnouncer()
+                        P: new UD_Bones_MoonKingAnnouncer()
                         {
                             Title = $"A {regalTitle} persists!",
                             Message = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
