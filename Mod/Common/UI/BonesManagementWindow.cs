@@ -256,9 +256,11 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void Update()
         {
+            /*
             if (prefabComponent.GetNavigationContext().parentContext.IsActive()
                 && IsInsideActiveContext(prefabComponent.GetNavigationContext()) != WasInScroller)
                 UpdateControls();
+            */
         }
 
         public void ControllerChanged()
