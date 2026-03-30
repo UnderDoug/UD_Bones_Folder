@@ -197,7 +197,7 @@ namespace UD_Bones_Folder.Mod
                             game.WallTime.Start();
                         }
 
-                        var saveBonesJSON = The.Game.CreateSaveBonesJSON(DeathEvent, MoonKing);
+                        var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing);
 
                         writer.Start(400);
                         writer.Write(123457);

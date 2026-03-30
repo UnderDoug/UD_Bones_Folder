@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<embarkmodules>
+  <module Class="UD_Bones_Folder.Mod.UI.BonesManagementModule">
+    <window ID="Menu/UD_BonesFolderManagement" Prefab="VertScroll" Class="UD_Bones_Folder.Mod.UI.BonesManagementWindow">
+      <name>Bones Management</name>
+      <title>:manage bones:</title>
+    </window>
+  </module>
+</embarkmodules>

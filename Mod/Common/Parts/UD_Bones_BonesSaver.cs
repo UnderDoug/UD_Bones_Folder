@@ -41,14 +41,14 @@ namespace XRL.World.Parts
             Cell TargetCell
             )
         {
-            if (!Player.CanBeReplicated(Player, UD_Bones_BonesSaver.BonesName, Temporary: false))
+            if (!Player.CanBeReplicated(Player, BonesName, Temporary: false))
                 return null;
 
             var moonKing = Player.DeepCopy();
 
             moonKing.RestorePristineHealth();
 
-            moonKing.SetStringProperty(UD_Bones_BonesSaver.BonesName, The.Game.GameID);
+            moonKing.SetStringProperty(BonesName, The.Game.GameID);
             moonKing.SetStringProperty("UD_Bones_NoWrite", null, true);
 
             var brain = moonKing.Brain;

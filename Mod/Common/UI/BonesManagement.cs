@@ -9,6 +9,7 @@ using Qud.UI;
 using UnityEngine.UI;
 
 using XRL;
+using XRL.CharacterBuilds;
 using XRL.CharacterBuilds.UI;
 using XRL.Collections;
 using XRL.UI;
@@ -16,10 +17,19 @@ using XRL.UI.Framework;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    [UIView("UD_BonesFolderManagement", NavCategory = "Menu", UICanvas = "SaveManagement", UICanvasHost = 1)]
-    public class BonesManagement : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
+    [UIView("UD_BonesFolderManagement",
+        NavCategory = "Menu",
+        UICanvas = "SaveManagement",
+        UICanvasHost = 1)]
+    public class BonesManagement
+        : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
+        // : EmbarkBuilderModuleWindowPrefabBase<BonesManagementModule, FrameworkScroller>, ControlManager.IControllerChangedEvent
     {
-        protected List<BonesInfoData> Bones;
+        protected List<FrameworkDataElement> Bones
+        {
+            get => BonesScroller.choices;
+            set => BonesScroller.choices = value;
+        }
 
         public Image Background;
 
@@ -41,6 +51,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void SetupContext()
         {
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(SetupContext)}");
             NavigationContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             NavigationContext.buttonHandlers.Set(InputButtonTypes.CancelButton, Event.Helpers.Handle(Exit));
             MidHorizNav.SetAxis(InputAxisTypes.NavigationXAxis);
@@ -53,34 +64,47 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
             var savedGameInfo = BonesManager.GetSavedBonesInfoAsync();
             Task.WaitAll(savedGameInfo);
             var result = new List<SaveBonesInfo>(savedGameInfo.Result);
-            var selections = Bones = SaveBonesInfosToUIElements(result);
-            if (result.Count == 0)
+            var bareBones = SaveBonesInfosToUIElements(result);
+            Bones = new(bareBones);
+
+            if (Bones.Count == 0)
             {
                 CompletionSource.TrySetResult(null);
                 Exit();
                 return;
             }
+            /**/
             base.Show();
+            /**/
+
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do backButton");
             BackButton?.gameObject.SetActive(value: true);
             if (BackButton.navigationContext == null)
-            {
                 BackButton.Awake();
-            }
             BackButton.navigationContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             BackButton.navigationContext.buttonHandlers.Set(InputButtonTypes.AcceptButton, Event.Helpers.Handle(Exit));
+
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do BonesScroller");
             BonesScroller.scrollContext.wraps = true;
-            BonesScroller.BeforeShow(null, selections);
+            BonesScroller.BeforeShow(null, Bones);
+
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do aggregate bonesManagementRows");
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones.Count: {BonesScroller.selectionClones?.Count ?? -1}");
             using var bonesManagementRows = ScopeDisposedList<BonesManagementRow>.GetFromPool();
             BonesScroller.selectionClones.Aggregate(
                 seed: bonesManagementRows,
                 func: delegate (ScopeDisposedList<BonesManagementRow> accumulator, FrameworkUnityScrollChild next)
                 {
+                    Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones: {next.GetComponent<BonesManagementRow>().TextSkins[0].text}");
                     bonesManagementRows.Add(next.GetComponent<BonesManagementRow>());
                     return bonesManagementRows;
                 });
+
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do bonesManagementRows");
             foreach (var bonesManagementRow in bonesManagementRows)
             {
                 if (bonesManagementRow != null)
@@ -95,18 +119,24 @@ namespace UD_Bones_Folder.Mod.UI
                     };
                 }
             }
+
             if (SelectFirst)
             {
+                Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do SelectFirst");
                 SelectFirst = false;
                 BonesScroller.scrollContext.selectedPosition = 0;
             }
             else
             if (BonesScroller.scrollContext.selectedPosition >= result.Count)
             {
+                Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do not SelectFirst");
                 BonesScroller.scrollContext.selectedPosition = Math.Max(result.Count - 1, 0);
             }
+
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do BonesScroller.onSelected");
             BonesScroller.onSelected.RemoveAllListeners();
             BonesScroller.onSelected.AddListener(SelectedInfo);
+
             SetupContext();
             EnableNavContext();
             UpdateMenuBars();
@@ -121,6 +151,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void EnableNavContext()
         {
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(EnableNavContext)}");
             NavigationContext.disabled = false;
             BonesScroller.GetNavigationContext().ActivateAndEnable();
         }
@@ -135,6 +166,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             return activeContext.IsInside(NavigationContext);
         }
+
         public void DisableNavContext(bool deactivate = true)
         {
             if (deactivate
@@ -191,7 +223,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void Exit()
         {
-            MetricsManager.LogEditorInfo("Exiting continue screen");
+            MetricsManager.LogEditorInfo("Exiting bones screen");
             CompletionSource?.TrySetResult(null);
             ControlManager.ResetInput();
         }
@@ -201,7 +233,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
                 return;
 
-            var bonesData = Bones[BonesScroller.selectedPosition];
+            var bonesData = Bones[BonesScroller.selectedPosition] as BonesInfoData;
             var bonesInfo = bonesData.BonesInfo;
 
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
@@ -224,7 +256,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                 await Popup.NewPopupMessageAsync("Bones Deleted!", PopupMessage.AcceptButton);
 
-                Bones = SaveBonesInfosToUIElements(new(await BonesManager.GetSavedBonesInfoAsync()));
+                Bones = new(SaveBonesInfosToUIElements(await BonesManager.GetSavedBonesInfoAsync()));
                 if (Bones.Count == 0)
                     Exit();
                 else
@@ -260,17 +292,15 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (NavigationContext.IsActive()
                 && IsInsideActiveContext(BonesScroller.GetNavigationContext()) != WasInScroller)
-            {
                 UpdateMenuBars();
-            }
         }
 
         public void ControllerChanged()
             => UpdateMenuBars()
             ;
 
-        public static List<BonesInfoData> SaveBonesInfosToUIElements(List<SaveBonesInfo> saveGameInfos)
-            => saveGameInfos.Aggregate(
+        public static List<BonesInfoData> SaveBonesInfosToUIElements(IEnumerable<SaveBonesInfo> SaveGameInfoList)
+            => SaveGameInfoList.Aggregate(
                 seed: new List<BonesInfoData>(),
                 func: delegate (List<BonesInfoData> accumulator, SaveBonesInfo next)
                 {

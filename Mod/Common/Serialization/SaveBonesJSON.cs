@@ -33,60 +33,6 @@ namespace UD_Bones_Folder.Mod
             Pending = $"{false}";
         }
 
-        public SaveBonesJSON(
-            string ZoneID,
-            string DeathReason
-            )
-            : this()
-        {
-            this.ZoneID = ZoneID;
-            this.DeathReason = DeathReason;
-        }
-
-        public SaveBonesJSON(IDeathEvent DeathEvent)
-            : this(
-                  ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  DeathReason: DeathEvent?.Reason)
-        { }
-
-        public SaveBonesJSON(
-            string ZoneID,
-            string ThirdPersonDeathReason,
-            SaveGameJSON Source
-            )
-            : this(ZoneID, ThirdPersonDeathReason)
-        {
-            if (Source != null)
-            {
-                InfoVersion = Source.InfoVersion;
-                SaveVersion = Source.SaveVersion;
-                GameVersion = Source.GameVersion;
-                ID = Source.ID;
-                Name = Source.Name;
-                Level = Source.Level;
-                GenoSubType = Source.GenoSubType;
-                GameMode = Source.GameMode;
-                CharIcon = Source.CharIcon;
-                FColor = Source.FColor;
-                DColor = Source.DColor;
-                Location = Source.Location;
-                InGameTime = Source.InGameTime;
-                Turn = Source.Turn;
-                SaveTime = Source.SaveTime;
-                ModsEnabled = Source.ModsEnabled;
-            }
-        }
-
-        public SaveBonesJSON(
-            IDeathEvent DeathEvent,
-            SaveGameJSON Source
-            )
-            : this(
-                  ZoneID: DeathEvent?.Dying?.CurrentZone?.ZoneID,
-                  ThirdPersonDeathReason: DeathEvent?.Reason,
-                  Source: Source)
-        { }
-
         public static long GetDirectorySize(string Path)
         {
             IEnumerable<string> files = Directory.EnumerateFiles(Path);
@@ -134,9 +80,19 @@ namespace UD_Bones_Folder.Mod
                 SaveTime = json.SaveTime,
                 ModsEnabled = json.ModsEnabled,
 
-                ModVersion = Utils.ThisMod.Assembly.GetName().Version.ToString(),
-
                 FileName = FilePath,
+
+                ModVersion = json.ModVersion,
+
+                ZoneID = json.ZoneID,
+                DeathReason = json.ZoneID,
+
+                GenotypeName = json.GenotypeName,
+                SubtypeName = json.SubtypeName,
+
+                ZoneTerrainType = json.ZoneTerrainType,
+                ZoneTier = json.ZoneTier,
+                ZoneRegion = json.ZoneRegion,
             };
             if (json.SaveVersion < 395
                 || json.SaveVersion > 400)

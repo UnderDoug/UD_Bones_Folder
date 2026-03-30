@@ -15,10 +15,14 @@ namespace UD_Bones_Folder.Mod
     {
         public static SaveBonesJSON CreateSaveBonesJSON(this XRLGame Game, IDeathEvent E, GameObject MoonKing)
         {
-            var render = MoonKing.RenderForUI("SaveGameInfo");
+            Utils.Log($"start of CreateSaveBonesJSON.");
+            var render = The.Player.RenderForUI("SaveBonesInfo", true);
+            Utils.Log($"got render.");
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
             var zone = MoonKing.CurrentZone;
+            Utils.Log($"got zone.");
             string zoneID = zone.ZoneID;
+            Utils.Log($"about to return new SaveBonesJSON.");
             return new SaveBonesJSON
             {
                 SaveVersion = 400,
@@ -38,7 +42,7 @@ namespace UD_Bones_Folder.Mod
                 SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
                 ModsEnabled = ModManager.GetRunningMods().ToList(),
 
-                ModVersion = Utils.ThisMod.Assembly.GetName().Version.ToString(),
+                ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
                 ZoneID = zoneID,
                 DeathReason = E.Reason,

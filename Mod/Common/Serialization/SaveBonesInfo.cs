@@ -26,6 +26,9 @@ namespace UD_Bones_Folder.Mod
             $"{UD_Bones_BonesSaver.BonesName}.json",
             $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
+
+        public string FileName;
+
         public string ModVersion;
 
         public string ZoneID;
@@ -37,8 +40,6 @@ namespace UD_Bones_Folder.Mod
         public string ZoneTerrainType;
         public int ZoneTier;
         public string ZoneRegion;
-
-        public string FileName;
 
         public string Pending => GetBonesJSON()?.Pending;
 
