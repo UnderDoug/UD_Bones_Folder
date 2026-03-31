@@ -79,7 +79,7 @@ namespace UD_Bones_Folder.Mod.UI
                 Utils.Log($"{nameof(BonesManagementWindow)}.{nameof(Show)}, do not SelectFirst");
                 prefabComponent.scrollContext.selectedPosition = Math.Max(prefabComponent.choices.Count - 1, 0);
             }
-
+            
             EnableNavContext();
 
             base.BeforeShow(descriptor);
@@ -93,8 +93,7 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public override UIBreadcrumb GetBreadcrumb()
-        {
-            return new()
+            => new()
             {
                 Id = GetType().FullName,
                 Title = "Manage Bones",
@@ -103,7 +102,6 @@ namespace UD_Bones_Folder.Mod.UI
                 IconDetailColor = The.Color.White,
                 IconForegroundColor = The.Color.Black,
             };
-        }
 
         public void EnableNavContext()
         {

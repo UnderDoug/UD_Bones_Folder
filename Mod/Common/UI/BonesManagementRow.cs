@@ -13,11 +13,22 @@ using UnityEngine.UI;
 using XRL;
 using XRL.UI;
 using XRL.UI.Framework;
+using System;
+using Event = XRL.UI.Framework.Event;
 
 namespace UD_Bones_Folder.Mod.UI
 {
     public class BonesManagementRow : MonoBehaviour, IFrameworkControl
     {
+        public static Dictionary<InputButtonTypes, Action> DeleteButtonHandler => new()
+        {
+            { InputButtonTypes.AcceptButton, Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
+        };
+        public static Dictionary<string, Action> DeleteCommandHandler => new()
+        {
+            { "CmdDelete", Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
+        };
+
         public ImageTinyFrame ImageTinyFrame;
 
         public List<UITextSkin> TextSkins;
@@ -35,22 +46,20 @@ namespace UD_Bones_Folder.Mod.UI
 
         public bool Invalid;
 
-        void IFrameworkControl.setData(FrameworkDataElement data)
-            => setData(data);
-
-        public bool setData(FrameworkDataElement data)
+        public void setData(FrameworkDataElement data)
         {
             if (data is not BonesInfoData bonesData)
             {
                 Invalid = true;
-                return false;
+                Utils.Log($"            {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
+                return;
             }
 
             Invalid = false;
+            Utils.Log($"            {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
 
             DeleteButton ??= new();
-            DeleteButton.context ??= new NavigationContext();
-            DeleteButton.context.parentContext = Context.context;
+            DeleteButton.RequireContext<NavigationContext>().parentContext = Context.context;
 
             var bonesInfo = bonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
@@ -97,8 +106,6 @@ namespace UD_Bones_Folder.Mod.UI
             ModsDiffer.SetActive(bonesInfo.DifferentMods());
             WasSelected = null;
             Update();
-
-            return true;
         }
 
         public void Update()

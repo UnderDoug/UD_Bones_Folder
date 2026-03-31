@@ -7,6 +7,15 @@ namespace UD_Bones_Folder.Mod.UI
 {
     public class BonesInfoData : PrefixMenuOption
     {
-        public SaveBonesInfo BonesInfo;
+        private SaveBonesInfo _BonesInfo;
+        public SaveBonesInfo BonesInfo
+        {
+            get => _BonesInfo;
+            set
+            {
+                Id = value.ID;
+                _BonesInfo = value;
+            }
+        }
     }
 }

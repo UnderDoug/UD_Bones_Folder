@@ -80,28 +80,33 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 if (Options.ModernUI)
                 {
-                    /*             
-                    try
+                    // await NavigationController.instance.SuspendContextWhile(delegate () { return Popup.ShowAsync("It Works."); });
+
+                    if (BonesManagement.CheckInit())
                     {
-                        GameManager.Instance.PushGameView("ModernBonesManagement");
-                        MainMenu.instance.DisableNavContext();
-                        await BonesManagement.Instance.BonesMenu();
+                        try
+                        {
+                            GameManager.Instance.PushGameView("ModernBonesManagement");
+                            MainMenu.instance.DisableNavContext();
+                            await BonesManagement.instance.BonesMenu();
+                        }
+                        finally
+                        {
+                            GameManager.Instance.PopGameView();
+                            MainMenu.instance.Reshow();
+                        }
                     }
-                    finally
+                    else
                     {
-                        GameManager.Instance.PopGameView();
-                        MainMenu.instance.Reshow();
-                    }
-                    */
-                    try
-                    {
-                        await NewGameForBones();
-                        // await NavigationController.instance.SuspendContextWhile(delegate () { return Popup.ShowAsync("It Works."); });
-                    }
-                    finally
-                    {
-                        DoingBonesManagement = false;
-                        UIManager.showWindow("MainMenu");
+                        try
+                        {
+                            await NewGameForBones();
+                        }
+                        finally
+                        {
+                            DoingBonesManagement = false;
+                            UIManager.showWindow("MainMenu");
+                        }
                     }
                 }
             }
