@@ -30,6 +30,8 @@ namespace UD_Bones_Folder.Mod.UI
     {
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolderManagement";
 
+        public static MenuOption BACK_BUTTON => EmbarkBuilderOverlayWindow.BackMenuOption;
+
         public Image Background;
 
         public FrameworkScroller HotkeyBar;
@@ -54,19 +56,6 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (instance == null)
             {
-                /*
-                if (Resources.Load($"Prefabs/{nameof(SaveManagement)}") is not UnityEngine.GameObject saveManagementPrefab
-                    || (saveManagementPrefab = SaveManagement.instance.gameObject) == null
-                    || (!UIManager.instance.windowsByName.TryGetValue(nameof(SaveManagement), out var saveManagementWindow)
-                        && (saveManagementPrefab = saveManagementWindow.gameObject) == null))
-                    throw new InvalidOperationException($"Unable to get copy of {nameof(SaveManagement)} UI Window.");
-
-                var bonesManagementPrefab = Instantiate(saveManagementPrefab);
-
-                bonesManagementPrefab.SetActive(value: false);
-                */
-
-                // var parent = GameObject.Find("UI Manager").transform;
                 try
                 {
                     var bonesManagementWindow = UIManager
@@ -101,38 +90,31 @@ namespace UD_Bones_Folder.Mod.UI
             if (Instantiate(SaveManagement.instance.gameObject) is not GameObject saveManagementObject)
                 throw new Exception($"Failed to get {nameof(SaveManagement)} game object for cloning.");
 
-            BackButton = Instantiate(SaveManagement.instance.backButton);
-            if (BackButton != null)
-            {
-                BackButton.gameObject.SetActive(value: false);
-                BackButton.transform.SetParent(transform, worldPositionStays: true);
-            }
-            else
-            {
-                Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
-            }
-
             BonesScroller = Instantiate(SaveManagement.instance.savesScroller);
             if (BonesScroller != null)
             {
-                BonesScroller.gameObject.SetActive(value: false);
-                BonesScroller.transform.SetParent(transform, worldPositionStays: true);
+                SetParentTransform(BonesScroller);
             }
             else
-            {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BonesScroller)} must not be null"));
-            }
 
             HotkeyBar = Instantiate(SaveManagement.instance.hotkeyBar);
             if (HotkeyBar != null)
-            {
-                HotkeyBar.gameObject.SetActive(value: false);
-                HotkeyBar.transform.SetParent(transform, worldPositionStays: true);
-            }
+                SetParentTransform(HotkeyBar);
             else
-            {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(HotkeyBar)} must not be null"));
-            }
+
+            BackButton = Instantiate(SaveManagement.instance.backButton);
+            if (BackButton != null)
+                SetParentTransform(BackButton);
+            else
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
+        }
+
+        public void SetParentTransform(Component Component)
+        {
+            Component.gameObject.SetActive(value: false);
+            Component.transform.SetParent(transform, worldPositionStays: false);
         }
 
         public void SetupContext()
@@ -140,6 +122,9 @@ namespace UD_Bones_Folder.Mod.UI
             Utils.Log($"{nameof(BonesManagement)}.{nameof(SetupContext)}");
             MainNavContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             MainNavContext.buttonHandlers.Set(InputButtonTypes.CancelButton, Event.Helpers.Handle(Exit));
+
+            Background = SaveManagement.instance.background;
+
             MidHorizNav.SetAxis(InputAxisTypes.NavigationXAxis);
             MidHorizNav.contexts.Clear();
             MidHorizNav.contexts.Add(BackButton.navigationContext);
@@ -150,8 +135,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
+            /*
             Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, get task");
             if (BonesManager.GetSavedBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
             {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get bonesInfo task");
@@ -160,15 +145,36 @@ namespace UD_Bones_Folder.Mod.UI
                 return;
             }
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, await Task");
             Task.WaitAll(savedBonesInfoTask);
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, get Task results");
+            if (savedBonesInfoTask.Result is not IEnumerable<SaveBonesInfo> bonesInfos
+                || SaveBonesInfosToUIElements(bonesInfos) is not List<SaveInfoData> bareBones
+                || bareBones.IsNullOrEmpty()
+                || (Bones = new(bareBones)).IsNullOrEmpty())
+            {
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get choices");
+                CompletionSource?.TrySetResult(null);
+                Exit();
+                return;
+            }
+            */
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
+            if (BonesManager.GetSavedBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
+            {
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get bonesInfo task");
+                CompletionSource?.TrySetResult(null);
+                Exit();
+                return;
+            }
+
+            Task.WaitAll(savedBonesInfoTask);
+
             if (savedBonesInfoTask.Result is not IEnumerable<SaveBonesInfo> bonesInfos
                 || SaveBonesInfosToUIElements(bonesInfos) is not List<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
                 || (Bones = new(bareBones)).IsNullOrEmpty())
             {
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get choices");
                 CompletionSource?.TrySetResult(null);
                 Exit();
                 return;
@@ -176,18 +182,16 @@ namespace UD_Bones_Folder.Mod.UI
 
             base.Show();
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do backButton");
             BackButton.gameObject.SetActive(value: true);
             if (BackButton.navigationContext == null)
                 BackButton.Awake();
             BackButton.navigationContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             BackButton.navigationContext.buttonHandlers.Set(InputButtonTypes.AcceptButton, Event.Helpers.Handle(Exit));
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do BonesScroller");
+            BonesScroller.gameObject.SetActive(value: true);
             BonesScroller.scrollContext.wraps = true;
-            BonesScroller.BeforeShow(null, Bones);
+            BonesScroller.BeforeShow(Bones);
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do aggregate bonesManagementRows");
             Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones.Count: {BonesScroller.selectionClones?.Count ?? -1}");
             for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
             {
@@ -206,8 +210,9 @@ namespace UD_Bones_Folder.Mod.UI
                         Utils.Log($"        {nameof(BonesManagement)}.{nameof(Show)}, {nameof(FrameworkUnityScrollChild)} doesn't want {nameof(BonesManagementRow)}");
                         continue;
                     }
-                    BonesScroller.SetupPrefab(selectionCloneI, selectionCloneI.scrollContext, bonesDataI, i);
-                    selectionCloneI.scrollContext.Setup();
+                    var childContext =  BonesScroller.MakeContextFor(data, i);
+                    BonesScroller.SetupPrefab(selectionCloneI, childContext, bonesDataI, i);
+                    childContext.Setup();
 
                     Utils.Log($"        {nameof(BonesManagement)}.{nameof(Show)}, {nameof(BonesManagementRow)} set up handlers");
 
@@ -224,6 +229,11 @@ namespace UD_Bones_Folder.Mod.UI
                         saveRow.context.context.commandHandlers = BonesManagementRow.DeleteCommandHandler;
                     }
                 }
+                if (!BonesScroller.spacerClones.IsNullOrEmpty())
+                {
+                    // BonesScroller.spacerClones[0].
+                }
+                
             }
 
             if (SelectFirst)
@@ -241,7 +251,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, do BonesScroller.onSelected");
             BonesScroller.onSelected.RemoveAllListeners();
-            BonesScroller.onSelected.AddListener(SelectedInfo);
+            BonesScroller.onSelected.AddListener(SelectedBones);
 
             SetupContext();
             EnableNavContext();
@@ -275,14 +285,17 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void DisableNavContext(bool deactivate = true)
         {
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(DisableNavContext)}");
             if (deactivate
                 && IsInsideActiveContext(MainNavContext))
                 NavigationController.instance.activeContext = null;
             MainNavContext.disabled = true;
         }
 
-        public void SelectedInfo(FrameworkDataElement data)
+        public void SelectedBones(FrameworkDataElement data)
         {
+            //Utils.Log($"{nameof(BonesManagement)}.{nameof(SelectedBones)}: {(data as SaveInfoData).SaveGame.Name}");
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(SelectedBones)}: {(data as BonesInfoData).BonesInfo.Name}");
             if (data is BonesInfoData bonesData)
                 CompletionSource?.TrySetResult(bonesData.BonesInfo);
         }
@@ -290,7 +303,6 @@ namespace UD_Bones_Folder.Mod.UI
         public async Task BonesMenu()
         {
             gameObject.SetActive(value: true);
-
             SelectFirst = true;
             while (true)
             {
@@ -339,8 +351,9 @@ namespace UD_Bones_Folder.Mod.UI
             if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
                 return;
 
-            var bonesData = Bones[BonesScroller.selectedPosition] as BonesInfoData;
-            var bonesInfo = bonesData.BonesInfo;
+            if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
+                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
+                return;
 
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
@@ -372,8 +385,9 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void UpdateMenuBars()
         {
+            // HotkeyBar.gameObject.SetActive(value: true);
             HotkeyBar.GetNavigationContext().disabled = true;
-            HotkeyBar.BeforeShow(null, new List<MenuOption>
+            HotkeyBar.BeforeShow(new List<MenuOption>
             {
                 new MenuOption
                 {
@@ -404,6 +418,23 @@ namespace UD_Bones_Folder.Mod.UI
             => UpdateMenuBars()
             ;
 
+        /*
+        public static IEnumerable<SaveInfoData> SaveBonesInfosToUIElements(IEnumerable<SaveBonesInfo> SaveGameInfoList)
+            => !SaveGameInfoList.IsNullOrEmpty()
+            ? SaveGameInfoList.Aggregate(
+                seed: new List<SaveInfoData>(),
+                func: delegate (List<SaveInfoData> accumulator, SaveBonesInfo next)
+                {
+                    accumulator.Add(
+                        item: new SaveInfoData
+                        { 
+                            SaveGame = next,
+                        });
+                    return accumulator;
+                })
+            : new()
+            ;
+        */
         public static IEnumerable<BonesInfoData> SaveBonesInfosToUIElements(IEnumerable<SaveBonesInfo> SaveGameInfoList)
             => !SaveGameInfoList.IsNullOrEmpty()
             ? SaveGameInfoList.Aggregate(
