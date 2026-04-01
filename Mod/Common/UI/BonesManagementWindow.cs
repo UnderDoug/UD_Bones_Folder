@@ -282,13 +282,13 @@ namespace UD_Bones_Folder.Mod.UI
                         item: new BonesInfoData
                         {
                             BonesInfo = next,
-                            LongDescription = next.Description,
+                            /*LongDescription = next.Description,
                             Renderable = new Renderable
                             {
                                 Tile = next.json.CharIcon,
                                 TileColor = tileColor,
                                 DetailColor = detailColor,
-                            },
+                            },*/
                         });
                     return accumulator;
                 });

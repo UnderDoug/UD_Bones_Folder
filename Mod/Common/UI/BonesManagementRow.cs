@@ -20,6 +20,9 @@ namespace UD_Bones_Folder.Mod.UI
 {
     public class BonesManagementRow : MonoBehaviour, IFrameworkControl
     {
+        public static ImageTinyFrame _imageTinyFrame;
+        public static ImageTinyFrame imageTinyFrame => _imageTinyFrame ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.imageTinyFrame);
+
         public static Dictionary<InputButtonTypes, Action> DeleteButtonHandler => new()
         {
             { InputButtonTypes.AcceptButton, Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
@@ -51,19 +54,26 @@ namespace UD_Bones_Folder.Mod.UI
             if (data is not BonesInfoData bonesData)
             {
                 Invalid = true;
-                Utils.Log($"            {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
+                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(data)})");
                 return;
             }
 
             Invalid = false;
-            Utils.Log($"            {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
+            Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
 
-            DeleteButton ??= new();
+            DeleteButton ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.deleteButton);
             DeleteButton.RequireContext<NavigationContext>().parentContext = Context.context;
 
             var bonesInfo = bonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
-            ImageTinyFrame ??= new();
+            if (Instantiate(BonesManagementRow.imageTinyFrame) is not ImageTinyFrame imageTinyFrame)
+            {
+                Invalid = true;
+                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(ImageTinyFrame)})");
+                return;
+            }
+
+            ImageTinyFrame ??= imageTinyFrame;
             string tile = "Text/32.bmp";
             if (bonesJSON != null)
             {
@@ -99,11 +109,34 @@ namespace UD_Bones_Folder.Mod.UI
                 ImageTinyFrame.ThreeColor.SetHFlip(Value: true);
 
             ImageTinyFrame.Sync(force: true);
+
+            if (TextSkins.IsNullOrEmpty())
+            {
+                TextSkins = new();
+                if (SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.TextSkins is not List<UITextSkin> textSkins)
+                {
+                    Invalid = true;
+                    Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
+                    return;
+                }
+                foreach (var textSkin in textSkins)
+                {
+                    TextSkins.Add(Instantiate(textSkin));
+                }
+            }
+            if (TextSkins.IsNullOrEmpty())
+            {
+                Invalid = true;
+                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)})");
+                return;
+            }
+
             TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".WithColor("W"));
             TextSkins[1].SetText($"{"Location:".WithColor("C")} {bonesInfo.Info}");
             TextSkins[2].SetText($"{"Last saved:".WithColor("C")} {bonesInfo.SaveTime}");
             TextSkins[3].SetText($"{bonesInfo.Size} {{{bonesInfo.ID}}}".WithColor("K"));
-            ModsDiffer.SetActive(bonesInfo.DifferentMods());
+            ModsDiffer ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.modsDiffer);
+            ModsDiffer.SetActive(value: bonesInfo.DifferentMods());
             WasSelected = null;
             Update();
         }
@@ -121,8 +154,35 @@ namespace UD_Bones_Folder.Mod.UI
 
                 var darkCyan = The.Color.DarkCyan;
                 darkCyan.a = isActive ? 0.25f : 0f;
+                background ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.background);
                 background.color = darkCyan;
                 bool first = true;
+
+                if (TextSkins.IsNullOrEmpty())
+                {
+                    TextSkins = new();
+                    if (SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.TextSkins is not List<UITextSkin> textSkins)
+                    {
+                        Invalid = true;
+                        Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
+                        return;
+                    }
+                    foreach (var textSkin in textSkins)
+                    {
+                        TextSkins.Add(Instantiate(textSkin));
+                    }
+                }
+
+                if (TextSkins.IsNullOrEmpty())
+                {
+                    Invalid = true;
+                    Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)}2)");
+                    return;
+                }
+
+                if (Invalid)
+                    return;
+
                 foreach (UITextSkin textSkin in TextSkins)
                 {
                     if (isActive)

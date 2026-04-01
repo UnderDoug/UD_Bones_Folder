@@ -86,13 +86,17 @@ namespace UD_Bones_Folder.Mod.UI
                     {
                         try
                         {
+                            /*
                             GameManager.Instance.PushGameView("ModernBonesManagement");
                             MainMenu.instance.DisableNavContext();
                             await BonesManagement.instance.BonesMenu();
+                            */
+                            await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
                         }
                         finally
                         {
-                            GameManager.Instance.PopGameView();
+                            //GameManager.Instance.PopGameView();
+                            UIManager.showWindow("MainMenu");
                             MainMenu.instance.Reshow();
                         }
                     }

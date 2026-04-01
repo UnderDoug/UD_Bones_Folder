@@ -86,6 +86,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Init()
         {
+            Utils.Log($"{nameof(BonesManagement)}.{nameof(Init)}");
             base.Init();
             if (Instantiate(SaveManagement.instance.gameObject) is not GameObject saveManagementObject)
                 throw new Exception($"Failed to get {nameof(SaveManagement)} game object for cloning.");
@@ -94,9 +95,72 @@ namespace UD_Bones_Folder.Mod.UI
             if (BonesScroller != null)
             {
                 SetParentTransform(BonesScroller);
+                
+                string name = BonesScroller.selectionPrefab.name;
+                try
+                {
+                    BonesScroller.selectionPrefab.name += $"[{nameof(BonesManagementRow)}]";
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", x);
+                    BonesScroller.selectionPrefab.name = name;
+                }
+                /*
+                BonesScroller.selectionPrefab = Instantiate(BonesScroller.selectionPrefab);
+                BonesScroller.selectionPrefab.name = nameof(BonesManagementRow);
+                BonesScroller.selectionPrefab.GetComponent<SaveManagementRow>().DestroyImmediate();
+                BonesScroller.selectionPrefab.gameObject.AddComponent<BonesManagementRow>();
+                BonesScroller.selectionPrefab = Instantiate(BonesScroller.selectionPrefab);
+                */
+
+                Background = BonesScroller.gameObject.AddComponent<Image>();
+                Background.color = SaveManagement.instance?.background?.color ?? The.Color.Black;
+                Background.material = SaveManagement.instance?.background?.material;
+
+                /*
+                var saveManBG = SaveManagement.instance?.background;
+                List<string> output = new();
+                string label = null;
+                string value = null;
+                string MakeEntry()
+                    => $"{label}: {value}";
+                try
+                {
+                    label = $"{1.Indent()}{nameof(saveManBG.color)}";
+                    value = $"{saveManBG?.color}";
+                    output.Add(MakeEntry());
+
+                    label = $"{1.Indent()}{nameof(saveManBG.sprite)}";
+                    value = $"{saveManBG?.sprite}";
+                    output.Add(MakeEntry());
+
+                    label = $"{1.Indent()}{nameof(saveManBG.mainTexture)}";
+                    value = $"{saveManBG?.mainTexture}";
+                    output.Add(MakeEntry());
+
+                    label = $"{1.Indent()}{nameof(saveManBG.material)}";
+                    value = $"{saveManBG?.material}";
+                    output.Add(MakeEntry());
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Unity didn't like {Utils.CallChain(nameof(SaveManagement.instance.background), label)} being looked at", x);
+                }
+                finally
+                {
+                    Utils.Log(output.Aggregate(Utils.CallChain(nameof(SaveManagement), nameof(SaveManagement.instance.background)), Utils.NewLineDelimitedAggregator));
+                }
+                */
             }
             else
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BonesScroller)} must not be null"));
+
+            BackButton = Instantiate(SaveManagement.instance.backButton);
+            if (BackButton != null)
+                SetParentTransform(BackButton);
+            else
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
 
             HotkeyBar = Instantiate(SaveManagement.instance.hotkeyBar);
             if (HotkeyBar != null)
@@ -104,17 +168,28 @@ namespace UD_Bones_Folder.Mod.UI
             else
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(HotkeyBar)} must not be null"));
 
-            BackButton = Instantiate(SaveManagement.instance.backButton);
-            if (BackButton != null)
-                SetParentTransform(BackButton);
-            else
-                Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
+            instance?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init)));
+            SaveManagement.instance?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance)));
+            Utils.Log("=".ThisManyTimes(45));
+
+            BonesScroller?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init), nameof(BonesScroller)));
+            SaveManagement.instance?.savesScroller?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance), nameof(SaveManagement.instance.savesScroller)));
+            Utils.Log("=".ThisManyTimes(45));
+
+            HotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init), nameof(HotkeyBar)));
+            SaveManagement.instance?.hotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance), nameof(SaveManagement.instance.hotkeyBar)));
+            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.gameObject?.name);
+            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.gameObject?.name);
+            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.parent?.gameObject?.name);
+            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.parent?.parent?.gameObject?.name);
+            Utils.Log("=".ThisManyTimes(45));
         }
 
-        public void SetParentTransform(Component Component)
+        public void SetParentTransform(Component Component, Transform Transform = null)
         {
+            Transform ??= transform;
             Component.gameObject.SetActive(value: false);
-            Component.transform.SetParent(transform, worldPositionStays: false);
+            Component.transform.SetParent(Transform, worldPositionStays: false);
         }
 
         public void SetupContext()
@@ -123,14 +198,15 @@ namespace UD_Bones_Folder.Mod.UI
             MainNavContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             MainNavContext.buttonHandlers.Set(InputButtonTypes.CancelButton, Event.Helpers.Handle(Exit));
 
-            Background = SaveManagement.instance.background;
-
             MidHorizNav.SetAxis(InputAxisTypes.NavigationXAxis);
             MidHorizNav.contexts.Clear();
             MidHorizNav.contexts.Add(BackButton.navigationContext);
             MidHorizNav.contexts.Add(BonesScroller.GetNavigationContext());
+            // MidHorizNav.contexts.Add(HotkeyBar.GetNavigationContext());
             MidHorizNav.Setup();
             MidHorizNav.parentContext = MainNavContext;
+
+            HotkeyBar.GetNavigationContext().parentContext = MidHorizNav;
         }
 
         public override void Show()
@@ -192,6 +268,16 @@ namespace UD_Bones_Folder.Mod.UI
             BonesScroller.scrollContext.wraps = true;
             BonesScroller.BeforeShow(Bones);
 
+            try
+            {
+                Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionPrefab: {BonesScroller.selectionPrefab?.name ?? "NO_PREFAB"}");
+                Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.spacerPrefab: {BonesScroller.spacerPrefab?.name ?? "NO_PREFAB"}");
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}", x);
+            }
+
             Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones.Count: {BonesScroller.selectionClones?.Count ?? -1}");
             for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
             {
@@ -225,16 +311,41 @@ namespace UD_Bones_Folder.Mod.UI
                     */
                     if (selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
                     {
+                        saveRow.TextSkins[2].SetText($"{$"{bonesDataI.BonesInfo.DeathReason} on:".WithColor("C")} {bonesDataI.BonesInfo.SaveTime}");
                         saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                         saveRow.context.context.commandHandlers = BonesManagementRow.DeleteCommandHandler;
                     }
-                }
-                if (!BonesScroller.spacerClones.IsNullOrEmpty())
-                {
-                    // BonesScroller.spacerClones[0].
+                    if (selectionCloneI.gameObject.GetComponent<BonesManagementRow>() is BonesManagementRow bonesRow)
+                    {
+                        // bonesRow.TextSkins[2].SetText($"{$"{bonesDataI.BonesInfo.DeathReason} on:".WithColor("C")} {bonesDataI.BonesInfo.SaveTime}");
+                        bonesRow.DeleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
+                        bonesRow.Context.context.commandHandlers = BonesManagementRow.DeleteCommandHandler;
+                    }
+
+                    selectionCloneI.gameObject.PrintComponents(CurrentDepth: 1);
+                    Utils.Log("-".ThisManyTimes(45));
                 }
                 
             }
+            Utils.Log($"{Utils.CallChain(nameof(BonesManagement), nameof(Show), nameof(BonesScroller.spacerClones))}: {BonesScroller.spacerClones?.Count ?? -1}");
+            if (!BonesScroller.spacerClones.IsNullOrEmpty())
+            {
+                for (int i = 0; i < BonesScroller.spacerClones.Count; i++)
+                {
+                    try
+                    {
+                        BonesScroller.spacerClones[i].PrintComponents($"{nameof(BonesScroller.spacerClones)}[{i}]:", CurrentDepth: 1);
+                        Utils.Log("-".ThisManyTimes(45));
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{Utils.CallChain(nameof(BonesManagement),nameof(Show))} {nameof(BonesScroller.spacerClones)}[{i}]", x);
+                    }
+                }
+            }
+
+            instance?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Show)));
+            Utils.Log("-".ThisManyTimes(45));
 
             if (SelectFirst)
             {
@@ -300,7 +411,7 @@ namespace UD_Bones_Folder.Mod.UI
                 CompletionSource?.TrySetResult(bonesData.BonesInfo);
         }
 
-        public async Task BonesMenu()
+        public async Task<bool> BonesMenu()
         {
             gameObject.SetActive(value: true);
             SelectFirst = true;
@@ -328,7 +439,7 @@ namespace UD_Bones_Folder.Mod.UI
                         && await bonesInfo.TryRestoreModsAsync())
                     {
                         Hide();
-                        return;
+                        return true;
                     }
                 }
                 catch (Exception x)
@@ -337,6 +448,7 @@ namespace UD_Bones_Folder.Mod.UI
                 }
             }
             Hide();
+            return false;
         }
 
         public void Exit()
@@ -359,7 +471,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                 buttons = PopupMessage.AcceptCancelButton;
 
-            string title = $"Delete {bonesInfo.Name}".WithColor("R");
+            string title = $"Cremate {bonesInfo.Name}".WithColor("R");
             if ((await Popup.NewPopupMessageAsync(
                     message: $"Are you sure you want to cremate {bonesInfo.Name}'s bones?",
                     buttons: buttons,
@@ -392,17 +504,17 @@ namespace UD_Bones_Folder.Mod.UI
                 new MenuOption
                 {
                     InputCommand = "NavigationXYAxis",
-                    Description = "navigate"
+                    Description = "navigate2"
                 },
                 new MenuOption
                 {
                     KeyDescription = ControlManager.getCommandInputDescription("Accept"),
-                    Description = "select"
+                    Description = "select2"
                 },
                 new MenuOption
                 {
                     KeyDescription = ControlManager.getCommandInputDescription("CmdDelete"),
-                    Description = "delete"
+                    Description = "delete2"
                 }
             });
         }

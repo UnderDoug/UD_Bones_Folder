@@ -5,7 +5,7 @@ using XRL.UI.Framework;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    public class BonesInfoData : PrefixMenuOption
+    public class BonesInfoData : SaveInfoData
     {
         private SaveBonesInfo _BonesInfo;
         public SaveBonesInfo BonesInfo
@@ -14,6 +14,7 @@ namespace UD_Bones_Folder.Mod.UI
             set
             {
                 Id = value.ID;
+                SaveGame = value;
                 _BonesInfo = value;
             }
         }

@@ -81,6 +81,18 @@ namespace UD_Bones_Folder.Mod
             => DelimitedAggregator(Accumulator, Next, "\n")
             ;
 
+        public static string PeriodDelimitedAggregator<T>(string Accumulator, T Next)
+            => DelimitedAggregator(Accumulator, Next, ".")
+            ;
+
+        public static string PeriodSpaceDelimitedAggregator<T>(string Accumulator, T Next)
+            => DelimitedAggregator(Accumulator, Next, ". ")
+            ;
+
+        public static string CallChain(params string[] Strings)
+            => Strings?.Aggregate("", PeriodDelimitedAggregator)
+            ;
+
         public static List<string> GetCriticalWarningUnion(
             IEnumerable<string> CriticalItems,
             IEnumerable<string> WarningItems

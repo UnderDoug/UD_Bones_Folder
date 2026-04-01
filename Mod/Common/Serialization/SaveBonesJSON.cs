@@ -61,7 +61,7 @@ namespace UD_Bones_Folder.Mod
                 return new SaveBonesInfo
                 {
                     Name = "Corrupt info file".WithColor("R"),
-                    Size = $"Total size: {GetDirectorySize(DirPath) / 1000000}mb",
+                    Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
                     Info = "",
                     Directory = DirPath
                 };
@@ -71,11 +71,11 @@ namespace UD_Bones_Folder.Mod
             {
                 json = json,
                 Directory = DirPath,
-                Size = $"Total size: {GetDirectorySize(DirPath) / 1000000}mb",
+                Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
                 ID = json.ID,
                 Version = json.GameVersion,
                 Name = json.Name,
-                Description = $"Level {json.Level} {json.GenoSubType} [{json.GameMode}]",
+                Description = $"Level {json.Level} {json.GenoSubType}",// [{json.GameMode}]",
                 Info = $"{json.Location}, {json.InGameTime} turn {json.Turn}",
                 SaveTime = json.SaveTime,
                 ModsEnabled = json.ModsEnabled,
@@ -85,7 +85,7 @@ namespace UD_Bones_Folder.Mod
                 ModVersion = json.ModVersion,
 
                 ZoneID = json.ZoneID,
-                DeathReason = json.ZoneID,
+                DeathReason = json.DeathReason,
 
                 GenotypeName = json.GenotypeName,
                 SubtypeName = json.SubtypeName,
