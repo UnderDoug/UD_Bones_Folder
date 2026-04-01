@@ -145,6 +145,8 @@ namespace UD_Bones_Folder.Mod
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} {"on:".WithColor("C")} {bonesInfo.SaveTime}");
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {{{bonesInfo.ID}}}".WithColor("K"));
             SaveRow.modsDiffer.SetActive(bonesInfo.DifferentMods());
+            if (SaveRow.modsDiffer.activeSelf)
+                SaveRow.modsDiffer.GetComponent<XRL.UI.UITextSkin>()?.SetText("err... ?");
             SaveRow.Update();
         }
 
