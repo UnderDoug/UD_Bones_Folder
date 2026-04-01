@@ -24,9 +24,7 @@ namespace UD_Bones_Folder.Mod.UI
         NavCategory = "Menu",
         UICanvas = "SaveManagement",
         UICanvasHost = 1)]
-    public class BonesManagement
-        : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
-        // : EmbarkBuilderModuleWindowPrefabBase<BonesManagementModule, FrameworkScroller>, ControlManager.IControllerChangedEvent
+    public class BonesManagement : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
     {
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolderManagement";
 
@@ -106,7 +104,10 @@ namespace UD_Bones_Folder.Mod.UI
                     Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", x);
                     BonesScroller.selectionPrefab.name = name;
                 }
+
                 /*
+                 * Wanna figure this out eventually.
+                 * 
                 BonesScroller.selectionPrefab = Instantiate(BonesScroller.selectionPrefab);
                 BonesScroller.selectionPrefab.name = nameof(BonesManagementRow);
                 BonesScroller.selectionPrefab.GetComponent<SaveManagementRow>().DestroyImmediate();
@@ -118,40 +119,6 @@ namespace UD_Bones_Folder.Mod.UI
                 Background.color = SaveManagement.instance?.background?.color ?? The.Color.Black;
                 Background.material = SaveManagement.instance?.background?.material;
 
-                /*
-                var saveManBG = SaveManagement.instance?.background;
-                List<string> output = new();
-                string label = null;
-                string value = null;
-                string MakeEntry()
-                    => $"{label}: {value}";
-                try
-                {
-                    label = $"{1.Indent()}{nameof(saveManBG.color)}";
-                    value = $"{saveManBG?.color}";
-                    output.Add(MakeEntry());
-
-                    label = $"{1.Indent()}{nameof(saveManBG.sprite)}";
-                    value = $"{saveManBG?.sprite}";
-                    output.Add(MakeEntry());
-
-                    label = $"{1.Indent()}{nameof(saveManBG.mainTexture)}";
-                    value = $"{saveManBG?.mainTexture}";
-                    output.Add(MakeEntry());
-
-                    label = $"{1.Indent()}{nameof(saveManBG.material)}";
-                    value = $"{saveManBG?.material}";
-                    output.Add(MakeEntry());
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Unity didn't like {Utils.CallChain(nameof(SaveManagement.instance.background), label)} being looked at", x);
-                }
-                finally
-                {
-                    Utils.Log(output.Aggregate(Utils.CallChain(nameof(SaveManagement), nameof(SaveManagement.instance.background)), Utils.NewLineDelimitedAggregator));
-                }
-                */
             }
             else
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BonesScroller)} must not be null"));
@@ -162,11 +129,9 @@ namespace UD_Bones_Folder.Mod.UI
             else
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
 
-            HotkeyBar = Instantiate(SaveManagement.instance.hotkeyBar);
-            if (HotkeyBar != null)
-                SetParentTransform(HotkeyBar);
-            else
-                Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(HotkeyBar)} must not be null"));
+            if (BonesScroller.GetComponentsInChildren<FrameworkScroller>() is FrameworkScroller[] frameworkScrollers
+                && frameworkScrollers.Length > 1)
+                HotkeyBar = frameworkScrollers[1];
 
             instance?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init)));
             SaveManagement.instance?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance)));
@@ -178,10 +143,6 @@ namespace UD_Bones_Folder.Mod.UI
 
             HotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init), nameof(HotkeyBar)));
             SaveManagement.instance?.hotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance), nameof(SaveManagement.instance.hotkeyBar)));
-            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.gameObject?.name);
-            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.gameObject?.name);
-            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.parent?.gameObject?.name);
-            Utils.Log(SaveManagement.instance?.hotkeyBar?.transform?.parent?.parent?.parent?.parent?.gameObject?.name);
             Utils.Log("=".ThisManyTimes(45));
         }
 
@@ -270,18 +231,20 @@ namespace UD_Bones_Folder.Mod.UI
 
             try
             {
-                Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionPrefab: {BonesScroller.selectionPrefab?.name ?? "NO_PREFAB"}");
-                Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.spacerPrefab: {BonesScroller.spacerPrefab?.name ?? "NO_PREFAB"}");
+                Utils.Log($"{1.Indent()}{nameof(BonesManagement)}.{nameof(Show)}, " +
+                    $"BonesScroller.selectionPrefab: {BonesScroller.selectionPrefab?.name ?? "NO_PREFAB"}");
+                Utils.Log($"{1.Indent()}{nameof(BonesManagement)}.{nameof(Show)}, " +
+                    $"BonesScroller.spacerPrefab: {BonesScroller.spacerPrefab?.name ?? "NO_PREFAB"}");
             }
             catch (Exception x)
             {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}", x);
             }
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones.Count: {BonesScroller.selectionClones?.Count ?? -1}");
+            Utils.Log($"{0.Indent()}{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones.Count: {BonesScroller.selectionClones?.Count ?? -1}");
             for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
             {
-                Utils.Log($"    {nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones {i}");
+                Utils.Log($"{1.Indent()}{nameof(BonesManagement)}.{nameof(Show)}, BonesScroller.selectionClones {i}");
                 if (BonesScroller.selectionClones[i] is FrameworkUnityScrollChild selectionCloneI
                     && Bones[i] is BonesInfoData bonesDataI)
                 {
@@ -311,7 +274,8 @@ namespace UD_Bones_Folder.Mod.UI
                     */
                     if (selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
                     {
-                        saveRow.TextSkins[2].SetText($"{$"{bonesDataI.BonesInfo.DeathReason} on:".WithColor("C")} {bonesDataI.BonesInfo.SaveTime}");
+                        saveRow.setBonesData(bonesDataI);
+                        //saveRow.TextSkins[2].SetText($"{$"{bonesDataI.BonesInfo.DeathReason} on:".WithColor("C")} {bonesDataI.BonesInfo.SaveTime}");
                         saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                         saveRow.context.context.commandHandlers = BonesManagementRow.DeleteCommandHandler;
                     }
@@ -327,7 +291,8 @@ namespace UD_Bones_Folder.Mod.UI
                 }
                 
             }
-            Utils.Log($"{Utils.CallChain(nameof(BonesManagement), nameof(Show), nameof(BonesScroller.spacerClones))}: {BonesScroller.spacerClones?.Count ?? -1}");
+            Utils.Log($"{Utils.CallChain(nameof(BonesManagement), nameof(Show), nameof(BonesScroller.spacerClones))}: " +
+                $"{BonesScroller.spacerClones?.Count ?? -1}");
             if (!BonesScroller.spacerClones.IsNullOrEmpty())
             {
                 for (int i = 0; i < BonesScroller.spacerClones.Count; i++)
@@ -504,17 +469,17 @@ namespace UD_Bones_Folder.Mod.UI
                 new MenuOption
                 {
                     InputCommand = "NavigationXYAxis",
-                    Description = "navigate2"
+                    Description = "navigate"
                 },
                 new MenuOption
                 {
                     KeyDescription = ControlManager.getCommandInputDescription("Accept"),
-                    Description = "select2"
+                    Description = "check mod configuration"
                 },
                 new MenuOption
                 {
                     KeyDescription = ControlManager.getCommandInputDescription("CmdDelete"),
-                    Description = "delete2"
+                    Description = "cremate"
                 }
             });
         }

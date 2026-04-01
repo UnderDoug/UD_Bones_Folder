@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<AssemblyName>UD_ManagedNaturalEquipment</AssemblyName>
-		<PackageId>UD_ManagedNaturalEquipment</PackageId>
+		<AssemblyName>UD_Bones_Folder</AssemblyName>
+		<PackageId>UD_Bones_Folder</PackageId>
 		<Authors>UnderDoug</Authors>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
     <BaseIntermediateOutputPath>.dotnet\obj\</BaseIntermediateOutputPath>
@@ -16,5 +16,4 @@
     <Folder Include="Mod\Textures\" />
   </ItemGroup>
   <Import Project="../Mods.csproj" />
-  <Import Project="../UD_Modding_Toolbox.csproj" />
 </Project>

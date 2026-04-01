@@ -136,7 +136,9 @@ namespace UD_Bones_Folder.Mod.UI
             TextSkins[2].SetText($"{"Last saved:".WithColor("C")} {bonesInfo.SaveTime}");
             TextSkins[3].SetText($"{bonesInfo.Size} {{{bonesInfo.ID}}}".WithColor("K"));
             ModsDiffer ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.modsDiffer);
+            ModsDiffer.transform.SetParent(transform, worldPositionStays: false);
             ModsDiffer.SetActive(value: bonesInfo.DifferentMods());
+            ModsDiffer.PrintComponents();
             WasSelected = null;
             Update();
         }

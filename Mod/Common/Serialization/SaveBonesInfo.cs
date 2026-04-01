@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Platform.IO;
 
 using Qud.API;
+using Qud.UI;
 
 using UnityEngine;
 
@@ -15,6 +17,8 @@ using XRL.Collections;
 using XRL.UI;
 using XRL.World;
 using XRL.World.Parts;
+
+using Event = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -132,32 +136,148 @@ namespace UD_Bones_Folder.Mod
         public async Task<bool> TryRestoreModsAsync()
         {
             await The.UiContext;
-            if (await The.Core.RestoreModsLoadedAsync(ModsEnabled))
+            return await RestoreModsLoadedAsync(ModsEnabled);
+        }
+
+        public async Task<bool> RestoreModsLoadedAsync(List<string> Enabled)
+        {
+            using var loadedMods = ScopeDisposedList<string>.GetFromPool();
+            if (ModManager.GetRunningMods() is IEnumerable<string> runningMods)
+                loadedMods.AddRange(runningMods);
+            else
             {
-                var unionizedMods = Utils.GetCriticalWarningUnion(BonesManager.RunningMods, ModsEnabled);
-                
-                if (unionizedMods.IsNullOrEmpty())
-                {
-                    Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
-                    return false;
-                }
-
-                string message = "The below mods are now enabled:\n";
-                if (unionizedMods.Count != BonesManager.RunningMods.Count()
-                    || unionizedMods.Count == ModsEnabled.Count)
-                {
-                    message = "Of the below mods,\n" +
-                        "\tthe {{R|red}} are enabled in the bones file but are not loaded,\n" +
-                        "\t the {{Y|yellow}} are loaded but missing from the bones file:\n";
-                }
-
-                return Popup.ShowAsync(
-                    Message: unionizedMods.Aggregate(
-                        seed: message,
-                        func: Utils.NewLineDelimitedAggregator)
-                    ).IsCompletedSuccessfully;
+                Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
+                return false;
             }
 
+            using var bonesHasButNotAvailable = ScopeDisposedList<string>.GetFromPoolFilledWith(Enabled.Except(ModManager.GetAvailableMods()));
+            using var loadedButBonesMissing = ScopeDisposedList<string>.GetFromPoolFilledWith(loadedMods.Except(Enabled));
+
+            using var bonesHasButNotLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
+                items: Enabled
+                    .Except(loadedMods)
+                    .Except(bonesHasButNotAvailable));
+
+            using var bothHaveLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
+                items: Enabled
+                    .Except(bonesHasButNotLoaded)
+                    .Except(bonesHasButNotAvailable)
+                    .Except(loadedButBonesMissing));
+
+            var sB = Event.NewStringBuilder();
+            if (bonesHasButNotAvailable.Count > 0)
+            {
+                sB.Append("One or more mods enabled in this save are ")
+                    .AppendColored("red", "not available")
+                    .Append(": ");
+
+                bonesHasButNotAvailable
+                    .Select(ModManager.GetModTitle)
+                    .Aggregate(
+                        seed: sB,
+                        func: (a, n) =>
+                            a.AppendLine()
+                                .AppendColored("y", ":").Append(" ")
+                                .AppendColored("red", n)
+                            )
+                    .AppendLine()
+                    .AppendLine()
+                    .Append("Do you still wish to try to load this save?");
+
+                if ((await Popup.NewPopupMessageAsync(
+                    message: sB.ToString(),
+                    buttons: PopupMessage.YesNoButton,
+                    title: "Incomplete Mod Configuration")).command != PopupMessage.YesNoButton[0].command)
+                {
+                    Event.ResetTo(sB);
+                    return false;
+                }
+                sB.Clear();
+            }
+            if (!bothHaveLoaded.IsNullOrEmpty()
+                || !loadedButBonesMissing.IsNullOrEmpty()
+                || !bonesHasButNotLoaded.IsNullOrEmpty())
+            {
+                if (!loadedButBonesMissing.IsNullOrEmpty())
+                {
+                    loadedButBonesMissing
+                        .Select(ModManager.GetModTitle)
+                        .Aggregate(
+                            seed: sB.Compound("These enabled mods are {{yellow|disabled}} in this bones file:", '\n'),
+                            func: (a, n) =>
+                                a.AppendLine()
+                                    .AppendColored("y", ":").Append(" ")
+                                    .AppendColored("yellow", n)
+                                )
+                        .AppendLine();
+                }
+                if (!bonesHasButNotLoaded.IsNullOrEmpty())
+                {
+                    bonesHasButNotLoaded
+                        .Select(ModManager.GetModTitle)
+                        .Aggregate(
+                            seed: sB.Compound("These disabled mods are {{red|enabled}} in this bones file:", '\n'),
+                            func: (a, n) =>
+                                a.AppendLine()
+                                    .AppendColored("y", ":").Append(" ")
+                                    .AppendColored("red", n)
+                                )
+                        .AppendLine();
+                }
+                if (!bothHaveLoaded.IsNullOrEmpty())
+                {
+                    bothHaveLoaded
+                        .Select(ModManager.GetModTitle)
+                        .Aggregate(
+                            seed: sB.Compound("These enabled mods are {{green|enabled}} in this bones file:", '\n'),
+                            func: (a, n) =>
+                                a.AppendLine()
+                                    .AppendColored("y", ":").Append(" ")
+                                    .AppendColored("green", n)
+                                )
+                        .AppendLine();
+                }
+                if (!loadedButBonesMissing.IsNullOrEmpty()
+                    || !bonesHasButNotLoaded.IsNullOrEmpty())
+                {
+                    sB.AppendLine();
+                    var options = new string[2]
+                    {
+                        "Restart {{yellow|adding enabled}} mods from bones file's mod configuration",
+                        "Restart {{red|using}} bones file's {{red|entire}} mod configuration",
+                    };
+                    int picked = await Popup.PickOptionAsync(
+                        Title: "Mod Configuration Differs",
+                        Intro: Event.FinalizeString(sB),
+                        Options: options,
+                        AllowEscape: true);
+
+                    if (picked < 0)
+                        return false;
+
+                    if (picked < 1)
+                        foreach (string item2 in bonesHasButNotLoaded)
+                            ModManager.GetMod(item2).IsEnabled = true;
+
+                    if (picked < 2)
+                        foreach (string item in loadedButBonesMissing)
+                            ModManager.GetMod(item).IsEnabled = false;
+
+                    ModManager.WriteModSettings();
+                    GameManager.Restart();
+                }
+                else
+                {
+                    var buttons = new List<QudMenuItem>(PopupMessage.AcceptButton);
+                    var button = buttons[0];
+                    button.text = "Continue";
+                    await Popup.NewPopupMessageAsync(
+                        message: Event.FinalizeString(sB),
+                        buttons: buttons,
+                        title: "Mod Configuration");
+                }
+            }
+            Event.ResetTo(sB);
             return false;
         }
     }

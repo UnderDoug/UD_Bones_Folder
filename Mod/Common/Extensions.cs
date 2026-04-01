@@ -24,7 +24,9 @@ namespace UD_Bones_Folder.Mod
             MoonKing.Render.Visible = true;
             var render = MoonKing.RenderForUI("SaveBonesInfo", true);
             MoonKing.Render.Visible = false;
+
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
+
             var zone = MoonKing.CurrentZone;
             string zoneID = zone.ZoneID;
             var terrainObject = zone.GetTerrainObject();
@@ -35,14 +37,11 @@ namespace UD_Bones_Folder.Mod
             {
                 location = terrainObject.Render.DisplayName;
                 if (terrainObject.IsPlural)
-                    location = $"in some {location}";
+                    location = $"some {location}";
                 else
-                    location = $"in {Grammar.A(location)}";
+                    location = $"{Grammar.A(location)}";
             }
-            else
-            {
-                location += ",";
-            }
+            location += ",";
 
             string deathReason = E.Reason;
             if (deathReason.EndsWith(".")
@@ -66,35 +65,35 @@ namespace UD_Bones_Folder.Mod
             }
 
             return new SaveBonesJSON
-                {
-                    SaveVersion = 400,
-                    GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
-                    ID = Game.GameID,
-                    Name = MoonKing.GetReferenceDisplayName(),
-                    Level = MoonKing.Statistics["Level"].Value,
-                    GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
-                    GameMode = Game.GetStringGameState("GameMode", "Classic"),
-                    CharIcon = render.Tile,
-                    FColor = render.GetForegroundColorChar(),
-                    DColor = render.GetDetailColorChar(),
+            {
+                SaveVersion = 400,
+                GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
+                ID = Game.GameID,
+                Name = MoonKing.GetReferenceDisplayName(),
+                Level = MoonKing.Statistics["Level"].Value,
+                GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
+                GameMode = Game.GetStringGameState("GameMode", "Classic"),
+                CharIcon = render.Tile,
+                FColor = render.GetForegroundColorChar(),
+                DColor = render.GetDetailColorChar(),
 
-                    Location = $"{location} {LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
-                    InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
-                    Turn = Game.Turns,
-                    SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
-                    ModsEnabled = ModManager.GetRunningMods().ToList(),
+                Location = $"{location} {LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
+                InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
+                Turn = Game.Turns,
+                SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
+                ModsEnabled = ModManager.GetRunningMods().ToList(),
 
-                    ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
+                ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
-                    ZoneID = zoneID,
-                    DeathReason = deathReason,
-                    GenotypeName = MoonKing.GetGenotype(),
-                    SubtypeName = MoonKing.GetSubtype(),
+                ZoneID = zoneID,
+                DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
+                GenotypeName = MoonKing.GetGenotype(),
+                SubtypeName = MoonKing.GetSubtype(),
 
-                    ZoneTerrainType = zoneTerrainType,
-                    ZoneTier = zone.Tier,
-                    ZoneRegion = zone.GetRegion(),
-                };
+                ZoneTerrainType = zoneTerrainType,
+                ZoneTier = zone.Tier,
+                ZoneRegion = zone.GetRegion(),
+            };
         }
 
         public static void setBonesData(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -141,12 +140,12 @@ namespace UD_Bones_Folder.Mod
 
             SaveRow.imageTinyFrame.Sync(force: true);
             SaveRow.TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".WithColor("W"));
-            SaveRow.TextSkins[1].SetText($"{"Location:".WithColor("C")} {bonesInfo.Info}");
-            SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} {"on:".WithColor("C")} {bonesInfo.SaveTime}");
-            SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {{{bonesInfo.ID}}}".WithColor("K"));
+            SaveRow.TextSkins[1].SetText(/*$"{"Location:".WithColor("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
+            SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
+            string bonesID = "{" + bonesInfo.ID + "}";
+            SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".WithColor("K"));
             SaveRow.modsDiffer.SetActive(bonesInfo.DifferentMods());
-            if (SaveRow.modsDiffer.activeSelf)
-                SaveRow.modsDiffer.GetComponent<XRL.UI.UITextSkin>()?.SetText("err... ?");
+            SaveRow.modsDiffer.PrintComponents(Utils.CallChain(nameof(SaveRow), nameof(SaveRow.modsDiffer)), CurrentDepth: 1);
             SaveRow.Update();
         }
 
@@ -207,7 +206,9 @@ namespace UD_Bones_Folder.Mod
                             nameof(UnityEngine.UI.Image) => $"{nameof(UnityEngine.UI.Image.color)}: {(component as UnityEngine.UI.Image).color}",
                             _ => null,
                         };
-                        Utils.Log($"{(CurrentDepth + 1).Indent(Factor: 4)}{component.GetType()?.Name ?? "NO_COMPONENT_TYPE"} {extras}");
+                        Utils.Log($"{(CurrentDepth + 1).Indent(Factor: 4)}" +
+                            $"{component.GetType()?.Name ?? "NO_COMPONENT_TYPE"}|" +
+                            $"{component.name} {extras}");
                     }
                     else
                         Utils.Log($"{(CurrentDepth + 1).Indent(Factor: 4)}NO_COMPONENT");
