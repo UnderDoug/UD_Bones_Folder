@@ -53,19 +53,15 @@ namespace XRL.World.WorldBuilders
                     saveWeights[savedBonesInfo] = null;
                     continue;
                 }
-                int saveWeight = 100;
+                int saveWeight = 50;
+                saveWeight += savedBonesInfo.ModsDiffer.EnabledWhereBonesDisabled * -1;
+                saveWeight += savedBonesInfo.ModsDiffer.DisabledWhereBonesEnabled * -2;
+                saveWeight = Math.Max(1, saveWeight);
                 foreach (var savedBonesMod in savedBonesInfo.ModsEnabled)
-                {
                     if (!BonesManager.RunningMods.Contains(savedBonesMod))
-                        saveWeight -= 10;
-                    else
-                        saveWeight += 10;
-                }
-                foreach (var runningMod in BonesManager.RunningMods)
-                {
-                    if (!savedBonesInfo.ModsEnabled.Contains(runningMod))
-                        saveWeight -= 10;
-                }
+                        saveWeight += 1;
+
+                saveWeight += savedBonesInfo.ModsDiffer.UnavailableWhereBonesEnabled * -4;
                 saveWeights[savedBonesInfo] = Math.Max(1, saveWeight);
             }
 

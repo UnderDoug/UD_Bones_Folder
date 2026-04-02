@@ -93,58 +93,31 @@ namespace UD_Bones_Folder.Mod
             => Strings?.Aggregate("", PeriodDelimitedAggregator)
             ;
 
-        public static List<string> GetCriticalWarningUnion(
-            IEnumerable<string> CriticalItems,
-            IEnumerable<string> WarningItems
-            )
+        private static string SafeInvoke<T>(this Func<string, string> PostProc, Func<T, string> Proc, T Element, string NoArg)
         {
-            using var sharedValues = ScopeDisposedList<string>.GetFromPoolFilledWith(CriticalItems);
-            using var missingCritcalItems = ScopeDisposedList<string>.GetFromPool();
-            using var missingWarningItems = ScopeDisposedList<string>.GetFromPool();
-
-            foreach (var warningItem in WarningItems)
-                if (!sharedValues.Contains(warningItem))
-                    sharedValues.Add(warningItem);
-
-            foreach (var sharedValue in sharedValues)
-            {
-                if (!CriticalItems.Any(i => i == sharedValue))
-                    missingCritcalItems.Add(sharedValue);
-                if (!WarningItems.Any(i => i == sharedValue))
-                    missingWarningItems.Add(sharedValue);
-            }
-
-            foreach (var missingCritical in missingCritcalItems)
-                sharedValues.Remove(missingCritical);
-
-            foreach (var missingWarning in missingWarningItems)
-                sharedValues.Remove(missingWarning);
-
-            var output = new List<string>();
-
-            missingCritcalItems.Aggregate(
-                seed: output,
-                func: delegate (List<string> accumulator, string next)
-                {
-                    accumulator.Add(next.WithColor("R"));
-                    return accumulator;
-                });
-
-            missingWarningItems.Aggregate(
-                seed: output,
-                func: delegate (List<string> accumulator, string next)
-                {
-                    accumulator.Add(next.WithColor("W"));
-                    return accumulator;
-                });
-
-            return sharedValues.Aggregate(
-                seed: output,
-                func: delegate (List<string> accumulator, string next)
-                {
-                    accumulator.Add(next);
-                    return accumulator;
-                });
+            string proc = Proc?.Invoke(Element) ?? Element?.ToString() ?? NoArg;
+            if (PostProc != null)
+                proc = PostProc(proc);
+            return proc;
         }
+
+        public static IEnumerable<T> Log<T>(IEnumerable<T> Source, object Message)
+        {
+            Log(Message);
+            return Source;
+        }
+
+        public static IEnumerable<T> Loggregrate<T>(
+            IEnumerable<T> Source,
+            Func<T, string> Proc = null,
+            string Empty = null,
+            Func<string, string> PostProc = null
+            )
+            => Source.IsNullOrEmpty()
+            ? Log(Source, PostProc?.Invoke(Empty) ?? Empty)
+            : Source.Aggregate(
+                seed: Source,
+                func: (a, n) => Log(a, PostProc.SafeInvoke(Proc, n, "NO_ELEMENT")))
+            ;
     }
 }

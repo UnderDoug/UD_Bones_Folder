@@ -349,11 +349,11 @@ namespace UD_Bones_Folder.Mod
                     if (picked < 0)
                         return false;
 
-                    if (picked < 1)
+                    if (picked >= 0)
                         foreach (string item2 in bonesHasButNotLoaded)
                             ModManager.GetMod(item2).IsEnabled = true;
 
-                    if (picked < 2)
+                    if (picked >= 1)
                         foreach (string item in loadedButBonesMissing)
                             ModManager.GetMod(item).IsEnabled = false;
 

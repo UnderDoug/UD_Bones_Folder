@@ -17,13 +17,13 @@ namespace XRL.World.Parts
         public static BallBag<Func<GameObject, bool>> GetDamageFuncBag()
             => new()
             {
-                { MakeItBroken, 100 },
+                { MakeItBroken, 150 },
                 { MakeItJackedUp, 100 },
                 { MakeItRusted, 100 },
-                { MakeItVeryDamaged, 100 },
-                { MakeItDamaged, 100 },
-                { MakeItDented, 100 },
-                { LeaveItAlone, 100 },
+                { MakeItVeryDamaged, 75 },
+                { MakeItDamaged, 35 },
+                { MakeItDented, 10 },
+                { LeaveItAlone, 1 },
             };
 
         public override void Attach()
@@ -42,21 +42,10 @@ namespace XRL.World.Parts
             || Object.ForceApplyEffect(new Rusted())
             ;
 
-        public static int GetPercentage(int Value, int Total)
-            => Value / Total * 100
-            ;
-
-        public static int GetPercentCurrentHP(Statistic Hitpoints)
-            => Hitpoints.Name == nameof(Hitpoints)
-            ? GetPercentage(Hitpoints.Value, Hitpoints.BaseValue)
-            : -1
-            ;
-
         public static bool DamageItBetweenPercent(GameObject Object, int Low, int High)
         {
             if (Object?.GetStat("Hitpoints") is not Statistic hitpoints)
                 return true;
-
 
             if (Object.GetPercentDamaged() >= Math.Max(Low, High))
                 return true;
@@ -74,7 +63,7 @@ namespace XRL.World.Parts
 
             damage = Math.Min(hitpoints.BaseValue - 1, damage);
 
-            return Object.TakeDamage(damage, "");
+            return Object.TakeDamage(damage, "", Attributes: "Unavoidable", Environmental: true);
         }
 
         public static bool MakeItDented(GameObject Object)
@@ -97,20 +86,15 @@ namespace XRL.World.Parts
             => true
             ;
 
-        public override bool WantTurnTick()
-            => true;
-
-        public override void TurnTick(long TimeTick, int Amount)
+        public void AttemptDamageAndRemove()
         {
             if (ParentObject != null)
             {
                 if (ParentObject.InInventory is not GameObject holder
                     || !holder.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
-                    || lunarRegent.BonesID != BonesID)
+                    || lunarRegent.BonesID != BonesID
+                    || BonesID == null)
                 {
-                    /*
-                     * Return to this.
-                     * 
                     var damageFuncs = GetDamageFuncBag();
 
                     int attempts = 0;
@@ -118,11 +102,38 @@ namespace XRL.World.Parts
                         && attempts++ < damageFuncs.Count)
                         if (damageFuncs.PickOne()?.Invoke(ParentObject) is not false)
                             break;
-                    */
+
                     ParentObject.RemovePart(this);
                 }
             }
+        }
+
+        public override bool WantTurnTick()
+            => true
+            ;
+
+        public override void TurnTick(long TimeTick, int Amount)
+        {
+            AttemptDamageAndRemove();
             base.TurnTick(TimeTick, Amount);
+        }
+
+        public override bool WantEvent(int ID, int Cascade)
+            => base.WantEvent(ID, Cascade)
+            || ID == EndTurnEvent.ID
+            || ID == DroppedEvent.ID
+            ;
+
+        public override bool HandleEvent(EndTurnEvent E)
+        {
+            AttemptDamageAndRemove();
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(DroppedEvent E)
+        {
+            AttemptDamageAndRemove();
+            return base.HandleEvent(E);
         }
     }
 }

@@ -106,7 +106,9 @@ namespace XRL.World.Parts
                 using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
                 foreach (var moonKingItem in moonKingInventory)
                 {
-                    moonKingItem.RequirePart<UD_Bones_FragileRoyalObject>();
+                    var fragileObject = moonKingItem.RequirePart<UD_Bones_FragileRoyalObject>();
+
+                    fragileObject.BonesID ??= The.Game.GameID;
 
                     if (moonKingItem.Equipped != null
                         || moonKingItem.GetBlueprint().InheritsFrom("Grenade")

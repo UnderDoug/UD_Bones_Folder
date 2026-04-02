@@ -87,7 +87,6 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                         finally
                         {
-                            //GameManager.Instance.PopGameView();
                             UIManager.showWindow("MainMenu");
                             MainMenu.instance.Reshow();
                         }

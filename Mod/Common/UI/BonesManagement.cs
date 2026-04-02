@@ -153,6 +153,7 @@ namespace UD_Bones_Folder.Mod.UI
             // AllBonesMenuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
             AllBonesMenuBar = Instantiate(LegendBar);
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
+
             /*
             if (AllBonesMenuBar.GetComponentInChildren<LayoutElement>() is LayoutElement allBonesLayout
                 && LegendBar.GetComponentInChildren<LayoutElement>() is LayoutElement legendLayout)
@@ -213,14 +214,16 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
-            if (!Printed
-                && Printed)
+            if (!Printed)
             {
                 Printed = true;
                 Utils.Log("#".ThisManyTimes(45));
+                /*
                 if (BonesScroller.GetComponentsInChildren<Component>() is Component[] components)
                     foreach (var component in components)
                         component.gameObject.PrintComponents($"{component.GetType()}|{component.gameObject.name}: ");
+                */
+                instance.gameObject.LogComponentTree();
                 Utils.Log("#".ThisManyTimes(45));
             }
 

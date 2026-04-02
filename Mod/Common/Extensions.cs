@@ -207,9 +207,9 @@ namespace UD_Bones_Folder.Mod
             => Type.Name.CallChain(Calls)
             ;
 
-        public static string Indent(this int Amount, int Factor = 4)
+        public static string Indent(this int Amount, int Factor = 4, int MaxIndent = 4)
             => Amount > 0
-            ? " ".ThisManyTimes(Math.Min(Amount * Math.Max(1, Factor), 16))
+            ? " ".ThisManyTimes(Math.Min(Amount * Math.Max(1, Factor), MaxIndent * Factor))
             : null
             ;
 
@@ -251,5 +251,18 @@ namespace UD_Bones_Folder.Mod
                 }
             }
         }
+
+        public static IEnumerable<T> Loggregate<T>(
+            this IEnumerable<T> Source,
+            Func<T, string> Proc = null,
+            string Empty = null,
+            Func<string, string> PostProc = null
+            )
+            => Utils.Loggregrate(
+                Source: Source,
+                Proc: Proc,
+                Empty: Empty,
+                PostProc: PostProc)
+            ;
     }
 }
