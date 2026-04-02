@@ -14,6 +14,7 @@ namespace UD_Bones_Folder.Mod
     public class SaveBonesJSON : SaveGameJSON
     {
         public string ModVersion;
+        public long SaveTimeValue;
 
         public string ZoneID;
         public string DeathReason;
@@ -66,6 +67,16 @@ namespace UD_Bones_Folder.Mod
                     Directory = DirPath
                 };
             }
+            DateTime saveTimeValue;
+            try
+            {
+                saveTimeValue = new DateTime(json.SaveTimeValue).ToLocalTime();
+            }
+            catch //(Exception x)
+            {
+                // Utils.Error(Utils.CallChain(nameof(SaveBonesJSON), nameof(ReadSaveBonesJson)), x);
+                saveTimeValue = new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
+            }
 
             var saveBonesInfo = new SaveBonesInfo
             {
@@ -81,6 +92,7 @@ namespace UD_Bones_Folder.Mod
                 ModsEnabled = json.ModsEnabled,
 
                 FileName = FilePath,
+                SaveTimeValue = saveTimeValue,
 
                 ModVersion = json.ModVersion,
 

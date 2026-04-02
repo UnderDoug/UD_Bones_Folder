@@ -23,8 +23,99 @@ using Event = XRL.World.Event;
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
-    public class SaveBonesInfo : SaveGameInfo
+    public class SaveBonesInfo : SaveGameInfo, IComparable<SaveBonesInfo>
     {
+        public class SaveBonesInfoComparer : IComparer<SaveBonesInfo>
+        {
+            public bool Ascending;
+
+            public SaveBonesInfoComparer()
+            {
+                Ascending = false;
+            }
+
+            public SaveBonesInfoComparer(bool Ascending)
+                : base()
+            {
+                this.Ascending = Ascending;
+            }
+
+            public int Compare(SaveBonesInfo x, SaveBonesInfo y)
+            {
+                int modifier = Ascending ? -1 : 1;
+
+                if (y == null)
+                {
+                    if (x != null)
+                        return -1 * modifier;
+                    else
+                        return 0;
+                }
+                else
+                if (x == null)
+                    return 1 * modifier;
+
+                return x.CompareTo(y) * modifier;
+            }
+        }
+
+        public class ModsDifferInfo
+        {
+            public int UnavailableWhereBonesEnabled;
+            public int EnabledWhereBonesDisabled;
+            public int DisabledWhereBonesEnabled;
+            public int DifferLevel
+            {
+                get
+                {
+                    if (UnavailableWhereBonesEnabled < 0)
+                        return -1;
+                    if (DisabledWhereBonesEnabled > 0)
+                        return 3;
+                    if (DisabledWhereBonesEnabled > 0)
+                        return 2;
+                    return EnabledWhereBonesDisabled > 0
+                        ? 1
+                        : 0
+                        ;
+                }
+            }
+            public bool IsRed => DifferLevel >= 2;
+            public bool IsYellow => DifferLevel == 1;
+
+            public override string ToString()
+            {
+                if (DifferLevel < 0)
+                    return "{{y|mods:}} {{red|error}}";
+
+                if (DifferLevel == 0)
+                    return "{{y|mods:}} {{green|\u00fb}}";
+
+                string output = "mods:".WithColor("y");
+
+                string extras = null;
+                if (EnabledWhereBonesDisabled > 0)
+                    extras = $"{extras}{EnabledWhereBonesDisabled}\u0007".WithColor("yellow");
+
+                if (DisabledWhereBonesEnabled > 0)
+                {
+                    if (!extras.IsNullOrEmpty())
+                        extras += "|".WithColor("y");
+                    extras = $"{extras}{DisabledWhereBonesEnabled}\u0009".WithColor("red");
+                }
+
+                if (UnavailableWhereBonesEnabled > 0)
+                {
+                    if (!extras.IsNullOrEmpty())
+                        extras += "|".WithColor("y");
+                    extras = $"{extras}{UnavailableWhereBonesEnabled}X".WithColor("red");
+                }
+                return $"{output} {extras}";
+            }
+        }
+
+        public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
+
         private static readonly string[] InfoFiles = new string[2]
         {
             $"{UD_Bones_BonesSaver.BonesName}.json",
@@ -32,6 +123,7 @@ namespace UD_Bones_Folder.Mod
         };
 
         public string FileName;
+        public DateTime SaveTimeValue;
 
         public string ModVersion;
 
@@ -49,6 +141,8 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsPending => Pending?.EqualsNoCase($"{false}") is not true;
 
+        private ModsDifferInfo _ModsDiffer;
+        public ModsDifferInfo ModsDiffer => _ModsDiffer ??= GetModsDifferInfo();
 
         public ZoneRequest ZoneRequest => new(ZoneID);
 
@@ -268,17 +362,71 @@ namespace UD_Bones_Folder.Mod
                 }
                 else
                 {
-                    var buttons = new List<QudMenuItem>(PopupMessage.AcceptButton);
-                    var button = buttons[0];
-                    button.text = "Continue";
                     await Popup.NewPopupMessageAsync(
                         message: Event.FinalizeString(sB),
-                        buttons: buttons,
                         title: "Mod Configuration");
                 }
             }
             Event.ResetTo(sB);
             return false;
         }
+
+        public ModsDifferInfo GetModsDifferInfo()
+        {
+            using var loadedMods = ScopeDisposedList<string>.GetFromPool();
+
+            if (ModManager.GetRunningMods() is IEnumerable<string> runningMods)
+                loadedMods.AddRange(runningMods);
+            else
+            {
+                Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
+                return new ModsDifferInfo
+                {
+                    UnavailableWhereBonesEnabled = -1,
+                };
+            }
+
+            using var bonesHasButNotAvailable = ScopeDisposedList<string>.GetFromPoolFilledWith(ModsEnabled.Except(ModManager.GetAvailableMods()));
+            using var loadedButBonesMissing = ScopeDisposedList<string>.GetFromPoolFilledWith(loadedMods.Except(ModsEnabled));
+
+            using var bonesHasButNotLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
+                items: ModsEnabled
+                    .Except(loadedMods)
+                    .Except(bonesHasButNotAvailable));
+
+            return new ModsDifferInfo
+            {
+                UnavailableWhereBonesEnabled = bonesHasButNotAvailable.Count,
+                EnabledWhereBonesDisabled = loadedButBonesMissing.Count,
+                DisabledWhereBonesEnabled = bonesHasButNotLoaded.Count,
+            };
+        }
+
+        public int CompareTo(SaveBonesInfo other)
+            => other != null
+            ? SaveTimeValue.CompareTo(other.SaveTimeValue)
+            : -1
+            ;
+
+        public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)
+            => DateTime.Compare(
+                t1: (x?.SaveTimeValue).GetValueOrDefault(),
+                t2: (y?.SaveTimeValue).GetValueOrDefault())
+                > 0
+            ;
+        public static bool operator <=(SaveBonesInfo x, SaveBonesInfo y)
+            => !(x > y)
+            ;
+
+        public static bool operator <(SaveBonesInfo x, SaveBonesInfo y)
+            => DateTime.Compare(
+                t1: (x?.SaveTimeValue).GetValueOrDefault(),
+                t2: (y?.SaveTimeValue).GetValueOrDefault())
+                < 0
+            ;
+
+        public static bool operator >=(SaveBonesInfo x, SaveBonesInfo y)
+            => !(x < y)
+            ;
     }
 }

@@ -12,6 +12,7 @@ using UD_Bones_Folder.Mod.UI;
 
 using XRL;
 using XRL.Language;
+using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World;
 
@@ -21,6 +22,8 @@ namespace UD_Bones_Folder.Mod
     {
         public static SaveBonesJSON CreateSaveBonesJSON(this XRLGame Game, IDeathEvent E, GameObject MoonKing)
         {
+            var localTimeNow = DateTime.Now;
+            long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
             MoonKing.Render.Visible = true;
             var render = MoonKing.RenderForUI("SaveBonesInfo", true);
             MoonKing.Render.Visible = false;
@@ -32,7 +35,8 @@ namespace UD_Bones_Folder.Mod
             var terrainObject = zone.GetTerrainObject();
             string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
 
-            string location = zoneTerrainType;
+            string location = null;
+            /*
             if (zone.Z <= 10)
             {
                 location = terrainObject.Render.DisplayName;
@@ -41,7 +45,9 @@ namespace UD_Bones_Folder.Mod
                 else
                     location = $"{Grammar.A(location)}";
             }
-            location += ",";
+            */
+            if (zone.Z > 10)
+                location += $"{zoneTerrainType}, ";
 
             string deathReason = E.Reason;
             if (deathReason.EndsWith(".")
@@ -77,13 +83,15 @@ namespace UD_Bones_Folder.Mod
                 FColor = render.GetForegroundColorChar(),
                 DColor = render.GetDetailColorChar(),
 
-                Location = $"{location} {LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
+                Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
                 Turn = Game.Turns,
-                SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
+                SaveTime = $"{localTimeNow.ToLongDateString()} at {localTimeNow.ToLongTimeString()}",
                 ModsEnabled = ModManager.GetRunningMods().ToList(),
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
+
+                SaveTimeValue = saveTimeValue,
 
                 ZoneID = zoneID,
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
@@ -142,10 +150,33 @@ namespace UD_Bones_Folder.Mod
             SaveRow.TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".WithColor("W"));
             SaveRow.TextSkins[1].SetText(/*$"{"Location:".WithColor("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
-            string bonesID = "{" + bonesInfo.ID + "}";
+            string bonesID = "{" + bonesInfo.ID + "} ";
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".WithColor("K"));
-            SaveRow.modsDiffer.SetActive(bonesInfo.DifferentMods());
-            SaveRow.modsDiffer.PrintComponents(Utils.CallChain(nameof(SaveRow), nameof(SaveRow.modsDiffer)), CurrentDepth: 1);
+            SaveRow.modsDiffer.SetActive(value: true);
+            if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsDifferTextSkins)
+            {
+                foreach (var modsDifferTextSkin in modsDifferTextSkins)
+                {
+                    if (modsDifferTextSkin.name == "tct"
+                        || modsDifferTextSkin.gameObject.name == "tct")
+                    {
+                        modsDifferTextSkin.SetText(bonesInfo.ModsDiffer.ToString());
+                        break;
+                    }
+                }
+            }
+            if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
+            {
+                foreach (var deleteButtonTextSkin in deleteButtonTextSkins)
+                {
+                    if (deleteButtonTextSkin.name == "tct"
+                        || deleteButtonTextSkin.gameObject.name == "tct")
+                    {
+                        deleteButtonTextSkin.SetText("{{y|cremate}}");
+                        break;
+                    }
+                }
+            }
             SaveRow.Update();
         }
 
@@ -202,6 +233,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         string extras = component.GetType().Name switch
                         {
+                            nameof(UITextSkin) => $"{nameof(UITextSkin.text)}: {(component as UITextSkin).text}",
                             nameof(UnityEngine.RectTransform) => $"{nameof(UnityEngine.RectTransform.rect)}: {(component as UnityEngine.RectTransform).rect}",
                             nameof(UnityEngine.UI.Image) => $"{nameof(UnityEngine.UI.Image.color)}: {(component as UnityEngine.UI.Image).color}",
                             _ => null,
