@@ -180,6 +180,19 @@ namespace UD_Bones_Folder.Mod
             SaveRow.Update();
         }
 
+        public static string ToLiteral(this string String, bool Quotes = false)
+        {
+            if (String.IsNullOrEmpty())
+                return null;
+
+            string output = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(String, false);
+
+            if (Quotes)
+                output = $"\"{output}\"";
+
+            return output;
+        }
+
         public static TAccumulate Aggregate<TAccumulate>(
             this int Number,
             TAccumulate seed,

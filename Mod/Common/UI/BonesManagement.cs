@@ -60,6 +60,8 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        public SaveBonesInfo Preselected;
+
         public Image Background;
 
         public FrameworkScroller LegendBar;
@@ -154,6 +156,15 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar = Instantiate(LegendBar);
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
 
+            AllBonesMenuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(AllBonesMenuBar), nameof(AllBonesMenuBar.gameObject))} {AllBonesMenuBar.gameObject.name}");
+            var menuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            menuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(EmbarkBuilderOverlayWindow), nameof(menuBar), nameof(menuBar.gameObject))} {menuBar.gameObject.name}");
+
+            // if (AllBonesMenuBar.transform.Find())
+            if (menuBar.transform.Find("KeyMenuOption") is RectTransform keyMenuOption)
+            {
+
+            }
             /*
             if (AllBonesMenuBar.GetComponentInChildren<LayoutElement>() is LayoutElement allBonesLayout
                 && LegendBar.GetComponentInChildren<LayoutElement>() is LayoutElement legendLayout)
@@ -214,16 +225,15 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
-            if (!Printed)
+            if (!Printed
+                && Printed)
             {
                 Printed = true;
                 Utils.Log("#".ThisManyTimes(45));
-                /*
                 if (BonesScroller.GetComponentsInChildren<Component>() is Component[] components)
                     foreach (var component in components)
                         component.gameObject.PrintComponents($"{component.GetType()}|{component.gameObject.name}: ");
-                */
-                instance.gameObject.LogComponentTree();
+                // instance.gameObject.LogComponentTree();
                 Utils.Log("#".ThisManyTimes(45));
             }
 
@@ -278,6 +288,13 @@ namespace UD_Bones_Folder.Mod.UI
                 
             }
 
+            if (Preselected != null
+                || MainMenuBones.ReturnToBones != null)
+            {
+                Preselected ??= MainMenuBones.ReturnToBones;
+                BonesScroller.scrollContext.selectedPosition = Math.Clamp(Bones.FindIndex(e => e is BonesInfoData bonesData && bonesData.BonesInfo.ID == Preselected.ID), 0, Bones.Count - 1);
+            }
+            else
             if (SelectFirst)
             {
                 SelectFirst = false;
@@ -362,10 +379,13 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
-        public async Task<bool> BonesMenu()
+        public async Task<SaveBonesInfo> BonesMenu()
         {
             gameObject.SetActive(value: true);
-            SelectFirst = true;
+
+            SelectFirst = Preselected == null
+                && MainMenuBones.ReturnToBones == null;
+
             while (true)
             {
                 CompletionSource?.TrySetCanceled();
@@ -386,11 +406,22 @@ namespace UD_Bones_Folder.Mod.UI
 
                 try
                 {
-                    if (bonesInfo.GetBonesJSON() is SaveBonesJSON json
-                        && await bonesInfo.TryRestoreModsAsync())
+                    if (bonesInfo.GetBonesJSON() is not SaveBonesJSON json)
+                    {
+                        await Popup.ShowAsync("That bones file appears to be missing an info file, or the info file has been lost during load." +
+                            $"\n\nPlease contact {Utils.AuthorOnPlatforms} to see if the file can be recovered.");
+                    }
+                    else
+                    if (json.SaveVersion < 400)
+                    {
+                        await Popup.ShowAsync("That bones file has an impossibly low save version and has either been modified haphardly or did something goofy while saving." +
+                            $"\n\nPlease contact {Utils.AuthorOnPlatforms} to see if the file can be recovered.");
+                    }
+                    else
+                    if (await bonesInfo.TryRestoreModsAsync())
                     {
                         Hide();
-                        return true;
+                        return bonesInfo;
                     }
                 }
                 catch (Exception x)
@@ -399,7 +430,7 @@ namespace UD_Bones_Folder.Mod.UI
                 }
             }
             Hide();
-            return false;
+            return null;
         }
 
         public void Exit()
@@ -417,23 +448,34 @@ namespace UD_Bones_Folder.Mod.UI
                 buttons = PopupMessage.AcceptCancelButton;
 
             string title = $"Cremate All".WithColor("R");
-            if ((await Popup.NewPopupMessageAsync(
-                    message: "Are you sure you want to cremate {{red|all}} bones?",
-                    buttons: buttons,
-                    title: title,
-                    DefaultSelected: 1)
-                ).command != "Cancel")
+            string confirmText = "CREMATE";
+            string typeToConfirmText = "\n\nType '" + confirmText + "' to confirm.";
+            string defaultValue = string.Empty;
+            if (CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.Console)
+            {
+                typeToConfirmText = string.Empty;
+                defaultValue = null;
+            }
+            if ((await Popup.AskStringAsync(
+                    Message: "Are you sure you want to cremate {{red|all}} bones?" + typeToConfirmText,
+                    Default: defaultValue,
+                    WantsSpecificPrompt: confirmText,
+                    MaxLength: confirmText.Length)
+                ) == confirmText)
             {
                 DisableNavContext();
 
                 int countBefore = Bones.Count;
+                int paddingAmount = countBefore.ToString().Length;
                 foreach (var frameworkDataElement in Bones)
                 {
                     if (frameworkDataElement is not BonesInfoData bonesData)
                         continue;
 
+                    Loading.SetLoadingStatus($"Cremating {(countBefore - Bones.Count).ToString().PadLeft(paddingAmount, '0')}/{countBefore} :: {bonesData.BonesInfo.Name.Strip()}");
                     bonesData.BonesInfo?.Cremate();
                 }
+                Loading.SetLoadingStatus(null);
 
                 EnableNavContext();
 
@@ -442,9 +484,8 @@ namespace UD_Bones_Folder.Mod.UI
                     || SaveBonesInfosToUIElements(orderedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
                     || bareBones.IsNullOrEmpty()
                     || (Bones = new(bareBones)).IsNullOrEmpty())
-                    
                 {
-                    await Popup.NewPopupMessageAsync("All Bones Cremated!", PopupMessage.AcceptButton);
+                    await Popup.NewPopupMessageAsync($"{countBefore - Bones.Count}/{countBefore} Bones Cremated!", PopupMessage.AcceptButton);
                     Exit();
                 }
                 else

@@ -29,10 +29,13 @@ using XRL.World.AI;
 using XRL.World.Effects;
 using XRL.World.Parts;
 
+using static UD_Bones_Folder.Mod.Const;
+
 using GameObject = XRL.World.GameObject;
 using ColorUtility = ConsoleLib.Console.ColorUtility;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
 using Event = XRL.World.Event;
+using UD_Bones_Folder.Mod.UI;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -199,8 +202,8 @@ namespace UD_Bones_Folder.Mod
 
                         var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing);
 
-                        writer.Start(400);
-                        writer.Write(123457);
+                        writer.Start(CURR_SAVE_VERSION);
+                        writer.Write(SERIALIZATION_CHECK);
 
                         writer.Write(saveBonesJSON.GameVersion);
 
@@ -278,7 +281,7 @@ namespace UD_Bones_Folder.Mod
             Popup.ShowFailAsync($"There was a fatal exception attempting to save some bones. " +
                 $"{Utils.ThisMod.DisplayTitle} attempted to recover them.\n" +
                 $"You ought to check out your bones folder for recent changes ({Utils.BothBonesLocations})\n\n" +
-                $"It'd be helpful if you could contact {Utils.ThisMod.Manifest.Author}, either via GitHub or on the steam workshop, " +
+                $"It'd be helpful if you could contact {Utils.AuthorOnPlatforms}, " +
                 $"because they'll probably want a copy of the problem bones.");
         }
 
@@ -454,7 +457,7 @@ namespace UD_Bones_Folder.Mod
                     memory.Position = 0L;
 
                     reader.Start();
-                    if (reader.ReadInt32() != 123457)
+                    if (reader.ReadInt32() != SERIALIZATION_CHECK)
                     {
                         versionString = "2.0.167.0 or prior";
                         throw new Exception("Bones file is the incorrect version.");
@@ -464,7 +467,7 @@ namespace UD_Bones_Folder.Mod
                     versionString = reader.ReadString();
                     try
                     {
-                        if (versionNumber != 400)
+                        if (versionNumber != CURR_SAVE_VERSION)
                         {
                             string backupPath = fullBonesPath + $"_upgradebackup_{versionNumber}.gz";
                             if (!File.Exists(backupPath))
@@ -483,8 +486,8 @@ namespace UD_Bones_Folder.Mod
                         Utils.Error($"bones upgrade backup: {x}");
                     }
 
-                    if (reader.FileVersion < 395
-                        || reader.FileVersion > 400)
+                    if (reader.FileVersion < MIN_SAVE_VERSION
+                        || reader.FileVersion > CURR_SAVE_VERSION)
                         throw new Exception($"Bones file is the incorrect version ({versionString}).");
 
                     string bonesID = SaveBonesInfo.ID;
@@ -539,11 +542,11 @@ namespace UD_Bones_Folder.Mod
                 }
                 else
                 {
-                    if (versionNumber < 400)
+                    if (versionNumber < CURR_SAVE_VERSION)
                         message = $"That bones file looks like it's from an older save format revision ({versionString}). Sorry!\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
                     else
-                    if (versionNumber > 400)
+                    if (versionNumber > CURR_SAVE_VERSION)
                         message = $"That bones file looks like it's from a newer save format revision ({versionString}).\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
 
@@ -649,11 +652,7 @@ namespace UD_Bones_Folder.Mod
             bool success = true;
             try
             {
-                if (GetSavedBonesInfo() is IEnumerable<SaveBonesInfo> saveBonesInfos)
-                {
-                    foreach (var bonesInfo in saveBonesInfos)
-                        bonesInfo.Cremate();
-                }
+                BonesManagement.instance.HandleDeleteAll();
             }
             catch (Exception x)
             {

@@ -20,6 +20,8 @@ namespace UD_Bones_Folder.Mod
 
         public static ModInfo ThisMod => ModManager.GetMod(MOD_ID);
 
+        public static string AuthorOnPlatforms => $"{ThisMod.Manifest.Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";
+
         public static string BothBonesLocations 
             => $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSyncPath)} -OR- " +
             $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSavePath)}"

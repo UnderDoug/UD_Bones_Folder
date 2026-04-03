@@ -8,38 +8,67 @@ using UnityEngine.UI;
 
 using XRL.Collections;
 using XRL.UI;
+using XRL.UI.Framework;
 
 namespace UD_Bones_Folder.Mod
 {
+    [XRL.HasModSensitiveStaticCache]
     public static class UnityExtensions
     {
+        [XRL.ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        public static Dictionary<GameObject, IEnumerable<UnityElement>> UnityElementCache = new();
+
         public class UnityElement
         {
+            public static int IDCounter;
+            public static string RootID
+                => $"{0.ToString().PadLeft(IDCounter.ToString().Length, '0')}";
+
+            public int ID;
+
             public Component Component;
             public UnityElement Root;
             public UnityElement Parent;
 
+            public List<UnityElement> DirectChildren;
+
             private IEnumerable<string> _Extras;
             public IEnumerable<string> Extras => _Extras ??= Component.GetTreeExtras();
 
+            public bool IsRoot
+                => Root == this
+                && Parent == null;
+
             public int Depth
-                => this != Root
+                => !IsRoot
                 ? Parent.Depth + 1
                 : 0
                 ;
 
             public UnityElement()
             {
+                ID = ++IDCounter;
+                DirectChildren = new();
             }
             public UnityElement(Component Component, UnityElement Parent = null)
+                : this()
             {
                 this.Component = Component;
                 this.Parent = Parent;
                 Root = Parent?.Root ?? Parent ?? this;
+                if (Parent != null)
+                {
+                    Parent.DirectChildren ??= new();
+                    if (!Parent.DirectChildren.Any(e => SameAs(e)))
+                        Parent.DirectChildren.Add(this);
+                }
             }
 
+            public string IDString
+                => $"{ID.ToString().PadLeft(IDCounter.ToString().Length, '0')}";
+
             public string BaseString()
-                => $"{Depth.Indent(MaxIndent: 12)}{Component.GetType()}|{Component.gameObject.name}";
+                => $"{Depth.Indent(MaxIndent: 12)}[ID:{IDString}(P:{Parent?.IDString ?? RootID})]{Component.GetType().Name} | {Component.gameObject.name}";
 
             public override string ToString()
                 => Extras
@@ -56,6 +85,19 @@ namespace UD_Bones_Folder.Mod
                 && Root?.Component == Other.Root?.Component
                 && Depth == Other.Depth
                 ;
+
+            public IEnumerable<UnityElement> Unpack()
+            {
+                if (Component == null)
+                    yield break;
+
+                yield return this;
+
+                if (!DirectChildren.IsNullOrEmpty())
+                    foreach (var child in DirectChildren)
+                        foreach (var element in child.Unpack())
+                            yield return element;
+            }
         }
 
         public static IEnumerable<string> GetTreeExtras(this Component Component)
@@ -63,7 +105,7 @@ namespace UD_Bones_Folder.Mod
             string label = null;
             string value = null;
             string MakeEntry()
-                => $"{label}: {value}";
+                => $"{label}: {value ?? "NO_VALUE"}";
             using var output = ScopeDisposedList<string>.GetFromPool();
             try
             {
@@ -77,7 +119,11 @@ namespace UD_Bones_Folder.Mod
                 if (Component is UITextSkin uITExtSkin)
                 {
                     label = nameof(uITExtSkin.text);
-                    value = $"{uITExtSkin.text}";
+                    value = $"{uITExtSkin.text.ToLiteral()}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(uITExtSkin.color);
+                    value = $"{uITExtSkin.color}";
                     output.Add(MakeEntry());
                 }
                 else
@@ -95,6 +141,66 @@ namespace UD_Bones_Folder.Mod
                     value = $"{unityImage.material}";
                     output.Add(MakeEntry());
                 }
+                else
+                if (Component is LayoutElement layoutElement)
+                {
+                    label = nameof(layoutElement.preferredHeight);
+                    value = $"{layoutElement.preferredHeight}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutElement.minHeight);
+                    value = $"{layoutElement.minHeight}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutElement.preferredWidth);
+                    value = $"{layoutElement.preferredWidth}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutElement.minWidth);
+                    value = $"{layoutElement.minWidth}";
+                    output.Add(MakeEntry());
+                }
+                else
+                if (Component is HasSelectionCaret hasSelectionCaret)
+                {
+                    label = nameof(hasSelectionCaret.selected);
+                    value = $"{hasSelectionCaret.selected}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(hasSelectionCaret.selectedColor);
+                    value = $"{hasSelectionCaret.selectedColor}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(hasSelectionCaret.useSelectColor);
+                    value = $"{hasSelectionCaret.useSelectColor}";
+                    output.Add(MakeEntry());
+                }
+                else
+                if (Component is CanvasRenderer canvasRenderer)
+                {
+                    label = nameof(canvasRenderer.materialCount);
+                    value = $"{canvasRenderer.materialCount}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(canvasRenderer.absoluteDepth);
+                    value = $"{canvasRenderer.absoluteDepth}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(canvasRenderer.relativeDepth);
+                    value = $"{canvasRenderer.relativeDepth}";
+                    output.Add(MakeEntry());
+                }
+                else
+                if (Component is FrameworkScroller frameworkScroller)
+                {
+                    label = nameof(frameworkScroller.selectionPrefab);
+                    value = $"{frameworkScroller.selectionPrefab?.GetType()?.Name ?? "NO_PREFAB"} | {frameworkScroller.selectionPrefab?.name ?? "NO_PREFAB"}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(frameworkScroller.spacerPrefab);
+                    value = $"{frameworkScroller.spacerPrefab?.GetType()?.Name ?? "NO_PREFAB"} | {frameworkScroller.spacerPrefab?.name ?? "NO_PREFAB"}";
+                    output.Add(MakeEntry());
+                }
             }
             catch (Exception x)
             {
@@ -108,7 +214,7 @@ namespace UD_Bones_Folder.Mod
                 yield return item;
         }
 
-        public static IEnumerable<UnityElement> GetComponentTree(this GameObject GameObject, UnityElement ParentElement = null)
+        private static IEnumerable<UnityElement> GetComponentTreeInternal(this GameObject GameObject, UnityElement ParentElement = null)
         {
             if (GameObject == null)
                 yield break;
@@ -117,6 +223,21 @@ namespace UD_Bones_Folder.Mod
                 if (GameObject.GetComponentAtIndex(i) is Component component)
                     foreach (var element in new UnityElement(component, ParentElement).GetComponentTree())
                         yield return element;
+        }
+
+        public static IEnumerable<UnityElement> GetComponentTree(this GameObject GameObject, UnityElement ParentElement = null, bool RootsOnly = true)
+        {
+            if (GameObject == null)
+                yield break;
+
+            if (!UnityElementCache.ContainsKey(GameObject))
+                UnityElementCache[GameObject] = GameObject.GetComponentTreeInternal(ParentElement);
+
+            foreach (var element in UnityElementCache[GameObject])
+                if (!RootsOnly
+                    || (element.Depth == 0
+                        || element.Root == element))
+                    yield return element;
         }
 
         public static IEnumerable<UnityElement> GetComponentTree(this UnityElement UnityElement)
@@ -140,10 +261,11 @@ namespace UD_Bones_Folder.Mod
         {
             using var output = ScopeDisposedList<UnityElement>.GetFromPool();
             foreach (var element in GameObject.GetComponentTree())
-                if (!output.Any(e => element.SameAs(e)))
-                    output.Add(element);
+                foreach (var unpacked in element.Unpack())
+                    if (!output.Any(e => element.SameAs(e)))
+                        output.Add(element);
 
-            Context ??= $"{nameof(LogComponentTree)}({GameObject}):";
+            Context ??= $"{nameof(LogComponentTree)}({GameObject.GetType().Name}: {GameObject.name}):";
             Utils.Log(Context);
 
             if (!output.IsNullOrEmpty())

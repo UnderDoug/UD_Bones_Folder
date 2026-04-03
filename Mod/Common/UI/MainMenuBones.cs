@@ -42,6 +42,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static EmbarkBuilderModuleWindowDescriptor BonesManagementWindowDescriptor => WindowDescriptors?[0];
 
+        public static SaveBonesInfo ReturnToBones;
+
         [ModSensitiveCacheInit]
         public static void InsertMainMenuBones()
         {
@@ -83,7 +85,7 @@ namespace UD_Bones_Folder.Mod.UI
                     {
                         try
                         {
-                            await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
+                            ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
                         }
                         finally
                         {

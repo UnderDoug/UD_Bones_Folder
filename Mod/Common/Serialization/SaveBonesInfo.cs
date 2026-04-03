@@ -10,11 +10,14 @@ using Platform.IO;
 using Qud.API;
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.UI;
+
 using UnityEngine;
 
 using XRL;
 using XRL.Collections;
 using XRL.UI;
+using XRL.UI.Framework;
 using XRL.World;
 using XRL.World.Parts;
 
@@ -95,20 +98,20 @@ namespace UD_Bones_Folder.Mod
 
                 string extras = null;
                 if (EnabledWhereBonesDisabled > 0)
-                    extras = $"{extras}{EnabledWhereBonesDisabled}\u0007".WithColor("yellow");
+                    extras = $"{extras}{(-EnabledWhereBonesDisabled).Signed()}".WithColor("yellow");
 
                 if (DisabledWhereBonesEnabled > 0)
                 {
                     if (!extras.IsNullOrEmpty())
                         extras += "|".WithColor("y");
-                    extras = $"{extras}{DisabledWhereBonesEnabled}\u0009".WithColor("red");
+                    extras = $"{extras}+{DisabledWhereBonesEnabled.Signed()}".WithColor("red");
                 }
 
                 if (UnavailableWhereBonesEnabled > 0)
                 {
                     if (!extras.IsNullOrEmpty())
                         extras += "|".WithColor("y");
-                    extras = $"{extras}{UnavailableWhereBonesEnabled}X".WithColor("red");
+                    extras = $"{extras}X{UnavailableWhereBonesEnabled}".WithColor("red");
                 }
                 return $"{output} {extras}";
             }
@@ -230,7 +233,17 @@ namespace UD_Bones_Folder.Mod
         public async Task<bool> TryRestoreModsAsync()
         {
             await The.UiContext;
-            return await RestoreModsLoadedAsync(ModsEnabled);
+            if (await RestoreModsLoadedAsync(ModsEnabled))
+            {
+                var goToBones = Task.Run(() =>
+                {
+                    BonesManagement.instance.Preselected = this;
+                    NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu).Wait();
+                });
+                await goToBones;
+                return goToBones.IsCompletedSuccessfully;
+            }
+            return false;
         }
 
         public async Task<bool> RestoreModsLoadedAsync(List<string> Enabled)
