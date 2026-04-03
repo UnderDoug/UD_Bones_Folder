@@ -10,10 +10,8 @@ using XRL.Rules;
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_FragileRoyalObject : IScribedPart
+    public class UD_Bones_FragileRoyalObject : UD_Bones_BaseLunarPart
     {
-        public string BonesID = null;
-
         public static BallBag<Func<GameObject, bool>> GetDamageFuncBag()
             => new()
             {
@@ -25,12 +23,6 @@ namespace XRL.World.Parts
                 { MakeItDented, 10 },
                 { LeaveItAlone, 1 },
             };
-
-        public override void Attach()
-        {
-            base.Attach();
-            BonesID ??= The.Game.GameID;
-        }
 
         public static bool MakeItBroken(GameObject Object)
             => Object?.HasEffect<Broken>() is not false

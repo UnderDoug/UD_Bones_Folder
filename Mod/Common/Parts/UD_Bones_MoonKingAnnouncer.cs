@@ -6,13 +6,13 @@ using XRL.UI;
 using XRL.World.ZoneBuilders;
 
 using UD_Bones_Folder.Mod;
+using Options = UD_Bones_Folder.Mod.Options;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_MoonKingAnnouncer : IScribedPart
+    public class UD_Bones_MoonKingAnnouncer : UD_Bones_BaseLunarPart
     {
-        public string BonesID;
         public bool Cremated;
 
         public string Title;
@@ -52,7 +52,8 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(ZoneActivatedEvent E)
         {
-            if (!Cremated
+            if (!Options.DebugEnableNoCremation
+                && !Cremated
                 && BonesManager.System != null
                 && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
@@ -60,7 +61,6 @@ namespace XRL.World.Parts
                 Cremated = true;
                 if (MoonKing?.GetPart<UD_Bones_LunarRegent>() is UD_Bones_LunarRegent lunarRegentPart)
                     lunarRegentPart.Cremated = true;
-
             }
             return base.HandleEvent(E);
         }

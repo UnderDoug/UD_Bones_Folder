@@ -30,8 +30,8 @@ namespace UD_Bones_Folder.Mod
             this.BonesZone = BonesZone;
         }
 
-        public static BonesData GetFromSavedBonesInfo(string ZoneID, SaveBonesInfo SavedBonesInfo)
-            => BonesManager?.ExhumeMoonKing(ZoneID, SavedBonesInfo)
+        public static BonesData GetFromSaveBonesInfo(string ZoneID, SaveBonesInfo SaveBonesInfo)
+            => BonesManager?.ExhumeMoonKing(ZoneID, SaveBonesInfo)
             ;
 
         public bool Apply(Zone Zone, out GameObject MoonKing)

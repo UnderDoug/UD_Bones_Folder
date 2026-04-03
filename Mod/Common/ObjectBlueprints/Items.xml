@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<objects>
+  <object Name="Lunar Regent Mask" Inherits="Sun and Moon Mask">
+    <part Name="Render" DisplayName="=subject.uD_RegalTitle= mask" TileColor="&amp;R" DetailColor="B" />
+    <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask wearer shares this knowing." />
+    <!--shader Name="rainbow" Type="alternation" Colors="r-R-W-G-B-b-m" ShowInPicker="true" /-->
+    <part Name="AnimatedMaterialGeneric" AnimationLength="28"
+          ColorStringAnimationFrames="0=&amp;r,4=&amp;R,8=&amp;W,12=&amp;G,16=&amp;B,20=&amp;b,24=&amp;m"
+          TileColorAnimationFrames="0=&amp;r,4=&amp;R,8=&amp;W,12=&amp;G,16=&amp;B,20=&amp;b,24=&amp;m"
+          DetailColorAnimationFrames="0=R,4=W,8=G,12=B,16=b,20=m,24=r" />
+    <part Name="UD_Bones_LunarFace" />
+    <part Name="Cursed" />
+    <intproperty Name="AlwaysEquipAsArmor" Value="999" />
+    <tag Name="EquipmentFrameColors" Value="RWBG" />
+  </object>
+</objects>

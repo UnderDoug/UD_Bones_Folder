@@ -26,9 +26,29 @@ namespace UD_Bones_Folder.Mod
 
             public int ID;
 
+            public string IDString
+                => $"{ID.ToString().PadLeft(IDCounter.ToString().Length, '0')}";
+
             public Component Component;
             public UnityElement Root;
-            public UnityElement Parent;
+
+            private UnityElement _Parent;
+            public UnityElement Parent
+            {
+                get => _Parent;
+                set
+                {
+                    if (_Parent != null
+                        && (_Parent != value
+                            || !_Parent.SameAs(value)))
+                    {
+                        _Parent.DirectChildren.Remove(this);
+                    }
+                    _Parent = value;
+                    _Parent.DirectChildren ??= new();
+                    _Parent.DirectChildren.Add(this);
+                }
+            }
 
             public List<UnityElement> DirectChildren;
 
@@ -48,27 +68,25 @@ namespace UD_Bones_Folder.Mod
             public UnityElement()
             {
                 ID = ++IDCounter;
-                DirectChildren = new();
+                DirectChildren ??= new();
             }
             public UnityElement(Component Component, UnityElement Parent = null)
                 : this()
             {
                 this.Component = Component;
-                this.Parent = Parent;
-                Root = Parent?.Root ?? Parent ?? this;
-                if (Parent != null)
-                {
-                    Parent.DirectChildren ??= new();
-                    if (!Parent.DirectChildren.Any(e => SameAs(e)))
-                        Parent.DirectChildren.Add(this);
-                }
+                SetParent(Parent);
             }
 
-            public string IDString
-                => $"{ID.ToString().PadLeft(IDCounter.ToString().Length, '0')}";
+            public UnityElement SetParent(UnityElement Parent)
+            {
+                Root ??= Parent?.Root ?? Parent ?? this;
+                this.Parent = Parent;
+                Utils.Log($"{nameof(SetParent)}({nameof(Parent)} is {Parent.IDString ?? "null"})");
+                return this;
+            }
 
             public string BaseString()
-                => $"{Depth.Indent(MaxIndent: 12)}[ID:{IDString}(P:{Parent?.IDString ?? RootID})]{Component.GetType().Name} | {Component.gameObject.name}";
+                => $"{Depth.Indent(MaxIndent: 12)}[ID:{IDString}(P:{Parent?.IDString ?? RootID})]{Component.GetType().Name} | {Component.gameObject.name}, Children: {(DirectChildren?.Count).ToString() ?? "null"}";
 
             public override string ToString()
                 => Extras
@@ -79,23 +97,41 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public bool SameAs(UnityElement Other)
-                => Other != null
-                && Component == Other.Component
-                && Parent?.Component == Other.Parent?.Component
-                && Root?.Component == Other.Root?.Component
-                && Depth == Other.Depth
-                ;
+            {
+                if (Other == null)
+                    return false;
 
-            public IEnumerable<UnityElement> Unpack()
+                if (Component != Other.Component)
+                    return false;
+
+                if (Parent?.Component != Other.Parent?.Component)
+                    return false;
+
+                if (Root?.Component != Other.Root?.Component)
+                    return false;
+
+                if (Depth != Other.Depth)
+                    return false;
+
+                return true;
+            }
+
+            public IEnumerable<UnityElement> Unpack(string prefix = null)
             {
                 if (Component == null)
                     yield break;
 
+                if (!prefix.IsNullOrEmpty())
+                    prefix += "/";
+
+                prefix += IDString;
+
+                Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
                 yield return this;
 
                 if (!DirectChildren.IsNullOrEmpty())
                     foreach (var child in DirectChildren)
-                        foreach (var element in child.Unpack())
+                        foreach (var element in child.Unpack(prefix))
                             yield return element;
             }
         }
@@ -221,7 +257,7 @@ namespace UD_Bones_Folder.Mod
 
             for (int i = 0; i < GameObject.GetComponentCount(); i++)
                 if (GameObject.GetComponentAtIndex(i) is Component component)
-                    foreach (var element in new UnityElement(component, ParentElement).GetComponentTree())
+                    foreach (var element in new UnityElement(component).SetParent(ParentElement).GetComponentTree())
                         yield return element;
         }
 
@@ -235,16 +271,23 @@ namespace UD_Bones_Folder.Mod
 
             foreach (var element in UnityElementCache[GameObject])
                 if (!RootsOnly
-                    || (element.Depth == 0
-                        || element.Root == element))
+                    || element.IsRoot)
                     yield return element;
         }
 
         public static IEnumerable<UnityElement> GetComponentTree(this UnityElement UnityElement)
         {
-            if (UnityElement == null
-                || UnityElement.Component == null)
+            if (UnityElement == null)
+            {
+                Utils.Log($"No element.");
                 yield break;
+            }
+
+            if (UnityElement.Component == null)
+            {
+                Utils.Log($"{UnityElement?.IDString ?? "NO_ID"} had no component.");
+                yield break;
+            }
 
             yield return UnityElement;
 
@@ -252,7 +295,7 @@ namespace UD_Bones_Folder.Mod
             {
                 foreach (var child in transform)
                     if (child is Component childComponent)
-                        foreach (var childElement in childComponent.gameObject.GetComponentTree(UnityElement))
+                        foreach (var childElement in childComponent.gameObject.GetComponentTree(UnityElement, RootsOnly: false))
                             yield return childElement;
             }
         }
@@ -261,9 +304,20 @@ namespace UD_Bones_Folder.Mod
         {
             using var output = ScopeDisposedList<UnityElement>.GetFromPool();
             foreach (var element in GameObject.GetComponentTree())
+            {
                 foreach (var unpacked in element.Unpack())
+                {
                     if (!output.Any(e => element.SameAs(e)))
+                    {
                         output.Add(element);
+                        Utils.Log($"{1.Indent()}: Added {(element == unpacked ? "root " : null)}element {element.ID}");
+                    }
+                    else
+                    {
+                        Utils.Log($"{1.Indent()}: Skipped {(element == unpacked ? "root " : null)}element {element.ID}");
+                    }
+                }
+            }
 
             Context ??= $"{nameof(LogComponentTree)}({GameObject.GetType().Name}: {GameObject.name}):";
             Utils.Log(Context);

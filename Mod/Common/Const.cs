@@ -6,9 +6,11 @@ namespace UD_Bones_Folder.Mod
 {
     public static class Const
     {
-        public const int MIN_SAVE_VERSION = 400;
-        public const int CURR_SAVE_VERSION = 400;
+        public const string MOD_ID = "UD_Bones_Folder";
+        public const string MOD_PREFIX = MOD_ID + "_";
 
-        public const int SERIALIZATION_CHECK = 1234567;
+        public const int MIN_SAVE_VERSION = 400;
+
+        public const int SERIALIZATION_CHECK = 123457;
     }
 }

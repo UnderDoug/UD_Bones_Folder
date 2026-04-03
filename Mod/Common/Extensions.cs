@@ -16,6 +16,8 @@ using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World;
 
+using static XRL.World.Cell;
+
 namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
@@ -97,6 +99,7 @@ namespace UD_Bones_Folder.Mod
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
                 GenotypeName = MoonKing.GetGenotype(),
                 SubtypeName = MoonKing.GetSubtype(),
+                Blueprint = MoonKing.Blueprint,
 
                 ZoneTerrainType = zoneTerrainType,
                 ZoneTier = zone.Tier,
@@ -112,7 +115,7 @@ namespace UD_Bones_Folder.Mod
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
             SaveRow.imageTinyFrame ??= new();
-            string tile = "Text/32.bmp";
+            string tile = GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk")?.GetRenderable()?.Tile;
             if (bonesJSON != null)
             {
                 if (SpriteManager.HasTextureInfo(bonesJSON.CharIcon))
@@ -191,6 +194,28 @@ namespace UD_Bones_Folder.Mod
                 output = $"\"{output}\"";
 
             return output;
+        }
+
+        public static string ValueUnits(this TimeSpan Duration)
+        {
+            string durationUnit = "minute";
+            double durationValue = Duration.TotalMinutes;
+            if (Duration.TotalMinutes < 1)
+            {
+                durationUnit = "second";
+                durationValue = Duration.TotalSeconds;
+            }
+            if (Duration.TotalSeconds < 1)
+            {
+                durationUnit = "millisecond";
+                durationValue = Duration.TotalMilliseconds;
+            }
+            if (Duration.TotalMilliseconds < 1)
+            {
+                durationUnit = "microsecond";
+                durationValue = Duration.TotalMilliseconds / 1000;
+            }
+            return durationValue.Things(durationUnit);
         }
 
         public static TAccumulate Aggregate<TAccumulate>(
@@ -277,5 +302,31 @@ namespace UD_Bones_Folder.Mod
                 Empty: Empty,
                 PostProc: PostProc)
             ;
+
+        public static IEnumerable<KeyValuePair<GameObject, T>> GetObjectsAndPartsWithPartDescendedFrom<T>(this Zone Zone)
+            where T : IPart
+        {
+            if (Zone == null)
+                yield break;
+
+            for (int i = 0; i < Zone.Height; i++)
+            {
+                for (int j = 0; j < Zone.Width; j++)
+                {
+                    if (Zone.Map[j][i] is not Cell cell
+                        || cell.Objects is not ObjectRack objects)
+                        continue;
+
+                    for (int k = 0; k < objects.Count; k++)
+                    {
+                        if (objects[k] is not GameObject gameObject
+                            || gameObject.GetPartDescendedFrom<T>() is not T tPart)
+                            continue;
+
+                        yield return new(gameObject, tPart);
+                    }
+                }
+            }
+        }
     }
 }

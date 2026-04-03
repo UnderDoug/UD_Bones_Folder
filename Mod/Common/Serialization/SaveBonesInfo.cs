@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using Platform.IO;
 
 using Qud.API;
@@ -149,6 +151,17 @@ namespace UD_Bones_Folder.Mod
 
         public ZoneRequest ZoneRequest => new(ZoneID);
 
+        public bool WasCremated;
+
+        public bool? _IsEligible;
+        public bool IsEligible => _IsEligible ??= IsEligibleForCurrentSave(Strict: true);
+
+        public bool? _IsLooselyEligible;
+        public bool IsLooselyEligible => _IsLooselyEligible ??= IsEligibleForCurrentSave();
+
+        private SaveBonesJSON.BonesRender _Render;
+        public SaveBonesJSON.BonesRender Render => _Render ??= GetBonesJSON()?.GetRender();
+
         public SaveBonesInfo()
             : base()
         { }
@@ -225,9 +238,68 @@ namespace UD_Bones_Folder.Mod
         public SaveBonesJSON GetBonesJSON()
             => json as SaveBonesJSON;
 
+
+        public int? GetBonesWeight()
+        {
+            if (ModsEnabled.IsNullOrEmpty())
+                return null;
+
+            int saveWeight = 50;
+
+            saveWeight += ModsDiffer.EnabledWhereBonesDisabled * -1;
+            saveWeight += ModsDiffer.DisabledWhereBonesEnabled * -2;
+
+            foreach (var runningMod in BonesManager.RunningMods)
+                if (ModsEnabled.Contains(runningMod))
+                    saveWeight += 1;
+
+            saveWeight = +ModsDiffer.UnavailableWhereBonesEnabled * -4;
+
+            return Math.Max(1, saveWeight);
+        }
+
         public void Cremate()
         {
             BonesManager.DeleteBonesInfoDirectory(Directory);
+            WasCremated = true;
+        }
+
+        public bool IsEligibleForCurrentSave(bool Strict = false)
+        {
+            if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
+                return false;
+
+            if (IsPending)
+                return false;
+
+            if (ID == The.Game.GameID)
+                return false;
+
+            if (bonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
+                return false;
+
+            if (bonesJSON.SaveVersion < XRLGame.MaxSaveVersion)
+                return false;
+
+            if (!GenotypeFactory.GenotypesByName.ContainsKey(bonesJSON.GenotypeName))
+                return !Strict;
+
+            if (!SubtypeFactory.SubtypesByName.ContainsKey(bonesJSON.SubtypeName))
+                return !Strict;
+
+            if (!GameObjectFactory.Factory.HasBlueprint(bonesJSON.Blueprint))
+                return !Strict;
+
+            if (bonesJSON.SaveVersion != XRLGame.SaveVersion)
+            {
+                if (bonesJSON.SaveVersion < XRLGame.SaveVersion)
+                    return !Strict;
+
+                if (bonesJSON.SaveVersion > XRLGame.SaveVersion)
+                    return false;
+            }
+
+            return true;
         }
 
         public async Task<bool> TryRestoreModsAsync()
@@ -348,27 +420,38 @@ namespace UD_Bones_Folder.Mod
                     || !bonesHasButNotLoaded.IsNullOrEmpty())
                 {
                     sB.AppendLine();
-                    var options = new string[2]
+                    var options = new Dictionary<string, string>
                     {
-                        "Restart {{yellow|adding enabled}} mods from bones file's mod configuration",
-                        "Restart {{red|using}} bones file's {{red|entire}} mod configuration",
+                        { "Restart {{yellow|adding enabled}} mods from bones file's mod configuration", "Add" },
+                        { "Restart {{red|using}} bones file's {{red|entire}} mod configuration", "Use" },
                     };
-                    int picked = await Popup.PickOptionAsync(
+                    using var optionsStrings = ScopeDisposedList<string>.GetFromPoolFilledWith(options.Keys);
+
+                    if (bonesHasButNotLoaded.IsNullOrEmpty())
+                        optionsStrings.RemoveAt(0);
+
+                    if (loadedButBonesMissing.IsNullOrEmpty())
+                        optionsStrings.RemoveAt(1);
+
+                    int pickedIndex = await Popup.PickOptionAsync(
                         Title: "Mod Configuration Differs",
                         Intro: Event.FinalizeString(sB),
-                        Options: options,
+                        Options: optionsStrings,
                         AllowEscape: true);
 
-                    if (picked < 0)
+                    if (pickedIndex < 0)
                         return false;
 
-                    if (picked >= 0)
-                        foreach (string item2 in bonesHasButNotLoaded)
-                            ModManager.GetMod(item2).IsEnabled = true;
+                    string picked = options[optionsStrings[pickedIndex]];
 
-                    if (picked >= 1)
-                        foreach (string item in loadedButBonesMissing)
-                            ModManager.GetMod(item).IsEnabled = false;
+                    if (picked.EqualsNoCase("Add")
+                        || picked.EqualsNoCase("Use"))
+                        foreach (string bonesExtra in bonesHasButNotLoaded)
+                            ModManager.GetMod(bonesExtra).IsEnabled = true;
+
+                    if (picked.EqualsNoCase("Use"))
+                        foreach (string bonesMissing in loadedButBonesMissing)
+                            ModManager.GetMod(bonesMissing).IsEnabled = false;
 
                     ModManager.WriteModSettings();
                     GameManager.Restart();

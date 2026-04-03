@@ -6,11 +6,18 @@ using XRL.World.Effects;
 using XRL.World.Parts;
 
 using UD_Bones_Folder.Mod;
+using static UD_Bones_Folder.Mod.BonesManager;
+using XRL.UI;
+using Qud.UI;
+using Platform.IO;
+using Kobold;
 
 namespace XRL.World.ZoneBuilders
 {
     public class BonesZoneBuilder
     {
+        protected bool Alerted;
+
         public string SaveBonesInfoID;
 
         public string ZoneID;
@@ -23,7 +30,7 @@ namespace XRL.World.ZoneBuilders
 
         public bool BuildZone(Zone Z)
         {
-            if (SaveBonesInfo is not SaveBonesInfo savedBones)
+            if (SaveBonesInfo is not SaveBonesInfo saveBonesInfo)
             {
                 Utils.Error(
                     Context: $"{nameof(BonesZoneBuilder)}.{nameof(BuildZone)}", 
@@ -35,22 +42,80 @@ namespace XRL.World.ZoneBuilders
                 return true;
             }
 
-            string gameID = The.Game?.GameID;
-            if (savedBones.Pending != gameID)
+            if (saveBonesInfo.WasCremated)
             {
-                string pending = savedBones.Pending.EqualsNoCase($"{false}") ? "none (this is an error)" : savedBones.Pending;
+                Utils.Warn($"{nameof(SaveBonesInfo)} was cremated. Aborting Bones Zone build and allowing zone to build normally.");
+                return true;
+            }
+
+            string gameID = The.Game?.GameID;
+            if (saveBonesInfo.Pending != gameID)
+            {
+                string pending = saveBonesInfo.Pending.EqualsNoCase($"{false}") ? "none (this is an error)" : saveBonesInfo.Pending;
                 Utils.Warn($"Loading mismatched {nameof(UD_Bones_Folder.Mod.SaveBonesInfo)} for this {nameof(SaveGameInfo)}: " +
                     $"expected {pending}, got {gameID}. " +
                     $"Zone may be nonsensically placed.");
             }
 
-            if (BonesData.GetFromSavedBonesInfo(ZoneID, savedBones) is BonesData bonesData
-                && bonesData.Apply(Z, out var MoonKing) is true)
+            BonesData bonesData = null;
+            try
+            {
+                bonesData = BonesData.GetFromSaveBonesInfo(ZoneID, saveBonesInfo);
+            }
+            catch (FatalDeserializationVersionException fX)
+            {
+                if (!Alerted)
+                {
+                    Popup.ShowYesNo(
+                        Message: $"This bones file has encountered a fatal deserialization exception on the basis of the save version and will likely never load.\n\n" +
+                        $"If you would like to try and recover it, select {PopupMessage.YesNoButton[1].text}, force the zone to load when asked, and then please contact {Utils.AuthorOnPlatforms} with a copy of the bones file: {DataManager.SanitizePathForDisplay(saveBonesInfo.Directory)}.\n\n" +
+                        $"Alternatively, it is recommended that you cremate this bones file, so that it doesn't continue to create issues.\n\n" +
+                        $"Would you like to cremate this bones file?",
+                        callback: (result) =>
+                        {
+                            if (result == DialogResult.Yes)
+                                saveBonesInfo.Cremate();
+                        });
+                    Alerted = true;
+                }
+                throw fX;
+            }
+            catch (DeserializationVersionException x)
+            {
+                if (!Alerted)
+                {
+                    Popup.ShowYesNo(
+                        Message: $"This bones file has encountered a deserialization version exception on the basis of the save version and will likely not load this run.\n\n" +
+                        $"This bones is for game version {saveBonesInfo.Version}, and will likely load in an appropriately versioned run. If you would like to keep this bones so that it might appear in run on that version of the game, select {PopupMessage.YesNoButton[1].text}, and then force the zone to load when asked.\n\n" +
+                        $"Alternatively, if you're unlikely to switch versions of the game, it is recommended that you cremate this bones file, so that it doesn't continue to create issues.\n\n" +
+                        $"Would you like to cremate this bones file?",
+                        callback: (result) =>
+                        {
+                            if (result == DialogResult.Yes)
+                                saveBonesInfo.Cremate();
+                        });
+                    Alerted = true;
+                }
+                throw x;
+            }
+            catch (Exception x)
+            {
+                Utils.Error(Utils.CallChain(nameof(BonesZoneBuilder), nameof(BuildZone)), x);
+                bonesData = null;
+            }
+
+            if (bonesData == null)
+                return false;
+
+            if (bonesData.Apply(Z, out var MoonKing) is true)
             {
                 string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
                 if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
                     regalTitle = moonKingFever.RegalTitle.WithColor("rainbow");
+
+                if (!SpriteManager.TryGetTextureInfo(MoonKing.Render.Tile, out _))
+                    MoonKing.Render.Tile = GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk")?.GetRenderable()?.Tile;
 
                 Z.GetCell(0, 0)
                     ?.AddObject("Widget")
@@ -65,11 +130,8 @@ namespace XRL.World.ZoneBuilders
                             BonesID = bonesData.BonesID,
                         }
                     );
-
-                // bonesData.Cremate();
                 return true;
             }
-
             return false;
         }
     }

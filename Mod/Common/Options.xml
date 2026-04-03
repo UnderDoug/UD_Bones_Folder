@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<options>
+  <!-- UD_Bones_Folder_ 
+  
+  Debug Options
+  
+  -->
+  <!--option
+        ID="UD_Bones_Folder_ DebugEnableOption"
+        DisplayText="{{Y|Choose Your Body Plan}}: Enable a debug option for this mod."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, this option is enabled.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option-->
+  <option
+        ID="UD_Bones_Folder_DebugEnableNoHoarding"
+        DisplayText="{{Y|Bones}}: Pause hoarding bones (saving new bones files)."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, new Bones files will not be created on player death.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableNoExhuming"
+        DisplayText="{{Y|Bones}}: Pause exhuming {{rainbow|Lunar Regent}}s (loading bones files)."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, new runs will not be assigned a bones file during world-gen.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnablePickingBones"
+        Requires="UD_Bones_Folder_DebugEnableNoExhuming==Yes"
+        DisplayText="{{Y|Bones}}: Pick which {{rainbow|Lunar Regent}} to exhume (pick bones file)."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, you'll be asked during world-gen which bones file to exhume (load), if any.
+      
+      You'll only be able to pick from eligible and available bones.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableNoCremation"
+        DisplayText="{{Y|Bones}}: Pause cremating {{rainbow|Lunar Regent}} bones (deleting bones files)."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, loaded bones files will not be deleted upon being encountered.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+
+  <!--
+  
+  Mod Options
+  
+  -->
+  <!--option
+        ID="UD_Bones_Folder_EnableExampleOption"
+        DisplayText="Sort body plans by Category."
+        Category="Mod: Bones"
+        Type="Checkbox"
+        Default="Yes">
+    <helptext>
+      When enabled, this option is enabled.
+
+      The default is {{W|Enabled}}.
+    </helptext>
+  </option-->
+</options>

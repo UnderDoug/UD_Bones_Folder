@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using Platform.IO;
 
 using Qud.API;
@@ -13,6 +15,68 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
+        [Serializable]
+        public class BonesRender : Renderable
+        {
+            public bool HFlip;
+
+            public BonesRender()
+                : base()
+            {
+                HFlip = true;
+            }
+
+            public BonesRender(
+                string Tile,
+                char FColor,
+                char DColor
+                )
+                : base(
+                      Tile: Tile,
+                      TileColor: $"&{FColor}",
+                      DetailColor: DColor)
+            {
+                HFlip = true;
+            }
+
+            public BonesRender(
+                string Tile,
+                char FColor,
+                char DColor,
+                bool HFlip
+                )
+                : this(
+                      Tile: Tile,
+                      FColor: FColor,
+                      DColor: DColor)
+            {
+                this.HFlip = HFlip;
+            }
+
+            public BonesRender(
+                SaveBonesJSON BonesJSON,
+                bool HFlip = true
+                )
+                : this(
+                      Tile: BonesJSON.CharIcon,
+                      FColor: BonesJSON.FColor,
+                      DColor: BonesJSON.DColor,
+                      HFlip: HFlip)
+            { }
+
+            public BonesRender(
+                IRenderable Source,
+                bool HFlip = true
+                )
+                : base(Source)
+            {
+                this.HFlip = HFlip;
+            }
+
+            public override bool getHFlip()
+                => HFlip;
+        }
+
         public string ModVersion;
         public long SaveTimeValue;
 
@@ -21,6 +85,7 @@ namespace UD_Bones_Folder.Mod
 
         public string GenotypeName;
         public string SubtypeName;
+        public string Blueprint;
 
         public string ZoneTerrainType;
         public int ZoneTier;
@@ -115,5 +180,9 @@ namespace UD_Bones_Folder.Mod
 
             return saveBonesInfo;
         }
+
+        public BonesRender GetRender()
+            => new(this, true)
+            ;
     }
 }

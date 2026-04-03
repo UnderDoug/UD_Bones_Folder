@@ -79,7 +79,7 @@ namespace UD_Bones_Folder.Mod.UI
             DoingBonesManagement = false;
             if (((MainMenuOptionData)data)?.Command == "Pick:Bones")
             {
-                if (Options.ModernUI)
+                if (XRL.UI.Options.ModernUI)
                 {
                     if (BonesManagement.CheckInit())
                     {

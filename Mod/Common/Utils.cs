@@ -1,23 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
-using System.Numerics;
 
 using XRL;
 using XRL.Language;
 using XRL.World.Effects;
 using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
-using XRL.Collections;
-using System.Linq;
+
+using static UD_Bones_Folder.Mod.Const;
 
 namespace UD_Bones_Folder.Mod
 {
     [HasVariableReplacer]
     public static class Utils
     {
-        public const string MOD_ID = "UD_Bones_Folder";
-
         public static ModInfo ThisMod => ModManager.GetMod(MOD_ID);
 
         public static string AuthorOnPlatforms => $"{ThisMod.Manifest.Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";

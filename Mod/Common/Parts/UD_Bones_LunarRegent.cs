@@ -9,9 +9,8 @@ using UD_Bones_Folder.Mod;
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_LunarRegent :IScribedPart
+    public class UD_Bones_LunarRegent : UD_Bones_BaseLunarPart
     {
-        public string BonesID;
         public bool Cremated;
 
         public string RegalTitle

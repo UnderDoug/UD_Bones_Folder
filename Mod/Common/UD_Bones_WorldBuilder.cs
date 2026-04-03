@@ -8,6 +8,10 @@ using XRL.Wish;
 using XRL.World.ZoneBuilders;
 
 using UD_Bones_Folder.Mod;
+using Options = UD_Bones_Folder.Mod.Options;
+using XRL.Collections;
+using ConsoleLib.Console;
+using XRL.World.Effects;
 
 namespace XRL.World.WorldBuilders
 {
@@ -36,6 +40,10 @@ namespace XRL.World.WorldBuilders
             if (WorldID != "JoppaWorld")
                 return;
 
+            if (Options.DebugEnableNoExhuming
+                && !Options.DebugEnablePickingBones)
+                return;
+
             WorldCreationProgress.StepProgress("Exhuming Moon King...");
 
             if (BonesManager == null)
@@ -45,66 +53,86 @@ namespace XRL.World.WorldBuilders
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 
-            var saveWeights = new Dictionary<SaveBonesInfo, int?>();
-            foreach (var savedBonesInfo in savedBonesInfos)
+            SaveBonesInfo pickedBones = null;
+            if (!Options.DebugEnablePickingBones)
             {
-                if (savedBonesInfo.ModsEnabled.IsNullOrEmpty())
+                if (savedBonesInfos
+                    .Aggregate(
+                        seed: new BallBag<SaveBonesInfo>(),
+                        func: delegate (BallBag<SaveBonesInfo> acc, SaveBonesInfo next)
+                        {
+                            if (next.GetBonesWeight() is int weight)
+                                acc.Add(next, weight);
+                            return acc;
+                        })
+                    .PluckOne() is not SaveBonesInfo pluckedBonesInfo)
+                    return;
+
+                pickedBones = pluckedBonesInfo;
+            }
+            else
+            {
+                Utils.Info($"Picking bones...");
+
+                using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(savedBonesInfos);
+
+                using var renderList = ScopeDisposedList<SaveBonesJSON.BonesRender>.GetFromPool();
+                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk").GetRenderable(), false));
+                renderList[0].TileColor = "&k";
+                renderList[0].DetailColor = 'k';
+
+                using var optionsList = ScopeDisposedList<string>.GetFromPool();
+                optionsList.Add("none please");
+
+                foreach (var bones in bonesList)
                 {
-                    saveWeights[savedBonesInfo] = null;
-                    continue;
+                    renderList.Add(bones.Render);
+                    string bonesOption = bones.Name;
+                    if (bones.GetBonesJSON() is SaveBonesJSON bonesJSON)
+                        bonesOption = $"{bonesOption}, Level {bonesJSON.Level}, {bonesJSON.Location} ({bonesJSON.ZoneID})";
+                    optionsList.Add(bonesOption);
                 }
-                int saveWeight = 50;
-                saveWeight += savedBonesInfo.ModsDiffer.EnabledWhereBonesDisabled * -1;
-                saveWeight += savedBonesInfo.ModsDiffer.DisabledWhereBonesEnabled * -2;
-                saveWeight = Math.Max(1, saveWeight);
-                foreach (var savedBonesMod in savedBonesInfo.ModsEnabled)
-                    if (!BonesManager.RunningMods.Contains(savedBonesMod))
-                        saveWeight += 1;
+                var picked = Popup.PickOptionAsync(
+                    Title: $"Eligible {UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize()} For This Run",
+                    Intro: "Pick a lunar regent to exhume.",
+                    Options: optionsList,
+                    Icons: renderList,
+                    IntroIcon: GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable(),
+                    AllowEscape: true);
 
-                saveWeight += savedBonesInfo.ModsDiffer.UnavailableWhereBonesEnabled * -4;
-                saveWeights[savedBonesInfo] = Math.Max(1, saveWeight);
+                picked.Wait();
+                if (picked.Result > 0)
+                    pickedBones = bonesList[picked.Result - 1];
             }
 
-            int maxWeight = saveWeights.Aggregate(
-                seed: 0,
-                func: delegate (int accumulator, KeyValuePair<SaveBonesInfo, int?> next)
-                {
-                    if (next.Value is int value
-                        && value > accumulator)
-                        return value;
-                    return accumulator;
-                });
-
-            var bonesInfoBag = new BallBag<SaveBonesInfo>();
-
-            foreach ((var savedBones, var bonesWeight) in saveWeights)
-                bonesInfoBag.Add(savedBones, bonesWeight ?? maxWeight);
-
-            if (bonesInfoBag.PluckOne() is not SaveBonesInfo pluckedBonesInfo)
-                return;
-
-            BoneZoneID = pluckedBonesInfo.ZoneID;
-            if (pluckedBonesInfo.ZoneRequest is ZoneRequest pluckedZR
-                && pluckedZR.Z > 20)
+            if (pickedBones != null)
             {
-                BoneZoneID = ZoneID.Assemble(
-                    World: pluckedZR.WorldID,
-                    ParasangX: pluckedZR.WorldX,
-                    ParasangY: pluckedZR.WorldY,
-                    ZoneX: pluckedZR.X,
-                    ZoneY: pluckedZR.Y,
-                    ZoneZ: Stat.Random(15, 20));
+                BoneZoneID = pickedBones.ZoneID;
+                if (pickedBones.ZoneRequest is ZoneRequest pluckedZR
+                    && pluckedZR.Z > 20)
+                {
+                    BoneZoneID = ZoneID.Assemble(
+                        World: pluckedZR.WorldID,
+                        ParasangX: pluckedZR.WorldX,
+                        ParasangY: pluckedZR.WorldY,
+                        ZoneX: pluckedZR.X,
+                        ZoneY: pluckedZR.Y,
+                        ZoneZ: Stat.Random(15, 20));
+                }
+
+                SaveBonesInfo.SetPending(pickedBones, The.Game?.GameID).Wait();
+
+                // The.ZoneManager.ClearZoneBuilders(BoneZoneID);
+                // The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);
+                The.ZoneManager.AddZonePostBuilder(
+                    ZoneID: BoneZoneID,
+                    Class: nameof(BonesZoneBuilder),
+                    Key1: nameof(BonesZoneBuilder.SaveBonesInfoID), Value1: pickedBones.ID,
+                    Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pickedBones.ZoneID);
+
+                Utils.Info($"Bones pending: {pickedBones.Name}, {pickedBones.GetBonesJSON().Location} " +
+                    $"({pickedBones.ZoneID}) {{{pickedBones.ID}}}");
             }
-
-            SaveBonesInfo.SetPending(pluckedBonesInfo, The.Game?.GameID).Wait();
-
-            // The.ZoneManager.ClearZoneBuilders(BoneZoneID);
-            // The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);
-            The.ZoneManager.AddZonePostBuilder(
-                ZoneID: BoneZoneID,
-                Class: nameof(BonesZoneBuilder),
-                Key1: nameof(BonesZoneBuilder.SaveBonesInfoID), Value1: pluckedBonesInfo.ID,
-                Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pluckedBonesInfo.ZoneID);
         }
     }
 }

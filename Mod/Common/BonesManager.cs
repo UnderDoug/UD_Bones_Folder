@@ -45,6 +45,33 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesManager : IScribedSystem
     {
+        public class DeserializationException : Exception
+        {
+            public DeserializationException(string Message)
+                : base(Message) { }
+
+            public DeserializationException(string Message, Exception InnerException)
+                : base(Message, InnerException) { }
+        }
+
+        public class DeserializationVersionException : DeserializationException
+        {
+            public DeserializationVersionException(string Message)
+                : base(Message) { }
+
+            public DeserializationVersionException(string Message, Exception InnerException)
+                : base(Message, InnerException) { }
+        }
+
+        public class FatalDeserializationVersionException : DeserializationVersionException
+        {
+            public FatalDeserializationVersionException(string Message)
+                : base(Message) { }
+
+            public FatalDeserializationVersionException(string Message, Exception InnerException)
+                : base(Message, InnerException) { }
+        }
+
         public static string BonesSyncPath => DataManager.SyncedPath("Bones");
 
         public static string BonesSavePath => DataManager.SavePath("Bones");
@@ -202,7 +229,7 @@ namespace UD_Bones_Folder.Mod
 
                         var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing);
 
-                        writer.Start(CURR_SAVE_VERSION);
+                        writer.Start(XRLGame.SaveVersion);
                         writer.Write(SERIALIZATION_CHECK);
 
                         writer.Write(saveBonesJSON.GameVersion);
@@ -354,7 +381,7 @@ namespace UD_Bones_Folder.Mod
             => await GetSavedBonesInfoAsync(null)
             ;
 
-        public static IEnumerable<SaveBonesInfo> GetSavedBonesInfo()
+        public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo()
             => GetSavedBonesInfoAsync()?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
@@ -362,8 +389,7 @@ namespace UD_Bones_Folder.Mod
         public static async Task<IEnumerable<SaveBonesInfo>> GetAvailableSavedBonesInfoAsync()
             => await GetSavedBonesInfoAsync(
                 Where: bones
-                    => !bones.IsPending
-                    && bones.ID != The.Game.GameID,
+                    => bones.IsLooselyEligible,
                 TidyPending: true)
             ;
 
@@ -460,14 +486,14 @@ namespace UD_Bones_Folder.Mod
                     if (reader.ReadInt32() != SERIALIZATION_CHECK)
                     {
                         versionString = "2.0.167.0 or prior";
-                        throw new Exception("Bones file is the incorrect version.");
+                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version.");
                     }
 
                     versionNumber = reader.FileVersion;
                     versionString = reader.ReadString();
                     try
                     {
-                        if (versionNumber != CURR_SAVE_VERSION)
+                        if (versionNumber != XRLGame.SaveVersion)
                         {
                             string backupPath = fullBonesPath + $"_upgradebackup_{versionNumber}.gz";
                             if (!File.Exists(backupPath))
@@ -486,9 +512,11 @@ namespace UD_Bones_Folder.Mod
                         Utils.Error($"bones upgrade backup: {x}");
                     }
 
-                    if (reader.FileVersion < MIN_SAVE_VERSION
-                        || reader.FileVersion > CURR_SAVE_VERSION)
-                        throw new Exception($"Bones file is the incorrect version ({versionString}).");
+                    if (reader.FileVersion < MIN_SAVE_VERSION)
+                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version.");
+
+                    if (reader.FileVersion > XRLGame.SaveVersion)
+                        throw new DeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version ({versionString}).");
 
                     string bonesID = SaveBonesInfo.ID;
                     Zone loadedZone = null;
@@ -542,11 +570,11 @@ namespace UD_Bones_Folder.Mod
                 }
                 else
                 {
-                    if (versionNumber < CURR_SAVE_VERSION)
+                    if (versionNumber < XRLGame.SaveVersion)
                         message = $"That bones file looks like it's from an older save format revision ({versionString}). Sorry!\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
                     else
-                    if (versionNumber > CURR_SAVE_VERSION)
+                    if (versionNumber > XRLGame.SaveVersion)
                         message = $"That bones file looks like it's from a newer save format revision ({versionString}).\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
 
@@ -636,8 +664,8 @@ namespace UD_Bones_Folder.Mod
             // DataManager.CloseCacheConnection();
         }
 
-        public bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SavedBonesInfo)
-            => (SavedBonesInfo = GetSavedBonesByID(BonesID)) != null
+        public bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SaveBonesInfo)
+            => (SaveBonesInfo = GetSavedBonesByID(BonesID)) != null
             ;
 
         public void CremateMoonKing(string BonesID)
@@ -652,7 +680,7 @@ namespace UD_Bones_Folder.Mod
             bool success = true;
             try
             {
-                BonesManagement.instance.HandleDeleteAll();
+                BonesManagement.HandleDeleteAll(null);
             }
             catch (Exception x)
             {
