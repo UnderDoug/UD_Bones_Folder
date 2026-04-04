@@ -40,6 +40,9 @@ namespace XRL.World.Parts
             if (!GameObject.Validate(ParentObject))
                 return;
 
+            if (MoonKing == null)
+                Utils.Error($"Failed to find moon king.");
+
             if (ParentObject.CurrentZone == The.Player.CurrentZone
                 && !Title.IsNullOrEmpty()
                 && !Message.IsNullOrEmpty()
@@ -48,7 +51,7 @@ namespace XRL.World.Parts
                 Popup.ShowSpace(
                     Message: Message,
                     Title: Title,
-                    AfterRender: new (MoonKing.RenderForUI()),
+                    AfterRender: new(MoonKing.RenderForUI()),
                     PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
 
                 ParentObject.Obliterate();
@@ -73,6 +76,7 @@ namespace XRL.World.Parts
                 if (MoonKing?.GetPart<UD_Bones_LunarRegent>() is UD_Bones_LunarRegent lunarRegentPart)
                     lunarRegentPart.Cremated = true;
             }
+            Announce();
             return base.HandleEvent(E);
         }
 

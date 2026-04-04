@@ -106,7 +106,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     if (!extras.IsNullOrEmpty())
                         extras += "|".Colored("y");
-                    extras = $"{extras}+{DisabledWhereBonesEnabled.Signed()}".Colored("red");
+                    extras = $"{extras}{DisabledWhereBonesEnabled.Signed()}".Colored("red");
                 }
 
                 if (UnavailableWhereBonesEnabled > 0)

@@ -83,6 +83,8 @@ namespace UD_Bones_Folder.Mod
 
         protected Dictionary<string, string> TileReplacementsByMissingBlueprint = new();
 
+        protected Dictionary<string, string> BlueprintReplacementsByMissingBlueprint = new();
+
         public static string BonesSyncPath => DataManager.SyncedPath("Bones");
 
         public static string BonesSavePath => DataManager.SavePath("Bones");
@@ -230,6 +232,15 @@ namespace UD_Bones_Folder.Mod
                     // Clear object ID's so they get a new one once re-serialzed
                     zoneGO._BaseID = 0;
                     zoneGO.RemoveStringProperty("id");
+
+                    zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
+                    zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());
+                    zoneGO.SetStringProperty("UsesSlots", zoneGO.UsesSlots, true);
+                    zoneGO.SetStringProperty("Species", zoneGO.GetSpecies(), true);
+                    zoneGO.SetStringProperty("Class", zoneGO.GetClass(), true);
+                    zoneGO.SetStringProperty("PaintedWall", zoneGO.GetPropertyOrTag("PaintedWall"), true);
+                    zoneGO.SetStringProperty("PaintedFence", zoneGO.GetPropertyOrTag("PaintedFence"), true);
+                    zoneGO.SetStringProperty("ImprovisedWeapon", $"{(zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true)}", true);
                 }
 
                 string bonesFilePath = GetSaveFileFullPath(GameName);
@@ -689,6 +700,24 @@ namespace UD_Bones_Folder.Mod
             => (SaveBonesInfo = GetSavedBonesByID(BonesID)) != null
             ;
 
+        public void RequireAlternativeTileAndBlueprintForGameObject(
+            GameObject GameObject,
+            out string Blueprint,
+            out string Tile
+            )
+        {
+            if (!TileReplacementsByMissingBlueprint.ContainsKey(GameObject.Blueprint))
+            {
+                string alternativeBlueprint = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(GameObject)).GetRandomElementCosmetic();
+                var alternativeModel = GameObjectFactory.Factory.GetBlueprintIfExists(alternativeBlueprint);
+                var alternativeTile = alternativeModel?.GetRenderable()?.Tile;
+                BlueprintReplacementsByMissingBlueprint[GameObject.Blueprint] = alternativeBlueprint;
+                TileReplacementsByMissingBlueprint[GameObject.Blueprint] = alternativeTile;
+            }
+            Blueprint = BlueprintReplacementsByMissingBlueprint[GameObject.Blueprint];
+            Tile = TileReplacementsByMissingBlueprint[GameObject.Blueprint];
+        }
+
         public void CremateMoonKing(string BonesID)
         {
             if (TryGetSaveBonesByID(BonesID, out var savedBones))
@@ -772,8 +801,10 @@ namespace UD_Bones_Folder.Mod
             }
             return orderedBonesInfos;
         }
+
         public static async Task<IEnumerable<SaveBonesInfo>> CremateAllMoonKings()
-            => await CremateAllMoonKings(null, null);
+            => await CremateAllMoonKings(null, null)
+            ;
 
         [WishCommand(Command = "cremate bones")]
         public static bool ClearBones_WishHandler()

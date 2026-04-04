@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 
 using Kobold;
 
@@ -70,7 +71,8 @@ namespace UD_Bones_Folder.Mod
 
                 foreach (var bonesObject in bonesObjects)
                 {
-                    if (bonesObject.GetStringProperty(UD_Bones_BonesSaver.BonesName, "").EqualsNoCase(BonesID))
+                    if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
+                        && lunarRegent.BonesID.EqualsNoCase(BonesID))
                     {
                         MoonKing = bonesObject;
                         MoonKing?.AddOpinion<OpinionMollify>(The.Player);
@@ -94,6 +96,15 @@ namespace UD_Bones_Folder.Mod
                         {
                             IsMad = true;
                             MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                            var sampleMask = GameObject.CreateSample("Lunar Regent Mask");
+
+                            if (!MoonKing.HasPart<AnimatedMaterialGeneric>()
+                                && sampleMask.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                            {
+                                sampleMask.RemovePart(animatedMaterial);
+                                MoonKing.AddPart(animatedMaterial);
+                            }
+                            sampleMask?.Obliterate();
                         }
 
                         if (!GenotypeFactory.GenotypesByName.ContainsKey(MoonKing.GetGenotype())
@@ -107,8 +118,32 @@ namespace UD_Bones_Folder.Mod
                     }
                     var bonesObjectCopy = cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
 
+                    if (bonesObject == MoonKing)
+                        MoonKing = bonesObjectCopy;
+
                     if (bonesObjectCopy.Energy is Statistic energyCopy)
                         energyCopy.BaseValue = 0;
+
+                    if (bonesObjectCopy != MoonKing)
+                    {
+                        if (bonesObjectCopy?.GetTile() is string tile
+                            && !SpriteManager.HasTextureInfo(tile))
+                            BonesManager.RequireAlternativeTileAndBlueprintForGameObject(
+                                GameObject: bonesObjectCopy,
+                                Blueprint: out bonesObjectCopy.Blueprint,
+                                Tile: out bonesObjectCopy.Render.Tile);
+                    }
+
+                    foreach (var part in bonesObject.LoopParts())
+                    {
+                        part.ApplyRegistrar(bonesObject, true);
+                        part.ApplyRegistrar(bonesObject);
+                    }
+                    foreach (var effect in bonesObject.Effects ?? Enumerable.Empty<Effect>())
+                    {
+                        effect.ApplyRegistrar(bonesObject, true);
+                        effect.ApplyRegistrar(bonesObject);
+                    }
 
                     bonesObject?.Obliterate();
                 }

@@ -1,19 +1,22 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <objects>
   <object Name="Lunar Regent Mask" Inherits="Sun and Moon Mask">
-    <part Name="Render" DisplayName="=subject.uD_RegalTitle= mask" Tile="Items/lunar_regent_mask2.png" TileColor="&amp;R" DetailColor="B" />
-    <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask wearer shares this knowing." />
+    <part Name="Render" DisplayName="=subject.uD_RegalTitle= mask" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
+    <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
     <!--shader Name="rainbow" Type="alternation" Colors="r-R-W-G-B-b-m" ShowInPicker="true" /-->
-    <part Name="AnimatedMaterialGeneric" AnimationLength="28"
-          ColorStringAnimationFrames="0=&amp;r,4=&amp;R,8=&amp;W,12=&amp;G,16=&amp;B,20=&amp;b,24=&amp;m"
-          TileColorAnimationFrames="0=&amp;r,4=&amp;R,8=&amp;W,12=&amp;G,16=&amp;B,20=&amp;b,24=&amp;m"
-          DetailColorAnimationFrames="0=R,4=W,8=G,12=B,16=b,20=m,24=r" />
+    <part Name="AnimatedMaterialGeneric" AnimationLength="56"
+          ColorStringAnimationFrames="0=&amp;r,8=&amp;R,16=&amp;W,24=&amp;G,32=&amp;B,40=&amp;b,48=&amp;m"
+          TileColorAnimationFrames="0=&amp;r,8=&amp;R,16=&amp;W,24=&amp;G,32=&amp;B,40=&amp;b,48=&amp;m"
+          DetailColorAnimationFrames="0=R,8=W,16=G,24=B,32=b,40=m,48=r" />
     <part Name="UD_Bones_LunarFace" />
     <part Name="Cursed" />
     <intproperty Name="AlwaysEquipAsArmor" Value="999" />
     <tag Name="EquipmentFrameColors" Value="RWBG" />
   </object>
   <object Name="Lunar Regent Mask2" Inherits="Lunar Regent Mask">
+    <part Name="Render" Tile="Items/lunar_regent_mask2.png" />
+  </object>
+  <object Name="Lunar Regent Mask3" Inherits="Lunar Regent Mask">
     <part Name="Render" Tile="Items/lunar_regent_mask.png" />
   </object>
 </objects>

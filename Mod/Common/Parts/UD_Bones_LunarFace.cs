@@ -16,8 +16,11 @@ namespace XRL.World.Parts
     {
         public bool TryBeWorn()
         {
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
             if (ParentObject == null)
+                return false;
+
+            if (ParentObject?.Holder != null
+                && ParentObject.Holder.IsPlayer())
                 return false;
 
             if (ParentObject.Equipped == null
@@ -25,6 +28,7 @@ namespace XRL.World.Parts
                 && !holder.IsPlayer()
                 && holder.TryGetPart(out UD_Bones_LunarRegent lunarRegent))
             {
+                Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
                 if (holder.FindEquippedItem(go => go.Blueprint == ParentObject.Blueprint) == null)
                 {
                     Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
@@ -32,7 +36,8 @@ namespace XRL.World.Parts
                     if (holder.Body.LoopPart(slot) is IEnumerable<BodyPart> bodyParts)
                     {
                         Utils.Log($"{2.Indent()}{slot} {nameof(bodyParts)}: {bodyParts.Count()}");
-                        if (!bodyParts.IsNullOrEmpty())
+                        if (!bodyParts.IsNullOrEmpty()
+                            && !holder.AutoEquip(ParentObject, Forced: true))
                         {
                             foreach (var bodyPart in bodyParts)
                             {
@@ -50,8 +55,11 @@ namespace XRL.World.Parts
                                 Utils.Log($"{3.Indent()}Force equipped on {firstPart}");
                         }
                     }
-                    if (ParentObject.Equipped == null)
+                    else
                         Utils.Log($"{2.Indent()}No {slot} {nameof(bodyParts)}");
+                    if (ParentObject.Equipped == null)
+                        Utils.Log($"{2.Indent()}Failed to equip {ParentObject.DebugName}");
+
                     return true;
                 }
                 else
@@ -81,10 +89,8 @@ namespace XRL.World.Parts
         public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
             if (TryBeWorn())
-            {
-                E.PreventAction = true;
-                return true;
-            }
+                return E.PreventAction = true;
+
             return base.HandleEvent(E);
         }
 

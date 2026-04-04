@@ -342,5 +342,37 @@ namespace UD_Bones_Folder.Mod
                 Utils.Log(Message ?? LogInsteadIfNull);
             return Message;
         }
+
+        public static HashSet<T> UnionWith<T>(this HashSet<T> Set, IEnumerable<IEnumerable<T>> Sets)
+        {
+            foreach (var set in Sets)
+                Set.UnionWith(set);
+
+            return Set;
+        }
+
+        public static HashSet<T> GetUnionOfSets<T>(this IEnumerable<IEnumerable<T>> Sets)
+            => new HashSet<T>().UnionWith(Sets)
+            ;
+
+        public static HashSet<T> IntersectWithUnless<T>(
+            this HashSet<T> Set,
+            IEnumerable<T> Other,
+            Predicate<IEnumerable<T>> Case
+            )
+        {
+            if (Case?.Invoke(Other) is not true)
+                Set.IntersectWith(Other);
+            return Set;
+        }
+
+        public static HashSet<T> IntersectWithUnlessEmptyOrNull<T>(
+            this HashSet<T> Set,
+            IEnumerable<T> Other
+            )
+            => Set.IntersectWithUnless(
+                Other: Other,
+                Case: o => o.IsNullOrEmpty())
+            ;
     }
 }

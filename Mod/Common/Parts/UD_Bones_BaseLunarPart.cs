@@ -26,6 +26,8 @@ namespace XRL.World.Parts
             protected set => ParentObject?.SetStringProperty(nameof(LastBonesID), value);
         }
 
+        public bool Persists;
+
         public override void Attach()
         {
             base.Attach();
@@ -60,12 +62,15 @@ namespace XRL.World.Parts
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
         {
             SetBonesID(The.Game?.GameID, true);
+            if (E.Context == "Wish")
+                Persists = true;
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(BeforeTakeActionEvent E)
         {
-            if (BonesID == The.Game.GameID)
+            if (BonesID == The.Game.GameID
+                && !Persists)
             {
                 ParentObject.Obliterate();
                 E.PreventAction = true;
