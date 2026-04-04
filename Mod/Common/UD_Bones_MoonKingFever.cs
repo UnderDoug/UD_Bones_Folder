@@ -71,7 +71,7 @@ namespace XRL.World.Effects
 
         public void SetDisplayName()
         {
-            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).WithColor("rainbow")} {"fever".WithColor("r")}";
+            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).Colored("rainbow")} {"fever".Colored("r")}";
         }
 
         private void ApplyChanges()

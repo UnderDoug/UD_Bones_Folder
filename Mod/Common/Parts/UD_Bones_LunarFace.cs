@@ -16,6 +16,10 @@ namespace XRL.World.Parts
     {
         public bool TryBeWorn()
         {
+            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
+            if (ParentObject == null)
+                return false;
+
             if (ParentObject.Equipped == null
                 && ParentObject.Holder is GameObject holder
                 && !holder.IsPlayer()
@@ -23,24 +27,35 @@ namespace XRL.World.Parts
             {
                 if (holder.FindEquippedItem(go => go.Blueprint == ParentObject.Blueprint) == null)
                 {
-                    if (holder.Body.LoopPart(ParentObject?.GetPart<Armor>()?.WornOn ?? "Face") is IEnumerable<BodyPart> bodyParts)
+                    Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
+                    string slot = ParentObject?.GetPart<Armor>()?.WornOn ?? "Face";
+                    if (holder.Body.LoopPart(slot) is IEnumerable<BodyPart> bodyParts)
                     {
+                        Utils.Log($"{2.Indent()}{slot} {nameof(bodyParts)}: {bodyParts.Count()}");
                         if (!bodyParts.IsNullOrEmpty())
                         {
                             foreach (var bodyPart in bodyParts)
                             {
                                 if (bodyPart.TryUnequip()
                                     && bodyPart.Equip(ParentObject))
+                                {
+                                    Utils.Log($"{3.Indent()}Equipped on {bodyPart}");
                                     return true;
+                                }
                             }
                             if (lunarRegent.BonesID == BonesID
                                 && bodyParts.First() is BodyPart firstPart
                                 && firstPart.ForceUnequip()
                                 && firstPart.Equip(ParentObject))
-                                return true;
+                                Utils.Log($"{3.Indent()}Force equipped on {firstPart}");
                         }
                     }
+                    if (ParentObject.Equipped == null)
+                        Utils.Log($"{2.Indent()}No {slot} {nameof(bodyParts)}");
+                    return true;
                 }
+                else
+                    Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} with {ParentObject.Blueprint}");
             }
             return false;
         }

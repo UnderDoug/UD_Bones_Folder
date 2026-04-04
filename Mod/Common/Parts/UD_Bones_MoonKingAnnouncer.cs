@@ -18,11 +18,22 @@ namespace XRL.World.Parts
         public string Title;
         public string Message;
 
-        public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetStringProperty(UD_Bones_BonesSaver.BonesName) == BonesID);
+        public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
 
         public UD_Bones_MoonKingAnnouncer()
             : base()
         { }
+
+        public UD_Bones_MoonKingAnnouncer(
+            string BonesID,
+            string Title,
+            string Message)
+            : this()
+        {
+            SetBonesID(BonesID, true);
+            this.Title = Title;
+            this.Message = Message;
+        }
 
         public void Announce()
         {

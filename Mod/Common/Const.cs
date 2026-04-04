@@ -12,5 +12,7 @@ namespace UD_Bones_Folder.Mod
         public const int MIN_SAVE_VERSION = 400;
 
         public const int SERIALIZATION_CHECK = 123457;
+
+        public const string MAD_LUNAR_REGENT_TILE = "Creatures/mad_lunar_regent_human.png";
     }
 }

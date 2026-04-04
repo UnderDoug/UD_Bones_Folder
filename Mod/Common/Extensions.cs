@@ -51,7 +51,7 @@ namespace UD_Bones_Folder.Mod
             if (zone.Z > 10)
                 location += $"{zoneTerrainType}, ";
 
-            string deathReason = E.Reason;
+            string deathReason = E.Reason ?? "You died under mysterious circumstances!";
             if (deathReason.EndsWith(".")
                 || deathReason.EndsWith("!"))
                 deathReason = deathReason[..^1];
@@ -150,11 +150,11 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: true);
 
             SaveRow.imageTinyFrame.Sync(force: true);
-            SaveRow.TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".WithColor("W"));
-            SaveRow.TextSkins[1].SetText(/*$"{"Location:".WithColor("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
+            SaveRow.TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".Colored("W"));
+            SaveRow.TextSkins[1].SetText(/*$"{"Location:".Colored("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";
-            SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".WithColor("K"));
+            SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
             SaveRow.modsDiffer.SetActive(value: true);
             if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsDifferTextSkins)
             {
@@ -182,6 +182,12 @@ namespace UD_Bones_Folder.Mod
             }
             SaveRow.Update();
         }
+
+        public static string Colored(this string Text, string Color)
+            => Color != null
+            ? Text?.WithColor(Color)
+            : Text
+            ;
 
         public static string ToLiteral(this string String, bool Quotes = false)
         {
@@ -327,6 +333,14 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
+        }
+
+        public static T Log<T>(this T Message, T LogInsteadIfNull = default)
+        {
+            if (!(Message?.ToString()).IsNullOrEmpty()
+                || !(LogInsteadIfNull?.ToString()).IsNullOrEmpty())
+                Utils.Log(Message ?? LogInsteadIfNull);
+            return Message;
         }
     }
 }

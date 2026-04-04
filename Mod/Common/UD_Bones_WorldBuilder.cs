@@ -49,7 +49,7 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (BonesManager.GetAvailableSavedBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
+            if (BonesManager.GetAvailableSaveBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 
@@ -77,9 +77,9 @@ namespace XRL.World.WorldBuilders
                 using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(savedBonesInfos);
 
                 using var renderList = ScopeDisposedList<SaveBonesJSON.BonesRender>.GetFromPool();
-                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk").GetRenderable(), false));
-                renderList[0].TileColor = "&k";
-                renderList[0].DetailColor = 'k';
+                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable(), false));
+                renderList[0].TileColor = "&K";
+                renderList[0].DetailColor = 'K';
 
                 using var optionsList = ScopeDisposedList<string>.GetFromPool();
                 optionsList.Add("none please");

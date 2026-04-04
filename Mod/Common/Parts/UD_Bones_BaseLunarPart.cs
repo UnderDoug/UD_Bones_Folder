@@ -14,9 +14,17 @@ namespace XRL.World.Parts
     [Serializable]
     public abstract class UD_Bones_BaseLunarPart : IScribedPart
     {
-        public string BonesID = null;
+        public string BonesID
+        {
+            get => ParentObject?.GetStringProperty(nameof(BonesID));
+            protected set => ParentObject?.SetStringProperty(nameof(BonesID), value);
+        }
 
-        public string LastBonesID = null;
+        public string LastBonesID
+        {
+            get => ParentObject?.GetStringProperty(nameof(LastBonesID));
+            protected set => ParentObject?.SetStringProperty(nameof(LastBonesID), value);
+        }
 
         public override void Attach()
         {
@@ -24,7 +32,7 @@ namespace XRL.World.Parts
             SetBonesID(The.Game?.GameID);
         }
 
-        protected virtual void SetBonesID(string BonesID, bool Override = false)
+        protected virtual void SetBonesID(string BonesID, bool Override)
         {
             if (Override
                 || this.BonesID == null)
@@ -32,6 +40,10 @@ namespace XRL.World.Parts
 
             LastBonesID = BonesID;
         }
+
+        public void SetBonesID(string BonesID)
+            => SetBonesID(BonesID, false)
+            ;
 
         public override void FinalizeRead(SerializationReader Reader)
         {
@@ -42,11 +54,23 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == BeforeObjectCreatedEvent.ID
+            || ID == BeforeTakeActionEvent.ID
             ;
 
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
         {
             SetBonesID(The.Game?.GameID, true);
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(BeforeTakeActionEvent E)
+        {
+            if (BonesID == The.Game.GameID)
+            {
+                ParentObject.Obliterate();
+                E.PreventAction = true;
+                return true;
+            }
             return base.HandleEvent(E);
         }
     }

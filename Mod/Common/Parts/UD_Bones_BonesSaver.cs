@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Qud.API;
 
 using UD_Bones_Folder.Mod;
 
 using XRL.Collections;
+using XRL.Rules;
 using XRL.UI;
 using XRL.Wish;
 using XRL.World.AI;
@@ -75,7 +77,7 @@ namespace XRL.World.Parts
 
             string regalTitle = UD_Bones_LunarRegent.GetRegalTitle(Player);
 
-            moonKing.RequirePart<Honorifics>().Primary = regalTitle.WithColor("rainbow");
+            moonKing.RequirePart<Honorifics>().Primary = regalTitle.Colored("rainbow");
 
             if (TargetCell == null)
             {
@@ -93,7 +95,7 @@ namespace XRL.World.Parts
 
             if (GameObject.Create("Lunar Regent Mask") is GameObject lunarRegentMask)
             {
-                if (!moonKing.ReceiveObject(lunarRegentMask))
+                if (moonKing.ReceiveObject(lunarRegentMask))
                 {
                     if (lunarRegentMask.TryGetPart(out UD_Bones_LunarFace lunarFace))
                         lunarFace.TryBeWorn();
@@ -113,6 +115,17 @@ namespace XRL.World.Parts
             => PreparePlayer(player)
             ;
 
+        public static void BonesExceptionCleanUp(GameObject Player)
+        {
+            foreach (var bonesObject in Player?.CurrentZone.GetObjectsWithProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) ?? Enumerable.Empty<GameObject>())
+                if (bonesObject.GetStringProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) == The.Game.GameID)
+                    bonesObject.Obliterate();
+        }
+
+        public void BonesExceptionCleanUp()
+            => BonesExceptionCleanUp(ParentObject)
+            ;
+
         public bool HandleDeathEvent(IDeathEvent E)
         {
             if (!Options.DebugEnableNoHoarding
@@ -124,9 +137,7 @@ namespace XRL.World.Parts
                     using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
                     foreach (var moonKingItem in moonKingInventory)
                     {
-                        var fragileObject = moonKingItem.RequirePart<UD_Bones_FragileRoyalObject>();
-
-                        fragileObject.BonesID ??= The.Game.GameID;
+                        moonKingItem.RequirePart<UD_Bones_FragileRoyalObject>();
 
                         if (moonKingItem.Equipped != null
                             || moonKingItem.GetBlueprint().InheritsFrom("Grenade")
@@ -138,8 +149,23 @@ namespace XRL.World.Parts
 
                         EquipmentAPI.DropObject(moonKingItem);
                     }
-                    BonesManager.HoardBones(BonesName, E, moonKing);
-                    return true;
+
+                    bool success = true;
+                    try
+                    {
+                        BonesManager.HoardBones(BonesName, E, moonKing)?.Wait();
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Failed to serialize bones", x);
+                        success = false;
+                    }
+                    finally
+                    {
+                        if (!success)
+                            BonesExceptionCleanUp();
+                    }
+                    return success;
                 }
             }
             return false;
@@ -158,12 +184,24 @@ namespace XRL.World.Parts
 
         [WishCommand("make bones")]
         public static bool MakeBones_WishHandler()
+            => MakeBones_WishHandler(null)
+            ;
+
+        [WishCommand("make bones")]
+        public static bool MakeBones_WishHandler(string Params)
         {
             if (The.Player.CurrentZone is not Zone currentZone)
                 return false;
 
             if (The.Game?.GameID is not string gameID)
                 return false;
+
+            bool willDie = Params?.Contains("die") is true;
+
+            if (willDie
+                && Popup.ShowYesNo($"You have flagged that you would like to die to make these bones.\n\n" +
+                $"Last chance to back out, this will atually, genuinely, end your run.") != DialogResult.Yes)
+                return true;
 
             WishContext = true;
             GameObject projectile = null;
@@ -178,7 +216,7 @@ namespace XRL.World.Parts
                         return true;
                 }
 
-                var killer = ZoneManager.instance.CachedObjects.Values?.GetRandomElementCosmetic()
+                var killer = ZoneManager.instance.CachedObjects.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
                     ?? The.Player;
 
                 var weapons = Event.NewGameObjectList();
@@ -193,20 +231,33 @@ namespace XRL.World.Parts
                     GetMissileWeaponProjectileEvent.GetFor(weapon, ref projectile, ref projectileeBlueprint);
                 }
 
-                AfterDieEvent.Send(
-                    Dying: The.Player,
-                    Killer: killer,
-                    Weapon: weapon,
-                    Projectile: projectile,
-                    Accidental: 25.in100(),
-                    Reason: The.Player.Physics.LastDeathReason,
-                    ThirdPersonReason: The.Player.Physics.LastThirdPersonDeathReason);
+                if (willDie)
+                {
+                    The.Player.TakeDamage(
+                        Amount: The.Player.hitpoints * (Stat.Random(80, 120) / 100),
+                        Message: "from %t desire it be so.",
+                        Attributes: "Unavoidable Cosmic Umbral Vorpal Disintegration",
+                        Owner: killer,
+                        Attacker: killer,
+                        Source: projectile ?? weapon,
+                        Accidental: 25.in100());
+                }
+                else
+                {
+                    AfterDieEvent.Send(
+                        Dying: The.Player,
+                        Killer: killer,
+                        Weapon: weapon,
+                        Projectile: projectile,
+                        Accidental: 25.in100(),
+                        Reason: The.Player.Physics.LastDeathReason,
+                        ThirdPersonReason: The.Player.Physics.LastThirdPersonDeathReason);
+                }
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
-                    foreach ((var bonesObject, var lunarPart) in currentZone.GetObjectsAndPartsWithPartDescendedFrom<UD_Bones_BaseLunarPart>())
-                        if (lunarPart.BonesID == gameID)
-                            bonesObject.Obliterate();
+                    if (!willDie)
+                        BonesExceptionCleanUp(The.Player);
 
                     Popup.Show($"Created new bones file for {saveBonesInfo.Name} in {DataManager.SanitizePathForDisplay(saveBonesInfo.Directory)}!");
                     return true;

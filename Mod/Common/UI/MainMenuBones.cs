@@ -63,7 +63,7 @@ namespace UD_Bones_Folder.Mod.UI
                         MainMenu.LeftOptions.Insert(placementIndex + 1, MainMenuBonesOptions);
                 }
 
-                MainMenuBonesOptions.Enabled = BonesManager.HasSavedBones();
+                MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones();
             }
 
         }
@@ -79,7 +79,8 @@ namespace UD_Bones_Folder.Mod.UI
             DoingBonesManagement = false;
             if (((MainMenuOptionData)data)?.Command == "Pick:Bones")
             {
-                if (XRL.UI.Options.ModernUI)
+                if (XRL.UI.Options.ModernUI
+                    && MainMenuBonesOptions?.Enabled is true)
                 {
                     if (BonesManagement.CheckInit())
                     {
@@ -98,15 +99,42 @@ namespace UD_Bones_Folder.Mod.UI
             DoingBonesManagement = false;
         }
 
+        public static void SetBonesMenuOptionEnabled()
+        {
+            if (MainMenuBonesOptions != null)
+                MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones();
+        }
+
         [HarmonyPatch(
             declaringType: typeof(MainMenu),
-            methodName: nameof(MainMenu.EnableNavContext),
-            argumentTypes: new Type[] { },
-            argumentVariations: new ArgumentType[] { })]
-        [HarmonyPostfix]
-        public static void EnableNavContext_ActiveInactiveBones_Postfix()
-        {
-            MainMenuBonesOptions.Enabled = BonesManager.HasSavedBones();
-        }
+            methodName: nameof(MainMenu.Show))]
+        [HarmonyPrefix]
+        public static void Show_ActiveInactiveBones_Prefix()
+            => SetBonesMenuOptionEnabled()
+            ;
+
+        [HarmonyPatch(
+            declaringType: typeof(MainMenu),
+            methodName: nameof(MainMenu.Update))]
+        [HarmonyPrefix]
+        public static void Update_ActiveInactiveBones_Prefix()
+            => SetBonesMenuOptionEnabled()
+            ;
+
+        [HarmonyPatch(
+            declaringType: typeof(MainMenu),
+            methodName: nameof(MainMenu.Hide))]
+        [HarmonyPrefix]
+        public static void Hide_ActiveInactiveBones_Prefix()
+            => SetBonesMenuOptionEnabled()
+            ;
+
+        [HarmonyPatch(
+            declaringType: typeof(MainMenu),
+            methodName: nameof(MainMenu.Reshow))]
+        [HarmonyPrefix]
+        public static void Reshow_ActiveInactiveBones_Prefix()
+            => SetBonesMenuOptionEnabled()
+            ;
     }
 }

@@ -96,24 +96,24 @@ namespace UD_Bones_Folder.Mod
                 if (DifferLevel == 0)
                     return "{{y|mods:}} {{green|\u00fb}}";
 
-                string output = "mods:".WithColor("y");
+                string output = "mods:".Colored("y");
 
                 string extras = null;
                 if (EnabledWhereBonesDisabled > 0)
-                    extras = $"{extras}{(-EnabledWhereBonesDisabled).Signed()}".WithColor("yellow");
+                    extras = $"{extras}{(-EnabledWhereBonesDisabled).Signed()}".Colored("yellow");
 
                 if (DisabledWhereBonesEnabled > 0)
                 {
                     if (!extras.IsNullOrEmpty())
-                        extras += "|".WithColor("y");
-                    extras = $"{extras}+{DisabledWhereBonesEnabled.Signed()}".WithColor("red");
+                        extras += "|".Colored("y");
+                    extras = $"{extras}+{DisabledWhereBonesEnabled.Signed()}".Colored("red");
                 }
 
                 if (UnavailableWhereBonesEnabled > 0)
                 {
                     if (!extras.IsNullOrEmpty())
-                        extras += "|".WithColor("y");
-                    extras = $"{extras}X{UnavailableWhereBonesEnabled}".WithColor("red");
+                        extras += "|".Colored("y");
+                    extras = $"{extras}X{UnavailableWhereBonesEnabled}".Colored("red");
                 }
                 return $"{output} {extras}";
             }

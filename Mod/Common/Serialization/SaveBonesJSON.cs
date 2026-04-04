@@ -126,7 +126,7 @@ namespace UD_Bones_Folder.Mod
             {
                 return new SaveBonesInfo
                 {
-                    Name = "Corrupt info file".WithColor("R"),
+                    Name = "Corrupt info file".Colored("R"),
                     Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
                     Info = "",
                     Directory = DirPath
@@ -174,7 +174,7 @@ namespace UD_Bones_Folder.Mod
             if (json.SaveVersion < 395
                 || json.SaveVersion > 400)
             {
-                string olderVersionString = $"Older Version ({json.GameVersion})".WithColor("R");
+                string olderVersionString = $"Older Version ({json.GameVersion})".Colored("R");
                 saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
             }
 

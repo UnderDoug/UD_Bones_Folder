@@ -1,5 +1,7 @@
 ﻿using System;
 
+using Kobold;
+
 using XRL;
 using XRL.World;
 using XRL.World.AI;
@@ -34,9 +36,10 @@ namespace UD_Bones_Folder.Mod
             => BonesManager?.ExhumeMoonKing(ZoneID, SaveBonesInfo)
             ;
 
-        public bool Apply(Zone Zone, out GameObject MoonKing)
+        public bool Apply(Zone Zone, out GameObject MoonKing, out bool IsMad)
         {
             MoonKing = null;
+            IsMad = false;
             if (BonesZone == null)
                 return false;
 
@@ -86,6 +89,16 @@ namespace UD_Bones_Folder.Mod
                             brain?.PushGoal(new Kill(The.Player));
                             ApplyHostility(The.Player, brain, 0);
                         }
+
+                        if (!SpriteManager.TryGetTextureInfo(MoonKing.Render.Tile, out _))
+                        {
+                            IsMad = true;
+                            MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                        }
+
+                        if (!GenotypeFactory.GenotypesByName.ContainsKey(MoonKing.GetGenotype())
+                            || !SubtypeFactory.SubtypesByName.ContainsKey(MoonKing.GetGenotype()))
+                            IsMad = true;
 
                         if (MoonKing.Render is Render render)
                             render.Visible = true;

@@ -36,11 +36,13 @@ using ColorUtility = ConsoleLib.Console.ColorUtility;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
 using Event = XRL.World.Event;
 using UD_Bones_Folder.Mod.UI;
+using XRL.UI.Framework;
 
 namespace UD_Bones_Folder.Mod
 {
     [HasModSensitiveStaticCache]
     [HasGameBasedStaticCache]
+    [HasCallAfterGameLoaded]
     [HasWishCommand]
     [Serializable]
     public class BonesManager : IScribedSystem
@@ -72,6 +74,15 @@ namespace UD_Bones_Folder.Mod
                 : base(Message, InnerException) { }
         }
 
+        private static bool _WishContext;
+        public static bool WishContext
+        {
+            get => _WishContext;
+            protected set => _WishContext = value;
+        }
+
+        protected Dictionary<string, string> TileReplacementsByMissingBlueprint = new();
+
         public static string BonesSyncPath => DataManager.SyncedPath("Bones");
 
         public static string BonesSavePath => DataManager.SavePath("Bones");
@@ -80,7 +91,6 @@ namespace UD_Bones_Folder.Mod
         private static List<string> _SaveGameIDs = null;
 
         public static IEnumerable<string> SaveGameIDs => _SaveGameIDs ??= SavesAPI.GetSavedGameInfo()?.Result?.Select(info => info.ID)?.ToList();
-
 
         protected static string[] BonesPaths = new string[]
         {
@@ -93,6 +103,8 @@ namespace UD_Bones_Folder.Mod
 
         private static List<string> _RunningMods;
         public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
+
+        private static bool? _HasSaveBones;
 
         public bool Initialized;
 
@@ -107,14 +119,10 @@ namespace UD_Bones_Folder.Mod
 
         private static BonesManager InitializeSystem() => new();
 
+        [CallAfterGameLoaded]
         [GameBasedCacheInit]
         public static void BonesManagerSystemInit()
         {
-            if (System == null)
-                System = The.Game?.RequireSystem(InitializeSystem);
-            else
-                The.Game?.AddSystem(System);
-
             if (System == null)
                 System = The.Game?.RequireSystem(InitializeSystem);
             else
@@ -182,6 +190,12 @@ namespace UD_Bones_Folder.Mod
             => GetBonesDirectory($"{FileName}.json")
             ;
 
+        private Task ReturnSaveTaskNullWithLogMessage(string Message = null)
+        {
+            Message.Log();
+            return SaveTask = null;
+        }
+
         public Task HoardBones(
             string GameName,
             IDeathEvent DeathEvent,
@@ -190,98 +204,103 @@ namespace UD_Bones_Folder.Mod
         {
             using (DelayShutdown.AutoScopeForceMainThread())
             {
-                var task = SaveTask;
+                var saveTask = The.Game.SaveTask;
 
-                if (task != null
-                    && !task.IsCompleted)
-                    return null;
+                if (saveTask?.IsCompleted is false)
+                    return ReturnSaveTaskNullWithLogMessage($"Abort {nameof(HoardBones)}: {nameof(SaveTask)} is not null and not complete");
+
+                if (The.Game is not XRLGame game)
+                    return ReturnSaveTaskNullWithLogMessage($"Abort {nameof(HoardBones)}: {Utils.CallChain(nameof(The), nameof(The.Game))} is null");
+
+                if (!game.Running)
+                    return ReturnSaveTaskNullWithLogMessage($"Abort {nameof(HoardBones)}: !{Utils.CallChain(nameof(The), nameof(The.Game), nameof(The.Game.Running))}");
+
+                if (DeathEvent?.Dying?.CurrentZone is not Zone currentZone)
+                    return ReturnSaveTaskNullWithLogMessage($"Abort {nameof(HoardBones)}: {nameof(currentZone)} is null");
+
+                if (SerializationWriter.Get() is not SerializationWriter writer)
+                    return ReturnSaveTaskNullWithLogMessage($"Abort {nameof(HoardBones)}: failed to get {nameof(SerializationWriter)}");
 
                 string message = "Hoarding Bones";
 
-                Loading.Status status = Loading.StartTask(message);
+                using var status = Loading.StartTask(message);
 
-                if (The.Game is XRLGame game
-                    && DeathEvent?.Dying?.CurrentZone is Zone currentZone
-                    && SerializationWriter.Get() is SerializationWriter writer)
+                foreach (var zoneGO in currentZone.GetObjects())
                 {
-                    // Clear object ID's so they get a new one once re-serialzed (hopefully this works...)
-                    foreach (var zoneGO in currentZone.GetObjects())
+                    // Clear object ID's so they get a new one once re-serialzed
+                    zoneGO._BaseID = 0;
+                    zoneGO.RemoveStringProperty("id");
+                }
+
+                string bonesFilePath = GetSaveFileFullPath(GameName);
+                string bonesInfoPath = GetInfoFileFullPath(GameName);
+                try
+                {
+                    if (game.WallTime != null)
                     {
-                        zoneGO._BaseID = 0;
-                        zoneGO.RemoveStringProperty("id");
+                        game._walltime += game.WallTime.ElapsedTicks;
+                        game.WallTime.Reset();
+                        game.WallTime.Start();
+                    }
+                    else
+                    {
+                        game.WallTime = new Stopwatch();
+                        game.WallTime.Start();
                     }
 
-                    string bonesFilePath = GetSaveFileFullPath(GameName);
-                    string bonesInfoPath = GetInfoFileFullPath(GameName);
+                    var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing);
+
+                    writer.Start(XRLGame.SaveVersion);
+                    writer.Write(SERIALIZATION_CHECK);
+
+                    writer.Write(saveBonesJSON.GameVersion);
+
+                    writer.WriteBonesZone(currentZone);
+
+                    writer.FinalizeWrite();
+
+                    bool restoreBackup = false;
                     try
                     {
-                        if (game.WallTime != null)
+                        File.WriteAllText(bonesInfoPath, JsonUtility.ToJson(saveBonesJSON, prettyPrint: true));
+                        if (File.Exists(bonesFilePath))
                         {
-                            game._walltime += game.WallTime.ElapsedTicks;
-                            game.WallTime.Reset();
-                            game.WallTime.Start();
+                            File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
+                            restoreBackup = true;
                         }
-                        else
+                        using (var memoryStream = new System.IO.MemoryStream())
                         {
-                            game.WallTime = new Stopwatch();
-                            game.WallTime.Start();
-                        }
-
-                        var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing);
-
-                        writer.Start(XRLGame.SaveVersion);
-                        writer.Write(SERIALIZATION_CHECK);
-
-                        writer.Write(saveBonesJSON.GameVersion);
-
-                        writer.WriteBonesZone(currentZone);
-
-                        writer.FinalizeWrite();
-
-                        bool restoreBackup = false;
-                        try
-                        {
-                            File.WriteAllText(bonesInfoPath, JsonUtility.ToJson(saveBonesJSON, prettyPrint: true));
-                            if (File.Exists(bonesFilePath))
+                            using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
                             {
-                                File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
-                                restoreBackup = true;
+                                byte[] buffer = writer.Stream.GetBuffer();
+                                gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
                             }
-                            using (var memoryStream = new System.IO.MemoryStream())
-                            {
-                                using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
-                                {
-                                    byte[] buffer = writer.Stream.GetBuffer();
-                                    gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
-                                }
-                                File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
-                            }
-                            MemoryHelper.GCCollect();
-                            game.CheckSave(bonesFilePath);
+                            File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
                         }
-                        catch (Exception x)
-                        {
-                            BonesHoardError(bonesFilePath, x, restoreBackup);
-                        }
-                        finally
-                        {
-                            SerializationWriter.Release(writer);
-                        }
-                        task = null;
+                        MemoryHelper.GCCollect();
+                        game.CheckSave(bonesFilePath);
                     }
                     catch (Exception x)
                     {
-                        SerializationWriter.Release(writer);
-                        BonesHoardError(bonesFilePath, x);
-                        task = SaveTask = Task.FromException(x);
+                        BonesHoardError(bonesFilePath, x, restoreBackup);
                     }
                     finally
                     {
-                        MemoryHelper.GCCollectMax();
-                        status.Dispose();
+                        SerializationWriter.Release(writer);
                     }
+                    return null;
                 }
-                return task;
+                catch (Exception x)
+                {
+                    SerializationWriter.Release(writer);
+                    BonesHoardError(bonesFilePath, x);
+                    return SaveTask = Task.FromException(x);
+                }
+                finally
+                {
+                    MemoryHelper.GCCollectMax();
+                    _HasSaveBones = null;
+                }
             }
         }
 
@@ -312,7 +331,7 @@ namespace UD_Bones_Folder.Mod
                 $"because they'll probably want a copy of the problem bones.");
         }
 
-        public static async Task<IEnumerable<SaveBonesInfo>> GetSavedBonesInfoAsync(Predicate<SaveBonesInfo> Where, bool TidyPending = false)
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(Predicate<SaveBonesInfo> Where, bool TidyPending = false)
         {
             var saveBonesInfos = new List<SaveBonesInfo>();
             string currentPath = null;
@@ -355,21 +374,21 @@ namespace UD_Bones_Folder.Mod
             return saveBonesInfos;
         }
 
-        public static IEnumerable<SaveBonesInfo> GetSavedBonesInfo(Predicate<SaveBonesInfo> Where)
-            => GetSavedBonesInfoAsync(Where)?.Result
+        public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo(Predicate<SaveBonesInfo> Where)
+            => GetSaveBonesInfoAsync(Where)?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
-        public static async Task<bool> HasSavedBonesAsync()
-            => !(await GetSavedBonesInfoAsync(null)).IsNullOrEmpty()
+        public static async Task<bool> HasSaveBonesAsync()
+            => _HasSaveBones ??= !(await GetSaveBonesInfoAsync(null)).IsNullOrEmpty()
             ;
 
-        public static bool HasSavedBones()
-            => HasSavedBonesAsync().Result
+        public static bool HasSaveBones()
+            => HasSaveBonesAsync().Result
             ;
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetPendingSaveBonesInfoAsync()
-            => await GetSavedBonesInfoAsync(bones => bones.IsPending)
+            => await GetSaveBonesInfoAsync(bones => bones.IsPending)
             ;
 
         public static IEnumerable<SaveBonesInfo> GetPendingSaveBonesInfo()
@@ -377,24 +396,24 @@ namespace UD_Bones_Folder.Mod
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
-        public static async Task<IEnumerable<SaveBonesInfo>> GetSavedBonesInfoAsync()
-            => await GetSavedBonesInfoAsync(null)
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync()
+            => await GetSaveBonesInfoAsync(null)
             ;
 
         public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo()
-            => GetSavedBonesInfoAsync()?.Result
+            => GetSaveBonesInfoAsync()?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
-        public static async Task<IEnumerable<SaveBonesInfo>> GetAvailableSavedBonesInfoAsync()
-            => await GetSavedBonesInfoAsync(
+        public static async Task<IEnumerable<SaveBonesInfo>> GetAvailableSaveBonesInfoAsync()
+            => await GetSaveBonesInfoAsync(
                 Where: bones
                     => bones.IsLooselyEligible,
                 TidyPending: true)
             ;
 
-        public static IEnumerable<SaveBonesInfo> GetAvailableSavedBonesInfo()
-            => GetAvailableSavedBonesInfoAsync()?.Result
+        public static IEnumerable<SaveBonesInfo> GetAvailableSaveBonesInfo()
+            => GetAvailableSaveBonesInfoAsync()?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
@@ -588,6 +607,7 @@ namespace UD_Bones_Folder.Mod
             finally
             {
                 // DataManager.CloseCacheConnection();
+                _HasSaveBones = null;
             }
 
             return bonesData;
@@ -627,7 +647,7 @@ namespace UD_Bones_Folder.Mod
 
         public async Task<SaveBonesInfo> GetSavedBonesByIDAsync(string BonesID)
         {
-            foreach (var savedBones in await GetSavedBonesInfoAsync())
+            foreach (var savedBones in await GetSaveBonesInfoAsync())
             {
                 if (savedBones.ID == BonesID)
                     return savedBones;
@@ -647,6 +667,7 @@ namespace UD_Bones_Folder.Mod
                 try
                 {
                     Platform.IO.Directory.Delete(Directory);
+                    _HasSaveBones = null;
                     break;
                 }
                 catch (Exception x)
@@ -674,20 +695,104 @@ namespace UD_Bones_Folder.Mod
                 savedBones.Cremate();
         }
 
+        public static async Task<IEnumerable<SaveBonesInfo>> CremateAllMoonKings(
+            Action BeforeDeletionLoop,
+            Action AfterDeletionLoop
+            )
+        {
+            var comparer = SaveBonesInfo.SaveBonesInfoComparerDescending;
+            var orderedBonesInfos = (await GetSaveBonesInfoAsync())?.OrderBy(bones => bones, comparer).AsEnumerable()
+                    ?? Enumerable.Empty<SaveBonesInfo>();
+
+            if (orderedBonesInfos.IsNullOrEmpty())
+            {
+                await Popup.NewPopupMessageAsync(
+                    message: $"There aren't any bones to cremate!",
+                    title: "{{yellow|No Bones!}}");
+                return orderedBonesInfos;
+            }
+
+            var buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
+            if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
+                buttons = PopupMessage.AcceptCancelButton;
+
+            string title = $"Cremate All".Colored("R");
+            string confirmText = "CREMATE";
+            string typeToConfirmText = "\n\nType '" + confirmText + "' to confirm.";
+            string defaultValue = string.Empty;
+            if (CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.Console)
+            {
+                typeToConfirmText = string.Empty;
+                defaultValue = null;
+            }
+            if ((await Popup.AskStringAsync(
+                    Message: "Are you sure you want to cremate {{red|all}} bones?" + typeToConfirmText,
+                    Default: defaultValue,
+                    WantsSpecificPrompt: confirmText,
+                    MaxLength: confirmText.Length)
+                ) == confirmText)
+            {
+                BeforeDeletionLoop?.Invoke();
+
+                int countBefore = orderedBonesInfos.Count();
+                int paddingAmount = countBefore.ToString().Length;
+                int cremateCounter = 0;
+                int crematedCounter = 0;
+
+                string paddedCremateCounter()
+                    => cremateCounter.ToString().PadLeft(paddingAmount, '0');
+
+                string cremateString(string Color = null)
+                    => $"{paddedCremateCounter().Colored(Color)}/{countBefore}";
+                foreach (var bonesInfo in orderedBonesInfos)
+                {
+                    cremateCounter++;
+                    if (bonesInfo == null)
+                        continue;
+
+                    Loading.SetLoadingStatus($"Cremating {cremateString()} :: {bonesInfo.Name.Strip()}");
+
+                    crematedCounter++;
+                    bonesInfo.Cremate();
+                }
+
+                AfterDeletionLoop?.Invoke();
+
+                orderedBonesInfos = (await GetSaveBonesInfoAsync())?.OrderBy(bones => bones, comparer).AsEnumerable()
+                    ?? Enumerable.Empty<SaveBonesInfo>();
+
+                string crematedString = crematedCounter.ToString();
+                if (crematedCounter != countBefore)
+                    crematedString = crematedString.Colored("red");
+
+                string somethingWrongString = !orderedBonesInfos.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null;
+                await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}");
+
+                Loading.SetLoadingStatus(null);
+            }
+            return orderedBonesInfos;
+        }
+        public static async Task<IEnumerable<SaveBonesInfo>> CremateAllMoonKings()
+            => await CremateAllMoonKings(null, null);
+
         [WishCommand(Command = "cremate bones")]
         public static bool ClearBones_WishHandler()
         {
             bool success = true;
+            Task<IEnumerable<SaveBonesInfo>> task = null;
             try
             {
-                BonesManagement.HandleDeleteAll(null);
+                task = NavigationController.instance.SuspendContextWhile(CremateAllMoonKings);
+                task?.Wait();
+                success = task?.IsCompletedSuccessfully is not false;
             }
             catch (Exception x)
             {
                 Utils.Error($"Failed to cremate all bones", x);
                 success = false;
             }
-            return success;
+            return success
+                || task?.Result?.IsNullOrEmpty() is false;
         }
     }
 }

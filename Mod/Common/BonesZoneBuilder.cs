@@ -107,29 +107,28 @@ namespace XRL.World.ZoneBuilders
             if (bonesData == null)
                 return false;
 
-            if (bonesData.Apply(Z, out var MoonKing) is true)
+            if (bonesData.Apply(Z, out var MoonKing, out bool IsMad) is true)
             {
                 string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
                 if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                    regalTitle = moonKingFever.RegalTitle.WithColor("rainbow");
+                    regalTitle = moonKingFever.RegalTitle.Colored("rainbow");
 
-                if (!SpriteManager.TryGetTextureInfo(MoonKing.Render.Tile, out _))
-                    MoonKing.Render.Tile = GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk")?.GetRenderable()?.Tile;
+                string announcement = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!";
+                string madAnnouncement = $"=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= " +
+                    $"from a world vastly different from this one, and will tolerate neither pretenders nor would-be-usurpers!";
 
                 Z.GetCell(0, 0)
                     ?.AddObject("Widget")
                     ?.AddPart(
-                        P: new UD_Bones_MoonKingAnnouncer()
-                        {
-                            Title = $"A {regalTitle} persists!",
-                            Message = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
+                        P: new UD_Bones_MoonKingAnnouncer(
+                            BonesID: bonesData.BonesID,
+                            Title: $"A {(IsMad ? "mad " : null)}{regalTitle} persists!",
+                            Message: (!IsMad ? announcement : madAnnouncement)
                                 .StartReplace()
                                 .AddObject(MoonKing)
-                                .ToString(),
-                            BonesID = bonesData.BonesID,
-                        }
-                    );
+                                .ToString())
+                        );
                 return true;
             }
             return false;

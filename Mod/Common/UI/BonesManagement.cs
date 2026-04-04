@@ -60,6 +60,8 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        public static bool WishContext;
+
         public SaveBonesInfo Preselected;
 
         public Image Background;
@@ -239,7 +241,7 @@ namespace UD_Bones_Folder.Mod.UI
             }
 
             Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
-            if (BonesManager.GetSavedBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
+            if (BonesManager.GetSaveBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
             {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get bonesInfo task");
                 CompletionSource?.TrySetResult(null);
@@ -347,13 +349,16 @@ namespace UD_Bones_Folder.Mod.UI
             return activeContext.IsInside(NavigationContext);
         }
 
-        public void DisableNavContext(bool deactivate = true)
+        public void DisableNavContext(bool deactivate)
         {
             if (deactivate
                 && IsInsideActiveContext(MainNavContext))
                 NavigationController.instance.activeContext = null;
             MainNavContext.disabled = true;
         }
+
+        public void DisableNavContext()
+            => DisableNavContext(true);
 
         public void SelectedBones(FrameworkDataElement data)
         {
@@ -376,7 +381,7 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 if (menuData.InputCommand == CMD_INSERT
                     && !menuData.Description.StartsWith("{{red|"))
-                    menuData.Description = menuData.Description.WithColor("red");
+                    menuData.Description = menuData.Description.Colored("red");
                 else
                 if (menuData.InputCommand != CMD_INSERT
                     && menuData.Description.StartsWith("{{red|"))
@@ -446,89 +451,22 @@ namespace UD_Bones_Folder.Mod.UI
             ControlManager.ResetInput();
         }
 
-        public static void HandleDeleteAll(BonesManagement BonesManagement)
-        {
-            List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
-            if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
-                buttons = PopupMessage.AcceptCancelButton;
-
-            string title = $"Cremate All".WithColor("R");
-            string confirmText = "CREMATE";
-            string typeToConfirmText = "\n\nType '" + confirmText + "' to confirm.";
-            string defaultValue = string.Empty;
-            if (CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.Console)
-            {
-                typeToConfirmText = string.Empty;
-                defaultValue = null;
-            }
-            if (Popup.AskString(
-                    Message: "Are you sure you want to cremate {{red|all}} bones?" + typeToConfirmText,
-                    Default: defaultValue,
-                    WantsSpecificPrompt: confirmText,
-                    MaxLength: confirmText.Length
-                ) == confirmText)
-            {
-                BonesManagement?.DisableNavContext();
-
-                using var bones = ScopeDisposedList<SaveBonesInfo>.GetFromPool();
-
-                bones.AddRange(BonesManager.GetSaveBonesInfo());
-
-                int countBefore = bones.Count;
-                int paddingAmount = countBefore.ToString().Length;
-                int cremateCounter = 0;
-                int crematedCounter = 0;
-                foreach (var bonesInfo in bones)
-                {
-                    Loading.SetLoadingStatus($"Cremating {cremateCounter.ToString().PadLeft(paddingAmount, '0')}/{countBefore} " +
-                        $":: {bonesInfo.Name.Strip()}");
-
-                    crematedCounter++;
-                    bonesInfo.Cremate();
-                }
-
-                BonesManagement?.EnableNavContext();
-
-                var comparer = SaveBonesInfo.SaveBonesInfoComparerDescending;
-                if (BonesManager.GetSavedBonesInfoAsync() is IEnumerable<SaveBonesInfo> bonesInfos
-                    && bonesInfos.OrderBy(bones => bones, comparer).AsEnumerable() is IEnumerable<SaveBonesInfo> orderedBonesInfos
-                    && !orderedBonesInfos.IsNullOrEmpty())
-                {
-                    bones.Clear();
-                    bones.AddRange(orderedBonesInfos);
-                }
-                else
-                {
-                    bones.Clear();
-                }
-                if (BonesManagement != null)
-                {
-                    if (bones.IsNullOrEmpty())
-                        BonesManagement.Bones = new();
-                    else
-                        BonesManagement.Bones = new(SaveBonesInfosToUIElements(bones));
-                }
-                string crematedString = crematedCounter.ToString();
-                if (crematedCounter != countBefore)
-                    crematedString = crematedString.WithColor("red");
-
-                var task = Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!" +
-                    (!bones.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null), PopupMessage.AcceptButton);
-                task.Wait();
-                Loading.SetLoadingStatus(null);
-
-                if (bones.IsNullOrEmpty())
-                    BonesManagement?.Exit();
-                else
-                    BonesManagement?.Show();
-            }
-        }
-
         public async void HandleDeleteAll()
         {
-            await The.UiContext;
-
-            HandleDeleteAll(this);
+            if (await BonesManager.CremateAllMoonKings(DisableNavContext, EnableNavContext) is IEnumerable<SaveBonesInfo> currentBonesInfos)
+            {
+                Bones ??= new();
+                Bones.Clear();
+                if (currentBonesInfos.IsNullOrEmpty()
+                    || SaveBonesInfosToUIElements(currentBonesInfos) is not IEnumerable<BonesInfoData> bareBones
+                    || !bareBones.IsNullOrEmpty())
+                    Exit();
+                else
+                {
+                    Bones.AddRange(bareBones);
+                    Show();
+                }
+            }
 
             if (int.TryParse("1", out int result) && result > 1)
             {
@@ -536,7 +474,7 @@ namespace UD_Bones_Folder.Mod.UI
                 if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                     buttons = PopupMessage.AcceptCancelButton;
 
-                string title = $"Cremate All".WithColor("R");
+                string title = $"Cremate All".Colored("R");
                 string confirmText = "CREMATE";
                 string typeToConfirmText = "\n\nType '" + confirmText + "' to confirm.";
                 string defaultValue = string.Empty;
@@ -567,7 +505,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                         Loading.SetLoadingStatus($"Cremating {cremateCounter.ToString().PadLeft(paddingAmount, '0')}/{countBefore} " +
                             $":: {bonesInfo.Name.Strip()}");
-                    
+
                         crematedCounter++;
                         bonesInfo.Cremate();
                     }
@@ -575,7 +513,7 @@ namespace UD_Bones_Folder.Mod.UI
                     EnableNavContext();
 
                     var comparer = SaveBonesInfo.SaveBonesInfoComparerDescending;
-                    if (await BonesManager.GetSavedBonesInfoAsync() is IEnumerable<SaveBonesInfo> bonesInfos
+                    if (await BonesManager.GetSaveBonesInfoAsync() is IEnumerable<SaveBonesInfo> bonesInfos
                         && bonesInfos.OrderBy(bones => bones, comparer).AsEnumerable() is IEnumerable<SaveBonesInfo> orderedBonesInfos
                         && SaveBonesInfosToUIElements(orderedBonesInfos) is IEnumerable<BonesInfoData> bareBones
                         && !bareBones.IsNullOrEmpty())
@@ -585,11 +523,12 @@ namespace UD_Bones_Folder.Mod.UI
 
                     string crematedString = crematedCounter.ToString();
                     if (crematedCounter != countBefore)
-                        crematedString = crematedString.WithColor("red");
+                        crematedString = crematedString.Colored("red");
 
-                    await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!" +
-                        (!Bones.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null), PopupMessage.AcceptButton);
-                        Loading.SetLoadingStatus(null);
+                    string somethingWrongString = !Bones.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null;
+                    await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}", PopupMessage.AcceptButton);
+
+                    Loading.SetLoadingStatus(null);
 
                     if (Bones.IsNullOrEmpty())
                         Exit();
@@ -597,8 +536,14 @@ namespace UD_Bones_Folder.Mod.UI
                         Show();
                 }
             }
-            
         }
+
+        public static Task HandleDeleteAllTask()
+            => Task.Run(() =>
+            {
+                if (CheckInit())
+                    instance?.HandleDeleteAll();
+            });
 
         public async void HandleDelete()
         {
@@ -613,7 +558,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                 buttons = PopupMessage.AcceptCancelButton;
 
-            string title = $"Cremate {bonesInfo.Name}".WithColor("R");
+            string title = $"Cremate {bonesInfo.Name}".Colored("R");
             if ((await Popup.NewPopupMessageAsync(
                     message: $"Are you sure you want to cremate {bonesInfo.Name}'s bones?",
                     buttons: buttons,
@@ -629,7 +574,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                 await Popup.NewPopupMessageAsync("Bones Cremated!", PopupMessage.AcceptButton);
 
-                if (await BonesManager.GetSavedBonesInfoAsync() is not IEnumerable<SaveBonesInfo> bonesInfos
+                if (await BonesManager.GetSaveBonesInfoAsync() is not IEnumerable<SaveBonesInfo> bonesInfos
                     || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
                     || SaveBonesInfosToUIElements(orderedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
                     || bareBones.IsNullOrEmpty()
