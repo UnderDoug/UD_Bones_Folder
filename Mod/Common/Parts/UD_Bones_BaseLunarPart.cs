@@ -77,6 +77,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == BeforeObjectCreatedEvent.ID
             || ID == BeforeTakeActionEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
@@ -96,6 +97,14 @@ namespace XRL.World.Parts
                 E.PreventAction = true;
                 return true;
             }
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(BonesID), BonesID);
+            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(LastBonesID), LastBonesID);
+            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(Persists), Persists);
             return base.HandleEvent(E);
         }
     }

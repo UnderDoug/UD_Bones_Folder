@@ -57,6 +57,12 @@ namespace XRL.World.ZoneBuilders
                     $"Zone may be nonsensically placed.");
             }
 
+            if (saveBonesInfo.Encountered > 0)
+            {
+                Utils.Warn($"Loading bones previously encountered {saveBonesInfo.Encountered.Things("time")}. " +
+                    $"Bones may have been loaded into a rebuilt Zone, or game may have crashed without saving.");
+            }
+
             BonesData bonesData = null;
             try
             {
@@ -107,12 +113,24 @@ namespace XRL.World.ZoneBuilders
             if (bonesData == null)
                 return false;
 
+            if (Z.GetZoneProperty(nameof(BonesData.BonesID), null) is string existingBonesID)
+            {
+                if (existingBonesID != bonesData.BonesID)
+                    Utils.Warn($"Loading {nameof(UD_Bones_Folder.Mod.SaveBonesInfo)} for zone that has already loaded a different bones: " +
+                        $"{nameof(existingBonesID)} {existingBonesID}, {nameof(bonesData)}.{nameof(bonesData.BonesID)} {bonesData.BonesID}. " +
+                        $"Zone may have errors.");
+                else
+                    Utils.Warn($"{nameof(UD_Bones_Folder.Mod.SaveBonesInfo)} for zone that has already loaded this bones: " +
+                        $"{nameof(existingBonesID)} {existingBonesID}, {nameof(bonesData)}.{nameof(bonesData.BonesID)} {bonesData.BonesID}. " +
+                        $"Zone may have errors.");
+            }
+
             if (bonesData.Apply(Z, out var MoonKing, saveBonesInfo.IsMad) is true)
             {
                 string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
                 if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                    regalTitle = moonKingFever.RegalTitle.Colored("rainbow");
+                    regalTitle = moonKingFever.RegalTitle;
 
                 string announcement = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!";
                 string madAnnouncement = $"=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= " +
@@ -123,12 +141,22 @@ namespace XRL.World.ZoneBuilders
                     ?.AddPart(
                         P: new UD_Bones_MoonKingAnnouncer(
                             BonesID: bonesData.BonesID,
-                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{regalTitle} persists!",
+                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{regalTitle.Color(Utils.GetAnimatedRainbowShaderForFrame())} persists!",
                             Message: (!saveBonesInfo.IsMad ? announcement : madAnnouncement)
                                 .StartReplace()
                                 .AddObject(MoonKing)
                                 .ToString())
                         );
+
+                Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
+                try
+                {
+                    SaveBonesInfo.IncrementEncountered(saveBonesInfo).Wait();
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Encountered)}", x);
+                }
                 return true;
             }
             return false;

@@ -378,5 +378,38 @@ namespace UD_Bones_Folder.Mod
         public static bool IsTile(this string Tile)
             => Utils.TileExists(Tile)
             ;
+
+        public static string ThisThese(this GameObject Object)
+            => Object.IsPlural
+            ? $"These"
+            : $"This"
+            ;
+
+        public static string ThisTheseDescriptiveCategory(this GameObject Object)
+        {
+            string noun = Object.GetDescriptiveCategory();
+
+            if (Object.IsPlural)
+                noun = Grammar.Pluralize(noun);
+
+            return $"{Object.ThisThese()} {noun}";
+        }
+
+        public static void ApplyRegistrar(this GameObject Object, bool Active = false)
+        {
+            if (Object?.PartsList is PartRack partsList)
+            {
+                for (int i = 0; i < partsList.Count; i++)
+                    if (partsList[i] is IPart part)
+                        part.ApplyRegistrar(Object, Active);
+            }
+
+            if (Object?._Effects is EffectRack _effects)
+            {
+                for (int i = 0; i < _effects.Count; i++)
+                    if (_effects[i] is Effect effect)
+                        effect.ApplyRegistrar(Object, Active);
+            }
+        }
     }
 }

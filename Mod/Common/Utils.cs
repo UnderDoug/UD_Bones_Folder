@@ -14,9 +14,11 @@ using Qud.UI;
 
 using XRL;
 using XRL.Collections;
+using XRL.Core;
 using XRL.Language;
 using XRL.Messages;
 using XRL.UI;
+using XRL.World;
 using XRL.World.Effects;
 using XRL.World.Parts;
 using XRL.World.Text.Attributes;
@@ -38,6 +40,9 @@ namespace UD_Bones_Folder.Mod
             => $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSyncPath)} -OR- " +
             $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSavePath)}"
             ;
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        public static Dictionary<string, string> EquipmentFrameByTileColor = new();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static Dictionary<string, HashSet<string>> BlueprintsByCategory = new();
@@ -355,9 +360,9 @@ namespace UD_Bones_Folder.Mod
             string output = UD_Bones_MoonKingFever.REGAL_TITLE;
             if (Context?.Target != null
                 && Context.Target.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                output = moonKingFever.RegalTitle.Colored("rainbow");
+                output = moonKingFever.RegalTitle;
 
-            return output;
+            return output.Colored(GetAnimatedRainbowShaderForFrame());
         }
 
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
@@ -450,6 +455,120 @@ namespace UD_Bones_Folder.Mod
         public static bool TileExists(string Tile)
             => Tile != null
             && SpriteManager.GetTextureInfo(Tile, false) is not null
+            ;
+
+        public static IEnumerable<string> YieldRainbowColors()
+        {
+            yield return "r";
+            yield return "R";
+            yield return "W";
+            yield return "G";
+            yield return "B";
+            yield return "b";
+            yield return "m";
+        }
+
+        public static ScopeDisposedList<string> ScopeDiscposedRainbowColorsListFromPool()
+            => ScopeDisposedList<string>.GetFromPoolFilledWith(YieldRainbowColors())
+            ;
+
+        public static string GetRainbowColorShaderAtIndex(int Offset)
+        {
+            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+            Offset = rainbowColors.Count - (Offset % rainbowColors.Count) - 1;
+            return rainbowColors[Offset];
+        }
+
+        public static bool IsRainbowColor(string Color)
+            => YieldRainbowColors().Contains(Color)
+            ;
+
+        public static string GetNextRainbowColor(string Color)
+        {
+            if (!IsRainbowColor(Color))
+                return null;
+
+            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+            int colorIndex = rainbowColors.IndexOf(Color);
+
+            return GetRainbowColorShaderAtIndex(colorIndex + 1);
+        }
+
+        public static string GetPrevRainbowColor(string Color)
+        {
+            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+            if (!rainbowColors.Contains(Color))
+                return null;
+
+            int colorIndex = rainbowColors.IndexOf(Color);
+
+            return GetRainbowColorShaderAtIndex(colorIndex - 1);
+        }
+
+        public static string GetAnimatedRainbowShader(int Offset = 0, string Style = "sequence")
+        {
+            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+            Offset %= rainbowColors.Count;
+
+            string output = null;
+            for (int i = 0; i < rainbowColors.Count; i++)
+            {
+                if (!output.IsNullOrEmpty())
+                    output += "-";
+
+                output += GetRainbowColorShaderAtIndex(i);
+            }
+
+            if (output.IsNullOrEmpty())
+                return "rainbow";
+
+            return $"{output} {Style}";
+        }
+
+        public static string GetAnimatedRainbowShaderForFrame()
+            => GetAnimatedRainbowShader((int)Math.Ceiling(XRLCore.CurrentFrameLong10 / 8f))
+            ;
+
+        [VariablePostProcessor(Keys = new string[] { "LunarShader" }, Capitalization = false)]
+        public static void RainbowShaderPostProcessor(DelegateContext Context)
+        {
+            if (!Context.Value.IsNullOrEmpty())
+            {
+                var oldValue = Context.Value.ToString();
+                Context.Value.Clear();
+                Context.Value.AppendColored(GetAnimatedRainbowShaderForFrame(), oldValue);
+            }
+        }
+
+        public static string GetAnimatedRainbowShaderEquipmentFrame(string Color)
+        {
+            EquipmentFrameByTileColor ??= new();
+            if (!EquipmentFrameByTileColor.ContainsKey(Color))
+            {
+                if (IsRainbowColor(Color))
+                {
+                    string color3 = Color;
+                    string color2 = GetPrevRainbowColor(color3);
+                    string color1 = GetPrevRainbowColor(color2);
+                    string color4 = GetNextRainbowColor(color3);
+                    string color5 = GetNextRainbowColor(color4);
+                    string color6 = GetNextRainbowColor(color5);
+                    EquipmentFrameByTileColor[Color] = $"{color1}{color2}{color5}{color6}";
+                }
+                else
+                    EquipmentFrameByTileColor[Color] = null;
+            }
+            return EquipmentFrameByTileColor[Color];
+        }
+
+        public static string GetAnimatedRainbowShaderEquipmentFrame(RenderEvent Render)
+            => GetAnimatedRainbowShaderEquipmentFrame($"{Render.GetForegroundColorChar()}")
+            ;
+
+        public static string GetAnimatedRainbowShaderEquipmentFrame(IRenderable Render)
+            => Render is RenderEvent renderEvent
+            ? GetAnimatedRainbowShaderEquipmentFrame(renderEvent)
+            : GetAnimatedRainbowShaderEquipmentFrame($"{Render.getTileColor()}")
             ;
     }
 }

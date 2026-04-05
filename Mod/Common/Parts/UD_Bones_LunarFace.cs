@@ -8,12 +8,15 @@ using UD_Bones_Folder.Mod;
 using XRL.Rules;
 using XRL.World.Anatomy;
 using System.Linq;
+using XRL.Core;
 
 namespace XRL.World.Parts
 {
     [Serializable]
     public class UD_Bones_LunarFace : UD_Bones_BaseLunarPart
     {
+        private bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
+
         public bool TryBeWorn()
         {
             if (ParentObject == null)
@@ -68,11 +71,15 @@ namespace XRL.World.Parts
             return false;
         }
 
+        public override bool WantTurnTick()
+            => true;
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
             || ID == BeforeBeginTakeActionEvent.ID
             || ID == EquippedEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(GetDisplayNameEvent E)
@@ -106,6 +113,44 @@ namespace XRL.World.Parts
                 SetBonesID(The.Game?.GameID);
 
             return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, "EquipmentFrame", ParentObject.GetPropertyOrTag("EquipmentFrame", "----"));
+            return base.HandleEvent(E);
+        }
+
+        public override bool FinalRender(RenderEvent E)
+        {
+            if (Options.EnableFlashingLightEffects)
+            {
+                if (XRLCore.CurrentFrame % 8 == 0)
+                    ParentObject?.SetStringProperty("EquipmentFrame", Utils.GetAnimatedRainbowShaderEquipmentFrame(E), true);
+            }
+            return FinalRender(E);
+        }
+
+        public override void TurnTick(long TimeTick, int Amount)
+        {
+            if (Options.EnableFlashingLightEffects != OriginalEnableFlashingLightEffects)
+            {
+                OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
+                if (ParentObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                {
+                    if (Options.EnableFlashingLightEffects)
+                    {
+                        string partName = nameof(AnimatedMaterialGeneric);
+                        string paramName = nameof(AnimatedMaterialGeneric.AnimationLength);
+                        if (ParentObject.GetBlueprint() is GameObjectBlueprint parentModel
+                            && parentModel.TryGetPartParameter(partName, paramName, out int animationLength))
+                            animatedMaterial.AnimationLength = animationLength;
+                        else
+                            animatedMaterial.AnimationLength = 0;
+                    }
+                }
+            }
+            base.TurnTick(TimeTick, Amount);
         }
     }
 }

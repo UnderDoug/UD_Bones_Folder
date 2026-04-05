@@ -74,16 +74,18 @@
   Mod Options
   
   -->
-  <!--option
-        ID="UD_Bones_Folder_EnableExampleOption"
-        DisplayText="Sort body plans by Category."
+  <option
+        ID="UD_Bones_Folder_EnableFlashingLightEffects"
+        DisplayText="Disable flashing light effects."
         Category="Mod: Bones"
         Type="Checkbox"
         Default="Yes">
     <helptext>
-      When enabled, this option is enabled.
+      When enabled, items such as the {{rainbow|Lunar Regent}} masks and objects such as mad {{rainbow|Lunar Regent}}s will have visual effects that might trigger photosensitivity.
+      
+      When disabled, these effects will be absent.
 
       The default is {{W|Enabled}}.
     </helptext>
-  </option-->
+  </option>
 </options>

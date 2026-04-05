@@ -146,6 +146,8 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsPending => Pending?.EqualsNoCase($"{false}") is not true;
 
+        public int Encountered => GetBonesJSON()?.Encountered ?? -1;
+
         public bool IsMad => GetBonesJSON().IsCharIconSwapped()
             || !GenotypeFactory.GenotypesByName.ContainsKey(GenotypeName)
             || !SubtypeFactory.SubtypesByName.ContainsKey(SubtypeName)
@@ -166,6 +168,8 @@ namespace UD_Bones_Folder.Mod
 
         private SaveBonesJSON.BonesRender _Render;
         public SaveBonesJSON.BonesRender Render => _Render ??= GetBonesJSON()?.GetRender();
+
+        public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
 
         public SaveBonesInfo()
             : base()
@@ -203,7 +207,30 @@ namespace UD_Bones_Folder.Mod
                 string toValue = "a GameID when it already has one";
                 if (bonesJSON.Pending.EqualsNoCase($"{false}"))
                     toValue = $"\"{false}\" when it already is";
-                Utils.Warn($"Attempted to set {DataManager.SanitizePathForDisplay(BonesInfo.Directory)} {nameof(SaveBonesJSON)}.{nameof(Pending)} to {toValue}.");
+                Utils.Warn($"Attempted to set {BonesInfo.DisplayDirectory} {nameof(SaveBonesJSON)}.{nameof(Pending)} to {toValue}.");
+            }
+        }
+
+        public static async Task IncrementEncountered(SaveBonesInfo BonesInfo)
+        {
+            if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            {
+                Utils.Warn($"Attempted to increment {nameof(SaveBonesJSON)}.{nameof(SaveBonesJSON.Encountered)} for null {nameof(SaveBonesJSON)}.");
+                return;
+            }
+
+            bonesJSON.Encountered++;
+            string bonesFilePath = Path.Combine(BonesInfo.Directory, BonesInfo.FileName);
+            if (await File.ExistsAsync(bonesFilePath))
+            {
+                bool swappedIcon = bonesJSON.IsCharIconSwapped();
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
+
+                File.WriteAllText(bonesFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
+
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
             }
         }
 
@@ -252,6 +279,30 @@ namespace UD_Bones_Folder.Mod
         public SaveBonesJSON GetBonesJSON()
             => json as SaveBonesJSON;
 
+
+        public IEnumerable<string> GetDebugLines()
+        {
+            yield return $"{nameof(ID)}: {ID}";
+            yield return $"{nameof(Name)}: {Name}";
+            yield return $"{nameof(ZoneID)}: {ZoneID}";
+
+            yield return $"{nameof(WasCremated)}: {WasCremated}";
+
+            yield return $"{nameof(IsMad)}: {IsMad}";
+
+            yield return $"{nameof(IsEligible)}: {IsEligible}";
+            yield return $"{nameof(IsLooselyEligible)}: {IsLooselyEligible}";
+
+            var bonesJSON = GetBonesJSON();
+
+            yield return $"{nameof(bonesJSON.DeathReason)}: {bonesJSON.DeathReason}";
+            yield return $"{nameof(bonesJSON.Location)}: {bonesJSON.Location}";
+
+            yield return $"{nameof(bonesJSON.GameVersion)}: {bonesJSON?.GameVersion ?? "missing"}";
+            yield return $"{nameof(bonesJSON.SaveVersion)}: {(bonesJSON?.SaveVersion)?.ToString() ?? "missing"}";
+            yield return $"{nameof(ModVersion)}: {ModVersion ?? "missing"}";
+
+        }
 
         public int? GetBonesWeight()
         {

@@ -15,8 +15,6 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool DebugEnableNoCremation;
 
         // General Settings
-        /*
-        [OptionFlag] public static bool EnableExampleOption;
-        */
+        [OptionFlag] public static bool EnableFlashingLightEffects;
     }
 }

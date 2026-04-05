@@ -13,19 +13,14 @@ namespace XRL.World.Parts
     {
         public bool Cremated;
 
-        public string RegalTitle
-        {
-            get => ParentObject?.GetStringProperty(nameof(UD_Bones_MoonKingFever.RegalTitle), GetRegalTitle(ParentObject));
-            set => ParentObject?.SetStringProperty(nameof(UD_Bones_MoonKingFever.RegalTitle), value);
-        }
+        public string RegalTitle => GetRegalTitle();
+
+        private bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
 
         public static string GetRegalTitle(GameObject LunarRegent)
         {
-            if (LunarRegent == null)
-                return null;
-
             string regalTerm = "Regent";
-            if (LunarRegent.GetGender() is Gender regentGender)
+            if (LunarRegent?.GetGender() is Gender regentGender)
             {
                 switch (regentGender.Name)
                 {
@@ -46,15 +41,30 @@ namespace XRL.World.Parts
             return $"Moon {regalTerm}";
         }
 
+        public string GetRegalTitle()
+            => GetRegalTitle(ParentObject)
+            ;
+
         public void Onset()
         {
-            ParentObject.ApplyEffect(new UD_Bones_MoonKingFever(RegalTitle));
+            ParentObject.ApplyEffect(new UD_Bones_MoonKingFever());
         }
+
+        public override bool WantTurnTick()
+            => true;
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
+            || ID == GetDisplayNameEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
+
+        public override bool HandleEvent(GetDisplayNameEvent E)
+        {
+            E.AddHonorific(GetRegalTitle().Colored(Utils.GetAnimatedRainbowShaderForFrame()));
+            return base.HandleEvent(E);
+        }
 
         public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
         {
@@ -75,6 +85,35 @@ namespace XRL.World.Parts
                 lunarRender.Visible = true;
 
             return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(Cremated), Cremated);
+            E.AddEntry(this, nameof(RegalTitle), RegalTitle);
+            return base.HandleEvent(E);
+        }
+
+        public override void TurnTick(long TimeTick, int Amount)
+        {
+            if (Options.EnableFlashingLightEffects != OriginalEnableFlashingLightEffects)
+            {
+                OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
+                if (ParentObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                {
+                    if (Options.EnableFlashingLightEffects)
+                    {
+                        string partName = nameof(AnimatedMaterialGeneric);
+                        string paramName = nameof(AnimatedMaterialGeneric.AnimationLength);
+                        if (ParentObject.GetBlueprint() is GameObjectBlueprint parentModel
+                            && parentModel.TryGetPartParameter(partName, paramName, out int animationLength))
+                            animatedMaterial.AnimationLength = animationLength;
+                        else
+                            animatedMaterial.AnimationLength = 0;
+                    }
+                }
+            }
+            base.TurnTick(TimeTick, Amount);
         }
     }
 }

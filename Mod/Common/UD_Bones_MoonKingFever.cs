@@ -13,7 +13,7 @@ namespace XRL.World.Effects
     {
         public const int MAX_DIST = 9999;
 
-        public const string REGAL_TITLE = "{{rainbow|Moon Regent}}";
+        public const string REGAL_TITLE = "Moon Regent";
 
         public static string[] MoonKingColors = new string[7] { "r", "R", "W", "G", "B", "b", "m", };
 
@@ -23,21 +23,17 @@ namespace XRL.World.Effects
 
         private bool AlreadyPreacher;
 
-        public string RegalTitle;
+        public string RegalTitle => UD_Bones_LunarRegent.GetRegalTitle(Object);
+
+        private string RenderColorString;
+        private int RenderColorStringCounter;
+
+        private string RenderTileColor = "r";
 
         public UD_Bones_MoonKingFever()
         {
-            RegalTitle = REGAL_TITLE;
             SetDisplayName();
-            Duration = 999;
-        }
-
-        public UD_Bones_MoonKingFever(string RegalTitle)
-            : this()
-        {
-            if (!RegalTitle.IsNullOrEmpty())
-                this.RegalTitle = RegalTitle;
-            SetDisplayName();
+            Duration = DURATION_INDEFINITE;
         }
 
         public override int GetEffectType()
@@ -55,8 +51,6 @@ namespace XRL.World.Effects
             if (!Object.FireEvent(Event.New($"Apply{nameof(UD_Bones_MoonKingFever)}")))
                 return false;
 
-            RegalTitle = Object.GetStringProperty(nameof(RegalTitle), RegalTitle);
-
             SetDisplayName();
 
             ApplyChanges();
@@ -71,8 +65,12 @@ namespace XRL.World.Effects
 
         public void SetDisplayName()
         {
-            DisplayName = $"{(RegalTitle ?? REGAL_TITLE).Colored("rainbow")} {"fever".Colored("r")}";
+            DisplayName = GetDisplayName();
         }
+
+        public string GetDisplayName()
+            => $"{(RegalTitle ?? REGAL_TITLE).Colored(Utils.GetAnimatedRainbowShaderForFrame())} {"fever".Colored("r")}"
+            ;
 
         private void ApplyChanges()
         {
@@ -86,7 +84,7 @@ namespace XRL.World.Effects
             {
                 var noInfluence = Object.AddPart<CannotBeInfluenced>();
                 noInfluence.Messages = 
-                    $"Beguiling::=subject.T= knows there is only one {{rainbow|Moon King}}. =subject.Subjective= also knows it's =subject.objective=!;;" +
+                    $"Beguiling::=subject.T= knows there is only one =Moon King|LunarShader=. =subject.Subjective= also knows it's =subject.objective=!;;" +
                     $"Persuasion_Proselytize::Are you sure you don't want to join =subject.t= instead? Well... there can only be one!;;" +
                     $"LoveTonicApplicator::The tonic failed to cure =subject.t= of =subject.possessive= {DisplayName}!;;" +
                     $"default::=subject.T's= {DisplayName} makes =subject.objective= insensible to your blandishments!";
@@ -127,7 +125,7 @@ namespace XRL.World.Effects
             Object.AddOpinion<OpinionMoonKingJealous>(Usurper);
             Object.Brain.WantToKill(
                 Subject: Usurper,
-                Because: ($"=subject.subjective= =subject.verb:think= =subject.subjective==subject.verb:'re:afterpronoun= the {REGAL_TITLE} " +
+                Because: ($"=subject.subjective= =subject.verb:think= =subject.subjective==subject.verb:'re:afterpronoun= the {UD_Bones_LunarRegent.GetRegalTitle(Usurper)} " +
                     $"but =subject.subjective==subject.verb:'re:afterpronoun= not me!")
                         .StartReplace()
                         .AddObject(Usurper)
@@ -154,6 +152,7 @@ namespace XRL.World.Effects
             || ID == PreferTargetEvent.ID
             || ID == GetFeelingEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(PreferTargetEvent E)
@@ -205,6 +204,15 @@ namespace XRL.World.Effects
             return base.HandleEvent(E);
         }
 
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(OriginalMaxKillDistance), OriginalMaxKillDistance);
+            E.AddEntry(this, nameof(AlreadyUninfluencable), AlreadyUninfluencable);
+            E.AddEntry(this, nameof(AlreadyPreacher), AlreadyPreacher);
+            E.AddEntry(this, nameof(Duration), Duration >= DURATION_INDEFINITE ? "\u00EC" : Duration.ToString());
+            return base.HandleEvent(E);
+        }
+
         public override bool FireEvent(Event E)
         {
             if (E.ID == "BeforeDeepCopyWithoutEffects")
@@ -225,8 +233,22 @@ namespace XRL.World.Effects
                     && frame < 10)
                 {
                     E.RenderString = "@";
-                    E.ColorString = Crayons.GetRandomColorAll();
+                    E.ColorString = $"&{RenderColorString ??= Utils.GetRainbowColorShaderAtIndex(RenderColorStringCounter)}";
+                    if (frame == 9)
+                    {
+                        RenderColorString = null;
+                        RenderColorStringCounter++;
+                    }
                 }
+
+                if (XRLCore.CurrentFrameLong10 % 8 == 0)
+                {
+                    SetDisplayName();
+                    RenderTileColor = Utils.GetNextRainbowColor(RenderTileColor);
+                }
+                if (Options.EnableFlashingLightEffects)
+                    E.ApplyColors($"&{RenderTileColor}", ICON_COLOR_PRIORITY);
+
                 return true;
             }
             return Render(E);

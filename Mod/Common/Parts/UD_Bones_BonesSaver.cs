@@ -72,10 +72,6 @@ namespace XRL.World.Parts
                 Player.AddOpinion<OpinionMollify>(moonKing);
             }
 
-            string regalTitle = UD_Bones_LunarRegent.GetRegalTitle(Player);
-
-            moonKing.RequirePart<Honorifics>().Primary = regalTitle.Colored("rainbow");
-
             if (TargetCell == null)
             {
                 moonKing.Obliterate();
@@ -87,7 +83,6 @@ namespace XRL.World.Parts
 
             var lunarRegentPart = moonKing.RequirePart<UD_Bones_LunarRegent>();
 
-            lunarRegentPart.RegalTitle = regalTitle;
             lunarRegentPart.Onset();
 
             if (GameObject.Create("Lunar Regent Mask") is GameObject lunarRegentMask)
@@ -176,11 +171,26 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == AfterDieEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(AfterDieEvent E)
         {
             HandleDeathEvent(E);
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(The.Game.GameID), The.Game.GameID);
+            if (BonesManager.GetThisRunPendingSaveBonesInfo() is SaveBonesInfo saveBonesInfo)
+                E.AddEntry(this, "Pending Bones", saveBonesInfo.GetDebugLines().Aggregate("", Utils.NewLineDelimitedAggregator));
+            else
+                E.AddEntry(this, "Pending Bones", "none");
+            E.AddEntry(this, nameof(Options.DebugEnableNoHoarding), Options.DebugEnableNoHoarding);
+            E.AddEntry(this, nameof(Options.DebugEnableNoExhuming), Options.DebugEnableNoExhuming);
+            E.AddEntry(this, nameof(Options.DebugEnablePickingBones), Options.DebugEnablePickingBones);
+            E.AddEntry(this, nameof(Options.DebugEnableNoCremation), Options.DebugEnableNoCremation);
             return base.HandleEvent(E);
         }
 
@@ -245,9 +255,17 @@ namespace XRL.World.Parts
                     projectile = null;
                 }
 
+                bool? originalIDKFA = null;
+                if (The.Core.IDKFA
+                    && willDie)
+                {
+                    originalIDKFA = The.Core.IDKFA;
+                    The.Core.IDKFA = false;
+                }
+
                 if (!willDie
                     || !The.Player.TakeDamage(
-                        Amount: The.Player.GetStatValue("Hitpoints", 99999) * (Stat.Random(80, 120) / 100),
+                        Amount: (int)(The.Player.GetStatValue("Hitpoints", 99999) * (Stat.Random(80, 120) / 100f)),
                         Message: "from %t desire it be so.",
                         Attributes: "Unavoidable Cosmic Umbral Vorpal Disintegration",
                         Owner: killer,
@@ -260,15 +278,18 @@ namespace XRL.World.Parts
                         Weapon: weapon,
                         Projectile: projectile,
                         Accidental: 25.in100(),
-                        Reason: The.Player.Physics.LastDeathReason,
-                        ThirdPersonReason: The.Player.Physics.LastThirdPersonDeathReason);
+                        Reason: The.Player.Physics?.LastDeathReason,
+                        ThirdPersonReason: The.Player.Physics?.LastThirdPersonDeathReason);
+
+                if (originalIDKFA.HasValue)
+                    The.Core.IDKFA = originalIDKFA.GetValueOrDefault();
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
                     if (!willDie)
                         BonesExceptionCleanUp(The.Player);
 
-                    Popup.Show($"Created new bones file for {saveBonesInfo.Name} in {DataManager.SanitizePathForDisplay(saveBonesInfo.Directory)}!");
+                    Popup.Show($"Created new bones file for {saveBonesInfo.Name} in {saveBonesInfo.DisplayDirectory}!");
                     return true;
                 }
             }

@@ -12,6 +12,7 @@ using Options = UD_Bones_Folder.Mod.Options;
 using XRL.Collections;
 using ConsoleLib.Console;
 using XRL.World.Effects;
+using XRL.Core;
 
 namespace XRL.World.WorldBuilders
 {
@@ -74,7 +75,8 @@ namespace XRL.World.WorldBuilders
             {
                 Utils.Info($"Picking bones...");
 
-                using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(savedBonesInfos);
+                using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(
+                    items: savedBonesInfos.OrderBy(b => b, SaveBonesInfo.SaveBonesInfoComparerDescending));
 
                 using var renderList = ScopeDisposedList<SaveBonesJSON.BonesRender>.GetFromPool();
                 renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable(), false));
@@ -92,8 +94,16 @@ namespace XRL.World.WorldBuilders
                         bonesOption = $"{bonesOption}, Level {bonesJSON.Level}, {bonesJSON.Location} ({bonesJSON.ZoneID})";
                     optionsList.Add(bonesOption);
                 }
+
+                var icon = GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable();
+                using var rainbowColors = Utils.ScopeDiscposedRainbowColorsListFromPool();
+                int offset = rainbowColors.Count - ((int)Math.Ceiling(XRLCore.CurrentFrame / 8.0) % rainbowColors.Count) - 1;
+                string tileColor = rainbowColors[offset];
+                icon.setTileColor($"&{tileColor}");
+                icon.setDetailColor(Utils.GetNextRainbowColor(tileColor));
+
                 var picked = Popup.PickOptionAsync(
-                    Title: $"Eligible {UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize()} For This Run",
+                    Title: $"Eligible {UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize().Colored(Utils.GetAnimatedRainbowShaderForFrame())} For This Run",
                     Intro: "Pick a lunar regent to exhume.",
                     Options: optionsList,
                     Icons: renderList,

@@ -12,6 +12,9 @@ using XRL.World.Parts;
 
 using static XRL.World.Cell;
 
+using static UD_Bones_Folder.Mod.SerializationExtensions;
+using XRL.Core;
+
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
@@ -110,7 +113,34 @@ namespace UD_Bones_Folder.Mod
 
                         MoonKing.Energy.BaseValue = 0;
                     }
-                    var bonesObjectCopy = cell.AddObject(bonesObject.DeepCopy(CopyEffects: true, CopyID: false));
+                    var oldBonesObject = bonesObject;
+                    /*
+                    var bonesObjectCopy = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
+                    if (oldBonesObject != bonesObjectCopy)
+                        oldBonesObject?.Obliterate();
+                    */
+                    var bonesObjectCopy = bonesObject;
+
+                    if (bonesObjectCopy.CurrentCell is Cell oldBonesCell)
+                        oldBonesCell.RemoveObject(bonesObjectCopy);
+
+                    bonesObjectCopy.ApplyRegistrar();
+
+                    cell.AddObject(bonesObjectCopy);
+
+                    if (The.ActionManager is ActionManager actionManager)
+                    {
+                        if (bonesObjectCopy.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
+                        {
+                            if (!actionManager.ActionQueue.Contains(bonesObjectCopy))
+                                bonesObjectCopy.MakeActive();
+                            bonesObjectCopy.ApplyActiveRegistrar();
+                        }
+                        if (bonesObjectCopy.GetStringProperty(ABILITY_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}")
+                            && actionManager.ActionQueue.Contains(bonesObjectCopy)
+                            && !actionManager.AbilityObjects.Contains(bonesObjectCopy))
+                            actionManager.AbilityObjects.Add(bonesObjectCopy);
+                    }
 
                     if (bonesObject == MoonKing)
                         MoonKing = bonesObjectCopy;
@@ -118,28 +148,10 @@ namespace UD_Bones_Folder.Mod
                     if (bonesObjectCopy.Energy is Statistic energyCopy)
                         energyCopy.BaseValue = 0;
 
-                    if (bonesObjectCopy != MoonKing)
-                    {
-                        if (bonesObjectCopy?.GetTile() is string tile
-                            && !tile.IsTile())
-                            BonesManager.RequireAlternativeTileAndBlueprintForGameObject(
-                                GameObject: bonesObjectCopy,
-                                Blueprint: out bonesObjectCopy.Blueprint,
-                                Tile: out bonesObjectCopy.Render.Tile);
-                    }
-
-                    foreach (var part in bonesObject.LoopParts())
-                    {
-                        part.ApplyRegistrar(bonesObject, true);
-                        part.ApplyRegistrar(bonesObject);
-                    }
-                    foreach (var effect in bonesObject.Effects ?? Enumerable.Empty<Effect>())
-                    {
-                        effect.ApplyRegistrar(bonesObject, true);
-                        effect.ApplyRegistrar(bonesObject);
-                    }
-
-                    bonesObject?.Obliterate();
+                    if (bonesObjectCopy != MoonKing
+                        && bonesObjectCopy?.GetTile() is string tile
+                        && !tile.IsTile())
+                        bonesObjectCopy.AddPart<UD_Bones_FeverWarped>();
                 }
             }
             return MoonKing != null;

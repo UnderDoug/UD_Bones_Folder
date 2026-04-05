@@ -342,9 +342,13 @@ namespace UD_Bones_Folder.Mod
                 $"because they'll probably want a copy of the problem bones.");
         }
 
-        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(Predicate<SaveBonesInfo> Where, bool TidyPending = false)
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(
+            Predicate<SaveBonesInfo> Where,
+            bool TidyPending = false
+            )
         {
             var saveBonesInfos = new List<SaveBonesInfo>();
+            using var cremateSaveBones = ScopeDisposedList<SaveBonesInfo>.GetFromPool();
             string currentPath = null;
             
             foreach (string bonesPath in BonesPaths)
@@ -368,7 +372,15 @@ namespace UD_Bones_Folder.Mod
                             if (TidyPending
                                 && !bonesInfo.Pending.EqualsNoCase($"{false}")
                                 && SaveGameIDs?.Contains(bonesInfo.Pending) is false)
+                            {
+                                if (bonesInfo.Encountered > 0)
+                                {
+                                    cremateSaveBones.Add(bonesInfo);
+                                    continue;
+                                }
+
                                 SaveBonesInfo.SetPending(bonesInfo, null).Wait();
+                            }
 
                             if (Where?.Invoke(bonesInfo) is not false)
                                 saveBonesInfos.Add(bonesInfo);
@@ -382,7 +394,11 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            return saveBonesInfos;
+            if (!cremateSaveBones.IsNullOrEmpty())
+                foreach (var saveBones in cremateSaveBones)
+                    saveBones.Cremate();
+
+            return saveBonesInfos.OrderBy(b => b, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable();
         }
 
         public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo(Predicate<SaveBonesInfo> Where)
@@ -405,6 +421,18 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<SaveBonesInfo> GetPendingSaveBonesInfo()
             => GetPendingSaveBonesInfoAsync()?.Result
             ?? Enumerable.Empty<SaveBonesInfo>()
+            ;
+
+        public static async Task<SaveBonesInfo> GetThisRunPendingSaveBonesInfoAsync()
+            => (await GetPendingSaveBonesInfoAsync()).FirstOrDefault(b => b.Pending == The.Game.GameID)
+            ;
+
+        public static SaveBonesInfo GetThisRunPendingSaveBonesInfo()
+            => GetThisRunPendingSaveBonesInfoAsync()?.Result
+            ;
+
+        public static bool TryGetThisRunPendingSaveBonesInfo(out SaveBonesInfo SaveBonesInfo)
+            => (SaveBonesInfo = GetThisRunPendingSaveBonesInfo()) != null
             ;
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync()
@@ -729,8 +757,7 @@ namespace UD_Bones_Folder.Mod
             Action AfterDeletionLoop
             )
         {
-            var comparer = SaveBonesInfo.SaveBonesInfoComparerDescending;
-            var orderedBonesInfos = (await GetSaveBonesInfoAsync())?.OrderBy(bones => bones, comparer).AsEnumerable()
+            var orderedBonesInfos = (await GetSaveBonesInfoAsync())
                     ?? Enumerable.Empty<SaveBonesInfo>();
 
             if (orderedBonesInfos.IsNullOrEmpty())
@@ -787,7 +814,7 @@ namespace UD_Bones_Folder.Mod
 
                 AfterDeletionLoop?.Invoke();
 
-                orderedBonesInfos = (await GetSaveBonesInfoAsync())?.OrderBy(bones => bones, comparer).AsEnumerable()
+                orderedBonesInfos = (await GetSaveBonesInfoAsync())
                     ?? Enumerable.Empty<SaveBonesInfo>();
 
                 string crematedString = crematedCounter.ToString();

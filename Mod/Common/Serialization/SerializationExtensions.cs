@@ -19,6 +19,10 @@ namespace UD_Bones_Folder.Mod
 {
     public static class SerializationExtensions
     {
+        public const string SERIALIZED_PROPERTY = Const.MOD_PREFIX + "Serialized_";
+        public const string ACTIVE_OBJECT_PROPERTY = SERIALIZED_PROPERTY + "ActiveObject";
+        public const string ABILITY_OBJECT_PROPERTY = SERIALIZED_PROPERTY + "ActiveObject";
+
         public static void WriteBonesCell(
             this Cell Cell,
             SerializationWriter Writer)
@@ -38,6 +42,12 @@ namespace UD_Bones_Folder.Mod
             {
                 if (cellObjects[i] is GameObject gameObject)
                 {
+                    if (The.ActionManager.ActionQueue.Contains(gameObject))
+                        gameObject.SetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{true}");
+                    
+                    if (The.ActionManager.AbilityObjects.Contains(gameObject))
+                        gameObject.SetStringProperty(ABILITY_OBJECT_PROPERTY, $"{true}");
+
                     if (gameObject.Physics == null
                         || gameObject.Physics._CurrentCell != Cell)
                     {

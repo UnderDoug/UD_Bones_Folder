@@ -149,7 +149,7 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Component == null)
                 {
-                    // Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(Component)} is null)");
+                    Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(Component)} is null)");
                     yield break;
                 }
 
@@ -158,7 +158,7 @@ namespace UD_Bones_Folder.Mod
 
                 prefix += IDString;
 
-                // Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
+                Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
                 yield return this;
 
                 if (!DirectChildren.IsNullOrEmpty())

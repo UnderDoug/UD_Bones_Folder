@@ -114,6 +114,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == EndTurnEvent.ID
             || ID == DroppedEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(EndTurnEvent E)
@@ -125,6 +126,12 @@ namespace XRL.World.Parts
         public override bool HandleEvent(DroppedEvent E)
         {
             AttemptDamageAndRemove();
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, "Present", true);
             return base.HandleEvent(E);
         }
     }

@@ -37,6 +37,12 @@ namespace XRL.World.Parts
             this.Message = Message;
         }
 
+        public override void Attach()
+        {
+            base.Attach();
+            ParentObject.Render.DisplayName = "[Moon King Announcer]";
+        }
+
         public void Announce()
         {
             if (!GameObject.Validate(ParentObject))
@@ -64,6 +70,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == ZoneActivatedEvent.ID
             || ID == EndTurnEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(ZoneActivatedEvent E)
@@ -85,6 +92,14 @@ namespace XRL.World.Parts
         public override bool HandleEvent(EndTurnEvent E)
         {
             Announce();
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(Cremated), Cremated);
+            E.AddEntry(this, nameof(Title), Title);
+            E.AddEntry(this, nameof(Message), Message);
             return base.HandleEvent(E);
         }
     }

@@ -92,6 +92,7 @@ namespace UD_Bones_Folder.Mod
         public string ZoneRegion;
 
         public string Pending;
+        public int Encountered;
 
         private bool CharIconSwapped;
         private string OriginalCharIcon;
