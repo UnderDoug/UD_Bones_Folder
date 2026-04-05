@@ -80,7 +80,7 @@ namespace XRL.World.Parts
                 && BonesManager.System != null
                 && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
-                bonesInfo.Cremate();
+                // bonesInfo.Cremate();
                 Cremated = true;
                 if (MoonKing?.GetPart<UD_Bones_LunarRegent>() is UD_Bones_LunarRegent lunarRegentPart)
                     lunarRegentPart.Cremated = true;

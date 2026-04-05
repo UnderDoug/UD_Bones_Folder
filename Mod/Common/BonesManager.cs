@@ -373,7 +373,8 @@ namespace UD_Bones_Folder.Mod
                                 && !bonesInfo.Pending.EqualsNoCase($"{false}")
                                 && SaveGameIDs?.Contains(bonesInfo.Pending) is false)
                             {
-                                if (bonesInfo.Encountered > 0)
+                                if (!Options.DebugEnableNoCremation
+                                    && bonesInfo.Encountered > 0)
                                 {
                                     cremateSaveBones.Add(bonesInfo);
                                     continue;
