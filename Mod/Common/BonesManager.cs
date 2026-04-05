@@ -825,5 +825,49 @@ namespace UD_Bones_Folder.Mod
             return success
                 || task?.Result?.IsNullOrEmpty() is false;
         }
+
+        [WishCommand(Command = "go2bones")]
+        public static bool Go2Bones_WishHandler()
+        {
+            bool success = false;
+            try
+            {
+                if (GetPendingSaveBonesInfo().FirstOrDefault(b => b.Pending == The.Game.GameID) is not SaveBonesInfo bonesInfo)
+                    Popup.Show("There are no bones pending for this save.");
+                else
+                {
+                    if (The.Player is GameObject player
+                        && The.ZoneManager.GetZone(bonesInfo.ZoneID) is Zone zone
+                        && player.CurrentCell is Cell currentCell)
+                    {
+                        if (player.Physics.CurrentCell.RemoveObject(player))
+                        {
+                            if (zone.GetEmptyCells().GetRandomElement()?.AddObject(player) != null)
+                            {
+                                The.ZoneManager.SetActiveZone(zone);
+                                The.ZoneManager.ProcessGoToPartyLeader();
+                                success = true;
+                            }
+                            else
+                            {
+                                Popup.Show($"Failed to find a single empty cell in zone {bonesInfo.ZoneID}.");
+                                currentCell.AddObject(player);
+                            }
+                        }
+                        else
+                            Popup.Show($"Failed to remove player from their current cell {currentCell.ParentZone.ZoneID}[{currentCell.Location}].");
+                    }
+                    else
+                        Popup.Show($"Failed to locate the zone with the pending bones ({bonesInfo.ZoneID}), or the player is in an invalid state.");
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed to find bones", x);
+                Popup.Show($"Process failed, check Player.log for errors.");
+                success = false;
+            }
+            return success;
+        }
     }
 }

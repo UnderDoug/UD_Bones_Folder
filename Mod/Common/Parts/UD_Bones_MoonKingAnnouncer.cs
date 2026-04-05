@@ -22,7 +22,9 @@ namespace XRL.World.Parts
 
         public UD_Bones_MoonKingAnnouncer()
             : base()
-        { }
+        {
+            Persists = true;
+        }
 
         public UD_Bones_MoonKingAnnouncer(
             string BonesID,
@@ -41,7 +43,7 @@ namespace XRL.World.Parts
                 return;
 
             if (MoonKing == null)
-                Utils.Error($"Failed to find moon king.");
+                Utils.Error($"Failed to find moon king with BonesID {BonesID}.");
 
             if (ParentObject.CurrentZone == The.Player.CurrentZone
                 && !Title.IsNullOrEmpty()

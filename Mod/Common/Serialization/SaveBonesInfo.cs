@@ -146,6 +146,11 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsPending => Pending?.EqualsNoCase($"{false}") is not true;
 
+        public bool IsMad => GetBonesJSON().IsCharIconSwapped()
+            || !GenotypeFactory.GenotypesByName.ContainsKey(GenotypeName)
+            || !SubtypeFactory.SubtypesByName.ContainsKey(SubtypeName)
+            ;
+
         private ModsDifferInfo _ModsDiffer;
         public ModsDifferInfo ModsDiffer => _ModsDiffer ??= GetModsDifferInfo();
 
@@ -182,7 +187,16 @@ namespace UD_Bones_Folder.Mod
                 bonesJSON.Pending = Pending;
                 string bonesFilePath = Path.Combine(BonesInfo.Directory, BonesInfo.FileName);
                 if (await File.ExistsAsync(bonesFilePath))
+                {
+                    bool swappedIcon = bonesJSON.IsCharIconSwapped();
+                    if (swappedIcon)
+                        bonesJSON.HotSwapCharIcon();
+
                     File.WriteAllText(bonesFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
+
+                    if (swappedIcon)
+                        bonesJSON.HotSwapCharIcon();
+                }
             }
             else
             {

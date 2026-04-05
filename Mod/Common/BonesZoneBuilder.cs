@@ -107,7 +107,7 @@ namespace XRL.World.ZoneBuilders
             if (bonesData == null)
                 return false;
 
-            if (bonesData.Apply(Z, out var MoonKing, out bool IsMad) is true)
+            if (bonesData.Apply(Z, out var MoonKing, saveBonesInfo.IsMad) is true)
             {
                 string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
 
@@ -123,8 +123,8 @@ namespace XRL.World.ZoneBuilders
                     ?.AddPart(
                         P: new UD_Bones_MoonKingAnnouncer(
                             BonesID: bonesData.BonesID,
-                            Title: $"A {(IsMad ? "mad " : null)}{regalTitle} persists!",
-                            Message: (!IsMad ? announcement : madAnnouncement)
+                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{regalTitle} persists!",
+                            Message: (!saveBonesInfo.IsMad ? announcement : madAnnouncement)
                                 .StartReplace()
                                 .AddObject(MoonKing)
                                 .ToString())

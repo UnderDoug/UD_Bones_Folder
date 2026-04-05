@@ -115,10 +115,10 @@ namespace UD_Bones_Folder.Mod
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
             SaveRow.imageTinyFrame ??= new();
-            string tile = GameObjectFactory.Factory.GetBlueprintIfExists("Trash Monk")?.GetRenderable()?.Tile;
+            string tile = Const.MAD_LUNAR_REGENT_TILE;
             if (bonesJSON != null)
             {
-                if (SpriteManager.HasTextureInfo(bonesJSON.CharIcon))
+                if (bonesJSON.CharIcon.IsTile())
                     tile = bonesJSON.CharIcon;
 
                 SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(tile);
@@ -373,6 +373,10 @@ namespace UD_Bones_Folder.Mod
             => Set.IntersectWithUnless(
                 Other: Other,
                 Case: o => o.IsNullOrEmpty())
+            ;
+
+        public static bool IsTile(this string Tile)
+            => Utils.TileExists(Tile)
             ;
     }
 }

@@ -14,16 +14,36 @@ namespace XRL.World.Parts
     [Serializable]
     public abstract class UD_Bones_BaseLunarPart : IScribedPart
     {
+        protected string _BonesID;
         public string BonesID
         {
-            get => ParentObject?.GetStringProperty(nameof(BonesID));
-            protected set => ParentObject?.SetStringProperty(nameof(BonesID), value);
+            get
+            {
+                if (ParentObject != null)
+                    _BonesID = ParentObject.GetStringProperty(nameof(BonesID), _BonesID);
+                return _BonesID;
+            }
+            protected set
+            {
+                _BonesID = value;
+                ParentObject?.SetStringProperty(nameof(BonesID), _BonesID, true);
+            }
         }
 
+        protected string _LastBonesID;
         public string LastBonesID
         {
-            get => ParentObject?.GetStringProperty(nameof(LastBonesID));
-            protected set => ParentObject?.SetStringProperty(nameof(LastBonesID), value);
+            get
+            {
+                if (ParentObject != null)
+                    _LastBonesID = ParentObject.GetStringProperty(nameof(LastBonesID), _LastBonesID);
+                return _LastBonesID;
+            }
+            protected set
+            {
+                _LastBonesID = value;
+                ParentObject?.SetStringProperty(nameof(LastBonesID), _LastBonesID, true);
+            }
         }
 
         public bool Persists;

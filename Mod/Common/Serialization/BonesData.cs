@@ -37,10 +37,9 @@ namespace UD_Bones_Folder.Mod
             => BonesManager?.ExhumeMoonKing(ZoneID, SaveBonesInfo)
             ;
 
-        public bool Apply(Zone Zone, out GameObject MoonKing, out bool IsMad)
+        public bool Apply(Zone Zone, out GameObject MoonKing, bool IsMad)
         {
             MoonKing = null;
-            IsMad = false;
             if (BonesZone == null)
                 return false;
 
@@ -92,12 +91,11 @@ namespace UD_Bones_Folder.Mod
                             ApplyHostility(The.Player, brain, 0);
                         }
 
-                        if (!SpriteManager.TryGetTextureInfo(MoonKing.Render.Tile, out _))
+                        if (IsMad)
                         {
-                            IsMad = true;
                             MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
-                            var sampleMask = GameObject.CreateSample("Lunar Regent Mask");
 
+                            var sampleMask = GameObject.CreateSample("Lunar Regent Mask");
                             if (!MoonKing.HasPart<AnimatedMaterialGeneric>()
                                 && sampleMask.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
                             {
@@ -106,10 +104,6 @@ namespace UD_Bones_Folder.Mod
                             }
                             sampleMask?.Obliterate();
                         }
-
-                        if (!GenotypeFactory.GenotypesByName.ContainsKey(MoonKing.GetGenotype())
-                            || !SubtypeFactory.SubtypesByName.ContainsKey(MoonKing.GetGenotype()))
-                            IsMad = true;
 
                         if (MoonKing.Render is Render render)
                             render.Visible = true;
@@ -127,7 +121,7 @@ namespace UD_Bones_Folder.Mod
                     if (bonesObjectCopy != MoonKing)
                     {
                         if (bonesObjectCopy?.GetTile() is string tile
-                            && !SpriteManager.HasTextureInfo(tile))
+                            && !tile.IsTile())
                             BonesManager.RequireAlternativeTileAndBlueprintForGameObject(
                                 GameObject: bonesObjectCopy,
                                 Blueprint: out bonesObjectCopy.Blueprint,

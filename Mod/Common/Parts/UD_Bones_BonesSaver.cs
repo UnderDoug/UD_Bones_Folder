@@ -55,9 +55,6 @@ namespace XRL.World.Parts
 
             moonKing.RestorePristineHealth();
 
-            moonKing.SetStringProperty(BonesName, The.Game.GameID);
-            moonKing.SetStringProperty("UD_Bones_NoWrite", null, true);
-
             var brain = moonKing.Brain;
             brain.PartyLeader = null;
             brain.Hibernating = false;
@@ -118,8 +115,13 @@ namespace XRL.World.Parts
         public static void BonesExceptionCleanUp(GameObject Player)
         {
             foreach (var bonesObject in Player?.CurrentZone.GetObjectsWithProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) ?? Enumerable.Empty<GameObject>())
+            {
+                if (bonesObject.PartsList.Any(p => ((UD_Bones_BaseLunarPart)p).Persists))
+                    continue;
+
                 if (bonesObject.GetStringProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) == The.Game.GameID)
                     bonesObject.Obliterate();
+            }
         }
 
         public void BonesExceptionCleanUp()
@@ -211,39 +213,47 @@ namespace XRL.World.Parts
                 {
                     var now = DateTime.Now;
                     var timeAgo = now - saveBonesInfo.SaveTimeValue;
-                    if (Popup.ShowYesNo($"This game already has a bones file which is {timeAgo.ValueUnits():D2} old.\n\n" +
+                    if (Popup.ShowYesNo($"This game already has a bones file which is {timeAgo.ValueUnits():0.##} old.\n\n" +
                         $"Would you like to proceed, overwriting that file?") != DialogResult.Yes)
                         return true;
                 }
 
-                var killer = ZoneManager.instance.CachedObjects.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
-                    ?? The.Player;
-
-                var weapons = Event.NewGameObjectList();
-                killer?.Body?.ForeachDefaultBehavior(go => weapons.Add(go));
-                killer?.Body?.ForeachEquippedObject(go => weapons.Add(go));
-
-                var weapon = weapons.GetRandomElementCosmetic();
-
-                if (weapon != null)
+                GameObject killer = null;
+                GameObject weapon = null;
+                try
                 {
-                    string projectileeBlueprint = null;
-                    GetMissileWeaponProjectileEvent.GetFor(weapon, ref projectile, ref projectileeBlueprint);
+                    killer = ZoneManager.instance.CachedObjects?.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
+                        ?? The.Player;
+
+                    var weapons = Event.NewGameObjectList();
+                    killer?.Body?.ForeachDefaultBehavior(go => weapons.Add(go));
+                    killer?.Body?.ForeachEquippedObject(go => { if (go.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is false) weapons.Add(go); });
+
+                    weapon = weapons.GetRandomElementCosmetic();
+
+                    if (weapon != null)
+                    {
+                        string projectileeBlueprint = null;
+                        GetMissileWeaponProjectileEvent.GetFor(weapon, ref projectile, ref projectileeBlueprint);
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Goofed getting random cached combat object and weapon", x);
+                    killer = The.Player;
+                    weapon = killer.GetPrimaryWeapon();
+                    projectile = null;
                 }
 
-                if (willDie)
-                {
-                    The.Player.TakeDamage(
-                        Amount: The.Player.hitpoints * (Stat.Random(80, 120) / 100),
+                if (!willDie
+                    || !The.Player.TakeDamage(
+                        Amount: The.Player.GetStatValue("Hitpoints", 99999) * (Stat.Random(80, 120) / 100),
                         Message: "from %t desire it be so.",
                         Attributes: "Unavoidable Cosmic Umbral Vorpal Disintegration",
                         Owner: killer,
                         Attacker: killer,
                         Source: projectile ?? weapon,
-                        Accidental: 25.in100());
-                }
-                else
-                {
+                        Accidental: 25.in100()))
                     AfterDieEvent.Send(
                         Dying: The.Player,
                         Killer: killer,
@@ -252,7 +262,6 @@ namespace XRL.World.Parts
                         Accidental: 25.in100(),
                         Reason: The.Player.Physics.LastDeathReason,
                         ThirdPersonReason: The.Player.Physics.LastThirdPersonDeathReason);
-                }
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {

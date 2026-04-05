@@ -93,6 +93,9 @@ namespace UD_Bones_Folder.Mod
 
         public string Pending;
 
+        private bool CharIconSwapped;
+        private string OriginalCharIcon;
+
         public SaveBonesJSON()
             : base()
         { 
@@ -112,17 +115,17 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task<SaveBonesInfo> ReadSaveBonesJson(string DirPath, string FilePath)
         {
-            SaveBonesJSON json = null;
+            SaveBonesJSON bonesJSON = null;
             try
             {
-                json = await File.ReadAllJsonAsync<SaveBonesJSON>(FilePath);
+                bonesJSON = await File.ReadAllJsonAsync<SaveBonesJSON>(FilePath);
             }
             catch (Exception x)
             {
                 Utils.Error($"Loading save json {FilePath}", x);
             }
 
-            if (json == null)
+            if (bonesJSON == null)
             {
                 return new SaveBonesInfo
                 {
@@ -135,7 +138,7 @@ namespace UD_Bones_Folder.Mod
             DateTime saveTimeValue;
             try
             {
-                saveTimeValue = new DateTime(json.SaveTimeValue).ToLocalTime();
+                saveTimeValue = new DateTime(bonesJSON.SaveTimeValue).ToLocalTime();
             }
             catch //(Exception x)
             {
@@ -145,40 +148,63 @@ namespace UD_Bones_Folder.Mod
 
             var saveBonesInfo = new SaveBonesInfo
             {
-                json = json,
+                json = bonesJSON,
                 Directory = DirPath,
                 Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
-                ID = json.ID,
-                Version = json.GameVersion,
-                Name = json.Name,
-                Description = $"Level {json.Level} {json.GenoSubType}",// [{json.GameMode}]",
-                Info = $"{json.Location}, {json.InGameTime} turn {json.Turn}",
-                SaveTime = json.SaveTime,
-                ModsEnabled = json.ModsEnabled,
+                ID = bonesJSON.ID,
+                Version = bonesJSON.GameVersion,
+                Name = bonesJSON.Name,
+                Description = $"Level {bonesJSON.Level} {bonesJSON.GenoSubType}",// [{json.GameMode}]",
+                Info = $"{bonesJSON.Location}, {bonesJSON.InGameTime} turn {bonesJSON.Turn}",
+                SaveTime = bonesJSON.SaveTime,
+                ModsEnabled = bonesJSON.ModsEnabled,
 
                 FileName = FilePath,
                 SaveTimeValue = saveTimeValue,
 
-                ModVersion = json.ModVersion,
+                ModVersion = bonesJSON.ModVersion,
 
-                ZoneID = json.ZoneID,
-                DeathReason = json.DeathReason,
+                ZoneID = bonesJSON.ZoneID,
+                DeathReason = bonesJSON.DeathReason,
 
-                GenotypeName = json.GenotypeName,
-                SubtypeName = json.SubtypeName,
+                GenotypeName = bonesJSON.GenotypeName,
+                SubtypeName = bonesJSON.SubtypeName,
 
-                ZoneTerrainType = json.ZoneTerrainType,
-                ZoneTier = json.ZoneTier,
-                ZoneRegion = json.ZoneRegion,
+                ZoneTerrainType = bonesJSON.ZoneTerrainType,
+                ZoneTier = bonesJSON.ZoneTier,
+                ZoneRegion = bonesJSON.ZoneRegion,
             };
-            if (json.SaveVersion < 395
-                || json.SaveVersion > 400)
+
+            if (!bonesJSON.CharIcon.IsTile())
+                bonesJSON.HotSwapCharIcon();
+
+            if (bonesJSON.SaveVersion < 395
+                || bonesJSON.SaveVersion > 400)
             {
-                string olderVersionString = $"Older Version ({json.GameVersion})".Colored("R");
+                string olderVersionString = $"Older Version ({bonesJSON.GameVersion})".Colored("R");
                 saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
             }
 
             return saveBonesInfo;
+        }
+
+        public bool IsCharIconSwapped()
+            => CharIconSwapped
+            ;
+
+        public void HotSwapCharIcon()
+        {
+            if (CharIconSwapped)
+            {
+                CharIcon = OriginalCharIcon;
+                CharIconSwapped = false;
+            }
+            else
+            {
+                OriginalCharIcon = CharIcon;
+                CharIcon = Const.MAD_LUNAR_REGENT_TILE;
+                CharIconSwapped = true;
+            }
         }
 
         public BonesRender GetRender()

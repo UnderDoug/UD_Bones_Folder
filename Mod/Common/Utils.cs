@@ -346,7 +346,8 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void Log(object Message)
-            => UnityEngine.Debug.Log(Message);
+            => UnityEngine.Debug.Log(Message)
+            ;
 
         [VariableObjectReplacer]
         public static string UD_RegalTitle(DelegateContext Context)
@@ -425,7 +426,6 @@ namespace UD_Bones_Folder.Mod
                 func: (a, n) => Log(a, PostProc.SafeInvoke(Proc, n, "NO_ELEMENT")))
             ;
 
-
         public static async Task PopupShowAsync(
             string Message,
             string Title = null,
@@ -446,5 +446,10 @@ namespace UD_Bones_Folder.Mod
                 title: Title,
                 PopupLocation: PopupLocation);
         }
+
+        public static bool TileExists(string Tile)
+            => Tile != null
+            && SpriteManager.GetTextureInfo(Tile, false) is not null
+            ;
     }
 }
