@@ -230,8 +230,8 @@ namespace UD_Bones_Folder.Mod
                 foreach (var zoneGO in currentZone.GetObjects())
                 {
                     // Clear object ID's so they get a new one once re-serialzed
-                    zoneGO._BaseID = 0;
-                    zoneGO.RemoveStringProperty("id");
+                    //zoneGO._BaseID = 0;
+                    //zoneGO.RemoveStringProperty("id");
 
                     zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
                     zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());

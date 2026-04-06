@@ -26,10 +26,11 @@ namespace UD_Bones_Folder.Mod
         {
             var localTimeNow = DateTime.Now;
             long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
-            MoonKing.Render.Visible = true;
+
             MoonKing.RestorePristineHealth();
-            var render = MoonKing.RenderForUI("SaveBonesInfo", true);
-            MoonKing.Render.Visible = false;
+
+            var render = MoonKing.Render;
+            var colorChars = render.getColorChars();
 
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
 
@@ -83,8 +84,8 @@ namespace UD_Bones_Folder.Mod
                 GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
                 CharIcon = render.Tile,
-                FColor = render.GetForegroundColorChar(),
-                DColor = render.GetDetailColorChar(),
+                FColor = colorChars.foreground,
+                DColor = colorChars.detail,
 
                 Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
@@ -116,29 +117,29 @@ namespace UD_Bones_Folder.Mod
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
             SaveRow.imageTinyFrame ??= new();
-            string tile = Const.MAD_LUNAR_REGENT_TILE;
             if (bonesJSON != null)
             {
-                if (bonesJSON.CharIcon.IsTile())
-                    tile = bonesJSON.CharIcon;
-
-                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(tile);
+                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesJSON.CharIcon);
                 SaveRow.imageTinyFrame.unselectedBorderColor = The.Color.Black;
                 SaveRow.imageTinyFrame.selectedBorderColor = The.Color.Yellow;
                 SaveRow.imageTinyFrame.unselectedForegroundColor = The.Color.Black;
                 SaveRow.imageTinyFrame.unselectedDetailColor = The.Color.Black;
 
                 SaveRow.imageTinyFrame.selectedForegroundColor = The.Color.Gray;
-                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.FColor, out var value))
-                    SaveRow.imageTinyFrame.selectedForegroundColor = value;
+                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.FColor, out var fColor))
+                    SaveRow.imageTinyFrame.selectedForegroundColor = fColor;
 
                 SaveRow.imageTinyFrame.selectedDetailColor = The.Color.DarkBlack;
-                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.DColor, out var value2))
-                    SaveRow.imageTinyFrame.selectedDetailColor = value2;
+                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.DColor, out var dColor))
+                    SaveRow.imageTinyFrame.selectedDetailColor = dColor;
+
+                if (bonesInfo.IsMad
+                    && ColorUtility.ColorMap.TryGetValue(Utils.GetRainbowColorAtIndex(bonesInfo.ID.GetHashCode())[0], out var madDColor))
+                    SaveRow.imageTinyFrame.selectedDetailColor = madDColor;
             }
             else
             {
-                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(tile);
+                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesJSON.CharIcon);
                 SaveRow.imageTinyFrame.unselectedBorderColor = The.Color.Black;
                 SaveRow.imageTinyFrame.selectedBorderColor = The.Color.Yellow;
                 SaveRow.imageTinyFrame.unselectedForegroundColor = UnityEngine.Color.clear;
@@ -151,7 +152,7 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: true);
 
             SaveRow.imageTinyFrame.Sync(force: true);
-            SaveRow.TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".Colored("W"));
+            SaveRow.TextSkins[0].SetText($"{(bonesInfo.IsMad ? "Mad " : null)}{bonesInfo.Name}::{bonesInfo.Description}".Colored("W"));
             SaveRow.TextSkins[1].SetText(/*$"{"Location:".Colored("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";

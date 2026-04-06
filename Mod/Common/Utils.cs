@@ -447,9 +447,29 @@ namespace UD_Bones_Folder.Mod
                 PopupLocation: PopupLocation);
         }
 
+        public static bool IsSameTexture(UnityEngine.Texture2D x, UnityEngine.Texture2D y)
+        {
+            var xRaw = x.GetRawTextureData();
+            var yRaw = y.GetRawTextureData();
+
+            if (xRaw.IsNullOrEmpty()
+                || yRaw.IsNullOrEmpty())
+                return xRaw.IsNullOrEmpty() == yRaw.IsNullOrEmpty();
+
+            if (xRaw.Length != yRaw.Length)
+                return false;
+
+            for (int i = 0; i < xRaw.Length; i++)
+                if (xRaw[i] != yRaw[i])
+                    return false;
+
+            return true;
+        }
+
         public static bool TileExists(string Tile)
             => Tile != null
-            && SpriteManager.GetTextureInfo(Tile, false) is not null
+            && SpriteManager.GetTextureInfo(Tile, false) != null
+            && !IsSameTexture(SpriteManager.GetTextureInfo(Tile).texture, SpriteManager.GetTextureInfo("Text_32.bmp").texture)
             ;
 
         public static IEnumerable<string> YieldRainbowColors()
@@ -505,23 +525,23 @@ namespace UD_Bones_Folder.Mod
         public static string GetAnimatedRainbowShader(int Offset = 0, string Style = "sequence")
         {
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            Offset %= rainbowColors.Count;
 
             string output = null;
             for (int i = 0; i < rainbowColors.Count; i++)
-                output = DelimitedAggregator(output, GetRainbowColorAtIndex(i), "-");
+                output = DelimitedAggregator(output, GetRainbowColorAtIndex(Offset + i), "-");
 
             if (output.IsNullOrEmpty())
                 return "rainbow";
 
+            // Log($"{output} {Style}");
             return $"{output} {Style}";
         }
 
         public static int GetFrame8thOrRandom()
         {
-            if (XRLCore.CurrentFrameAccumulator == 0.0)
-                return Stat.RandomCosmetic(0, YieldRainbowColors().Count() - 1);
-            return (int)Math.Ceiling(XRLCore.CurrentFrameLong10 / 8f);
+            if (The.Game?.Running is not true)
+                return (int)Math.Ceiling((DateTime.Now.Millisecond % 1000.0) / 8.0); // Stat.RandomCosmetic(0, YieldRainbowColors().Count() - 1);
+            return (int)Math.Ceiling(XRLCore.CurrentFrameLong / 8.0);
         }
 
         public static string GetAnimatedRainbowShaderForFrame()

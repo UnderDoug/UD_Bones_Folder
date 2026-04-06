@@ -140,7 +140,7 @@ namespace UD_Bones_Folder.Mod
             for (int j = 0; j < blueprintObjects; j++)
                 if (Reader.ReadString() is string writtenBlueprint
                     && GameObject.CreateUnmodified(writtenBlueprint) is GameObject newObject)
-                        cell.AddObjectWithoutEvents(newObject);
+                    cell.AddObjectWithoutEvents(newObject);
 
             cell.PaintTile = Reader.ReadString();
             cell.PaintTileColor = Reader.ReadString();

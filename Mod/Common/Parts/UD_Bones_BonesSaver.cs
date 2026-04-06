@@ -85,7 +85,7 @@ namespace XRL.World.Parts
 
             lunarRegentPart.Onset();
 
-            if (GameObject.Create("Lunar Regent Mask") is GameObject lunarRegentMask)
+            if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
             {
                 if (moonKing.ReceiveObject(lunarRegentMask))
                 {

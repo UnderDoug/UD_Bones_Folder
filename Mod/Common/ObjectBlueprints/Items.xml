@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <objects>
-  <object Name="Lunar Regent Mask" Inherits="Sun and Moon Mask">
+  <object Name="Lunar Face" Inherits="Sun and Moon Mask">
     <part Name="Render" DisplayName="=subject.uD_RegalTitle= mask" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
     <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
     <!--shader Name="rainbow" Type="alternation" Colors="r-R-W-G-B-b-m" ShowInPicker="true" /-->
@@ -13,10 +13,10 @@
     <intproperty Name="AlwaysEquipAsArmor" Value="999" />
     <tag Name="EquipmentFrameColors" Value="RWBG" />
   </object>
-  <object Name="Lunar Regent Mask2" Inherits="Lunar Regent Mask">
+  <object Name="Lunar Face2" Inherits="Lunar Face">
     <part Name="Render" Tile="Items/lunar_regent_mask2.png" />
   </object>
-  <object Name="Lunar Regent Mask3" Inherits="Lunar Regent Mask">
+  <object Name="Lunar Face3" Inherits="Lunar Face">
     <part Name="Render" Tile="Items/lunar_regent_mask.png" />
   </object>
 </objects>

@@ -5,6 +5,7 @@ using System.Text;
 using XRL.World.Effects;
 
 using UD_Bones_Folder.Mod;
+using XRL.Core;
 
 namespace XRL.World.Parts
 {
@@ -15,7 +16,10 @@ namespace XRL.World.Parts
 
         public string RegalTitle => GetRegalTitle();
 
-        private static bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
+        public bool IsMad;
+
+        protected string TileColor;
+        protected string DetailColor;
 
         public static string GetRegalTitle(GameObject LunarRegent)
         {
@@ -94,40 +98,54 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
-        public override void TurnTick(long TimeTick, int Amount)
+        public override bool Render(RenderEvent E)
         {
-            HandleFlashingLightsOption(ParentObject);
-            base.TurnTick(TimeTick, Amount);
+            if (CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, IsMad))
+                return true;
+            return base.Render(E);
         }
 
-        public static void HandleFlashingLightsOption(GameObject GameObject)
+        public static bool CycleColors(RenderEvent E, ref string TileColor, ref string DetailColor, bool IsMad = true)
         {
-            if (Options.EnableFlashingLightEffects != OriginalEnableFlashingLightEffects)
+            if (Options.EnableFlashingLightEffects)
             {
-                OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
-                if (GameObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                if (XRLCore.CurrentFrame % 8 == 0)
                 {
-                    if (GameObject.GetBlueprint() is GameObjectBlueprint parentModel)
-                    {
-                        string partName = nameof(AnimatedMaterialGeneric);
-                        string paramName = nameof(AnimatedMaterialGeneric.AnimationLength);
-                        string prop = $"{partName}.{paramName}";
-                        if (Options.EnableFlashingLightEffects)
-                        {
-                            if (GameObject.TryGetIntProperty(prop, out int animationLength))
-                            {
-                                GameObject.SetIntProperty(prop, 0, true);
-                                animatedMaterial.AnimationLength = animationLength;
-                            }
-                        }
-                        else
-                        {
-                            GameObject.SetIntProperty(prop, animatedMaterial.AnimationLength);
-                            animatedMaterial.AnimationLength = 0;
-                        }
-                    }
+                    TileColor = null;
+                    DetailColor = null;
                 }
+                TileColor ??= Utils.GetRainbowColorForFrame();
+                DetailColor ??= Utils.GetNextRainbowColor(TileColor);
+                if (IsMad)
+                {
+                    E.ApplyColors($"&{TileColor}", $"{DetailColor}", 999, 999);
+                    return true;
+                }
+                E.ApplyColors($"&{TileColor}", 999);
+                return true;
             }
+            return false;
+        }
+
+        public static bool CycleColors(Render Render, ref string TileColor, ref string DetailColor, bool IsMad = true)
+        {
+            if (Options.EnableFlashingLightEffects)
+            {
+                if (XRLCore.CurrentFrame % 8 == 0)
+                {
+                    Render.TileColor = null;
+                    Render.DetailColor = null;
+                }
+                TileColor ??= Utils.GetRainbowColorForFrame();
+                DetailColor ??= Utils.GetNextRainbowColor(TileColor);
+
+                Render.TileColor = $"&{TileColor}";
+                if (IsMad)
+                    Render.DetailColor = $"{DetailColor}";
+
+                return true;
+            }
+            return false;
         }
     }
 }

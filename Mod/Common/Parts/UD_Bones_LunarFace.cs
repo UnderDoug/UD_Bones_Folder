@@ -15,12 +15,15 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_LunarFace : UD_Bones_BaseLunarPart
     {
+        protected string TileColor;
+        protected string DetailColor;
+
         public bool TryBeWorn()
         {
             if (ParentObject == null)
                 return false;
 
-            if (ParentObject?.Holder != null
+            if (ParentObject.Holder != null
                 && ParentObject.Holder.IsPlayer())
                 return false;
 
@@ -85,7 +88,7 @@ namespace XRL.World.Parts
             E.ReplacePrimaryBase(
                 desc: E.GetPrimaryBase()
                     .StartReplace()
-                    .AddObject(ParentObject.Equipped ?? The.Player)
+                    .AddObject(ParentObject?.Equipped ?? The.Player)
                     .ToString()
                 );
             return base.HandleEvent(E);
@@ -94,6 +97,7 @@ namespace XRL.World.Parts
         public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
             TryBeWorn();
+            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(BeforeBeginTakeActionEvent))}");
             return base.HandleEvent(E);
         }
 
@@ -117,24 +121,17 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
-        public override bool FinalRender(RenderEvent E)
+        public override bool Render(RenderEvent E)
         {
-            /*
-            if (Options.EnableFlashingLightEffects)
+            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor))
             {
-                if (XRLCore.CurrentFrame % 8 == 0
-                    && Utils.GetAnimatedRainbowShaderEquipmentFrame(E) is string equipmentFrameColors)
-                {
-                    ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrameColors);
-                }
-            }*/
-            return FinalRender(E);
-        }
+                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(E) is string equipmentFrame)
+                    ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrame);
+                return true;
+            }
 
-        public override void TurnTick(long TimeTick, int Amount)
-        {
-            UD_Bones_LunarRegent.HandleFlashingLightsOption(ParentObject);
-            base.TurnTick(TimeTick, Amount);
+            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(Render))}");
+            return Render(E);
         }
     }
 }

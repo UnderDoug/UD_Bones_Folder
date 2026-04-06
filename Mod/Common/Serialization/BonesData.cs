@@ -14,6 +14,7 @@ using static XRL.World.Cell;
 
 using static UD_Bones_Folder.Mod.SerializationExtensions;
 using XRL.Core;
+using XRL.Collections;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -55,6 +56,7 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
+            using var oldBonesList = ScopeDisposedList<GameObject>.GetFromPool();
             foreach (var cell in Zone.GetCells())
             {
                 cell.Clear(Important: true, Combat: true);
@@ -71,88 +73,87 @@ namespace UD_Bones_Folder.Mod
                 if (bonesCell.Objects is not ObjectRack bonesObjects)
                     continue;
 
-                foreach (var bonesObject in bonesObjects)
+                oldBonesList.Clear();
+                for (int i = 0; i < bonesObjects.Count; i++)
                 {
-                    if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
-                        && lunarRegent.BonesID.EqualsNoCase(BonesID))
+                    if (bonesObjects[i] is GameObject bonesObject)
                     {
-                        MoonKing = bonesObject;
-                        MoonKing?.AddOpinion<OpinionMollify>(The.Player);
-                        The.Player.AddOpinion<OpinionMollify>(MoonKing);
+                        oldBonesList.Add(bonesObject);
+                        bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
 
-                        if (MoonKing.TryGetPart<Description>(out var description))
-                            description.Short = "It was you.";
-
-                        var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
-                            .SetParameter(nameof(MoonKing), MoonKing)
-                            .SetParameter(nameof(The.Player), The.Player);
-
-                        if (The.Player.FireEvent(attitudeSetup))
+                        if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
+                            && lunarRegent.BonesID.EqualsNoCase(BonesID))
                         {
-                            var brain = MoonKing.Brain;
-                            brain?.PushGoal(new Kill(The.Player));
-                            ApplyHostility(The.Player, brain, 0);
-                        }
+                            MoonKing = bonesObject;
+                            MoonKing?.AddOpinion<OpinionMollify>(The.Player);
+                            The.Player.AddOpinion<OpinionMollify>(MoonKing);
 
-                        if (IsMad)
-                        {
-                            MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                            if (MoonKing.TryGetPart(out Description description))
+                                description.Short = "It was you.";
 
-                            var sampleMask = GameObject.CreateSample("Lunar Regent Mask");
-                            if (!MoonKing.HasPart<AnimatedMaterialGeneric>()
-                                && sampleMask.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                            var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
+                                .SetParameter(nameof(MoonKing), MoonKing)
+                                .SetParameter(nameof(The.Player), The.Player);
+
+                            if (The.Player.FireEvent(attitudeSetup))
                             {
-                                sampleMask.RemovePart(animatedMaterial);
-                                MoonKing.AddPart(animatedMaterial);
+                                var brain = MoonKing.Brain;
+                                brain?.PushGoal(new Kill(The.Player));
+                                ApplyHostility(The.Player, brain, 0);
                             }
-                            sampleMask?.Obliterate();
+
+                            if (IsMad)
+                            {
+                                MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                                if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                                {
+                                    lunarRegentPart.IsMad = true;
+                                }
+                            }
+
+                            if (MoonKing.Render is Render render)
+                                render.Visible = true;
+
+                            MoonKing.Energy.BaseValue = 0;
                         }
 
-                        if (MoonKing.Render is Render render)
-                            render.Visible = true;
+                        if (bonesObject.CurrentCell is Cell oldBonesCell)
+                            oldBonesCell.RemoveObject(bonesObject);
 
-                        MoonKing.Energy.BaseValue = 0;
-                    }
-                    var oldBonesObject = bonesObject;
-                    /*
-                    var bonesObjectCopy = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
-                    if (oldBonesObject != bonesObjectCopy)
-                        oldBonesObject?.Obliterate();
-                    */
-                    var bonesObjectCopy = bonesObject;
+                        cell.AddObject(bonesObject);
 
-                    if (bonesObjectCopy.CurrentCell is Cell oldBonesCell)
-                        oldBonesCell.RemoveObject(bonesObjectCopy);
-
-                    bonesObjectCopy.ApplyRegistrar();
-
-                    cell.AddObject(bonesObjectCopy);
-
-                    if (The.ActionManager is ActionManager actionManager)
-                    {
-                        if (bonesObjectCopy.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
+                        if (The.ActionManager is ActionManager actionManager)
                         {
-                            if (!actionManager.ActionQueue.Contains(bonesObjectCopy))
-                                bonesObjectCopy.MakeActive();
-                            bonesObjectCopy.ApplyActiveRegistrar();
+                            if (bonesObject.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
+                            {
+                                if (!actionManager.ActionQueue.Contains(bonesObject))
+                                    bonesObject.MakeActive();
+                                bonesObject.ApplyActiveRegistrar();
+                            }
+                            if (bonesObject.GetStringProperty(ABILITY_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}")
+                                && actionManager.ActionQueue.Contains(bonesObject)
+                                && !actionManager.AbilityObjects.Contains(bonesObject))
+                                actionManager.AbilityObjects.Add(bonesObject);
                         }
-                        if (bonesObjectCopy.GetStringProperty(ABILITY_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}")
-                            && actionManager.ActionQueue.Contains(bonesObjectCopy)
-                            && !actionManager.AbilityObjects.Contains(bonesObjectCopy))
-                            actionManager.AbilityObjects.Add(bonesObjectCopy);
+
+                        if (bonesObject == MoonKing)
+                            MoonKing = bonesObject;
+
+                        if (bonesObject.Energy is Statistic bonesEnergy)
+                            bonesEnergy.BaseValue = 0;
+
+                        if (bonesObject != MoonKing)
+                        {
+                            if (bonesObject?.GetTile().IsTile() is not true
+                                || !GameObjectFactory.Factory.HasBlueprint(bonesObject.Blueprint))
+                            bonesObject.AddPart<UD_Bones_FeverWarped>();
+                        }
+
+                        bonesObject.ApplyRegistrar();
                     }
-
-                    if (bonesObject == MoonKing)
-                        MoonKing = bonesObjectCopy;
-
-                    if (bonesObjectCopy.Energy is Statistic energyCopy)
-                        energyCopy.BaseValue = 0;
-
-                    if (bonesObjectCopy != MoonKing
-                        && bonesObjectCopy?.GetTile() is string tile
-                        && !tile.IsTile())
-                        bonesObjectCopy.AddPart<UD_Bones_FeverWarped>();
                 }
+                foreach (var oldBones in oldBonesList)
+                    oldBones.Obliterate();
             }
             return MoonKing != null;
         }

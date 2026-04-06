@@ -14,6 +14,9 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_FeverWarped : UD_Bones_BaseLunarPart
     {
+        protected string TileColor;
+        protected string DetailColor;
+
         public override void Attach()
         {
             base.Attach();
@@ -68,6 +71,13 @@ namespace XRL.World.Parts
             E.AddEntry(this, "Adjective", GetAdjective());
             E.AddEntry(this, "Description", GetDescription());
             return base.HandleEvent(E);
+        }
+        public override bool Render(RenderEvent E)
+        {
+            if (UD_Bones_LunarRegent.CycleColors(E, ref TileColor, ref DetailColor))
+                return true;
+            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_FeverWarped), nameof(Render))}");
+            return Render(E);
         }
     }
 }

@@ -79,7 +79,7 @@ namespace XRL.World.WorldBuilders
                     items: savedBonesInfos.OrderBy(b => b, SaveBonesInfo.SaveBonesInfoComparerDescending));
 
                 using var renderList = ScopeDisposedList<SaveBonesJSON.BonesRender>.GetFromPool();
-                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable(), false));
+                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face").GetRenderable(), false));
                 renderList[0].TileColor = "&K";
                 renderList[0].DetailColor = 'K';
 
@@ -95,7 +95,7 @@ namespace XRL.World.WorldBuilders
                     optionsList.Add(bonesOption);
                 }
 
-                var icon = GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable();
+                var icon = GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face").GetRenderable();
                 string tileColor = Utils.GetRainbowColorForFrame();
                 icon.setTileColor($"&{tileColor}");
                 icon.setDetailColor(Utils.GetNextRainbowColor(tileColor));
