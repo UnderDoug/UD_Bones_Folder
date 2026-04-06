@@ -76,7 +76,7 @@
   -->
   <option
         ID="UD_Bones_Folder_EnableFlashingLightEffects"
-        DisplayText="Disable flashing light effects."
+        DisplayText="Enable flashing light effects."
         Category="Mod: Bones"
         Type="Checkbox"
         Default="Yes">

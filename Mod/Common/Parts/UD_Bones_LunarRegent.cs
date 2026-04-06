@@ -15,7 +15,7 @@ namespace XRL.World.Parts
 
         public string RegalTitle => GetRegalTitle();
 
-        private bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
+        private static bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
 
         public static string GetRegalTitle(GameObject LunarRegent)
         {
@@ -72,7 +72,7 @@ namespace XRL.World.Parts
                 && BonesManager.System != null
                 && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
             {
-                bonesInfo.Cremate();
+                // bonesInfo.Cremate();
                 Cremated = true;
             }
             if (ParentObject != null
@@ -96,24 +96,38 @@ namespace XRL.World.Parts
 
         public override void TurnTick(long TimeTick, int Amount)
         {
+            HandleFlashingLightsOption(ParentObject);
+            base.TurnTick(TimeTick, Amount);
+        }
+
+        public static void HandleFlashingLightsOption(GameObject GameObject)
+        {
             if (Options.EnableFlashingLightEffects != OriginalEnableFlashingLightEffects)
             {
                 OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
-                if (ParentObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
+                if (GameObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
                 {
-                    if (Options.EnableFlashingLightEffects)
+                    if (GameObject.GetBlueprint() is GameObjectBlueprint parentModel)
                     {
                         string partName = nameof(AnimatedMaterialGeneric);
                         string paramName = nameof(AnimatedMaterialGeneric.AnimationLength);
-                        if (ParentObject.GetBlueprint() is GameObjectBlueprint parentModel
-                            && parentModel.TryGetPartParameter(partName, paramName, out int animationLength))
-                            animatedMaterial.AnimationLength = animationLength;
+                        string prop = $"{partName}.{paramName}";
+                        if (Options.EnableFlashingLightEffects)
+                        {
+                            if (GameObject.TryGetIntProperty(prop, out int animationLength))
+                            {
+                                GameObject.SetIntProperty(prop, 0, true);
+                                animatedMaterial.AnimationLength = animationLength;
+                            }
+                        }
                         else
+                        {
+                            GameObject.SetIntProperty(prop, animatedMaterial.AnimationLength);
                             animatedMaterial.AnimationLength = 0;
+                        }
                     }
                 }
             }
-            base.TurnTick(TimeTick, Amount);
         }
     }
 }

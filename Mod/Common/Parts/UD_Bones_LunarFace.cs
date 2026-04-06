@@ -15,8 +15,6 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_LunarFace : UD_Bones_BaseLunarPart
     {
-        private bool OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
-
         public bool TryBeWorn()
         {
             if (ParentObject == null)
@@ -95,9 +93,7 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
-            if (TryBeWorn())
-                return E.PreventAction = true;
-
+            TryBeWorn();
             return base.HandleEvent(E);
         }
 
@@ -123,33 +119,21 @@ namespace XRL.World.Parts
 
         public override bool FinalRender(RenderEvent E)
         {
+            /*
             if (Options.EnableFlashingLightEffects)
             {
-                if (XRLCore.CurrentFrame % 8 == 0)
-                    ParentObject?.SetStringProperty("EquipmentFrame", Utils.GetAnimatedRainbowShaderEquipmentFrame(E), true);
-            }
+                if (XRLCore.CurrentFrame % 8 == 0
+                    && Utils.GetAnimatedRainbowShaderEquipmentFrame(E) is string equipmentFrameColors)
+                {
+                    ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrameColors);
+                }
+            }*/
             return FinalRender(E);
         }
 
         public override void TurnTick(long TimeTick, int Amount)
         {
-            if (Options.EnableFlashingLightEffects != OriginalEnableFlashingLightEffects)
-            {
-                OriginalEnableFlashingLightEffects = Options.EnableFlashingLightEffects;
-                if (ParentObject.TryGetPart(out AnimatedMaterialGeneric animatedMaterial))
-                {
-                    if (Options.EnableFlashingLightEffects)
-                    {
-                        string partName = nameof(AnimatedMaterialGeneric);
-                        string paramName = nameof(AnimatedMaterialGeneric.AnimationLength);
-                        if (ParentObject.GetBlueprint() is GameObjectBlueprint parentModel
-                            && parentModel.TryGetPartParameter(partName, paramName, out int animationLength))
-                            animatedMaterial.AnimationLength = animationLength;
-                        else
-                            animatedMaterial.AnimationLength = 0;
-                    }
-                }
-            }
+            UD_Bones_LunarRegent.HandleFlashingLightsOption(ParentObject);
             base.TurnTick(TimeTick, Amount);
         }
     }

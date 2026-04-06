@@ -82,9 +82,10 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
         {
-            SetBonesID(The.Game?.GameID, true);
             if (E.Context == "Wish")
                 Persists = true;
+
+            SetBonesID(The.Game?.GameID, true);
             return base.HandleEvent(E);
         }
 
@@ -94,7 +95,6 @@ namespace XRL.World.Parts
                 && !Persists)
             {
                 ParentObject.Obliterate();
-                E.PreventAction = true;
                 return true;
             }
             return base.HandleEvent(E);

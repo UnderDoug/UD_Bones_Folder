@@ -96,9 +96,7 @@ namespace XRL.World.WorldBuilders
                 }
 
                 var icon = GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable();
-                using var rainbowColors = Utils.ScopeDiscposedRainbowColorsListFromPool();
-                int offset = rainbowColors.Count - ((int)Math.Ceiling(XRLCore.CurrentFrame / 8.0) % rainbowColors.Count) - 1;
-                string tileColor = rainbowColors[offset];
+                string tileColor = Utils.GetRainbowColorForFrame();
                 icon.setTileColor($"&{tileColor}");
                 icon.setDetailColor(Utils.GetNextRainbowColor(tileColor));
 
@@ -107,7 +105,7 @@ namespace XRL.World.WorldBuilders
                     Intro: "Pick a lunar regent to exhume.",
                     Options: optionsList,
                     Icons: renderList,
-                    IntroIcon: GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Regent Mask").GetRenderable(),
+                    IntroIcon: icon,
                     AllowEscape: true);
 
                 picked.Wait();

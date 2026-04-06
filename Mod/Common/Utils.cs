@@ -17,6 +17,7 @@ using XRL.Collections;
 using XRL.Core;
 using XRL.Language;
 using XRL.Messages;
+using XRL.Rules;
 using XRL.UI;
 using XRL.World;
 using XRL.World.Effects;
@@ -76,7 +77,7 @@ namespace UD_Bones_Folder.Mod
         {
             using var status = Loading.StartTask("Converting Lunar Regents");
 
-            foreach (var blueprint in XRL.World.GameObjectFactory.Factory.GetBlueprintsInheritingFrom("PhysicalObject"))
+            foreach (var blueprint in GameObjectFactory.Factory.GetBlueprintsInheritingFrom("PhysicalObject"))
             {
                 if (!SpriteManager.HasTextureInfo(blueprint.GetRenderable().Tile))
                     continue;
@@ -356,14 +357,8 @@ namespace UD_Bones_Folder.Mod
 
         [VariableObjectReplacer]
         public static string UD_RegalTitle(DelegateContext Context)
-        {
-            string output = UD_Bones_MoonKingFever.REGAL_TITLE;
-            if (Context?.Target != null
-                && Context.Target.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                output = moonKingFever.RegalTitle;
-
-            return output.Colored(GetAnimatedRainbowShaderForFrame());
-        }
+            => UD_Bones_LunarRegent.GetRegalTitle(Context.Target).Colored(GetAnimatedRainbowShaderForFrame())
+            ;
 
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
             where T : IComparable<T>
@@ -472,10 +467,12 @@ namespace UD_Bones_Folder.Mod
             => ScopeDisposedList<string>.GetFromPoolFilledWith(YieldRainbowColors())
             ;
 
-        public static string GetRainbowColorShaderAtIndex(int Offset)
+        public static string GetRainbowColorAtIndex(int Offset)
         {
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            Offset = rainbowColors.Count - (Offset % rainbowColors.Count) - 1;
+            if (Offset < 0)
+                Offset = Math.Abs(Offset + rainbowColors.Count);
+            Offset %= rainbowColors.Count;
             return rainbowColors[Offset];
         }
 
@@ -491,7 +488,7 @@ namespace UD_Bones_Folder.Mod
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
             int colorIndex = rainbowColors.IndexOf(Color);
 
-            return GetRainbowColorShaderAtIndex(colorIndex + 1);
+            return GetRainbowColorAtIndex(colorIndex + 1);
         }
 
         public static string GetPrevRainbowColor(string Color)
@@ -502,7 +499,7 @@ namespace UD_Bones_Folder.Mod
 
             int colorIndex = rainbowColors.IndexOf(Color);
 
-            return GetRainbowColorShaderAtIndex(colorIndex - 1);
+            return GetRainbowColorAtIndex(colorIndex - 1);
         }
 
         public static string GetAnimatedRainbowShader(int Offset = 0, string Style = "sequence")
@@ -512,12 +509,7 @@ namespace UD_Bones_Folder.Mod
 
             string output = null;
             for (int i = 0; i < rainbowColors.Count; i++)
-            {
-                if (!output.IsNullOrEmpty())
-                    output += "-";
-
-                output += GetRainbowColorShaderAtIndex(i);
-            }
+                output = DelimitedAggregator(output, GetRainbowColorAtIndex(i), "-");
 
             if (output.IsNullOrEmpty())
                 return "rainbow";
@@ -525,8 +517,19 @@ namespace UD_Bones_Folder.Mod
             return $"{output} {Style}";
         }
 
+        public static int GetFrame8thOrRandom()
+        {
+            if (XRLCore.CurrentFrameAccumulator == 0.0)
+                return Stat.RandomCosmetic(0, YieldRainbowColors().Count() - 1);
+            return (int)Math.Ceiling(XRLCore.CurrentFrameLong10 / 8f);
+        }
+
         public static string GetAnimatedRainbowShaderForFrame()
-            => GetAnimatedRainbowShader((int)Math.Ceiling(XRLCore.CurrentFrameLong10 / 8f))
+            => GetAnimatedRainbowShader(GetFrame8thOrRandom())
+            ;
+
+        public static string GetRainbowColorForFrame()
+            => GetRainbowColorAtIndex(GetFrame8thOrRandom())
             ;
 
         [VariablePostProcessor(Keys = new string[] { "LunarShader" }, Capitalization = false)]

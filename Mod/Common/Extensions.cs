@@ -27,6 +27,7 @@ namespace UD_Bones_Folder.Mod
             var localTimeNow = DateTime.Now;
             long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
             MoonKing.Render.Visible = true;
+            MoonKing.RestorePristineHealth();
             var render = MoonKing.RenderForUI("SaveBonesInfo", true);
             MoonKing.Render.Visible = false;
 

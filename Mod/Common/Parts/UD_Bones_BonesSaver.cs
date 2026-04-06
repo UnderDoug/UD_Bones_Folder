@@ -265,7 +265,7 @@ namespace XRL.World.Parts
 
                 if (!willDie
                     || !The.Player.TakeDamage(
-                        Amount: (int)(The.Player.GetStatValue("Hitpoints", 99999) * (Stat.Random(80, 120) / 100f)),
+                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(110, 150) / 100f)),
                         Message: "from %t desire it be so.",
                         Attributes: "Unavoidable Cosmic Umbral Vorpal Disintegration",
                         Owner: killer,

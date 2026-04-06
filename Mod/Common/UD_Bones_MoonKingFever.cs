@@ -233,7 +233,7 @@ namespace XRL.World.Effects
                     && frame < 10)
                 {
                     E.RenderString = "@";
-                    E.ColorString = $"&{RenderColorString ??= Utils.GetRainbowColorShaderAtIndex(RenderColorStringCounter)}";
+                    E.ColorString = $"&{RenderColorString ??= Utils.GetRainbowColorAtIndex(RenderColorStringCounter)}";
                     if (frame == 9)
                     {
                         RenderColorString = null;
