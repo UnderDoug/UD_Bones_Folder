@@ -447,29 +447,17 @@ namespace UD_Bones_Folder.Mod
                 PopupLocation: PopupLocation);
         }
 
-        public static bool IsSameTexture(UnityEngine.Texture2D x, UnityEngine.Texture2D y)
-        {
-            var xRaw = x.GetRawTextureData();
-            var yRaw = y.GetRawTextureData();
-
-            if (xRaw.IsNullOrEmpty()
-                || yRaw.IsNullOrEmpty())
-                return xRaw.IsNullOrEmpty() == yRaw.IsNullOrEmpty();
-
-            if (xRaw.Length != yRaw.Length)
-                return false;
-
-            for (int i = 0; i < xRaw.Length; i++)
-                if (xRaw[i] != yRaw[i])
-                    return false;
-
-            return true;
-        }
+        public static bool IsSameTexture(exTextureInfo x, exTextureInfo y)
+            => x == y
+            && x.x == y.x
+            && x.y == y.y
+            && x.rawTextureGUID == y.rawTextureGUID
+            ;
 
         public static bool TileExists(string Tile)
             => Tile != null
             && SpriteManager.GetTextureInfo(Tile, false) != null
-            && !IsSameTexture(SpriteManager.GetTextureInfo(Tile).texture, SpriteManager.GetTextureInfo("Text_32.bmp").texture)
+            && !IsSameTexture(SpriteManager.GetTextureInfo(Tile), SpriteManager.GetTextureInfo("Text_32.bmp"))
             ;
 
         public static IEnumerable<string> YieldRainbowColors()
@@ -557,15 +545,27 @@ namespace UD_Bones_Folder.Mod
         {
             if (!Context.Value.IsNullOrEmpty())
             {
+                string param0 = null;
+                if (!Context.Parameters.IsNullOrEmpty())
+                    param0 = Context.Parameters[0];
                 var oldValue = Context.Value.ToString();
                 Context.Value.Clear();
-                Context.Value.AppendColored(GetAnimatedRainbowShaderForFrame(), oldValue);
+                Context.Value.AppendColored(
+                    color: param0 == "*"
+                        ? GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 7000))
+                        : GetAnimatedRainbowShaderForFrame(), 
+                    text: oldValue);
             }
         }
 
         public static string GetAnimatedRainbowShaderEquipmentFrame(string Color)
         {
             EquipmentFrameByTileColor ??= new();
+
+            if (!Color.IsNullOrEmpty()
+                && Color.Length > 1)
+                Color = $"{ColorUtility.FindLastForeground(Color)}";
+
             if (!EquipmentFrameByTileColor.ContainsKey(Color))
             {
                 if (IsRainbowColor(Color))

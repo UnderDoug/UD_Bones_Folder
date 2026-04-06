@@ -132,6 +132,7 @@ namespace XRL.World.ZoneBuilders
                 if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
                     regalTitle = moonKingFever.RegalTitle;
 
+                string coloredRegalTitle = regalTitle.Color(Utils.GetAnimatedRainbowShaderForFrame());
                 string announcement = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!";
                 string madAnnouncement = $"=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= " +
                     $"from a world vastly different from this one, and will tolerate neither pretenders nor would-be-usurpers!";
@@ -141,7 +142,7 @@ namespace XRL.World.ZoneBuilders
                     ?.AddPart(
                         P: new UD_Bones_MoonKingAnnouncer(
                             BonesID: bonesData.BonesID,
-                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{regalTitle.Color(Utils.GetAnimatedRainbowShaderForFrame())} persists!",
+                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{coloredRegalTitle} persists!",
                             Message: (!saveBonesInfo.IsMad ? announcement : madAnnouncement)
                                 .StartReplace()
                                 .AddObject(MoonKing)

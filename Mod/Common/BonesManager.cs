@@ -735,16 +735,21 @@ namespace UD_Bones_Folder.Mod
             out string Tile
             )
         {
-            if (!TileReplacementsByMissingBlueprint.ContainsKey(GameObject.Blueprint))
+            Blueprint = GameObject.Blueprint;
+            Tile = null;
+            if (GameObject.Blueprint is string key)
             {
-                string alternativeBlueprint = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(GameObject)).GetRandomElementCosmetic();
-                var alternativeModel = GameObjectFactory.Factory.GetBlueprintIfExists(alternativeBlueprint);
-                var alternativeTile = alternativeModel?.GetRenderable()?.Tile;
-                BlueprintReplacementsByMissingBlueprint[GameObject.Blueprint] = alternativeBlueprint;
-                TileReplacementsByMissingBlueprint[GameObject.Blueprint] = alternativeTile;
+                if (!TileReplacementsByMissingBlueprint.ContainsKey(key))
+                {
+                    string altBlueprint = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(GameObject)).GetRandomElementCosmetic();
+                    var altModel = GameObjectFactory.Factory.GetBlueprintIfExists(altBlueprint);
+                    var altTile = altModel?.GetRenderable()?.Tile;
+                    BlueprintReplacementsByMissingBlueprint[key] = altBlueprint;
+                    TileReplacementsByMissingBlueprint[key] = altTile;
+                }
+                BlueprintReplacementsByMissingBlueprint.TryGetValue(key, out Blueprint);
+                TileReplacementsByMissingBlueprint.TryGetValue(key, out Tile);
             }
-            Blueprint = BlueprintReplacementsByMissingBlueprint[GameObject.Blueprint];
-            Tile = TileReplacementsByMissingBlueprint[GameObject.Blueprint];
         }
 
         public void CremateMoonKing(string BonesID)

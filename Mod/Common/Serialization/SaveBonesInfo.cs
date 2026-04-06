@@ -166,8 +166,8 @@ namespace UD_Bones_Folder.Mod
         public bool? _IsLooselyEligible;
         public bool IsLooselyEligible => _IsLooselyEligible ??= IsEligibleForCurrentSave();
 
-        private SaveBonesJSON.BonesRender _Render;
-        public SaveBonesJSON.BonesRender Render => _Render ??= GetBonesJSON()?.GetRender();
+        private BonesRender _Render;
+        public BonesRender Render => _Render ??= new(GetBonesJSON());
 
         public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
 

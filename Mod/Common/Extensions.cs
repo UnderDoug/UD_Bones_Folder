@@ -15,6 +15,7 @@ using XRL.Language;
 using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World;
+using XRL.World.Parts;
 
 using static XRL.World.Cell;
 
@@ -29,8 +30,9 @@ namespace UD_Bones_Folder.Mod
 
             MoonKing.RestorePristineHealth();
 
-            var render = MoonKing.Render;
-            var colorChars = render.getColorChars();
+            var render = new BonesRender(MoonKing.Render, HFlip: true);
+            var tileColor = render.GetTileColor();
+            var detailColor = render.GetDetailColor();
 
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
 
@@ -40,16 +42,7 @@ namespace UD_Bones_Folder.Mod
             string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
 
             string location = null;
-            /*
-            if (zone.Z <= 10)
-            {
-                location = terrainObject.Render.DisplayName;
-                if (terrainObject.IsPlural)
-                    location = $"some {location}";
-                else
-                    location = $"{Grammar.A(location)}";
-            }
-            */
+
             if (zone.Z > 10)
                 location += $"{zoneTerrainType}, ";
 
@@ -79,13 +72,13 @@ namespace UD_Bones_Folder.Mod
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
-                Name = MoonKing.GetReferenceDisplayName(),
+                Name = $"={UD_Bones_LunarRegent.GetRegalTitle(MoonKing)}|LunarShader:*= {MoonKing.GetDisplayName(BaseOnly: true)}",
                 Level = MoonKing.Statistics["Level"].Value,
                 GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
                 CharIcon = render.Tile,
-                FColor = colorChars.foreground,
-                DColor = colorChars.detail,
+                FColor = tileColor[1],
+                DColor = detailColor,
 
                 Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
@@ -116,30 +109,29 @@ namespace UD_Bones_Folder.Mod
 
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
+            var bonesRender = bonesInfo.Render;
+            var tileColor = bonesRender.GetTileColor();
+            var detailColor = bonesRender.GetDetailColor();
             SaveRow.imageTinyFrame ??= new();
             if (bonesJSON != null)
             {
-                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesJSON.CharIcon);
+                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesRender.GetTile());
                 SaveRow.imageTinyFrame.unselectedBorderColor = The.Color.Black;
                 SaveRow.imageTinyFrame.selectedBorderColor = The.Color.Yellow;
                 SaveRow.imageTinyFrame.unselectedForegroundColor = The.Color.Black;
                 SaveRow.imageTinyFrame.unselectedDetailColor = The.Color.Black;
 
                 SaveRow.imageTinyFrame.selectedForegroundColor = The.Color.Gray;
-                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.FColor, out var fColor))
+                if (ColorUtility.ColorMap.TryGetValue(tileColor[1], out var fColor))
                     SaveRow.imageTinyFrame.selectedForegroundColor = fColor;
 
                 SaveRow.imageTinyFrame.selectedDetailColor = The.Color.DarkBlack;
-                if (ColorUtility.ColorMap.TryGetValue(bonesJSON.DColor, out var dColor))
+                if (ColorUtility.ColorMap.TryGetValue(detailColor, out var dColor))
                     SaveRow.imageTinyFrame.selectedDetailColor = dColor;
-
-                if (bonesInfo.IsMad
-                    && ColorUtility.ColorMap.TryGetValue(Utils.GetRainbowColorAtIndex(bonesInfo.ID.GetHashCode())[0], out var madDColor))
-                    SaveRow.imageTinyFrame.selectedDetailColor = madDColor;
             }
             else
             {
-                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesJSON.CharIcon);
+                SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesRender.GetTile());
                 SaveRow.imageTinyFrame.unselectedBorderColor = The.Color.Black;
                 SaveRow.imageTinyFrame.selectedBorderColor = The.Color.Yellow;
                 SaveRow.imageTinyFrame.unselectedForegroundColor = UnityEngine.Color.clear;
@@ -152,8 +144,8 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: true);
 
             SaveRow.imageTinyFrame.Sync(force: true);
-            SaveRow.TextSkins[0].SetText($"{(bonesInfo.IsMad ? "Mad " : null)}{bonesInfo.Name}::{bonesInfo.Description}".Colored("W"));
-            SaveRow.TextSkins[1].SetText(/*$"{"Location:".Colored("C")} " + */$"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
+            SaveRow.TextSkins[0].SetText($"{(bonesInfo.IsMad ? "Mad " : null)}{bonesInfo.Name.StartReplace()}::{bonesInfo.Description}".Colored("W"));
+            SaveRow.TextSkins[1].SetText($"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
@@ -412,6 +404,24 @@ namespace UD_Bones_Folder.Mod
                     if (_effects[i] is Effect effect)
                         effect.ApplyRegistrar(Object, Active);
             }
+        }
+
+        public static bool NeedsFeverWarped(this GameObject BonesObject)
+        {
+            if (BonesObject.HasPart<UD_Bones_FeverWarped>())
+                return false;
+
+            if (BonesObject.GetTile() is string bonesTile
+                && !bonesTile.IsTile())
+                return true;
+
+            if (!GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint))
+                return true;
+
+            if (BonesObject.GetBlueprint() is not GameObjectBlueprint bonesModel)
+                return true;
+
+            return false;
         }
     }
 }

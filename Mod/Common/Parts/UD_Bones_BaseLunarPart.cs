@@ -61,7 +61,6 @@ namespace XRL.World.Parts
                 this.BonesID = BonesID;
 
             LastBonesID = BonesID;
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_BaseLunarPart), GetType().Name, nameof(SetBonesID))}({nameof(BonesID)}: {BonesID}, {nameof(Override)}: {Override})");
         }
 
         public void SetBonesID(string BonesID)
@@ -86,14 +85,12 @@ namespace XRL.World.Parts
             if (E.Context == "Wish")
                 Persists = true;
 
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_BaseLunarPart), GetType().Name, nameof(BeforeObjectCreatedEvent))}({nameof(E.Context)}: {E.Context})");
             SetBonesID(The.Game?.GameID, true);
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(BeforeTakeActionEvent E)
         {
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_BaseLunarPart), GetType().Name, nameof(BeforeTakeActionEvent))}({nameof(Persists)}: {Persists})");
             if (BonesID == The.Game.GameID
                 && !Persists)
             {

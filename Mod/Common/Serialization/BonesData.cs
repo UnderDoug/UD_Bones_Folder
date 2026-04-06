@@ -117,11 +117,18 @@ namespace UD_Bones_Folder.Mod
                             MoonKing.Energy.BaseValue = 0;
                         }
 
+                        if (bonesObject != MoonKing)
+                        {
+                            if (bonesObject.NeedsFeverWarped())
+                                bonesObject.RequirePart<UD_Bones_FeverWarped>();
+                        }
+
                         if (bonesObject.CurrentCell is Cell oldBonesCell)
                             oldBonesCell.RemoveObject(bonesObject);
 
                         cell.AddObject(bonesObject);
 
+                        /*
                         if (The.ActionManager is ActionManager actionManager)
                         {
                             if (bonesObject.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
@@ -135,6 +142,7 @@ namespace UD_Bones_Folder.Mod
                                 && !actionManager.AbilityObjects.Contains(bonesObject))
                                 actionManager.AbilityObjects.Add(bonesObject);
                         }
+                        */
 
                         if (bonesObject == MoonKing)
                             MoonKing = bonesObject;
@@ -142,14 +150,7 @@ namespace UD_Bones_Folder.Mod
                         if (bonesObject.Energy is Statistic bonesEnergy)
                             bonesEnergy.BaseValue = 0;
 
-                        if (bonesObject != MoonKing)
-                        {
-                            if (bonesObject?.GetTile().IsTile() is not true
-                                || !GameObjectFactory.Factory.HasBlueprint(bonesObject.Blueprint))
-                            bonesObject.AddPart<UD_Bones_FeverWarped>();
-                        }
-
-                        bonesObject.ApplyRegistrar();
+                        // bonesObject.ApplyRegistrar();
                     }
                 }
                 foreach (var oldBones in oldBonesList)

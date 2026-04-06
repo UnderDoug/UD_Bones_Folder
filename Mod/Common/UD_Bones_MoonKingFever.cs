@@ -5,6 +5,7 @@ using XRL.World.Parts;
 using XRL.World.AI.GoalHandlers;
 
 using UD_Bones_Folder.Mod;
+using System.Collections.Generic;
 
 namespace XRL.World.Effects
 {
@@ -17,9 +18,27 @@ namespace XRL.World.Effects
 
         public static string[] MoonKingColors = new string[7] { "r", "R", "W", "G", "B", "b", "m", };
 
-        private int OriginalMaxKillDistance;
+        public static Dictionary<string, string> NoInfluenceMessages => new()
+        {
+            {
+                "Beguiling", 
+                "=subject.T= knows there is only one =Moon King|LunarShader=. =subject.Subjective= also knows it's =subject.objective=!"
+            },
+            {
+                "Persuasion_Proselytize",
+                "Are you sure you don't want to join =subject.t= instead? Well... there can only be one!"
+            },
+            {
+                "LoveTonicApplicator",
+                "The tonic failed to cure =subject.t= of =subject.possessive= @@DisplayName@@!"
+            },
+            {
+                "default",
+                "=subject.T's= @@DisplayName@@ makes =subject.objective= insensible to your blandishments!"
+            },
+        };
 
-        private bool AlreadyUninfluencable;
+        private int OriginalMaxKillDistance;
 
         private bool AlreadyPreacher;
 
@@ -79,16 +98,6 @@ namespace XRL.World.Effects
                 OriginalMaxKillDistance = Object.Brain.MaxKillRadius;
                 Object.Brain.MaxKillRadius = MAX_DIST;
             }
-            AlreadyUninfluencable = Object.HasPart<CannotBeInfluenced>();
-            if (!AlreadyUninfluencable)
-            {
-                var noInfluence = Object.AddPart<CannotBeInfluenced>();
-                noInfluence.Messages = 
-                    $"Beguiling::=subject.T= knows there is only one =Moon King|LunarShader=. =subject.Subjective= also knows it's =subject.objective=!;;" +
-                    $"Persuasion_Proselytize::Are you sure you don't want to join =subject.t= instead? Well... there can only be one!;;" +
-                    $"LoveTonicApplicator::The tonic failed to cure =subject.t= of =subject.possessive= {DisplayName}!;;" +
-                    $"default::=subject.T's= {DisplayName} makes =subject.objective= insensible to your blandishments!";
-            }
             AlreadyPreacher = Object.HasPart<Preacher>();
             if (!AlreadyPreacher)
             {
@@ -104,8 +113,6 @@ namespace XRL.World.Effects
                 Object.Brain.MaxKillRadius = OriginalMaxKillDistance;
                 OriginalMaxKillDistance = 0;
             }
-            if (!AlreadyUninfluencable)
-                Object.RemovePart<CannotBeInfluenced>();
 
             if (!AlreadyPreacher)
                 Object.RemovePart<Preacher>();
@@ -144,6 +151,7 @@ namespace XRL.World.Effects
         {
             Registrar.Register("AfterDeepCopyWithoutEffects");
             Registrar.Register("BeforeDeepCopyWithoutEffects");
+            Registrar.Register("CanBeInfluenced");
             base.Register(Object, Registrar);
         }
 
@@ -207,7 +215,6 @@ namespace XRL.World.Effects
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(OriginalMaxKillDistance), OriginalMaxKillDistance);
-            E.AddEntry(this, nameof(AlreadyUninfluencable), AlreadyUninfluencable);
             E.AddEntry(this, nameof(AlreadyPreacher), AlreadyPreacher);
             E.AddEntry(this, nameof(Duration), Duration >= DURATION_INDEFINITE ? "\u00EC" : Duration.ToString());
             return base.HandleEvent(E);
@@ -220,7 +227,18 @@ namespace XRL.World.Effects
             else
             if (E.ID == "AfterDeepCopyWithoutEffects")
                 ApplyChanges();
-
+            else
+            if (E.ID == "CanBeInfluenced")
+            {
+                string influenceType = E.GetStringParameter("Type", "default");
+                if (influenceType != nameof(Parts.Mutation.Domination)
+                    && NoInfluenceMessages.TryGetValue(influenceType, out string influenceMessage))
+                {
+                    Utils.Log($"CanBeInfluenced, Type: {influenceType}");
+                    E.SetParameter("Message", influenceMessage.StartReplace().AddObject(Object).ToString());
+                    return false;
+                }
+            }
             return base.FireEvent(E);
         }
 

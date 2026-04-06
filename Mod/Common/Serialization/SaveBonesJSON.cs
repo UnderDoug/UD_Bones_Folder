@@ -15,68 +15,6 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
-        [Serializable]
-        public class BonesRender : Renderable
-        {
-            public bool HFlip;
-
-            public BonesRender()
-                : base()
-            {
-                HFlip = true;
-            }
-
-            public BonesRender(
-                string Tile,
-                char FColor,
-                char DColor
-                )
-                : base(
-                      Tile: Tile,
-                      TileColor: $"&{FColor}",
-                      DetailColor: DColor)
-            {
-                HFlip = true;
-            }
-
-            public BonesRender(
-                string Tile,
-                char FColor,
-                char DColor,
-                bool HFlip
-                )
-                : this(
-                      Tile: Tile,
-                      FColor: FColor,
-                      DColor: DColor)
-            {
-                this.HFlip = HFlip;
-            }
-
-            public BonesRender(
-                SaveBonesJSON BonesJSON,
-                bool HFlip = true
-                )
-                : this(
-                      Tile: BonesJSON.CharIcon,
-                      FColor: BonesJSON.FColor,
-                      DColor: BonesJSON.DColor,
-                      HFlip: HFlip)
-            { }
-
-            public BonesRender(
-                IRenderable Source,
-                bool HFlip = true
-                )
-                : base(Source)
-            {
-                this.HFlip = HFlip;
-            }
-
-            public override bool getHFlip()
-                => HFlip;
-        }
-
         public string ModVersion;
         public long SaveTimeValue;
 
@@ -207,9 +145,5 @@ namespace UD_Bones_Folder.Mod
                 CharIconSwapped = true;
             }
         }
-
-        public BonesRender GetRender()
-            => new(this, true)
-            ;
     }
 }

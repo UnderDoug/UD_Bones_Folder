@@ -97,7 +97,6 @@ namespace XRL.World.Parts
         public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
             TryBeWorn();
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(BeforeBeginTakeActionEvent))}");
             return base.HandleEvent(E);
         }
 
@@ -125,12 +124,10 @@ namespace XRL.World.Parts
         {
             if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor))
             {
-                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(E) is string equipmentFrame)
+                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(ParentObject.Render) is string equipmentFrame)
                     ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrame);
                 return true;
             }
-
-            Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(Render))}");
             return Render(E);
         }
     }

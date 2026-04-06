@@ -78,8 +78,8 @@ namespace XRL.World.WorldBuilders
                 using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(
                     items: savedBonesInfos.OrderBy(b => b, SaveBonesInfo.SaveBonesInfoComparerDescending));
 
-                using var renderList = ScopeDisposedList<SaveBonesJSON.BonesRender>.GetFromPool();
-                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face").GetRenderable(), false));
+                using var renderList = ScopeDisposedList<BonesRender>.GetFromPool();
+                renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), false));
                 renderList[0].TileColor = "&K";
                 renderList[0].DetailColor = 'K';
 
@@ -89,19 +89,18 @@ namespace XRL.World.WorldBuilders
                 foreach (var bones in bonesList)
                 {
                     renderList.Add(bones.Render);
-                    string bonesOption = bones.Name;
+                    string bonesOption = bones.Name.StartReplace().ToString();
                     if (bones.GetBonesJSON() is SaveBonesJSON bonesJSON)
                         bonesOption = $"{bonesOption}, Level {bonesJSON.Level}, {bonesJSON.Location} ({bonesJSON.ZoneID})";
                     optionsList.Add(bonesOption);
                 }
 
-                var icon = GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face").GetRenderable();
-                string tileColor = Utils.GetRainbowColorForFrame();
-                icon.setTileColor($"&{tileColor}");
-                icon.setDetailColor(Utils.GetNextRainbowColor(tileColor));
+                var icon = new BonesRender(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), HFlip: false, IsMad: true);
+
+                string neutralRegalTitle = UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize();
 
                 var picked = Popup.PickOptionAsync(
-                    Title: $"Eligible {UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize().Colored(Utils.GetAnimatedRainbowShaderForFrame())} For This Run",
+                    Title: $"Eligible {neutralRegalTitle.Colored(Utils.GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 7000)))} For This Run",
                     Intro: "Pick a lunar regent to exhume.",
                     Options: optionsList,
                     Icons: renderList,
