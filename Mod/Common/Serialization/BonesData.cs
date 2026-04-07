@@ -47,6 +47,8 @@ namespace UD_Bones_Folder.Mod
             if (BonesZone == null)
                 return false;
 
+            BonesZone.ZoneID = XRL.World.ZoneID.Assemble("BonesWorld", BonesZone.wX, BonesZone.wY, BonesZone.X, BonesZone.Y, BonesZone.Z);
+
             if (BonesZone.Parts != null)
             {
                 foreach (var zonePart in BonesZone.Parts)
@@ -56,7 +58,6 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            using var oldBonesList = ScopeDisposedList<GameObject>.GetFromPool();
             foreach (var cell in Zone.GetCells())
             {
                 cell.Clear(Important: true, Combat: true);
@@ -73,16 +74,16 @@ namespace UD_Bones_Folder.Mod
                 if (bonesCell.Objects is not ObjectRack bonesObjects)
                     continue;
 
-                oldBonesList.Clear();
                 for (int i = 0; i < bonesObjects.Count; i++)
                 {
                     if (bonesObjects[i] is GameObject bonesObject)
                     {
-                        oldBonesList.Add(bonesObject);
                         bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
+                        bonesObject.ApplyRegistrar();
 
-                        if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
-                            && lunarRegent.BonesID.EqualsNoCase(BonesID))
+                        bonesObject.FeverWarp(BonesID);
+
+                        if (bonesObject.IsMoonKing(BonesID))
                         {
                             MoonKing = bonesObject;
                             MoonKing?.AddOpinion<OpinionMollify>(The.Player);
@@ -117,44 +118,20 @@ namespace UD_Bones_Folder.Mod
                             MoonKing.Energy.BaseValue = 0;
                         }
 
-                        if (bonesObject != MoonKing)
-                        {
-                            if (bonesObject.NeedsFeverWarped())
-                                bonesObject.RequirePart<UD_Bones_FeverWarped>();
-                        }
-
                         if (bonesObject.CurrentCell is Cell oldBonesCell)
                             oldBonesCell.RemoveObject(bonesObject);
 
                         cell.AddObject(bonesObject);
 
-                        /*
-                        if (The.ActionManager is ActionManager actionManager)
-                        {
-                            if (bonesObject.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
-                            {
-                                if (!actionManager.ActionQueue.Contains(bonesObject))
-                                    bonesObject.MakeActive();
-                                bonesObject.ApplyActiveRegistrar();
-                            }
-                            if (bonesObject.GetStringProperty(ABILITY_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}")
-                                && actionManager.ActionQueue.Contains(bonesObject)
-                                && !actionManager.AbilityObjects.Contains(bonesObject))
-                                actionManager.AbilityObjects.Add(bonesObject);
-                        }
-                        */
+                        bonesObject.MakeActive();
 
                         if (bonesObject == MoonKing)
                             MoonKing = bonesObject;
 
                         if (bonesObject.Energy is Statistic bonesEnergy)
                             bonesEnergy.BaseValue = 0;
-
-                        // bonesObject.ApplyRegistrar();
                     }
                 }
-                foreach (var oldBones in oldBonesList)
-                    oldBones.Obliterate();
             }
             return MoonKing != null;
         }

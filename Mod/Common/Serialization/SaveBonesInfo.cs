@@ -175,6 +175,9 @@ namespace UD_Bones_Folder.Mod
             : base()
         { }
 
+        public string GetName()
+            => $"{(IsMad ? "Mad " : null)}{Name}".StartReplace().ToString();
+
         public static async Task SetPending(SaveBonesInfo BonesInfo, string Pending)
         {
             if (Pending.IsNullOrEmpty())

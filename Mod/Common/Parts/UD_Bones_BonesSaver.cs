@@ -54,6 +54,16 @@ namespace XRL.World.Parts
             var moonKing = Player.DeepCopy();
 
             moonKing.RestorePristineHealth();
+            
+            var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
+
+            Utils.Log($"{nameof(RenderEvent)}({nameof(renderEvent.getColorString)}: {renderEvent.getColorString()}, " +
+                $"{nameof(renderEvent.GetForegroundColorChar)}: {renderEvent.GetForegroundColorChar()}, " +
+                $"{nameof(renderEvent.GetDetailColorChar)}: {renderEvent.GetDetailColorChar()})");
+
+            Utils.Log($"{nameof(Parts.Render)}({nameof(moonKing.Render.getColorString)}: {moonKing.Render.getColorString()}, " +
+                $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
+                $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
 
             var brain = moonKing.Brain;
             brain.PartyLeader = null;
@@ -63,8 +73,6 @@ namespace XRL.World.Parts
             brain.Factions = "Mean-100,Playerhater-99";
             brain.Allegiance.Hostile = true;
             brain.Allegiance.Calm = false;
-
-            brain.PerformEquip();
 
             if (Player != null)
             {
@@ -95,6 +103,8 @@ namespace XRL.World.Parts
                 else
                     lunarRegentMask?.Obliterate();
             }
+
+            brain.PerformEquip();
 
             TargetCell.AddObject(moonKing);
 
@@ -289,7 +299,7 @@ namespace XRL.World.Parts
                     if (!willDie)
                         BonesExceptionCleanUp(The.Player);
 
-                    Popup.Show($"Created new bones file for {saveBonesInfo.Name} in {saveBonesInfo.DisplayDirectory}!");
+                    Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
                     return true;
                 }
             }

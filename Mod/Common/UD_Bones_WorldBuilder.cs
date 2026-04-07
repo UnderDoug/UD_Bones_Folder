@@ -89,7 +89,7 @@ namespace XRL.World.WorldBuilders
                 foreach (var bones in bonesList)
                 {
                     renderList.Add(bones.Render);
-                    string bonesOption = bones.Name.StartReplace().ToString();
+                    string bonesOption = bones.GetName();
                     if (bones.GetBonesJSON() is SaveBonesJSON bonesJSON)
                         bonesOption = $"{bonesOption}, Level {bonesJSON.Level}, {bonesJSON.Location} ({bonesJSON.ZoneID})";
                     optionsList.Add(bonesOption);

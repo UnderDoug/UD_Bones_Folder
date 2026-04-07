@@ -558,9 +558,9 @@ namespace UD_Bones_Folder.Mod.UI
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                 buttons = PopupMessage.AcceptCancelButton;
 
-            string title = $"Cremate {bonesInfo.Name}".Colored("R");
+            string title = $"Cremate {bonesInfo.GetName()}".Colored("R");
             if ((await Popup.NewPopupMessageAsync(
-                    message: $"Are you sure you want to cremate {bonesInfo.Name}'s bones?",
+                    message: $"Are you sure you want to cremate {bonesInfo.GetName()}'s bones?",
                     buttons: buttons,
                     title: title,
                     DefaultSelected: 1)

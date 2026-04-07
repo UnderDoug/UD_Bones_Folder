@@ -126,9 +126,8 @@ namespace XRL.World.Parts
             {
                 if (Utils.GetAnimatedRainbowShaderEquipmentFrame(ParentObject.Render) is string equipmentFrame)
                     ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrame);
-                return true;
             }
-            return Render(E);
+            return base.Render(E);
         }
     }
 }

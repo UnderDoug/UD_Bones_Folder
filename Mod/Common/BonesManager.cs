@@ -106,7 +106,10 @@ namespace UD_Bones_Folder.Mod
         private static List<string> _RunningMods;
         public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
 
+        [GameBasedStaticCache(CreateInstance = false)]
         private static bool? _HasSaveBones;
+
+        private string GameID;
 
         public bool Initialized;
 
@@ -119,7 +122,7 @@ namespace UD_Bones_Folder.Mod
         public BonesManager()
         { }
 
-        private static BonesManager InitializeSystem() => new();
+        private static BonesManager InitializeSystem() => new() { GameID = The.Game?.GameID };
 
         [CallAfterGameLoaded]
         [GameBasedCacheInit]
@@ -127,6 +130,14 @@ namespace UD_Bones_Folder.Mod
         {
             if (System == null)
                 System = The.Game?.RequireSystem(InitializeSystem);
+            else
+            if (System.GameID != null
+                && System.GameID != The.Game?.GameID)
+            {
+                System = null;
+                BonesManagerSystemInit();
+                return;
+            }
             else
                 The.Game?.AddSystem(System);
 
@@ -139,27 +150,7 @@ namespace UD_Bones_Folder.Mod
 
         public void PrepareBonesPile()
         {
-            // TidyBonesPile();
-        }
-
-        // [ModSensitiveCacheInit]
-        public static void TidyBonesPile()
-        {
-            using var saveGameInfoIDs = ScopeDisposedList<string>.GetFromPool();
-
-            foreach (var saveInfo in SavesAPI.GetSavedGameInfo().Result)
-                saveGameInfoIDs.Add(saveInfo.ID);
-
-            var bonesInfos = GetPendingSaveBonesInfoAsync().Result;
-
-            foreach (var bonesInfo in bonesInfos)
-            {
-                if (!saveGameInfoIDs.Contains(bonesInfo.Pending))
-                {
-                    Utils.Info($"Save file {bonesInfo.Pending} missing without encountering bones; bones no longer pending.");
-                    SaveBonesInfo.SetPending(bonesInfo, $"{false}").Wait();
-                }
-            }
+            // Consider adding code here.
         }
 
         public string GetBonesDirectory(string FileName = null)
@@ -369,18 +360,19 @@ namespace UD_Bones_Folder.Mod
                         if (directories[i] is string bonesFolder
                             && await SaveBonesInfo.GetSaveBonesInfo(bonesFolder) is SaveBonesInfo bonesInfo)
                         {
-                            if (TidyPending
-                                && !bonesInfo.Pending.EqualsNoCase($"{false}")
-                                && SaveGameIDs?.Contains(bonesInfo.Pending) is false)
+                            if (TidyPending)
                             {
-                                if (!Options.DebugEnableNoCremation
-                                    && bonesInfo.Encountered > 0)
+                                if (!bonesInfo.Pending.EqualsNoCase($"{false}"))
                                 {
-                                    cremateSaveBones.Add(bonesInfo);
-                                    continue;
+                                    if (!Options.DebugEnableNoCremation
+                                        && SaveGameIDs?.Contains(bonesInfo.Pending) is false
+                                        && bonesInfo.Encountered > 0)
+                                    {
+                                        cremateSaveBones.Add(bonesInfo);
+                                        continue;
+                                    }
+                                    SaveBonesInfo.SetPending(bonesInfo, null).Wait();
                                 }
-
-                                SaveBonesInfo.SetPending(bonesInfo, null).Wait();
                             }
 
                             if (Where?.Invoke(bonesInfo) is not false)
@@ -737,6 +729,8 @@ namespace UD_Bones_Folder.Mod
         {
             Blueprint = GameObject.Blueprint;
             Tile = null;
+
+            Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {GameObject?.DebugName}");
             if (GameObject.Blueprint is string key)
             {
                 if (!TileReplacementsByMissingBlueprint.ContainsKey(key))

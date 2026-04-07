@@ -38,8 +38,6 @@ namespace XRL.World.Parts
         public string Title;
         public string Message;
 
-        public bool Activated;
-
         public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
 
         public UD_Bones_MoonKingAnnouncer()
@@ -65,36 +63,6 @@ namespace XRL.World.Parts
             ParentObject.Render.DisplayName = "[Moon King Announcer]";
         }
 
-        public void ActivateObjects()
-        {
-            if (!Activated)
-            {
-                Activated = true;
-                foreach (var bonesObject in ParentObject.CurrentZone.GetObjectsWithProperty(GAME_ID_PROPERTY))
-                {
-                    if (bonesObject.GetStringProperty(GAME_ID_PROPERTY) is string originGameID
-                        && originGameID == BonesID)
-                    {
-                        if (The.ActionManager is ActionManager actionManager)
-                        {
-                            if (bonesObject.GetStringProperty(ACTIVE_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}"))
-                            {
-                                if (!actionManager.ActionQueue.Contains(bonesObject))
-                                    bonesObject.MakeActive();
-                                bonesObject.ApplyActiveRegistrar();
-                            }
-                            if (bonesObject.GetStringProperty(ABILITY_OBJECT_PROPERTY, $"{false}").EqualsNoCase($"{true}")
-                                && actionManager.ActionQueue.Contains(bonesObject)
-                                && !actionManager.AbilityObjects.Contains(bonesObject))
-                                actionManager.AbilityObjects.Add(bonesObject);
-
-                            bonesObject.ApplyRegistrar();
-                        }
-                    }
-                }
-            }
-        }
-
         public void Announce()
         {
             if (!GameObject.Validate(ParentObject))
@@ -108,14 +76,20 @@ namespace XRL.World.Parts
                 && !Message.IsNullOrEmpty()
                 && MoonKing != null)
             {
-                var render = new BonesRender(MoonKing.Render);
+                var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
                 Popup.ShowSpace(
-                    Message: Message,
-                    Title: Title,
+                    Message: Message
+                        .StartReplace()
+                        .AddObject(MoonKing)
+                        .AddObject(The.Player)
+                        .ToString(),
+                    Title: Title
+                        .StartReplace()
+                        .AddObject(MoonKing)
+                        .AddObject(The.Player)
+                        .ToString(),
                     AfterRender: new FlippableRender(render, false),
                     PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
-
-                ActivateObjects();
 
                 ParentObject.Obliterate();
             }

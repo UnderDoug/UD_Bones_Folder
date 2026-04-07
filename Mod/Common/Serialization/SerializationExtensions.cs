@@ -134,6 +134,8 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Reader.ReadGameObject() is GameObject gameObject)
                 {
+                    if (gameObject.NeedsFeverWarped())
+                        gameObject.SetStringProperty(nameof(UD_Bones_FeverWarped), $"{true}");
                     cell.Objects.Add(gameObject);
                     Reader.Locations[gameObject] = cell;
                 }

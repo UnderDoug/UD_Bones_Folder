@@ -21,8 +21,8 @@ namespace XRL.World.Effects
         public static Dictionary<string, string> NoInfluenceMessages => new()
         {
             {
-                "Beguiling", 
-                "=subject.T= knows there is only one =Moon King|LunarShader=. =subject.Subjective= also knows it's =subject.objective=!"
+                "Beguiling",
+                "=subject.T= knows there is only one =LunarShader:Moon King=. =subject.Subjective= also knows it's =subject.objective=!"
             },
             {
                 "Persuasion_Proselytize",
@@ -44,10 +44,8 @@ namespace XRL.World.Effects
 
         public string RegalTitle => UD_Bones_LunarRegent.GetRegalTitle(Object);
 
-        private string RenderColorString;
-        private int RenderColorStringCounter;
-
         private string RenderTileColor = "r";
+        private int RenderTileColorCounter = 0;
 
         public UD_Bones_MoonKingFever()
         {
@@ -88,39 +86,52 @@ namespace XRL.World.Effects
         }
 
         public string GetDisplayName()
-            => $"{(RegalTitle ?? REGAL_TITLE).Colored(Utils.GetAnimatedRainbowShaderForFrame())} {"fever".Colored("r")}"
+            => $"=LunarShader:{RegalTitle ?? REGAL_TITLE}= {"fever".Colored("r")}"
+                .StartReplace()
+                .ToString()
             ;
 
         private void ApplyChanges()
         {
-            if (Object.Brain != null)
+            if (Object?.IsPlayer() is not true)
             {
-                OriginalMaxKillDistance = Object.Brain.MaxKillRadius;
-                Object.Brain.MaxKillRadius = MAX_DIST;
-            }
-            AlreadyPreacher = Object.HasPart<Preacher>();
-            if (!AlreadyPreacher)
-            {
-                var preacher = Object.AddPart<Preacher>();
-                preacher.Book = "UD_Bones_MoonKingFever";
+                if (Object.Brain != null)
+                {
+                    OriginalMaxKillDistance = Object.Brain.MaxKillRadius;
+                    Object.Brain.MaxKillRadius = MAX_DIST;
+                }
+                AlreadyPreacher = Object.HasPart<Preacher>();
+                if (!AlreadyPreacher)
+                {
+                    var preacher = Object.AddPart<Preacher>();
+                    preacher.Book = "UD_Bones_MoonKingFever";
+                    preacher.Prefix = "=subject.T= =verb:proclaims= {{W|\'";
+                    preacher.Postfix = "}}\'";
+                }
             }
         }
         private void UnapplyChanges()
         {
-            if (OriginalMaxKillDistance != 0
-                && Object.Brain != null)
+            if (Object?.IsPlayer() is not true)
             {
-                Object.Brain.MaxKillRadius = OriginalMaxKillDistance;
-                OriginalMaxKillDistance = 0;
-            }
+                if (OriginalMaxKillDistance != 0
+                && Object.Brain != null)
+                {
+                    Object.Brain.MaxKillRadius = OriginalMaxKillDistance;
+                    OriginalMaxKillDistance = 0;
+                }
 
-            if (!AlreadyPreacher)
-                Object.RemovePart<Preacher>();
+                if (!AlreadyPreacher)
+                    Object.RemovePart<Preacher>();
+            }
         }
 
         public bool FocusOnUsurper(GameObject Usurper)
         {
             if (Object?.Brain == null)
+                return false;
+
+            if (Object.IsPlayer())
                 return false;
 
             if (Usurper == null)
@@ -165,48 +176,57 @@ namespace XRL.World.Effects
 
         public override bool HandleEvent(PreferTargetEvent E)
         {
-            if (E.Target1.IsPlayer()
-                || E.Target2.IsPlayer())
-            { 
-                E.Result = E.Target1.IsPlayer().CompareTo(E.Target2.IsPlayer());
-                return true;
-            }
-            if (E.Target1.HasEffect<UD_Bones_MoonKingFever>()
-                || E.Target2.HasEffect<UD_Bones_MoonKingFever>())
-            { 
-                E.Result = E.Target1.HasEffect<UD_Bones_MoonKingFever>().CompareTo(E.Target2.HasEffect<UD_Bones_MoonKingFever>());
-                return true;
-            }
-            if (E.Target1.HasPart<UD_Bones_LunarRegent>()
-                || E.Target2.HasPart<UD_Bones_LunarRegent>())
-            { 
-                E.Result = E.Target1.HasPart<UD_Bones_LunarRegent>().CompareTo(E.Target2.HasPart<UD_Bones_LunarRegent>());
-                return true;
+            if (Object?.IsPlayer() is not true)
+            {
+                if (E.Target1.IsPlayer()
+                    || E.Target2.IsPlayer())
+                {
+                    E.Result = E.Target1.IsPlayer().CompareTo(E.Target2.IsPlayer());
+                    return true;
+                }
+                if (E.Target1.HasEffect<UD_Bones_MoonKingFever>()
+                    || E.Target2.HasEffect<UD_Bones_MoonKingFever>())
+                {
+                    E.Result = E.Target1.HasEffect<UD_Bones_MoonKingFever>().CompareTo(E.Target2.HasEffect<UD_Bones_MoonKingFever>());
+                    return true;
+                }
+                if (E.Target1.HasPart<UD_Bones_LunarRegent>()
+                    || E.Target2.HasPart<UD_Bones_LunarRegent>())
+                {
+                    E.Result = E.Target1.HasPart<UD_Bones_LunarRegent>().CompareTo(E.Target2.HasPart<UD_Bones_LunarRegent>());
+                    return true;
+                }
             }
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(GetFeelingEvent E)
         {
-            if (E.Target.IsPlayer()
-                || E.Target.HasEffect<UD_Bones_MoonKingFever>()
-                || E.Target.HasPart<UD_Bones_LunarRegent>())
+            if (Object?.IsPlayer() is not true)
             {
-                E.Feeling = -100;
-                return false;
+                if (E.Target.IsPlayer()
+                    || E.Target.HasEffect<UD_Bones_MoonKingFever>()
+                    || E.Target.HasPart<UD_Bones_LunarRegent>())
+                {
+                    E.Feeling = -100;
+                    return false;
+                }
             }
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
         {
-            if (Object?.Brain != null)
+            if (Object?.IsPlayer() is not true)
             {
-                if (Object.Brain.FindGoal(nameof(Kill)) is not Kill killGoal
-                    || !killGoal.Target.IsPlayer())
+                if (Object?.Brain != null)
                 {
-                    if (FocusOnUsurper(The.Player))
-                        return true;
+                    if (Object.Brain.FindGoal(nameof(Kill)) is not Kill killGoal
+                        || !killGoal.Target.IsPlayer())
+                    {
+                        if (FocusOnUsurper(The.Player))
+                            return true;
+                    }
                 }
             }
             return base.HandleEvent(E);
@@ -222,21 +242,24 @@ namespace XRL.World.Effects
 
         public override bool FireEvent(Event E)
         {
-            if (E.ID == "BeforeDeepCopyWithoutEffects")
-                UnapplyChanges();
-            else
-            if (E.ID == "AfterDeepCopyWithoutEffects")
-                ApplyChanges();
-            else
-            if (E.ID == "CanBeInfluenced")
+            if (Object?.IsPlayer() is not true)
             {
-                string influenceType = E.GetStringParameter("Type", "default");
-                if (influenceType != nameof(Parts.Mutation.Domination)
-                    && NoInfluenceMessages.TryGetValue(influenceType, out string influenceMessage))
+                if (E.ID == "BeforeDeepCopyWithoutEffects")
+                    UnapplyChanges();
+                else
+                if (E.ID == "AfterDeepCopyWithoutEffects")
+                    ApplyChanges();
+                else
+                if (E.ID == "CanBeInfluenced")
                 {
-                    Utils.Log($"CanBeInfluenced, Type: {influenceType}");
-                    E.SetParameter("Message", influenceMessage.StartReplace().AddObject(Object).ToString());
-                    return false;
+                    string influenceType = E.GetStringParameter("Type", "default");
+                    if (influenceType != nameof(Parts.Mutation.Domination)
+                        && NoInfluenceMessages.TryGetValue(influenceType, out string influenceMessage))
+                    {
+                        Utils.Log($"CanBeInfluenced, Type: {influenceType}");
+                        E.SetParameter("Message", influenceMessage.StartReplace().AddObject(Object).ToString().Replace("@@DisplayName@@", GetDisplayName()));
+                        return false;
+                    }
                 }
             }
             return base.FireEvent(E);
@@ -246,30 +269,16 @@ namespace XRL.World.Effects
         {
             if (Object?.Render?.Visible is true)
             {
-                int frame = XRLCore.CurrentFrame % 60;
-                if (frame > 5
-                    && frame < 10)
-                {
-                    E.RenderString = "@";
-                    E.ColorString = $"&{RenderColorString ??= Utils.GetRainbowColorAtIndex(RenderColorStringCounter)}";
-                    if (frame == 9)
-                    {
-                        RenderColorString = null;
-                        RenderColorStringCounter++;
-                    }
-                }
+                E.RenderEffectIndicator("@", $"Effects/lunar_regent_fever.png", $"&{RenderTileColor}", Utils.GetNextRainbowColor(RenderTileColor).ToString(), 5, 5);
 
-                if (XRLCore.CurrentFrameLong10 % 8 == 0)
+                if (XRLCore.CurrentFrame % (int)Utils.FPS_MODULO == 0)
                 {
                     SetDisplayName();
-                    RenderTileColor = Utils.GetNextRainbowColor(RenderTileColor);
                 }
-                if (Options.EnableFlashingLightEffects)
-                    E.ApplyColors($"&{RenderTileColor}", ICON_COLOR_PRIORITY);
-
-                return true;
+                if (XRLCore.CurrentFrame % 60 == 10)
+                    RenderTileColor = Utils.GetRainbowColorAtIndex(RenderTileColorCounter++);
             }
-            return Render(E);
+            return base.Render(E);
         }
     }
 }

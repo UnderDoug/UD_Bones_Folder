@@ -159,6 +159,7 @@ namespace UD_Bones_Folder.Mod
                 prefix += IDString;
 
                 Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
+                //Utils.Log($"{nameof(Unpack)}{BaseString()}");
                 yield return this;
 
                 if (!DirectChildren.IsNullOrEmpty())
@@ -343,7 +344,8 @@ namespace UD_Bones_Folder.Mod
         public static void LogComponentTree(this GameObject GameObject, string Context = null)
         {
             using var output = ScopeDisposedList<UnityElement>.GetFromPool();
-            foreach (var element in GameObject.GetComponentTree())
+            var componentTree = GameObject.GetComponentTree();
+            foreach (var element in componentTree)
             {
                 foreach (var unpacked in element.Unpack())
                 {

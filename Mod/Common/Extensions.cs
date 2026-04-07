@@ -11,6 +11,7 @@ using Kobold;
 using UD_Bones_Folder.Mod.UI;
 
 using XRL;
+using XRL.Collections;
 using XRL.Language;
 using XRL.UI;
 using XRL.UI.Framework;
@@ -28,11 +29,15 @@ namespace UD_Bones_Folder.Mod
             var localTimeNow = DateTime.Now;
             long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
 
+            bool visible = MoonKing.Render.Visible;
+            MoonKing.Render.Visible = true;
             MoonKing.RestorePristineHealth();
+            var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true), HFlip: true);
+            MoonKing.Render.Visible = visible;
 
-            var render = new BonesRender(MoonKing.Render, HFlip: true);
-            var tileColor = render.GetTileColor();
-            var detailColor = render.GetDetailColor();
+            var colorChars = render.GetColorChars();
+            var tileColor = colorChars.foreground;
+            var detailColor = colorChars.detail;
 
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
 
@@ -72,12 +77,12 @@ namespace UD_Bones_Folder.Mod
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
-                Name = $"={UD_Bones_LunarRegent.GetRegalTitle(MoonKing)}|LunarShader:*= {MoonKing.GetDisplayName(BaseOnly: true)}",
+                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(MoonKing)}:*= {MoonKing.GetDisplayName(BaseOnly: true)}",
                 Level = MoonKing.Statistics["Level"].Value,
                 GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
-                CharIcon = render.Tile,
-                FColor = tileColor[1],
+                CharIcon = render.GetTile(),
+                FColor = tileColor,
                 DColor = detailColor,
 
                 Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
@@ -110,8 +115,9 @@ namespace UD_Bones_Folder.Mod
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
             var bonesRender = bonesInfo.Render;
-            var tileColor = bonesRender.GetTileColor();
-            var detailColor = bonesRender.GetDetailColor();
+            var colorChars = bonesRender.GetColorChars();
+            var tileColor = colorChars.foreground;
+            var detailColor = colorChars.detail;
             SaveRow.imageTinyFrame ??= new();
             if (bonesJSON != null)
             {
@@ -122,7 +128,7 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.imageTinyFrame.unselectedDetailColor = The.Color.Black;
 
                 SaveRow.imageTinyFrame.selectedForegroundColor = The.Color.Gray;
-                if (ColorUtility.ColorMap.TryGetValue(tileColor[1], out var fColor))
+                if (ColorUtility.ColorMap.TryGetValue(tileColor, out var fColor))
                     SaveRow.imageTinyFrame.selectedForegroundColor = fColor;
 
                 SaveRow.imageTinyFrame.selectedDetailColor = The.Color.DarkBlack;
@@ -144,7 +150,7 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: true);
 
             SaveRow.imageTinyFrame.Sync(force: true);
-            SaveRow.TextSkins[0].SetText($"{(bonesInfo.IsMad ? "Mad " : null)}{bonesInfo.Name.StartReplace()}::{bonesInfo.Description}".Colored("W"));
+            SaveRow.TextSkins[0].SetText($"{bonesInfo.GetName()}::{bonesInfo.Description}".Colored("W"));
             SaveRow.TextSkins[1].SetText($"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";
@@ -196,10 +202,25 @@ namespace UD_Bones_Folder.Mod
             return output;
         }
 
-        public static string ValueUnits(this TimeSpan Duration)
+        public static string ValueUnits(this TimeSpan Duration, int Digits = 2)
         {
-            string durationUnit = "minute";
-            double durationValue = Duration.TotalMinutes;
+            string durationUnit = "week";
+            double durationValue = Duration.TotalDays / 7;
+            if (Duration.TotalDays < 7)
+            {
+                durationUnit = "day";
+                durationValue = Duration.TotalDays;
+            }
+            if (Duration.TotalDays < 1)
+            {
+                durationUnit = "hour";
+                durationValue = Duration.TotalHours;
+            }
+            if (Duration.TotalHours < 1)
+            {
+                durationUnit = "minute";
+                durationValue = Duration.TotalMinutes;
+            }
             if (Duration.TotalMinutes < 1)
             {
                 durationUnit = "second";
@@ -215,7 +236,7 @@ namespace UD_Bones_Folder.Mod
                 durationUnit = "microsecond";
                 durationValue = Duration.TotalMilliseconds / 1000;
             }
-            return durationValue.Things(durationUnit);
+            return Math.Round(durationValue, Math.Max(0, Digits)).Things(durationUnit);
         }
 
         public static TAccumulate Aggregate<TAccumulate>(
@@ -389,8 +410,18 @@ namespace UD_Bones_Folder.Mod
             return $"{Object.ThisThese()} {noun}";
         }
 
-        public static void ApplyRegistrar(this GameObject Object, bool Active = false)
+        public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
+            // Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+            if (Recursive)
+            {
+                using var wholeInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Object.GetInventoryAndEquipmentAndDefaultEquipment());
+                wholeInventory.AddRange(Object.GetInstalledCybernetics() ?? Enumerable.Empty<GameObject>());
+                wholeInventory.AddRange(Object.GetContents());
+                for (int i = 0; i < wholeInventory.Count; i++)
+                    wholeInventory[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+            }
+
             if (Object?.PartsList is PartRack partsList)
             {
                 for (int i = 0; i < partsList.Count; i++)
@@ -406,10 +437,50 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static bool IsMoonKing(this GameObject Object, string FromBonesID = null)
+            => Object.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
+                && (FromBonesID.IsNullOrEmpty()
+                    || lunarRegent.BonesID.EqualsNoCase(FromBonesID))
+            ;
+
+        public static void FeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
+        {
+            // Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+
+            if (BonesID != null
+                && !BonesObject.IsMoonKing(BonesID))
+            {
+                if (BonesObject.NeedsFeverWarped())
+                    BonesObject.RequirePart<UD_Bones_FeverWarped>();
+                else
+                {
+                    try
+                    {
+                        _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
+                    }
+                    catch
+                    {
+                        BonesObject.RequirePart<UD_Bones_FeverWarped>();
+                    }
+                }
+            }
+            if (Recursive)
+            {
+                using var wholeInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(BonesObject.GetInventoryAndEquipmentAndDefaultEquipment());
+                wholeInventory.AddRange(BonesObject.GetInstalledCybernetics() ?? Enumerable.Empty<GameObject>());
+                wholeInventory.AddRange(BonesObject.GetContents());
+                for (int i = 0; i < wholeInventory.Count; i++)
+                    wholeInventory[i].FeverWarp(BonesID, Recursive, Depth + 1);
+            }
+        }
+
         public static bool NeedsFeverWarped(this GameObject BonesObject)
         {
             if (BonesObject.HasPart<UD_Bones_FeverWarped>())
                 return false;
+
+            if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
+                return true;
 
             if (BonesObject.GetTile() is string bonesTile
                 && !bonesTile.IsTile())

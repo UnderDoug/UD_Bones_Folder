@@ -8,7 +8,7 @@ using XRL.World.Parts;
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
-    public class BonesRender : IRenderable, IComposite
+    public class BonesRender : IRenderable, IComposite, IDisposable
     {
         public string Tile;
 
@@ -25,6 +25,8 @@ namespace UD_Bones_Folder.Mod
         public bool HFlip;
 
         public bool IsMad;
+
+        private string LastMadTileColor;
 
         public virtual bool WantFieldReflection => false;
 
@@ -54,15 +56,6 @@ namespace UD_Bones_Folder.Mod
             SetIsMad(IsMad);
         }
 
-        public BonesRender(IRenderable Source)
-        {
-            Copy(Source);
-        }
-
-        public BonesRender(Renderable Source)
-            : this((IRenderable)Source)
-        { }
-
         public BonesRender(
             IRenderable Source,
             string Tile = null,
@@ -74,8 +67,8 @@ namespace UD_Bones_Folder.Mod
             bool? VFlip = null,
             bool? IsMad = null
             )
+            : this()
         {
-            Copy(Source);
             SetTile(Tile ?? Source.getTile());
             SetRenderString(RenderString ?? Source.getRenderString());
             SetColorString(ColorString ?? Source.getColorString());
@@ -85,29 +78,6 @@ namespace UD_Bones_Folder.Mod
             SetVFlip(VFlip ?? Source.getVFlip());
             SetIsMad(IsMad ?? this.IsMad);
         }
-
-        public BonesRender(
-            Renderable Source,
-            string Tile = null,
-            string RenderString = null,
-            string ColorString = null,
-            string TileColor = null,
-            char? DetailColor = null,
-            bool? HFlip = null,
-            bool? VFlip = null,
-            bool? IsMad = null
-            )
-            : this(
-                  Source: (IRenderable)Source,
-                  Tile: Tile,
-                  RenderString: RenderString,
-                  ColorString: ColorString,
-                  TileColor: TileColor,
-                  DetailColor: DetailColor,
-                  HFlip: HFlip,
-                  VFlip: VFlip,
-                  IsMad: IsMad)
-        { }
 
         public BonesRender(SaveBonesJSON BonesJSON)
             : this(
@@ -144,8 +114,8 @@ namespace UD_Bones_Folder.Mod
             SetColorString(Source.getColorString());
             SetTileColor(Source.getTileColor());
             SetDetailColor(Source.getDetailColor());
-            SetVFlip(Source.getVFlip());
             SetHFlip(Source.getHFlip());
+            SetVFlip(Source.getVFlip());
         }
 
         public virtual void Copy(IRenderable Source, bool IsMad)
@@ -177,15 +147,15 @@ namespace UD_Bones_Folder.Mod
                 VFlip: VFlip)
             ;
 
-        private static char ColorCodeFromString(string color)
+        private static char ColorCodeFromString(string Color)
         {
-            if (string.IsNullOrEmpty(color))
+            if (string.IsNullOrEmpty(Color))
                 return '\0';
 
-            if (color.Length == 1)
-                return color[0];
+            if (Color.Length == 1)
+                return Color[0];
 
-            return color[1];
+            return Color[1];
         }
 
         public static BonesRender UITile(
@@ -278,7 +248,9 @@ namespace UD_Bones_Folder.Mod
         }
 
         public virtual string GetColorString()
-            => ColorString
+            => IsMad
+            ? $"&{LastMadTileColor = Utils.GetRainbowColorForFPS()}"
+            : ColorString
             ;
 
         string IRenderable.getColorString()
@@ -293,7 +265,7 @@ namespace UD_Bones_Folder.Mod
 
         public virtual string GetTileColor()
             => IsMad
-            ? $"&{Utils.GetRainbowColorForFrame()}"
+            ? $"&{LastMadTileColor = Utils.GetRainbowColorForFPS()}"
             : TileColor
             ;
 
@@ -313,7 +285,7 @@ namespace UD_Bones_Folder.Mod
 
         public virtual char GetDetailColor()
             => IsMad
-            ? Utils.GetNextRainbowColor(GetTileColor()[1].ToString())[0]
+            ? Utils.GetNextRainbowColor(LastMadTileColor ?? ColorCodeFromString(GetTileColor()).ToString())[0]
             : DetailColor
             ;
 
@@ -383,9 +355,9 @@ namespace UD_Bones_Folder.Mod
         public virtual ColorChars GetColorChars()
             => new ColorChars
             {
-                detail = GetDetailColor(),
-                foreground = GetForegroundColor(),
                 background = GetBackgroundColor(),
+                foreground = GetForegroundColor(),
+                detail = GetDetailColor(),
             };
 
         ColorChars IRenderable.getColorChars()
@@ -425,6 +397,10 @@ namespace UD_Bones_Folder.Mod
             HFlip = Reader.ReadBoolean();
             VFlip = Reader.ReadBoolean();
             IsMad = Reader.ReadBoolean();
+        }
+
+        public void Dispose()
+        {
         }
 
         public static explicit operator Renderable(BonesRender BonesRender)

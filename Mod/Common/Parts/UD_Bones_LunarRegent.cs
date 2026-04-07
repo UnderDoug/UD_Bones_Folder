@@ -26,19 +26,12 @@ namespace XRL.World.Parts
             string regalTerm = "Regent";
             if (LunarRegent?.GetGender() is Gender regentGender)
             {
-                switch (regentGender.Name)
-                {
-                    case "Female":
-                    case "female":
-                        regalTerm = "Queen";
-                        break;
-                    case "Male":
-                    case "male":
-                        regalTerm = "King";
-                        break;
-                    default:
-                        break;
-                }
+                if (regentGender.Name.ToLower().Contains("male"))
+                    regalTerm = "King";
+
+                if (regentGender.Name.ToLower().Contains("female"))
+                    regalTerm = "Queen";
+
                 if (regentGender.Plural)
                     regalTerm = regalTerm.Pluralize();
             }
@@ -66,7 +59,9 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDisplayNameEvent E)
         {
-            E.AddHonorific(GetRegalTitle().Colored(Utils.GetAnimatedRainbowShaderForFrame()));
+            E.AddHonorific($"=LunarShader:{GetRegalTitle()}=".StartReplace().ToString());
+            if (IsMad)
+                E.AddHonorific("mad", DescriptionBuilder.ORDER_ADJUST_SLIGHTLY_EARLY);
             return base.HandleEvent(E);
         }
 
@@ -101,44 +96,23 @@ namespace XRL.World.Parts
         public override bool Render(RenderEvent E)
         {
             if (CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, IsMad))
-                return true;
+                return base.Render(E);  //true;
             return base.Render(E);
-        }
-
-        public static bool CycleColors(RenderEvent E, ref string TileColor, ref string DetailColor, bool IsMad = true)
-        {
-            if (Options.EnableFlashingLightEffects)
-            {
-                if (XRLCore.CurrentFrame % 8 == 0)
-                {
-                    TileColor = null;
-                    DetailColor = null;
-                }
-                TileColor ??= Utils.GetRainbowColorForFrame();
-                DetailColor ??= Utils.GetNextRainbowColor(TileColor);
-                if (IsMad)
-                {
-                    E.ApplyColors($"&{TileColor}", $"{DetailColor}", 999, 999);
-                    return true;
-                }
-                E.ApplyColors($"&{TileColor}", 999);
-                return true;
-            }
-            return false;
         }
 
         public static bool CycleColors(Render Render, ref string TileColor, ref string DetailColor, bool IsMad = true)
         {
             if (Options.EnableFlashingLightEffects)
             {
-                if (XRLCore.CurrentFrame % 8 == 0)
+                if (XRLCore.CurrentFrame % (int)Utils.FPS_MODULO == 0)
                 {
-                    Render.TileColor = null;
-                    Render.DetailColor = null;
+                    TileColor = null;
+                    DetailColor = null;
                 }
-                TileColor ??= Utils.GetRainbowColorForFrame();
+                TileColor ??= Utils.GetRainbowColorForFPS();
                 DetailColor ??= Utils.GetNextRainbowColor(TileColor);
 
+                Render.ColorString = $"&{TileColor}";
                 Render.TileColor = $"&{TileColor}";
                 if (IsMad)
                     Render.DetailColor = $"{DetailColor}";
