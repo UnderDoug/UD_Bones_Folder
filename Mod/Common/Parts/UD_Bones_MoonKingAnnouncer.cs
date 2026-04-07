@@ -52,7 +52,7 @@ namespace XRL.World.Parts
             string Message)
             : this()
         {
-            SetBonesID(BonesID, true);
+            SetBonesIDInternal(BonesID, true);
             this.Title = Title;
             this.Message = Message;
         }

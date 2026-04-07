@@ -134,8 +134,11 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Reader.ReadGameObject() is GameObject gameObject)
                 {
-                    if (gameObject.NeedsFeverWarped())
+                    if (gameObject.NeedsFeverWarped(out bool tileOnly))
+                    {
                         gameObject.SetStringProperty(nameof(UD_Bones_FeverWarped), $"{true}");
+                        gameObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", $"{tileOnly}");
+                    }
                     cell.Objects.Add(gameObject);
                     Reader.Locations[gameObject] = cell;
                 }

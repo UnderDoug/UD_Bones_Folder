@@ -19,20 +19,54 @@ namespace XRL.World.Parts
         protected string TileColor;
         protected string DetailColor;
 
+        protected bool TileOnly;
+
+        protected string OriginalShortDesc;
+
+        public UD_Bones_FeverWarped()
+        {
+        }
+
+        public UD_Bones_FeverWarped(bool TileOnly)
+            : this()
+        {
+            this.TileOnly = TileOnly;
+        }
+
         public override void Attach()
         {
             base.Attach();
             ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
+            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
+
+            if (ParentObject.RequirePart<Cursed>() is Cursed cursed)
+            {
+                cursed.RevealInDescription = false;
+            }
 
             if (ParentObject.TryGetPart(out Description description))
-                description._Short = ProcessDescription(description._Short).StartReplace().ToString();
+            {
+                OriginalShortDesc = description._Short;
+                description._Short = ProcessDescription(
+                    Description: OriginalShortDesc
+                        .StartReplace()
+                        .AddObject(ParentObject)
+                        .ToString())
+                    .StartReplace()
+                    .ToString();
+            }
 
             var render = ParentObject.RequirePart<Render>();
-
+            
             BonesManager.System.RequireAlternativeTileAndBlueprintForGameObject(
-                GameObject: ParentObject,
-                Blueprint: out ParentObject.Blueprint,
-                Tile: out render.Tile);
+                BlueprintSpec: new Utils.BlueprintSpec(ParentObject),
+                Blueprint: out string altBlueprint,
+                Tile: out string altTile);
+
+            if (!TileOnly)
+                ParentObject.Blueprint = altBlueprint;
+
+            render.Tile = altTile;
 
             if (Stat.RandomCosmetic(0, 5) == 0)
                 render.HFlip = true;
@@ -40,6 +74,10 @@ namespace XRL.World.Parts
             if (Stat.RandomCosmetic(0, 25) == 0)
                 render.VFlip = true;
         }
+
+        public bool IsTileOnly()
+            => TileOnly
+            ;
 
         public string GetDescription()
         {
@@ -127,12 +165,41 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
+            || ID == GetShortDescriptionEvent.ID
+            || ID == EquippedEvent.ID
+            || ID == UnequippedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(GetShortDescriptionEvent E)
         {
+            if (ParentObject.TryGetPart(out Description description))
+                description._Short = ProcessDescription(
+                        Description: OriginalShortDesc
+                            .StartReplace()
+                            .AddObject(ParentObject)
+                            .ToString())
+                        .StartReplace()
+                        .ToString();
+
             E.Postfix.AppendRules(GetDescription());
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(EquippedEvent E)
+        {
+            if (E.Item == ParentObject
+                && ParentObject.IsEquippedProperly())
+                StatShifter.SetStatShift("Willpower", Math.Clamp(ParentObject.GetTier() / 2, 1, 4));
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(UnequippedEvent E)
+        {
+            if (E.Item == ParentObject)
+                StatShifter.RemoveStatShifts();
+
             return base.HandleEvent(E);
         }
 
@@ -151,7 +218,7 @@ namespace XRL.World.Parts
 
         public override bool Render(RenderEvent E)
         {
-            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor))
+            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, Offset: ParentObject.BaseID))
                 return base.Render(E);  //true;
 
             return base.Render(E);

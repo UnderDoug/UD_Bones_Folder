@@ -84,9 +84,12 @@ namespace UD_Bones_Folder.Mod
 
             foreach (var blueprint in GameObjectFactory.Factory.GetBlueprintsInheritingFrom("PhysicalObject"))
             {
-                if (!SpriteManager.HasTextureInfo(blueprint.GetRenderable().Tile))
+                if (!blueprint.GetRenderable().Tile.IsTile())
                     continue;
-                
+
+                if (blueprint.IsExcludedFromDynamicEncounters())
+                    continue;
+
                 if (blueprint.TryGetPartParameter(nameof(Physics), nameof(Physics.Category), out string physicsCategory))
                     CacheValue(ref BlueprintsByCategory, physicsCategory, blueprint.Name);
                 
@@ -125,6 +128,9 @@ namespace UD_Bones_Folder.Mod
 
         public class BlueprintSpec
         {
+            public string DebugName;
+            public string Blueprint;
+
             public string Category;
             public HashSet<int> Tiers;
             public string WeaponSkill;
@@ -141,50 +147,98 @@ namespace UD_Bones_Folder.Mod
             public BlueprintSpec(XRL.World.GameObject GameObject)
                 : this()
             {
+                DebugName = GameObject.DebugName;
+                Blueprint = GameObject.Blueprint;
+
+                if (BonesManager.System.HasBlueprintReplacement(Blueprint)
+                    && BonesManager.System.HasTileReplacement(Blueprint))
+                {
+                    Log($"{nameof(BlueprintSpec)}: Already have entry for {Blueprint}");
+                    return;
+                }
+
                 Category = GameObject?.Physics?.Category;
 
-                if ((GameObject?.HasIntProperty("Tier") is true)
-                    || (GameObject?.HasIntProperty("TechTIer") is true))
+                try
                 {
-                    Tiers = new();
-                    if (GameObject?.GetIntPropertyIfSet("Tier") is int tier)
-                        Tiers.Add(tier);
+                    if ((GameObject?.HasIntProperty("Tier") is true)
+                        || (GameObject?.HasIntProperty("TechTIer") is true))
+                    {
+                        Tiers = new();
+                        if (GameObject?.GetIntPropertyIfSet("Tier") is int tier)
+                            Tiers.Add(tier);
 
-                    if (GameObject?.GetIntPropertyIfSet("TechTier") is int techTier)
-                        Tiers.Add(techTier);
+                        if (GameObject?.GetIntPropertyIfSet("TechTier") is int techTier)
+                            Tiers.Add(techTier);
+                    }
+                }
+                catch (Exception x)
+                {
+                    Error($"{nameof(BlueprintSpec)} Tiers", x);
                 }
 
                 using var workingList = ScopeDisposedList<string>.GetFromPool();
-                if (GameObject?.GetPart<MissileWeapon>()?.Skill is string missileSkill)
-                    workingList.Add(missileSkill);
-                if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
-                    && GameObject?.GetPart<MeleeWeapon>()?.Skill is string meleeSkill)
-                    workingList.Add(meleeSkill);
-                ProcessWorkingList(out WeaponSkill, workingList);
+                try
+                {
+                    if (GameObject?.GetPart<MissileWeapon>()?.Skill is string missileSkill)
+                        workingList.Add(missileSkill);
+                    if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
+                        && GameObject?.GetPart<MeleeWeapon>()?.Skill is string meleeSkill)
+                        workingList.Add(meleeSkill);
+                    ProcessWorkingList(out WeaponSkill, workingList);
+                }
+                catch (Exception x)
+                {
+                    Error($"{nameof(BlueprintSpec)} Skills", x);
+                    workingList.Clear();
+                }
 
-                if (GameObject?.GetPart<MissileWeapon>()?.SlotType?.CachedCommaExpansion() is IEnumerable<string> missileSlots)
-                    workingList.AddRange(missileSlots);
-                if (GameObject?.GetPart<Armor>()?.WornOn?.CachedCommaExpansion() is IEnumerable<string> armorSlots)
-                    workingList.AddRange(armorSlots);
-                if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
-                    && GameObject?.GetPart<MeleeWeapon>()?.Slot?.CachedCommaExpansion() is IEnumerable<string> meleeSlots)
-                    workingList.AddRange(meleeSlots);
-                if (GameObject?.GetStringProperty("UsesSlots")?.CachedCommaExpansion() is IEnumerable<string> usesSlots)
-                    workingList.AddRange(usesSlots);
-                ProcessWorkingList(out EquipmentSlot, workingList);
+                try
+                {
+                    if (GameObject?.GetPart<MissileWeapon>()?.SlotType?.CachedCommaExpansion() is IEnumerable<string> missileSlots)
+                        workingList.AddRange(missileSlots);
+                    if (GameObject?.GetPart<Armor>()?.WornOn?.CachedCommaExpansion() is IEnumerable<string> armorSlots)
+                        workingList.AddRange(armorSlots);
+                    if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
+                        && GameObject?.GetPart<MeleeWeapon>()?.Slot?.CachedCommaExpansion() is IEnumerable<string> meleeSlots)
+                        workingList.AddRange(meleeSlots);
+                    if (GameObject?.GetStringProperty("UsesSlots")?.CachedCommaExpansion() is IEnumerable<string> usesSlots)
+                        workingList.AddRange(usesSlots);
+                    ProcessWorkingList(out EquipmentSlot, workingList);
+                }
+                catch (Exception x)
+                {
+                    Error($"{nameof(BlueprintSpec)} Slots", x);
+                    workingList.Clear();
+                }
 
-                if (GameObject?.GetStringProperty("Species") is string speciesProp)
-                    workingList.Add(speciesProp);
-                ProcessWorkingList(out Species, workingList);
+                try
+                {
+                    if (GameObject?.GetStringProperty("Species") is string speciesProp)
+                        workingList.Add(speciesProp);
+                    ProcessWorkingList(out Species, workingList);
+                }
+                catch (Exception x)
+                {
+                    Error($"{nameof(BlueprintSpec)} Species", x);
+                    workingList.Clear();
+                }
 
-                if (GameObject?.GetStringProperty(nameof(Class)) is string classProp)
-                    Class = classProp;
+                try
+                {
+                    if (GameObject?.GetStringProperty(nameof(Class)) is string classProp)
+                        Class = classProp;
 
-                if (GameObject?.GetStringProperty(nameof(PaintedWall)) is string paintedWallProp)
-                    PaintedWall = paintedWallProp;
+                    if (GameObject?.GetStringProperty(nameof(PaintedWall)) is string paintedWallProp)
+                        PaintedWall = paintedWallProp;
 
-                if (GameObject?.GetStringProperty(nameof(PaintedFence)) is string paintedFenceProp)
-                    PaintedFence = paintedFenceProp;
+                    if (GameObject?.GetStringProperty(nameof(PaintedFence)) is string paintedFenceProp)
+                        PaintedFence = paintedFenceProp;
+                }
+                catch (Exception x)
+                {
+                    Error($"{nameof(BlueprintSpec)} Class, PaintedWall, PintedFence", x);
+                }
             }
             public BlueprintSpec(BlueprintSpec Source)
             {
@@ -217,6 +271,24 @@ namespace UD_Bones_Folder.Mod
                 && PaintedWall.IsNullOrEmpty()
                 && PaintedFence.IsNullOrEmpty()
                 ;
+
+            public IEnumerable<string> GetDebugLines(int Indent = 0)
+            {
+                yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(Tiers)}: {Tiers?.Count ?? -1}";
+                if (Tiers.IsNullOrEmpty())
+                    yield return $"{(Indent + 1).Indent()}: Empty";
+                else
+                    foreach (var tier in Tiers)
+                        yield return $"{(Indent + 1).Indent()}: {tier}";
+
+                yield return $"{Indent.Indent()}{nameof(WeaponSkill)}: {WeaponSkill ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(EquipmentSlot)}: {EquipmentSlot ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(Species)}: {Species ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(Class)}: {Class ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(PaintedWall)}: {PaintedWall ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {PaintedFence ?? "NONE"}";
+            }
 
             private static void ProcessWorkingList(out string Field, ScopeDisposedList<string> WorkingList)
             {
@@ -316,12 +388,20 @@ namespace UD_Bones_Folder.Mod
                     .IsNullOrEmpty())
                 {
                     output.Clear();
-                    return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                        ;
+                    if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
+                        .IsNullOrEmpty())
+                    {
+                        output.Clear();
+                        return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
+                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
+                            ;
+                    }
+                    return output;
                 }
                 return output;
             }

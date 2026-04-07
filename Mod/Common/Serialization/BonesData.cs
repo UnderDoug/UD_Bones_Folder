@@ -76,60 +76,83 @@ namespace UD_Bones_Folder.Mod
 
                 for (int i = 0; i < bonesObjects.Count; i++)
                 {
+                    
                     if (bonesObjects[i] is GameObject bonesObject)
                     {
-                        bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
-                        bonesObject.ApplyRegistrar();
-
-                        bonesObject.FeverWarp(BonesID);
-
-                        if (bonesObject.IsMoonKing(BonesID))
+                        string bonesObjectDebugName = bonesObject.DebugName;
+                        string catchFlag = "top";
+                        try
                         {
-                            MoonKing = bonesObject;
-                            MoonKing?.AddOpinion<OpinionMollify>(The.Player);
-                            The.Player.AddOpinion<OpinionMollify>(MoonKing);
+                            bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
+                            catchFlag = nameof(Extensions.ApplyRegistrar);
+                            bonesObject.ApplyRegistrar();
 
-                            if (MoonKing.TryGetPart(out Description description))
-                                description.Short = "It was you.";
+                            catchFlag = nameof(Extensions.FeverWarp);
+                            bonesObject.FeverWarp(BonesID);
 
-                            var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
-                                .SetParameter(nameof(MoonKing), MoonKing)
-                                .SetParameter(nameof(The.Player), The.Player);
-
-                            if (The.Player.FireEvent(attitudeSetup))
+                            catchFlag = $"{nameof(Extensions.IsMoonKing)}?";
+                            if (bonesObject.IsMoonKing(BonesID))
                             {
-                                var brain = MoonKing.Brain;
-                                brain?.PushGoal(new Kill(The.Player));
-                                ApplyHostility(The.Player, brain, 0);
-                            }
+                                catchFlag = $"{nameof(Extensions.IsMoonKing)}: true";
+                                MoonKing = bonesObject;
+                                MoonKing?.AddOpinion<OpinionMollify>(The.Player);
+                                The.Player.AddOpinion<OpinionMollify>(MoonKing);
 
-                            if (IsMad)
-                            {
-                                MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
-                                if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                                catchFlag = nameof(Description);
+                                if (MoonKing.TryGetPart(out Description description))
+                                    description.Short = "It was you.";
+
+                                catchFlag = $"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup";
+                                var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
+                                    .SetParameter(nameof(MoonKing), MoonKing)
+                                    .SetParameter(nameof(The.Player), The.Player);
+
+                                catchFlag = nameof(GameObject.FireEvent);
+                                if (The.Player.FireEvent(attitudeSetup))
                                 {
-                                    lunarRegentPart.IsMad = true;
+                                    var brain = MoonKing.Brain;
+                                    brain?.PushGoal(new Kill(The.Player));
+                                    ApplyHostility(The.Player, brain, 0);
                                 }
+
+                                catchFlag = $"{nameof(IsMad)}?";
+                                if (IsMad)
+                                {
+                                    catchFlag = $"{nameof(IsMad)}: true";
+                                    MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                                    if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                                        lunarRegentPart.IsMad = true;
+
+                                }
+                                else
+                                    catchFlag = $"{nameof(IsMad)}: false";
+
+                                if (MoonKing.Render is Render render)
+                                    render.Visible = true;
+
                             }
+                            else
+                                catchFlag = $"{nameof(Extensions.IsMoonKing)}: false";
 
-                            if (MoonKing.Render is Render render)
-                                render.Visible = true;
 
-                            MoonKing.Energy.BaseValue = 0;
+                            catchFlag = nameof(GameObject.CurrentCell);
+                            if (bonesObject.CurrentCell is Cell oldBonesCell)
+                                oldBonesCell.RemoveObject(bonesObject);
+
+                            catchFlag = nameof(Cell.AddObject);
+                            cell.AddObject(bonesObject);
+
+                            catchFlag = nameof(GameObject.MakeActive);
+                            bonesObject.MakeActive();
+
+                            catchFlag = nameof(GameObject.Energy);
+                            if (bonesObject.Energy is Statistic bonesEnergy)
+                                bonesEnergy.BaseValue = 0;
                         }
-
-                        if (bonesObject.CurrentCell is Cell oldBonesCell)
-                            oldBonesCell.RemoveObject(bonesObject);
-
-                        cell.AddObject(bonesObject);
-
-                        bonesObject.MakeActive();
-
-                        if (bonesObject == MoonKing)
-                            MoonKing = bonesObject;
-
-                        if (bonesObject.Energy is Statistic bonesEnergy)
-                            bonesEnergy.BaseValue = 0;
+                        catch (Exception x)
+                        {
+                            Utils.Error($"{nameof(bonesObjects)}[{i}] ({catchFlag}): {bonesObjectDebugName}", x);
+                        }
                     }
                 }
             }

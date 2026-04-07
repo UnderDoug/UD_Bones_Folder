@@ -721,28 +721,58 @@ namespace UD_Bones_Folder.Mod
             => (SaveBonesInfo = GetSavedBonesByID(BonesID)) != null
             ;
 
+        public bool HasBlueprintReplacement(string Blueprint)
+            => BlueprintReplacementsByMissingBlueprint.ContainsKey(Blueprint);
+
+        public bool HasTileReplacement(string Blueprint)
+            => TileReplacementsByMissingBlueprint.ContainsKey(Blueprint);
+
         public void RequireAlternativeTileAndBlueprintForGameObject(
-            GameObject GameObject,
+            Utils.BlueprintSpec BlueprintSpec,
             out string Blueprint,
             out string Tile
             )
         {
-            Blueprint = GameObject.Blueprint;
+            Blueprint = "Object";
             Tile = null;
 
-            Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {GameObject?.DebugName}");
-            if (GameObject.Blueprint is string key)
+            Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {BlueprintSpec?.DebugName}");
+            if (BlueprintSpec.Blueprint is string key)
             {
                 if (!TileReplacementsByMissingBlueprint.ContainsKey(key))
                 {
-                    string altBlueprint = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(GameObject)).GetRandomElementCosmetic();
-                    var altModel = GameObjectFactory.Factory.GetBlueprintIfExists(altBlueprint);
-                    var altTile = altModel?.GetRenderable()?.Tile;
-                    BlueprintReplacementsByMissingBlueprint[key] = altBlueprint;
-                    TileReplacementsByMissingBlueprint[key] = altTile;
+                    try
+                    {
+                        var altBlueprints = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(BlueprintSpec));
+                        altBlueprints.Loggregate(
+                            Proc: s => s,
+                            Empty: "empty",
+                            PostProc: e => $"{1.Indent()}: {e}");
+
+                        string altBlueprint = "Object";
+                        var altTile = "Creatures/sw_mimic.bmp";
+
+                        if (!altBlueprints.IsNullOrEmpty())
+                        {
+                            altBlueprint = altBlueprints.GetRandomElementCosmetic();
+                            var altModel = GameObjectFactory.Factory.GetBlueprintIfExists(altBlueprint);
+                            altTile = altModel?.GetRenderable()?.Tile;
+                        }
+                        
+                        BlueprintReplacementsByMissingBlueprint[key] = altBlueprint;
+                        TileReplacementsByMissingBlueprint[key] = altTile;
+
+                        Utils.Log($"{1.Indent()}{nameof(BlueprintSpec)}: {BlueprintSpec.Blueprint}");
+                        BlueprintSpec.GetDebugLines(2).Loggregate(Empty: $"{2.Indent()}: empty");
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}({key}), find alternate", x);
+                    }
                 }
                 BlueprintReplacementsByMissingBlueprint.TryGetValue(key, out Blueprint);
                 TileReplacementsByMissingBlueprint.TryGetValue(key, out Tile);
+                Utils.Log($"{1.Indent()}{BlueprintSpec.Blueprint} -> {nameof(Blueprint)}: {Blueprint}, {nameof(Tile)}: {Tile}");
             }
         }
 

@@ -95,16 +95,22 @@ namespace XRL.World.Parts
 
         public override bool Render(RenderEvent E)
         {
-            if (CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, IsMad))
+            if (CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, IsMad, ParentObject.BaseID))
                 return base.Render(E);  //true;
             return base.Render(E);
         }
 
-        public static bool CycleColors(Render Render, ref string TileColor, ref string DetailColor, bool IsMad = true)
+        public static bool CycleColors(
+            Render Render,
+            ref string TileColor,
+            ref string DetailColor,
+            bool IsMad = true,
+            int Offset = 0
+            )
         {
             if (Options.EnableFlashingLightEffects)
             {
-                if (XRLCore.CurrentFrame % (int)Utils.FPS_MODULO == 0)
+                if ((XRLCore.CurrentFrame % (int)Utils.FPS_MODULO) == (Offset % (int)Utils.FPS_MODULO))
                 {
                     TileColor = null;
                     DetailColor = null;

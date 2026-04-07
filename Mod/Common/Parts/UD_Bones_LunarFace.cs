@@ -105,11 +105,11 @@ namespace XRL.World.Parts
             if (E.Actor.TryGetPart(out UD_Bones_LunarRegent lunarRegent))
             {
                 if (LastBonesID != lunarRegent.BonesID)
-                    SetBonesID(lunarRegent.BonesID);
+                    SetBonesID<UD_Bones_LunarFace>(lunarRegent.BonesID);
             }
             else
             if (E.Actor.IsPlayer())
-                SetBonesID(The.Game?.GameID);
+                SetBonesID<UD_Bones_LunarFace>(The.Game?.GameID);
 
             return base.HandleEvent(E);
         }
@@ -122,9 +122,9 @@ namespace XRL.World.Parts
 
         public override bool Render(RenderEvent E)
         {
-            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor))
+            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, Offset: ParentObject.BaseID))
             {
-                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(ParentObject.Render) is string equipmentFrame)
+                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(TileColor) is string equipmentFrame)
                     ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrame);
             }
             return base.Render(E);

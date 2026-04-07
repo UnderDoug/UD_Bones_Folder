@@ -51,10 +51,10 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            SetBonesID(The.Game?.GameID);
+            SetBonesID<UD_Bones_BaseLunarPart>(The.Game?.GameID);
         }
 
-        protected virtual void SetBonesID(string BonesID, bool Override)
+        protected virtual void SetBonesIDInternal(string BonesID, bool Override)
         {
             if (Override
                 || this.BonesID == null)
@@ -63,13 +63,26 @@ namespace XRL.World.Parts
             LastBonesID = BonesID;
         }
 
-        public void SetBonesID(string BonesID)
-            => SetBonesID(BonesID, false)
-            ;
+        protected virtual void SetBonesIDInternal(string BonesID)
+            => SetBonesIDInternal(BonesID, false);
+
+        public T SetBonesID<T>(string BonesID)
+            where T : UD_Bones_BaseLunarPart
+        {
+            SetBonesIDInternal(BonesID, false);
+            return (T)this;
+        }
+
+        public T OverrideBonesID<T>(string BonesID)
+            where T : UD_Bones_BaseLunarPart
+        {
+            SetBonesIDInternal(BonesID, true);
+            return (T)this;
+        }
 
         public override void FinalizeRead(SerializationReader Reader)
         {
-            SetBonesID(BonesID);
+            SetBonesIDInternal(BonesID);
             base.FinalizeRead(Reader);
         }
 
@@ -85,7 +98,7 @@ namespace XRL.World.Parts
             if (E.Context == "Wish")
                 Persists = true;
 
-            SetBonesID(The.Game?.GameID, true);
+            SetBonesIDInternal(The.Game?.GameID, true);
             return base.HandleEvent(E);
         }
 

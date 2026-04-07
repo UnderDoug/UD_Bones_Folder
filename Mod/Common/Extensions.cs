@@ -412,14 +412,17 @@ namespace UD_Bones_Folder.Mod
 
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
-            // Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+            Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
             if (Recursive)
             {
-                using var wholeInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Object.GetInventoryAndEquipmentAndDefaultEquipment());
-                wholeInventory.AddRange(Object.GetInstalledCybernetics() ?? Enumerable.Empty<GameObject>());
-                wholeInventory.AddRange(Object.GetContents());
-                for (int i = 0; i < wholeInventory.Count; i++)
-                    wholeInventory[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+                if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
+                    for (int i = 0; i < inventoryObjects.Count; i++)
+                        inventoryObjects[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+
+                using var contentsList = ScopeDisposedList<GameObject>.GetFromPool();
+                if (Object.GetContents(contentsList) is List<GameObject> contentsObject)
+                    for (int i = 0; i < contentsObject.Count; i++)
+                        contentsObject[i].ApplyRegistrar(Active, Recursive, Depth + 1);
             }
 
             if (Object?.PartsList is PartRack partsList)
@@ -445,13 +448,32 @@ namespace UD_Bones_Folder.Mod
 
         public static void FeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
         {
-            // Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+            Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {BonesObject?.DebugName ?? "NO_OBJECT??"}");
+
+            if (Recursive)
+            {
+                if (BonesObject.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
+                    for (int i = 0; i < inventoryObjects.Count; i++)
+                        inventoryObjects[i].FeverWarp(BonesID, Depth: Depth + 1);
+
+                using var contentsList = ScopeDisposedList<GameObject>.GetFromPool();
+                if (BonesObject.GetContents(contentsList) is List<GameObject> contentsObject)
+                    for (int i = 0; i < contentsObject.Count; i++)
+                        contentsObject[i].FeverWarp(BonesID, Depth: Depth + 1);
+            }
 
             if (BonesID != null
                 && !BonesObject.IsMoonKing(BonesID))
             {
-                if (BonesObject.NeedsFeverWarped())
-                    BonesObject.RequirePart<UD_Bones_FeverWarped>();
+                if (BonesObject.NeedsFeverWarped(out bool tileOnly))
+                {
+                    if (!BonesObject.HasPart<UD_Bones_FeverWarped>())
+                        BonesObject.AddPart(
+                            P: new UD_Bones_FeverWarped(TileOnly: tileOnly)
+                            {
+                                Persists = true,
+                            }.OverrideBonesID<UD_Bones_FeverWarped>(BonesID));
+                }
                 else
                 {
                     try
@@ -460,36 +482,41 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch
                     {
-                        BonesObject.RequirePart<UD_Bones_FeverWarped>();
+                        if (!BonesObject.HasPart<UD_Bones_FeverWarped>())
+                            BonesObject.AddPart(
+                                P: new UD_Bones_FeverWarped(TileOnly: false)
+                                {
+                                    Persists = true,
+                                }.OverrideBonesID<UD_Bones_FeverWarped>(BonesID));
                     }
                 }
             }
-            if (Recursive)
-            {
-                using var wholeInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(BonesObject.GetInventoryAndEquipmentAndDefaultEquipment());
-                wholeInventory.AddRange(BonesObject.GetInstalledCybernetics() ?? Enumerable.Empty<GameObject>());
-                wholeInventory.AddRange(BonesObject.GetContents());
-                for (int i = 0; i < wholeInventory.Count; i++)
-                    wholeInventory[i].FeverWarp(BonesID, Recursive, Depth + 1);
-            }
         }
 
-        public static bool NeedsFeverWarped(this GameObject BonesObject)
+        public static bool NeedsFeverWarped(this GameObject BonesObject, out bool TileOnly)
         {
-            if (BonesObject.HasPart<UD_Bones_FeverWarped>())
+            TileOnly = false;
+            if (BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
+            {
+                TileOnly = feverWarped.IsTileOnly();
                 return false;
+            }
 
             if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
+            {
+                TileOnly = BonesObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", $"{false}").EqualsNoCase($"{true}");
                 return true;
+            }
 
+            bool blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
             if (BonesObject.GetTile() is string bonesTile
                 && !bonesTile.IsTile())
+            {
+                TileOnly = blueprintExists;
                 return true;
+            }
 
-            if (!GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint))
-                return true;
-
-            if (BonesObject.GetBlueprint() is not GameObjectBlueprint bonesModel)
+            if (!blueprintExists)
                 return true;
 
             return false;
