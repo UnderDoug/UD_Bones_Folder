@@ -143,7 +143,8 @@ namespace XRL.World.ZoneBuilders
                         P: new UD_Bones_MoonKingAnnouncer(
                             BonesID: bonesData.BonesID,
                             Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{coloredRegalTitle} persists!",
-                            Message: !saveBonesInfo.IsMad ? announcement : madAnnouncement)
+                            Message: !saveBonesInfo.IsMad ? announcement : madAnnouncement,
+                            IsMad: saveBonesInfo.IsMad)
                         );
 
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);

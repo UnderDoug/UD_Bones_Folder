@@ -21,6 +21,8 @@ namespace XRL.World.Parts
         protected string TileColor;
         protected string DetailColor;
 
+        private double LastColorFrame;
+
         public static string GetRegalTitle(GameObject LunarRegent)
         {
             string regalTerm = "Regent";
@@ -59,7 +61,7 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDisplayNameEvent E)
         {
-            E.AddHonorific($"=LunarShader:{GetRegalTitle()}=".StartReplace().ToString());
+            E.AddHonorific($"=LunarShader:{GetRegalTitle()}:{ParentObject.BaseID}=".StartReplace().ToString());
             if (IsMad)
                 E.AddHonorific("mad", DescriptionBuilder.ORDER_ADJUST_SLIGHTLY_EARLY);
             return base.HandleEvent(E);
@@ -95,31 +97,43 @@ namespace XRL.World.Parts
 
         public override bool Render(RenderEvent E)
         {
-            if (CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, IsMad, ParentObject.BaseID))
-                return base.Render(E);  //true;
+            //CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref CycleCounter, FPS_MODULO, IsMad, ParentObject.BaseID);
             return base.Render(E);
+        }
+
+        public override void TurnTick(long TimeTick, int Amount)
+        {
+            CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref LastColorFrame, Utils.FPS_MODULO, IsMad, ParentObject.BaseID);
+            base.TurnTick(TimeTick, Amount);
         }
 
         public static bool CycleColors(
             Render Render,
             ref string TileColor,
             ref string DetailColor,
+            ref double LastFrameCache,
+            double Threshold,
             bool IsMad = true,
             int Offset = 0
             )
         {
+            if (LastFrameCache <= 0)
+                LastFrameCache = Utils.CurrentFrame;
+
+            if (Utils.CurrentFrame - LastFrameCache > Threshold)
+            {
+                TileColor = null;
+                DetailColor = null;
+                LastFrameCache = Utils.CurrentFrame;
+            }
+            TileColor ??= Utils.GetRainbowColorAtIndex(Utils.GetFPSModuloOrRandom(Offset));
+            DetailColor ??= Utils.GetNextRainbowColor(TileColor);
+
             if (Options.EnableFlashingLightEffects)
             {
-                if ((XRLCore.CurrentFrame % (int)Utils.FPS_MODULO) == (Offset % (int)Utils.FPS_MODULO))
-                {
-                    TileColor = null;
-                    DetailColor = null;
-                }
-                TileColor ??= Utils.GetRainbowColorForFPS();
-                DetailColor ??= Utils.GetNextRainbowColor(TileColor);
-
                 Render.ColorString = $"&{TileColor}";
                 Render.TileColor = $"&{TileColor}";
+
                 if (IsMad)
                     Render.DetailColor = $"{DetailColor}";
 

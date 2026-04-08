@@ -47,6 +47,8 @@ namespace UD_Bones_Folder.Mod
 
         public const double FPS_MODULO = 8.0;
 
+        public static double CurrentFrame = XRLCore.FrameTimer.Elapsed.TotalMilliseconds / 16.0;
+
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<string, string> EquipmentFrameByTileColor = new();
 
@@ -76,6 +78,12 @@ namespace UD_Bones_Folder.Mod
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static HashSet<string> CachedBlueprints = new();
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        private static Dictionary<string, string> NextRainbowColor = new();
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        private static Dictionary<string, string> PrevRainbowColor = new();
 
         [ModSensitiveCacheInit]
         public static void CacheBlueprintsBySpec()
@@ -131,14 +139,16 @@ namespace UD_Bones_Folder.Mod
             public string DebugName;
             public string Blueprint;
 
-            public string Category;
-            public HashSet<int> Tiers;
-            public string WeaponSkill;
-            public string EquipmentSlot;
-            public string Species;
-            public string Class;
-            public string PaintedWall;
-            public string PaintedFence;
+            public bool AlreadyExists;
+
+            public string Category = "";
+            public HashSet<int> Tiers = new();
+            public string WeaponSkill = "";
+            public string EquipmentSlot = "";
+            public string Species = "";
+            public string Class = "";
+            public string PaintedWall = "";
+            public string PaintedFence = "";
 
             public BlueprintSpec()
             {
@@ -153,7 +163,8 @@ namespace UD_Bones_Folder.Mod
                 if (BonesManager.System.HasBlueprintReplacement(Blueprint)
                     && BonesManager.System.HasTileReplacement(Blueprint))
                 {
-                    Log($"{nameof(BlueprintSpec)}: Already have entry for {Blueprint}");
+                    //Log($"{nameof(BlueprintSpec)}: Already have entry for {Blueprint}");
+                    AlreadyExists = true;
                     return;
                 }
 
@@ -181,11 +192,18 @@ namespace UD_Bones_Folder.Mod
                 try
                 {
                     if (GameObject?.GetPart<MissileWeapon>()?.Skill is string missileSkill)
+                    {
+                        //Log($"{1.Indent()}{nameof(MissileWeapon)}: {missileSkill}");
                         workingList.Add(missileSkill);
-                    if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
+                    }
+                    if (!GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
                         && GameObject?.GetPart<MeleeWeapon>()?.Skill is string meleeSkill)
+                    {
+                        //Log($"{1.Indent()}{nameof(MeleeWeapon)}: {meleeSkill}");
                         workingList.Add(meleeSkill);
-                    ProcessWorkingList(out WeaponSkill, workingList);
+                    }
+                    ProcessWorkingList(out WeaponSkill, workingList.AsEnumerable());
+                    workingList.Clear();
                 }
                 catch (Exception x)
                 {
@@ -195,16 +213,85 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    if (GameObject?.GetPart<MissileWeapon>()?.SlotType?.CachedCommaExpansion() is IEnumerable<string> missileSlots)
-                        workingList.AddRange(missileSlots);
-                    if (GameObject?.GetPart<Armor>()?.WornOn?.CachedCommaExpansion() is IEnumerable<string> armorSlots)
-                        workingList.AddRange(armorSlots);
-                    if (GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
-                        && GameObject?.GetPart<MeleeWeapon>()?.Slot?.CachedCommaExpansion() is IEnumerable<string> meleeSlots)
-                        workingList.AddRange(meleeSlots);
-                    if (GameObject?.GetStringProperty("UsesSlots")?.CachedCommaExpansion() is IEnumerable<string> usesSlots)
-                        workingList.AddRange(usesSlots);
-                    ProcessWorkingList(out EquipmentSlot, workingList);
+                    if (GameObject?.GetPart<MissileWeapon>()?.SlotType is string missileSlotRaw
+                        && !missileSlotRaw.IsNullOrEmpty())
+                    {
+                        //Log($"{1.Indent()}{nameof(MissileWeapon)}");
+                        if (missileSlotRaw.CachedCommaExpansion() is IEnumerable<string> missileSlots
+                            && !missileSlots.IsNullOrEmpty())
+                        {
+                            /*missileSlots.Loggregate(
+                                Proc: s => s,
+                                Empty: "empty",
+                                PostProc: e => $"{2.Indent()}: {e}");*/
+                            workingList.AddRange(missileSlots);
+                        }
+                        else
+                        {
+                            //Log($"{2.Indent()}: {missileSlotRaw}");
+                            workingList.Add(missileSlotRaw);
+                        }
+                    }
+                    if (GameObject?.GetPart<Armor>()?.WornOn is string armorSlotRaw
+                        && !armorSlotRaw.IsNullOrEmpty())
+                    {
+                        //Log($"{1.Indent()}{nameof(Armor)}");
+                        if (armorSlotRaw.CachedCommaExpansion() is IEnumerable<string> armorSlots
+                            && !armorSlots.IsNullOrEmpty())
+                        {
+                            /*armorSlots.Loggregate(
+                                Proc: s => s,
+                                Empty: "empty",
+                                PostProc: e => $"{2.Indent()}: {e}");*/
+                            workingList.AddRange(armorSlots);
+                        }
+                        else
+                        {
+                            //Log($"{2.Indent()}: {armorSlotRaw}");
+                            workingList.Add(armorSlotRaw);
+                        }
+                    }
+                    if (!GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
+                        && GameObject?.GetPart<MeleeWeapon>()?.Slot is string meleeSlotRaw
+                            && !meleeSlotRaw.IsNullOrEmpty())
+                    {
+                        //Log($"{1.Indent()}{nameof(MeleeWeapon)}");
+                        if (meleeSlotRaw.CachedCommaExpansion() is IEnumerable<string> meleeSlots
+                            && !meleeSlots.IsNullOrEmpty())
+                        {
+                            /*meleeSlots.Loggregate(
+                                Proc: s => s,
+                                Empty: "empty",
+                                PostProc: e => $"{2.Indent()}: {e}");*/
+                            workingList.AddRange(meleeSlots);
+                        }
+                        else
+                        {
+                            //Log($"{2.Indent()}: {meleeSlotRaw}");
+                            workingList.Add(meleeSlotRaw);
+                        }
+                    }
+                    if (GameObject?.GetStringProperty("UsesSlots") is string usesSlotRaw
+                        && !usesSlotRaw.IsNullOrEmpty())
+                    {
+                        //Log($"{1.Indent()}UsesSlots");
+                        if (usesSlotRaw.CachedCommaExpansion() is IEnumerable<string> usesSlots
+                            && !usesSlots.IsNullOrEmpty())
+                        {
+                            /*usesSlots.Loggregate(
+                                Proc: s => s,
+                                Empty: "empty",
+                                PostProc: e => $"{2.Indent()}: {e}");*/
+                            workingList.AddRange(usesSlots);
+                        }
+                        else
+                        {
+                            //Log($"{2.Indent()}: {usesSlotRaw}");
+                            workingList.Add(usesSlotRaw);
+                        }
+                    }
+                    ProcessWorkingList(out EquipmentSlot, workingList.AsEnumerable());
+                    workingList.Clear();
                 }
                 catch (Exception x)
                 {
@@ -214,9 +301,15 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    if (GameObject?.GetStringProperty("Species") is string speciesProp)
+                    //Log($"{1.Indent()}Species");
+                    if (GameObject?.GetStringProperty("Species") is string speciesProp
+                        && !speciesProp.IsNullOrEmpty())
+                    {
+                        //Log($"{2.Indent()}: {speciesProp}");
                         workingList.Add(speciesProp);
-                    ProcessWorkingList(out Species, workingList);
+                    }
+                    ProcessWorkingList(out Species, workingList.AsEnumerable());
+                    workingList.Clear();
                 }
                 catch (Exception x)
                 {
@@ -240,14 +333,20 @@ namespace UD_Bones_Folder.Mod
                     Error($"{nameof(BlueprintSpec)} Class, PaintedWall, PintedFence", x);
                 }
             }
+
             public BlueprintSpec(BlueprintSpec Source)
             {
-                Category = Source.Category;
-                Tiers = Source.Tiers;
-                WeaponSkill = Source.WeaponSkill;
-                EquipmentSlot = Source.Category;
-                Category = Source.Category;
-                Category = Source.Category;
+                DebugName = Source?.DebugName;
+                Blueprint = Source?.Blueprint;
+
+                Category = Source?.Category;
+                Tiers = Source?.Tiers;
+                WeaponSkill = Source?.WeaponSkill;
+                EquipmentSlot = Source?.Category;
+                Species = Source?.Species;
+                Class = Source?.Class;
+                PaintedWall = Source?.PaintedWall;
+                PaintedFence = Source?.PaintedFence;
             }
 
             public bool IsEmpty
@@ -274,6 +373,14 @@ namespace UD_Bones_Folder.Mod
 
             public IEnumerable<string> GetDebugLines(int Indent = 0)
             {
+                yield return $"{Indent.Indent()}{nameof(DebugName)}: {DebugName ?? "NONE"}";
+                yield return $"{Indent.Indent()}{nameof(Blueprint)}: {Blueprint ?? "NONE"}";
+
+                if (AlreadyExists)
+                {
+                    yield return $"{nameof(AlreadyExists)}: {AlreadyExists}";
+                    yield break;
+                }
                 yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
                 yield return $"{Indent.Indent()}{nameof(Tiers)}: {Tiers?.Count ?? -1}";
                 if (Tiers.IsNullOrEmpty())
@@ -290,35 +397,39 @@ namespace UD_Bones_Folder.Mod
                 yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {PaintedFence ?? "NONE"}";
             }
 
-            private static void ProcessWorkingList(out string Field, ScopeDisposedList<string> WorkingList)
+            private static void ProcessWorkingList(out string Field, IEnumerable<string> WorkingList)
             {
-                Field = null;
+                Field = "";
                 if (!WorkingList.IsNullOrEmpty())
-                    WorkingList.Aggregate(Field, CommaDelimitedAggregator);
-                WorkingList.Clear();
+                    Field = WorkingList.Aggregate(Field, CommaDelimitedAggregator);
             }
 
             protected IEnumerable<string> GetMatching<T>(Dictionary<T, HashSet<string>> Cache, T Key, T NoValue, T AllValue)
             {
                 if (Equals(Key, NoValue))
-                    yield break;
+                    return Enumerable.Empty<string>();
 
                 if (Equals(Key, AllValue))
-                    foreach (var element in Cache.Values.GetUnionOfSets())
-                        yield return element;
+                    return Cache.Values.GetUnionOfSets() ?? Enumerable.Empty<string>();
                 else
-                    foreach (var element in Cache.GetValue(Key) ?? Enumerable.Empty<string>())
-                        yield return element;
+                    return Cache.GetValue(Key) ?? Enumerable.Empty<string>();
             }
 
             public IEnumerable<string> GetMatchingStringKey(Dictionary<string, HashSet<string>> Cache, string Key)
             {
                 var output = new HashSet<string>();
-                if (Key?.CachedCommaExpansion().ToList() is List<string> keys)
+                if (Key.IsNullOrEmpty())
+                    return output;
+
+                if (Key?.CachedCommaExpansion().ToList() is List<string> keys
+                    && !keys.IsNullOrEmpty())
                 {
                     foreach (var key in keys)
                         output.UnionWith(GetMatching(Cache, key, null, string.Empty));
                 }
+                else
+                    output.UnionWith(GetMatching(Cache, Key, null, string.Empty));
+
                 return output;
             }
 
@@ -388,6 +499,7 @@ namespace UD_Bones_Folder.Mod
                     .IsNullOrEmpty())
                 {
                     output.Clear();
+                    output.UnionWith(CachedBlueprints);
                     if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
                             .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
                             .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
@@ -396,10 +508,14 @@ namespace UD_Bones_Folder.Mod
                         .IsNullOrEmpty())
                     {
                         output.Clear();
-                        return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                            ;
+                        output.UnionWith(CachedBlueprints);
+                        if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
+                                .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
+                                .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
+                            .IsNullOrEmpty())
+                            return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
+                                ;
+                        return output;
                     }
                     return output;
                 }
@@ -442,7 +558,7 @@ namespace UD_Bones_Folder.Mod
 
         [VariableObjectReplacer]
         public static string UD_RegalTitle(DelegateContext Context)
-            => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}="
+            => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{Context.Target.BaseID}="
                 .StartReplace()
                 .ToString()
             ;
@@ -586,9 +702,8 @@ namespace UD_Bones_Folder.Mod
         public static string GetRainbowColorAtIndex(int Offset)
         {
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            if (Offset < 0)
-                Offset = Math.Abs(Offset + rainbowColors.Count);
-            Offset %= rainbowColors.Count;
+            Offset = Math.Abs(Offset + rainbowColors.Count) % rainbowColors.Count;
+            Offset = Math.Abs(rainbowColors.Count - Offset - 1);
             return rainbowColors[Offset];
         }
 
@@ -605,10 +720,16 @@ namespace UD_Bones_Folder.Mod
             if (!IsRainbowColor(Color))
                 return null;
 
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            int colorIndex = rainbowColors.IndexOf(Color);
-
-            return GetRainbowColorAtIndex(colorIndex + 1);
+            if (!NextRainbowColor.ContainsKey(Color))
+            {
+                using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+                int colorIndex = rainbowColors.IndexOf(Color);
+                string next = GetRainbowColorAtIndex(colorIndex + 1);
+                NextRainbowColor[Color] = next;
+                if (!PrevRainbowColor.ContainsKey(next))
+                    PrevRainbowColor[next] = Color;
+            }
+            return NextRainbowColor[Color];
         }
 
         public static string GetNextRainbowColor(char Color)
@@ -617,13 +738,19 @@ namespace UD_Bones_Folder.Mod
 
         public static string GetPrevRainbowColor(string Color)
         {
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            if (!rainbowColors.Contains(Color))
+            if (!IsRainbowColor(Color))
                 return null;
 
-            int colorIndex = rainbowColors.IndexOf(Color);
-
-            return GetRainbowColorAtIndex(colorIndex - 1);
+            if (!PrevRainbowColor.ContainsKey(Color))
+            {
+                using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+                int colorIndex = rainbowColors.IndexOf(Color);
+                string prev = GetRainbowColorAtIndex(colorIndex - 1);
+                PrevRainbowColor[Color] = prev;
+                if (!NextRainbowColor.ContainsKey(prev))
+                    NextRainbowColor[prev] = Color;
+            }
+            return PrevRainbowColor[Color];
         }
 
         public static string GetAnimatedRainbowShader(int Offset = 0, string Style = "sequence")
@@ -637,18 +764,17 @@ namespace UD_Bones_Folder.Mod
             if (output.IsNullOrEmpty())
                 return "rainbow";
 
-            // Log($"{output} {Style}");
             return $"{output} {Style}";
         }
 
-        public static int GetFPSModuloOrRandom()
+        public static int GetFPSModuloOrRandom(int Offset = 0)
         {
-            if (XRLCore.CurrentFrameAccumulator == 0)
-                return Stat.RandomCosmetic(0, 7000);
-            return (int)Math.Ceiling(XRLCore.CurrentFrameAccumulator / FPS_MODULO);
+            if (CurrentFrame == 0)
+                return Stat.RandomCosmetic(0, 6999) % (int)FPS_MODULO;
+            return (int)Math.Ceiling(((CurrentFrame + Offset) / FPS_MODULO)) % (int)FPS_MODULO;
         }
 
-        public static string GetAnimatedRainbowShaderForFrame()
+        public static string GetAnimatedRainbowShaderForFPS()
             => GetAnimatedRainbowShader(GetFPSModuloOrRandom())
             ;
 
@@ -661,12 +787,16 @@ namespace UD_Bones_Folder.Mod
         {
             if (!Context.Value.IsNullOrEmpty())
             {
-                string shader;
-                if (!Context.Parameters.IsNullOrEmpty()
-                    && Context.Parameters[0] == "*")
-                    shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 7000));
-                else
-                    shader = GetAnimatedRainbowShaderForFrame();
+                string shader = null;
+                if (!Context.Parameters.IsNullOrEmpty())
+                {
+                    if (Context.Parameters[0] == "*")
+                        shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
+                    else
+                    if (int.TryParse(Context.Parameters[0], out int offset))
+                        shader = GetAnimatedRainbowShader(GetFPSModuloOrRandom(offset));
+                }
+                shader ??= GetAnimatedRainbowShaderForFPS();
 
                 var oldValue = Context.Value.ToString();
                 Context.Value.Clear();
@@ -681,19 +811,21 @@ namespace UD_Bones_Folder.Mod
                 && Context.Parameters[0] is string text
                 && !text.IsNullOrEmpty())
             {
-                string shader;
-                if (Context.Parameters.Count > 1
-                    && Context.Parameters[1] == "*")
-                    shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 7000));
-                else
-                    shader = GetAnimatedRainbowShaderForFrame();
-
-                return text.Color(shader);
+                string shader = null;
+                if (Context.Parameters.Count > 1)
+                {
+                    if (Context.Parameters[1] == "*")
+                        shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
+                    else
+                    if (int.TryParse(Context.Parameters[1], out int offset))
+                        shader = GetAnimatedRainbowShader(GetFPSModuloOrRandom(offset));
+                }
+                return text.Color(shader ?? GetAnimatedRainbowShaderForFPS());
             }
             return null;
         }
 
-        public static string GetAnimatedRainbowShaderEquipmentFrame(int TileColorIndex)
+        public static string GetAnimatedRainbowShaderEquipmentFrameColors(int TileColorIndex)
         {
             EquipmentFrameByTileColor ??= new();
             string tileColor = GetRainbowColorAtIndex(TileColorIndex);
@@ -715,7 +847,7 @@ namespace UD_Bones_Folder.Mod
             return EquipmentFrameByTileColor[tileColor];
         }
 
-        public static string GetAnimatedRainbowShaderEquipmentFrame(string Color)
+        public static string GetAnimatedRainbowShaderEquipmentFrameColors(string Color)
         {
             if (!Color.IsNullOrEmpty()
                 && Color.Length > 1)
@@ -725,17 +857,17 @@ namespace UD_Bones_Folder.Mod
                 return null;
 
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            return GetAnimatedRainbowShaderEquipmentFrame(rainbowColors.IndexOf(Color));
+            return GetAnimatedRainbowShaderEquipmentFrameColors(rainbowColors.IndexOf(Color));
         }
 
         public static string GetAnimatedRainbowShaderEquipmentFrame(RenderEvent Render)
-            => GetAnimatedRainbowShaderEquipmentFrame($"{Render.GetForegroundColorChar()}")
+            => GetAnimatedRainbowShaderEquipmentFrameColors($"{Render.GetForegroundColorChar()}")
             ;
 
-        public static string GetAnimatedRainbowShaderEquipmentFrame(IRenderable Render)
+        public static string GetAnimatedRainbowShaderEquipmentFrameColors(IRenderable Render)
             => Render is RenderEvent renderEvent
             ? GetAnimatedRainbowShaderEquipmentFrame(renderEvent)
-            : GetAnimatedRainbowShaderEquipmentFrame($"{Render.getTileColor()}")
+            : GetAnimatedRainbowShaderEquipmentFrameColors($"{Render.getTileColor()}")
             ;
     }
 }

@@ -54,7 +54,9 @@ namespace XRL.World.Parts
             var moonKing = Player.DeepCopy();
 
             moonKing.RestorePristineHealth();
-            
+
+            moonKing.RenderForUI("SaveGameInfo", true);
+            /*
             var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
 
             Utils.Log($"{nameof(RenderEvent)}({nameof(renderEvent.getColorString)}: {renderEvent.getColorString()}, " +
@@ -64,7 +66,7 @@ namespace XRL.World.Parts
             Utils.Log($"{nameof(Parts.Render)}({nameof(moonKing.Render.getColorString)}: {moonKing.Render.getColorString()}, " +
                 $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
                 $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
-
+*/
             var brain = moonKing.Brain;
             brain.PartyLeader = null;
             brain.Hibernating = false;

@@ -3,21 +3,21 @@
   <object Name="Lunar Face" Inherits="Sun and Moon Mask">
     <part Name="Render" DisplayName="=subject.uD_RegalTitle= Face" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
     <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
-    <!--shader Name="rainbow" Type="alternation" Colors="r-R-W-G-B-b-m" ShowInPicker="true" /-->
-    <part Name="AnimatedMaterialGeneric" AnimationLength="56"
-          ColorStringAnimationFrames="0=&amp;r,8=&amp;R,16=&amp;W,24=&amp;G,32=&amp;B,40=&amp;b,48=&amp;m"
-          TileColorAnimationFrames="0=&amp;r,8=&amp;R,16=&amp;W,24=&amp;G,32=&amp;B,40=&amp;b,48=&amp;m"
-          DetailColorAnimationFrames="0=R,8=W,16=G,24=B,32=b,40=m,48=r" />
+    <part Name="Physics" Weight="1" />
     <part Name="UD_Bones_LunarFace" />
+    <part Name="Commerce" Value="1" />
+    <stat Name="Hitpoints" Value="1500" />
+    <part Name="SultanMask" Period="7" />
+    <part Name="Unreplicable" />
     <part Name="Cursed" />
-    <intproperty Name="AlwaysEquipAsArmor" Value="999" />
-    <tag Name="EquipmentFrameColors" Value="RWBG" />
+    <tag Name="Tier" Value="8" />
     <xtagGrammar Proper="true" />
-  </object>
-  <object Name="Lunar Face2" Inherits="Lunar Face">
-    <part Name="Render" Tile="Items/lunar_regent_mask2.png" />
-  </object>
-  <object Name="Lunar Face3" Inherits="Lunar Face">
-    <part Name="Render" Tile="Items/lunar_regent_mask.png" />
+    <tag Name="Mods" Value="None" />
+    <tag Name="EquipmentFrameColors" Value="RWBG" />
+    <intproperty Name="AlwaysEquipAsArmor" Value="999" />
+    <tag Name="EquipSound" Value="sfx_equip_material_generic_glass" />
+    <stag Name="Contemporary" />
+    <tag Name="IncludeInDynamicSemanticTables" />
+    <tag Name="ExcludeFromDynamicEncounters" Value="*noinherit" />
   </object>
 </objects>

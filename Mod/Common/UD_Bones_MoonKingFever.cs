@@ -47,6 +47,9 @@ namespace XRL.World.Effects
         private string RenderTileColor = "r";
         private int RenderTileColorCounter = 0;
 
+        private int EffectCycleCounter;
+        private int NameCycleCounter;
+
         public UD_Bones_MoonKingFever()
         {
             SetDisplayName();
@@ -86,7 +89,7 @@ namespace XRL.World.Effects
         }
 
         public string GetDisplayName()
-            => $"=LunarShader:{RegalTitle ?? REGAL_TITLE}= {"fever".Colored("r")}"
+            => $"=LunarShader:{RegalTitle ?? REGAL_TITLE}:{(Object?.BaseID)?.ToString() ?? "*"}= {"fever".Colored("r")}"
                 .StartReplace()
                 .ToString()
             ;
@@ -105,8 +108,8 @@ namespace XRL.World.Effects
                 {
                     var preacher = Object.AddPart<Preacher>();
                     preacher.Book = "UD_Bones_MoonKingFever";
-                    preacher.Prefix = "=subject.T= =verb:proclaims= {{W|\'";
-                    preacher.Postfix = "}}\'";
+                    preacher.Prefix = "=subject.T= =verb:proclaim= {{W|\'";
+                    preacher.Postfix = "\'}}";
                 }
             }
         }
@@ -173,6 +176,9 @@ namespace XRL.World.Effects
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public override bool WantTurnTick()
+            => true;
 
         public override bool HandleEvent(PreferTargetEvent E)
         {
@@ -256,7 +262,7 @@ namespace XRL.World.Effects
                     if (influenceType != nameof(Parts.Mutation.Domination)
                         && NoInfluenceMessages.TryGetValue(influenceType, out string influenceMessage))
                     {
-                        Utils.Log($"CanBeInfluenced, Type: {influenceType}");
+                        //Utils.Log($"CanBeInfluenced, Type: {influenceType}");
                         E.SetParameter("Message", influenceMessage.StartReplace().AddObject(Object).ToString().Replace("@@DisplayName@@", GetDisplayName()));
                         return false;
                     }
@@ -267,18 +273,38 @@ namespace XRL.World.Effects
 
         public override bool Render(RenderEvent E)
         {
-            if (Object?.Render?.Visible is true)
+            int frameTarget = (int)Utils.FPS_MODULO;
+            bool counterOverride = NameCycleCounter++ > frameTarget;
+            if (Utils.GetFPSModuloOrRandom(Object.BaseID) == 0
+                || counterOverride)
             {
-                E.RenderEffectIndicator("@", $"Effects/lunar_regent_fever.png", $"&{RenderTileColor}", Utils.GetNextRainbowColor(RenderTileColor).ToString(), 5, 5);
-
-                if (XRLCore.CurrentFrame % (int)Utils.FPS_MODULO == 0)
-                {
-                    SetDisplayName();
-                }
-                if (XRLCore.CurrentFrame % 60 == 10)
-                    RenderTileColor = Utils.GetRainbowColorAtIndex(RenderTileColorCounter++);
+                NameCycleCounter = Math.Max(0, NameCycleCounter - frameTarget);
+                SetDisplayName();
             }
+
+            E.RenderEffectIndicator(
+                renderString: "@",
+                tile: Const.MOON_KING_FEVER_TILE,
+                colorString: $"&{RenderTileColor}",
+                detailColor: Utils.GetNextRainbowColor(RenderTileColor).ToString(),
+                frameHint: (Object.BaseID % 5) +1,
+                durationHint: 10);
+
+            frameTarget = (Object.BaseID % 5) + 1 + 10;
+            counterOverride = EffectCycleCounter++ > frameTarget;
+            if (Utils.CurrentFrame % 60 == frameTarget
+                || counterOverride)
+            {
+                RenderTileColor = Utils.GetRainbowColorAtIndex(RenderTileColorCounter++);
+                EffectCycleCounter = Math.Max(0, EffectCycleCounter - frameTarget);
+            }
+
             return base.Render(E);
+        }
+
+        public override void TurnTick(long TimeTick, int Amount)
+        {
+            base.TurnTick(TimeTick, Amount);
         }
     }
 }

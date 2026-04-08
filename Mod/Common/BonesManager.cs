@@ -734,20 +734,20 @@ namespace UD_Bones_Folder.Mod
             )
         {
             Blueprint = "Object";
-            Tile = null;
+            Tile = "Creatures/sw_mimic.bmp";
 
-            Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {BlueprintSpec?.DebugName}");
+            // Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {BlueprintSpec?.DebugName}");
             if (BlueprintSpec.Blueprint is string key)
             {
                 if (!TileReplacementsByMissingBlueprint.ContainsKey(key))
                 {
                     try
                     {
-                        var altBlueprints = Utils.GetAlternativeBlueprintsBySpec(new Utils.BlueprintSpec(BlueprintSpec));
-                        altBlueprints.Loggregate(
+                        var altBlueprints = Utils.GetAlternativeBlueprintsBySpec(BlueprintSpec);
+                        /*altBlueprints.Loggregate(
                             Proc: s => s,
                             Empty: "empty",
-                            PostProc: e => $"{1.Indent()}: {e}");
+                            PostProc: e => $"{1.Indent()}: {e}");*/
 
                         string altBlueprint = "Object";
                         var altTile = "Creatures/sw_mimic.bmp";
@@ -762,17 +762,19 @@ namespace UD_Bones_Folder.Mod
                         BlueprintReplacementsByMissingBlueprint[key] = altBlueprint;
                         TileReplacementsByMissingBlueprint[key] = altTile;
 
-                        Utils.Log($"{1.Indent()}{nameof(BlueprintSpec)}: {BlueprintSpec.Blueprint}");
-                        BlueprintSpec.GetDebugLines(2).Loggregate(Empty: $"{2.Indent()}: empty");
+                        //Utils.Log($"{1.Indent()}{nameof(BlueprintSpec)}: {BlueprintSpec.Blueprint}");
+                        //BlueprintSpec.GetDebugLines(2).Loggregate(Empty: $"{2.Indent()}: empty");
                     }
                     catch (Exception x)
                     {
                         Utils.Error($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}({key}), find alternate", x);
+                        Blueprint = "Object";
+                        Tile = "Creatures/sw_mimic.bmp";
                     }
                 }
                 BlueprintReplacementsByMissingBlueprint.TryGetValue(key, out Blueprint);
                 TileReplacementsByMissingBlueprint.TryGetValue(key, out Tile);
-                Utils.Log($"{1.Indent()}{BlueprintSpec.Blueprint} -> {nameof(Blueprint)}: {Blueprint}, {nameof(Tile)}: {Tile}");
+                //Utils.Log($"{1.Indent()}{BlueprintSpec.Blueprint} -> {nameof(Blueprint)}: {Blueprint}, {nameof(Tile)}: {Tile}");
             }
         }
 

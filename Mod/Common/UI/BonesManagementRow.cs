@@ -54,12 +54,12 @@ namespace UD_Bones_Folder.Mod.UI
             if (data is not BonesInfoData bonesData)
             {
                 Invalid = true;
-                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(data)})");
+                //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(data)})");
                 return;
             }
 
             Invalid = false;
-            Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
+            //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid}");
 
             DeleteButton ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.deleteButton);
             DeleteButton.RequireContext<NavigationContext>().parentContext = Context.context;
@@ -69,7 +69,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (Instantiate(BonesManagementRow.imageTinyFrame) is not ImageTinyFrame imageTinyFrame)
             {
                 Invalid = true;
-                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(ImageTinyFrame)})");
+                //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(ImageTinyFrame)})");
                 return;
             }
 
@@ -116,7 +116,7 @@ namespace UD_Bones_Folder.Mod.UI
                 if (SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.TextSkins is not List<UITextSkin> textSkins)
                 {
                     Invalid = true;
-                    Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
+                    //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
                     return;
                 }
                 foreach (var textSkin in textSkins)
@@ -127,7 +127,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (TextSkins.IsNullOrEmpty())
             {
                 Invalid = true;
-                Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)})");
+                //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(setData)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)})");
                 return;
             }
 
@@ -166,7 +166,7 @@ namespace UD_Bones_Folder.Mod.UI
                     if (SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.TextSkins is not List<UITextSkin> textSkins)
                     {
                         Invalid = true;
-                        Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
+                        //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(SaveManagement)}.{nameof(TextSkins)})");
                         return;
                     }
                     foreach (var textSkin in textSkins)
@@ -178,7 +178,7 @@ namespace UD_Bones_Folder.Mod.UI
                 if (TextSkins.IsNullOrEmpty())
                 {
                     Invalid = true;
-                    Utils.Log($"    {nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)}2)");
+                    //Utils.Log($"{1.Indent()}{nameof(BonesManagementRow)}.{nameof(Update)} {nameof(Invalid)}: {Invalid} ({nameof(TextSkins)}2)");
                     return;
                 }
 

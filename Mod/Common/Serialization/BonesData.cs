@@ -95,12 +95,30 @@ namespace UD_Bones_Folder.Mod
                             {
                                 catchFlag = $"{nameof(Extensions.IsMoonKing)}: true";
                                 MoonKing = bonesObject;
+
+                                if (!GameObjectFactory.Factory.HasBlueprint(MoonKing.Blueprint))
+                                {
+                                    MoonKing.Blueprint = "Lunar Regent";
+                                    IsMad = true;
+                                }
+
+                                catchFlag = $"{nameof(IsMad)}?";
+                                if (IsMad)
+                                {
+                                    catchFlag = $"{nameof(IsMad)}: true";
+                                    MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                                    if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                                        lunarRegentPart.IsMad = true;
+                                }
+                                else
+                                    catchFlag = $"{nameof(IsMad)}: false";
+
                                 MoonKing?.AddOpinion<OpinionMollify>(The.Player);
                                 The.Player.AddOpinion<OpinionMollify>(MoonKing);
 
                                 catchFlag = nameof(Description);
                                 if (MoonKing.TryGetPart(out Description description))
-                                    description.Short = "It was you.";
+                                    description._Short = "It was you.";
 
                                 catchFlag = $"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup";
                                 var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")
@@ -115,25 +133,11 @@ namespace UD_Bones_Folder.Mod
                                     ApplyHostility(The.Player, brain, 0);
                                 }
 
-                                catchFlag = $"{nameof(IsMad)}?";
-                                if (IsMad)
-                                {
-                                    catchFlag = $"{nameof(IsMad)}: true";
-                                    MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
-                                    if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
-                                        lunarRegentPart.IsMad = true;
-
-                                }
-                                else
-                                    catchFlag = $"{nameof(IsMad)}: false";
-
                                 if (MoonKing.Render is Render render)
                                     render.Visible = true;
-
                             }
                             else
                                 catchFlag = $"{nameof(Extensions.IsMoonKing)}: false";
-
 
                             catchFlag = nameof(GameObject.CurrentCell);
                             if (bonesObject.CurrentCell is Cell oldBonesCell)
@@ -145,9 +149,8 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(GameObject.MakeActive);
                             bonesObject.MakeActive();
 
-                            catchFlag = nameof(GameObject.Energy);
-                            if (bonesObject.Energy is Statistic bonesEnergy)
-                                bonesEnergy.BaseValue = 0;
+                            catchFlag = nameof(GameObject.ForfeitTurn);
+                            bonesObject.ForfeitTurn();
                         }
                         catch (Exception x)
                         {

@@ -141,7 +141,7 @@ namespace UD_Bones_Folder.Mod
                 if (Parent?.SameAs(Other.Parent) is not true)
                     return false;
 
-                Utils.Log($"{2.Indent()}[{TypeNameString()} ({IDString},{Depth})] same as [{Other.TypeNameString()}] ({Other.IDString},{Other.Depth})");
+                //Utils.Log($"{2.Indent()}[{TypeNameString()} ({IDString},{Depth})] same as [{Other.TypeNameString()}] ({Other.IDString},{Other.Depth})");
                 return true;
             }
 
@@ -158,7 +158,7 @@ namespace UD_Bones_Folder.Mod
 
                 prefix += IDString;
 
-                Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
+                //Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
                 //Utils.Log($"{nameof(Unpack)}{BaseString()}");
                 yield return this;
 
@@ -320,13 +320,13 @@ namespace UD_Bones_Folder.Mod
         {
             if (UnityElement == null)
             {
-                Utils.Log($"No element.");
+                //Utils.Log($"No element.");
                 yield break;
             }
 
             if (UnityElement.Component == null)
             {
-                Utils.Log($"{UnityElement?.IDString ?? "NO_ID"} had no component.");
+                //Utils.Log($"{UnityElement?.IDString ?? "NO_ID"} had no component.");
                 yield break;
             }
 
@@ -352,11 +352,11 @@ namespace UD_Bones_Folder.Mod
                     if (!output.Any(e => element.SameAs(e)))
                     {
                         output.Add(element);
-                        Utils.Log($"{1.Indent()}: Added {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
+                        //Utils.Log($"{1.Indent()}: Added {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
                     }
                     else
                     {
-                        Utils.Log($"{1.Indent()}: Skipped {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
+                        //Utils.Log($"{1.Indent()}: Skipped {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
                     }
                 }
             }

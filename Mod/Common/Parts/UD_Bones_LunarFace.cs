@@ -18,6 +18,8 @@ namespace XRL.World.Parts
         protected string TileColor;
         protected string DetailColor;
 
+        private double LastColorFrame;
+
         public bool TryBeWorn()
         {
             if (ParentObject == null)
@@ -32,14 +34,14 @@ namespace XRL.World.Parts
                 && !holder.IsPlayer()
                 && holder.TryGetPart(out UD_Bones_LunarRegent lunarRegent))
             {
-                Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
+                //Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
                 if (holder.FindEquippedItem(go => go.Blueprint == ParentObject.Blueprint) == null)
                 {
-                    Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
+                    //Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
                     string slot = ParentObject?.GetPart<Armor>()?.WornOn ?? "Face";
                     if (holder.Body.LoopPart(slot) is IEnumerable<BodyPart> bodyParts)
                     {
-                        Utils.Log($"{2.Indent()}{slot} {nameof(bodyParts)}: {bodyParts.Count()}");
+                        //Utils.Log($"{2.Indent()}{slot} {nameof(bodyParts)}: {bodyParts.Count()}");
                         if (!bodyParts.IsNullOrEmpty()
                             && !holder.AutoEquip(ParentObject, Forced: true))
                         {
@@ -48,26 +50,31 @@ namespace XRL.World.Parts
                                 if (bodyPart.TryUnequip()
                                     && bodyPart.Equip(ParentObject))
                                 {
-                                    Utils.Log($"{3.Indent()}Equipped on {bodyPart}");
+                                    //Utils.Log($"{3.Indent()}Equipped on {bodyPart}");
                                     return true;
                                 }
                             }
                             if (lunarRegent.BonesID == BonesID
                                 && bodyParts.First() is BodyPart firstPart
-                                && firstPart.ForceUnequip()
-                                && firstPart.Equip(ParentObject))
-                                Utils.Log($"{3.Indent()}Force equipped on {firstPart}");
+                                && firstPart.ForceUnequip())
+                            {
+                                if (firstPart.Equip(ParentObject))
+                                {
+                                    //Utils.Log($"{3.Indent()}Force equipped on {firstPart}");
+                                }
+                            }
                         }
-                    }
+                    }/*
                     else
                         Utils.Log($"{2.Indent()}No {slot} {nameof(bodyParts)}");
+
                     if (ParentObject.Equipped == null)
                         Utils.Log($"{2.Indent()}Failed to equip {ParentObject.DebugName}");
-
+                    */
                     return true;
-                }
+                }/*
                 else
-                    Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} with {ParentObject.Blueprint}");
+                    Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} with {ParentObject.Blueprint}");*/
             }
             return false;
         }
@@ -116,16 +123,18 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            E.AddEntry(this, "EquipmentFrame", ParentObject.GetPropertyOrTag("EquipmentFrame", "----"));
+            E.AddEntry(this, nameof(TileColor), TileColor);
+            E.AddEntry(this, nameof(DetailColor), DetailColor);
+            E.AddEntry(this, "EquipmentFrameColors", ParentObject.GetEquipmentFrameColors("----"));
             return base.HandleEvent(E);
         }
 
         public override bool Render(RenderEvent E)
         {
-            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, Offset: ParentObject.BaseID))
+            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref LastColorFrame, Utils.FPS_MODULO, Offset: ParentObject.BaseID))
             {
-                if (Utils.GetAnimatedRainbowShaderEquipmentFrame(TileColor) is string equipmentFrame)
-                    ParentObject?.SetStringProperty("EquipmentFrame", equipmentFrame);
+                if (Utils.GetAnimatedRainbowShaderEquipmentFrameColors(TileColor) is string equipmentFrame)
+                    ParentObject?.SetEquipmentFrameColors(equipmentFrame);
             }
             return base.Render(E);
         }

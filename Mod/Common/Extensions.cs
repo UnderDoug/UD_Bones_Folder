@@ -412,15 +412,15 @@ namespace UD_Bones_Folder.Mod
 
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
-            Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+            //Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
+
             if (Recursive)
             {
                 if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
                     for (int i = 0; i < inventoryObjects.Count; i++)
                         inventoryObjects[i].ApplyRegistrar(Active, Recursive, Depth + 1);
 
-                using var contentsList = ScopeDisposedList<GameObject>.GetFromPool();
-                if (Object.GetContents(contentsList) is List<GameObject> contentsObject)
+                if (Object.GetContents() is List<GameObject> contentsObject)
                     for (int i = 0; i < contentsObject.Count; i++)
                         contentsObject[i].ApplyRegistrar(Active, Recursive, Depth + 1);
             }
@@ -438,6 +438,10 @@ namespace UD_Bones_Folder.Mod
                     if (_effects[i] is Effect effect)
                         effect.ApplyRegistrar(Object, Active);
             }
+
+            if (Recursive)
+            {
+            }
         }
 
         public static bool IsMoonKing(this GameObject Object, string FromBonesID = null)
@@ -448,7 +452,7 @@ namespace UD_Bones_Folder.Mod
 
         public static void FeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
         {
-            Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {BonesObject?.DebugName ?? "NO_OBJECT??"}");
+            //Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {BonesObject?.DebugName ?? "NO_OBJECT??"}");
 
             if (Recursive)
             {
@@ -456,8 +460,7 @@ namespace UD_Bones_Folder.Mod
                     for (int i = 0; i < inventoryObjects.Count; i++)
                         inventoryObjects[i].FeverWarp(BonesID, Depth: Depth + 1);
 
-                using var contentsList = ScopeDisposedList<GameObject>.GetFromPool();
-                if (BonesObject.GetContents(contentsList) is List<GameObject> contentsObject)
+                if (BonesObject.GetContents() is List<GameObject> contentsObject)
                     for (int i = 0; i < contentsObject.Count; i++)
                         contentsObject[i].FeverWarp(BonesID, Depth: Depth + 1);
             }
@@ -517,6 +520,42 @@ namespace UD_Bones_Folder.Mod
             }
 
             if (!blueprintExists)
+                return true;
+
+            return false;
+        }
+
+        public static void SetEquipmentFrameColors(this GameObject GameObject, string TopLeft_Left_Right_BottomRight = null)
+            => GameObject.SetStringProperty("EquipmentFrameColors", TopLeft_Left_Right_BottomRight, RemoveIfNull: true)
+            ;
+
+        public static string GetEquipmentFrameColors(this GameObject GameObject, string Default = null)
+            => GameObject.GetStringProperty("EquipmentFrameColors", Default)
+            ;
+
+        public static bool IsEquipment(this GameObject GameObject)
+        {
+            if (GameObject.GetBlueprint()?.InheritsFrom("Item") is not true)
+                return false;
+
+            if (GameObject.HasPart<Armor>())
+                return true;
+
+            if (GameObject.HasPart<CyberneticsBaseItem>())
+                return true;
+
+            if (GameObject.HasPart<MissileWeapon>())
+                return true;
+
+            if (GameObject.TryGetPart(out MeleeWeapon mw)
+                && !mw.IsImprovisedWeapon())
+                return true;
+
+            if (GameObject.HasPart<ThrownWeapon>()
+                && !GameObject.HasTagOrProperty("HideThrownWeaponPerformance"))
+                return true;
+
+            if (GameObject.HasTagOrProperty("UsesSlots"))
                 return true;
 
             return false;

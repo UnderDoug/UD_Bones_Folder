@@ -96,11 +96,14 @@ namespace XRL.World.WorldBuilders
                 }
 
                 var icon = new BonesRender(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), HFlip: false, IsMad: true);
+                
+                if (savedBonesInfos.Any(b => b.IsMad))
+                    icon.SetTile(Const.MOON_KING_FEVER_TILE);
 
                 string neutralRegalTitle = UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize();
 
                 var picked = Popup.PickOptionAsync(
-                    Title: $"Eligible {neutralRegalTitle.Colored(Utils.GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 7000)))} For This Run",
+                    Title: $"Eligible =LunarShader:{neutralRegalTitle}:*= For This Run".StartReplace().ToString(),
                     Intro: "Pick a lunar regent to exhume.",
                     Options: optionsList,
                     Icons: renderList,

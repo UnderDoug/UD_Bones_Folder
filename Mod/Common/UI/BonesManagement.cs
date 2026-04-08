@@ -122,7 +122,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Init()
         {
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Init)}");
+            //Utils.Log($"{nameof(BonesManagement)}.{nameof(Init)}");
             base.Init();
             if (Instantiate(SaveManagement.instance.gameObject) is not GameObject saveManagementObject)
                 throw new Exception($"Failed to get {nameof(SaveManagement)} game object for cloning.");
@@ -158,9 +158,9 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar = Instantiate(LegendBar);
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
 
-            AllBonesMenuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(AllBonesMenuBar), nameof(AllBonesMenuBar.gameObject))} {AllBonesMenuBar.gameObject.name}");
-            var menuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
-            menuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(EmbarkBuilderOverlayWindow), nameof(menuBar), nameof(menuBar.gameObject))} {menuBar.gameObject.name}");
+            //AllBonesMenuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(AllBonesMenuBar), nameof(AllBonesMenuBar.gameObject))} {AllBonesMenuBar.gameObject.name}");
+            //var menuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            //menuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(EmbarkBuilderOverlayWindow), nameof(menuBar), nameof(menuBar.gameObject))} {menuBar.gameObject.name}");
 
             /*
             // if (AllBonesMenuBar.transform.Find())
@@ -211,7 +211,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void SetupContext()
         {
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(SetupContext)}");
+            //Utils.Log($"{nameof(BonesManagement)}.{nameof(SetupContext)}");
             MainNavContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             MainNavContext.buttonHandlers.Set(InputButtonTypes.CancelButton, Event.Helpers.Handle(Exit));
 
@@ -231,16 +231,16 @@ namespace UD_Bones_Folder.Mod.UI
             if (!Printed
                 && Printed)
             {
-                Printed = true;
+                /*Printed = true;
                 Utils.Log("#".ThisManyTimes(45));
                 if (BonesScroller.GetComponentsInChildren<Component>() is Component[] components)
                     foreach (var component in components)
                         component.gameObject.PrintComponents($"{component.GetType()}|{component.gameObject.name}: ");
                 // instance.gameObject.LogComponentTree();
-                Utils.Log("#".ThisManyTimes(45));
+                Utils.Log("#".ThisManyTimes(45));*/
             }
 
-            Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
+            //Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
             if (BonesManager.GetSaveBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
             {
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get bonesInfo task");

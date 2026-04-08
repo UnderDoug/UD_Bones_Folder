@@ -14,5 +14,6 @@ namespace UD_Bones_Folder.Mod
         public const int SERIALIZATION_CHECK = 123457;
 
         public const string MAD_LUNAR_REGENT_TILE = "Creatures/mad_lunar_regent_human.png";
+        public const string MOON_KING_FEVER_TILE = "Effects/lunar_regent_fever.png";
     }
 }

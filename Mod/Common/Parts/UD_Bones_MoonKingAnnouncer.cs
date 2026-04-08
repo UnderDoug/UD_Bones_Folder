@@ -38,6 +38,8 @@ namespace XRL.World.Parts
         public string Title;
         public string Message;
 
+        public bool IsMad;
+
         public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
 
         public UD_Bones_MoonKingAnnouncer()
@@ -49,12 +51,14 @@ namespace XRL.World.Parts
         public UD_Bones_MoonKingAnnouncer(
             string BonesID,
             string Title,
-            string Message)
+            string Message,
+            bool IsMad)
             : this()
         {
             SetBonesIDInternal(BonesID, true);
             this.Title = Title;
             this.Message = Message;
+            this.IsMad = IsMad;
         }
 
         public override void Attach()
@@ -77,12 +81,18 @@ namespace XRL.World.Parts
                 && MoonKing != null)
             {
                 var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
-                Popup.ShowSpace(
-                    Message: Message
+
+                string message = Message
                         .StartReplace()
                         .AddObject(MoonKing)
                         .AddObject(The.Player)
-                        .ToString(),
+                        .ToString();
+
+                if (IsMad)
+                    message = UD_Bones_FeverWarped.FeverWarpText(message);
+
+                Popup.ShowSpace(
+                    Message: message,
                     Title: Title
                         .StartReplace()
                         .AddObject(MoonKing)

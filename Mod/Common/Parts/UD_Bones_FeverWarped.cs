@@ -23,6 +23,13 @@ namespace XRL.World.Parts
 
         protected string OriginalShortDesc;
 
+        private double LastDisplayNameFrame;
+        private double LastAdjectiveFrame;
+        private double LastColorFrame;
+
+        private string DisplayNameCache;
+        private string AdjectiveCache;
+
         public UD_Bones_FeverWarped()
         {
         }
@@ -36,24 +43,30 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
+
             ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
+            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
 
-            if (ParentObject.RequirePart<Cursed>() is Cursed cursed)
+            if (ParentObject.IsEquipment())
             {
-                cursed.RevealInDescription = false;
+                if (ParentObject.RequirePart<Cursed>() is Cursed cursed)
+                {
+                    // this was originally FAFO, but was maybe a little harsh.
+                    cursed.RevealInDescription = true;
+                }
             }
 
             if (ParentObject.TryGetPart(out Description description))
             {
                 OriginalShortDesc = description._Short;
-                description._Short = ProcessDescription(
-                    Description: OriginalShortDesc
-                        .StartReplace()
-                        .AddObject(ParentObject)
-                        .ToString())
+
+                string bakedDescription = OriginalShortDesc
                     .StartReplace()
+                    .AddObject(ParentObject)
                     .ToString();
+
+                description._Short = FeverWarpText(bakedDescription);
             }
 
             var render = ParentObject.RequirePart<Render>();
@@ -68,10 +81,12 @@ namespace XRL.World.Parts
 
             render.Tile = altTile;
 
-            if (Stat.RandomCosmetic(0, 5) == 0)
+            string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
+
+            if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
                 render.HFlip = true;
 
-            if (Stat.RandomCosmetic(0, 25) == 0)
+            if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
                 render.VFlip = true;
         }
 
@@ -84,17 +99,40 @@ namespace XRL.World.Parts
             var sB = Event.NewStringBuilder();
             sB.Append(GetAdjective().Capitalize()).Append(": ")
                 .Append(ParentObject.ThisTheseDescriptiveCategory()).Append(" has been warped by the process of arriving in this world.");
+
+            if (ParentObject.IsEquipment())
+            sB.AppendLine()
+                .AppendColored("R", $"{GetWillpowerMalus(ParentObject?.GetTier() ?? 1).Signed()} Willpower");
+
             return Event.FinalizeString(sB);
         }
 
         public string GetAdjective()
-            => "=LunarShader:fever warped="
+        {
+            if (LastAdjectiveFrame <= 0)
+                LastAdjectiveFrame = Utils.CurrentFrame;
+
+            if (Utils.CurrentFrame - LastAdjectiveFrame > Utils.FPS_MODULO)
+            {
+                LastAdjectiveFrame = Utils.CurrentFrame;
+                AdjectiveCache = null;
+            }
+
+            AdjectiveCache ??= $"=LunarShader:fever warped:{ParentObject.BaseID}="
                 .StartReplace()
-                .ToString()
+                .ToString();
+
+            return AdjectiveCache;
+        }
+
+        public static int GetWillpowerMalus(int Tier)
+            => -Math.Clamp(Math.Clamp(Tier, 1, 8) / 2, 1, 4)
             ;
 
-        public static string ProcessDescription(string Description)
+        public static string FeverWarpText(string Description, bool DoReplace = true)
         {
+            Description = Description.Strip();
+
             using var corruptions = ScopeDisposedList<string>.GetFromPool();
             while (corruptions.IsNullOrEmpty() || corruptions.Aggregate(0, (a,n) => a + n.Length) < Description.Length)
                 corruptions.Add(TextFilters.GenerateCrypticWord());
@@ -153,6 +191,12 @@ namespace XRL.World.Parts
                     startAt += lunarCorruption.Length;
                 }
             }
+
+            if (DoReplace)
+                output = output
+                    .StartReplace()
+                    .ToString();
+
             return output;
         }
 
@@ -165,24 +209,45 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
-            || ID == GetShortDescriptionEvent.ID
             || ID == EquippedEvent.ID
             || ID == UnequippedEvent.ID
+            || ID == ImplantedEvent.ID
+            || ID == UnimplantedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(GetShortDescriptionEvent E)
         {
             if (ParentObject.TryGetPart(out Description description))
-                description._Short = ProcessDescription(
-                        Description: OriginalShortDesc
-                            .StartReplace()
-                            .AddObject(ParentObject)
-                            .ToString())
-                        .StartReplace()
-                        .ToString();
+            {
+                string bakedDescription = OriginalShortDesc
+                    .StartReplace()
+                    .AddObject(ParentObject)
+                    .ToString();
+
+                description._Short = FeverWarpText(bakedDescription);
+            }
 
             E.Postfix.AppendRules(GetDescription());
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDisplayNameEvent E)
+        {
+            E.AddAdjective(GetAdjective());
+
+            if (LastDisplayNameFrame <= 0)
+                LastDisplayNameFrame = Utils.CurrentFrame;
+
+            if (Utils.CurrentFrame - LastDisplayNameFrame > Utils.FPS_MODULO)
+            {
+                LastDisplayNameFrame = Utils.CurrentFrame;
+                DisplayNameCache = null;
+            }
+
+            DisplayNameCache ??= FeverWarpText(E.GetPrimaryBase());
+            E.ReplacePrimaryBase(DisplayNameCache);
+
             return base.HandleEvent(E);
         }
 
@@ -190,7 +255,7 @@ namespace XRL.World.Parts
         {
             if (E.Item == ParentObject
                 && ParentObject.IsEquippedProperly())
-                StatShifter.SetStatShift("Willpower", Math.Clamp(ParentObject.GetTier() / 2, 1, 4));
+                StatShifter.SetStatShift(E.Actor, "Willpower", GetWillpowerMalus(ParentObject.GetTier()));
 
             return base.HandleEvent(E);
         }
@@ -198,14 +263,25 @@ namespace XRL.World.Parts
         public override bool HandleEvent(UnequippedEvent E)
         {
             if (E.Item == ParentObject)
-                StatShifter.RemoveStatShifts();
+                StatShifter.RemoveStatShifts(E.Actor);
 
             return base.HandleEvent(E);
         }
 
-        public override bool HandleEvent(GetDisplayNameEvent E)
+        public override bool HandleEvent(ImplantedEvent E)
         {
-            E.AddAdjective(GetAdjective());
+            if (E.Item == ParentObject
+                && ParentObject.IsEquippedProperly())
+                StatShifter.SetStatShift(E.Implantee, "Willpower", GetWillpowerMalus(ParentObject.GetTier()));
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(UnimplantedEvent E)
+        {
+            if (E.Item == ParentObject)
+                StatShifter.RemoveStatShifts(E.Implantee);
+
             return base.HandleEvent(E);
         }
 
@@ -218,9 +294,7 @@ namespace XRL.World.Parts
 
         public override bool Render(RenderEvent E)
         {
-            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, Offset: ParentObject.BaseID))
-                return base.Render(E);  //true;
-
+            UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref LastColorFrame, Utils.FPS_MODULO, Offset: ParentObject.BaseID);
             return base.Render(E);
         }
     }
