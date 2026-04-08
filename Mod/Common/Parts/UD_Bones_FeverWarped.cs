@@ -10,6 +10,7 @@ using XRL.Core;
 using XRL.Language;
 using XRL.Collections;
 using System.Linq;
+using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Parts
 {
@@ -22,10 +23,6 @@ namespace XRL.World.Parts
         protected bool TileOnly;
 
         protected string OriginalShortDesc;
-
-        private double LastDisplayNameFrame;
-        private double LastAdjectiveFrame;
-        private double LastColorFrame;
 
         private string DisplayNameCache;
         private string AdjectiveCache;
@@ -47,6 +44,9 @@ namespace XRL.World.Parts
             ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
+            ParentObject.SetStringProperty("UD_Bones_Folder_IsMad", $"{true}");
+
+            ParentObject.RequirePart<UD_Bones_LunarColors>();
 
             if (ParentObject.IsEquipment())
             {
@@ -109,16 +109,7 @@ namespace XRL.World.Parts
 
         public string GetAdjective()
         {
-            if (LastAdjectiveFrame <= 0)
-                LastAdjectiveFrame = Utils.CurrentFrame;
-
-            if (Utils.CurrentFrame - LastAdjectiveFrame > Utils.FPS_MODULO)
-            {
-                LastAdjectiveFrame = Utils.CurrentFrame;
-                AdjectiveCache = null;
-            }
-
-            AdjectiveCache ??= $"=LunarShader:fever warped:{ParentObject.BaseID}="
+            AdjectiveCache ??= $"fever warped"
                 .StartReplace()
                 .ToString();
 
@@ -213,6 +204,7 @@ namespace XRL.World.Parts
             || ID == UnequippedEvent.ID
             || ID == ImplantedEvent.ID
             || ID == UnimplantedEvent.ID
+            || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
@@ -235,15 +227,6 @@ namespace XRL.World.Parts
         public override bool HandleEvent(GetDisplayNameEvent E)
         {
             E.AddAdjective(GetAdjective());
-
-            if (LastDisplayNameFrame <= 0)
-                LastDisplayNameFrame = Utils.CurrentFrame;
-
-            if (Utils.CurrentFrame - LastDisplayNameFrame > Utils.FPS_MODULO)
-            {
-                LastDisplayNameFrame = Utils.CurrentFrame;
-                DisplayNameCache = null;
-            }
 
             DisplayNameCache ??= FeverWarpText(E.GetPrimaryBase());
             E.ReplacePrimaryBase(DisplayNameCache);
@@ -285,17 +268,18 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
+        public override bool HandleEvent(LunarObjectColorChangedEvent E)
+        {
+            DisplayNameCache = null;
+            AdjectiveCache = null;
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, "Adjective", GetAdjective());
             E.AddEntry(this, "Description", GetDescription());
             return base.HandleEvent(E);
-        }
-
-        public override bool Render(RenderEvent E)
-        {
-            UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref LastColorFrame, Utils.FPS_MODULO, Offset: ParentObject.BaseID);
-            return base.Render(E);
         }
     }
 }

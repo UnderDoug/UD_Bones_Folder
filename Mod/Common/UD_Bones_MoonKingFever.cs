@@ -6,11 +6,14 @@ using XRL.World.AI.GoalHandlers;
 
 using UD_Bones_Folder.Mod;
 using System.Collections.Generic;
+using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Effects
 {
     [Serializable]
-    public class UD_Bones_MoonKingFever : IScribedEffect
+    public class UD_Bones_MoonKingFever
+        : IScribedEffect
+        , IModEventHandler<LunarObjectColorChangedEvent>
     {
         public const int MAX_DIST = 9999;
 
@@ -44,11 +47,8 @@ namespace XRL.World.Effects
 
         public string RegalTitle => UD_Bones_LunarRegent.GetRegalTitle(Object);
 
-        private string RenderTileColor = "r";
-        private int RenderTileColorCounter = 0;
-
-        private int EffectCycleCounter;
-        private int NameCycleCounter;
+        private string TileColor = "r";
+        private string DetailColor = "R";
 
         public UD_Bones_MoonKingFever()
         {
@@ -83,15 +83,13 @@ namespace XRL.World.Effects
             base.Remove(Object);
         }
 
-        public void SetDisplayName()
+        public void SetDisplayName(string TileColor = "r")
         {
-            DisplayName = GetDisplayName();
+            DisplayName = GetDisplayName(TileColor);
         }
 
-        public string GetDisplayName()
-            => $"=LunarShader:{RegalTitle ?? REGAL_TITLE}:{(Object?.BaseID)?.ToString() ?? "*"}= {"fever".Colored("r")}"
-                .StartReplace()
-                .ToString()
+        public string GetDisplayName(string TileColor = "r")
+            => $"{(RegalTitle ?? REGAL_TITLE).Color(Utils.GetAnimatedRainbowShaderFor(TileColor))} {"fever".Colored("r")}"
             ;
 
         private void ApplyChanges()
@@ -174,11 +172,9 @@ namespace XRL.World.Effects
             || ID == PreferTargetEvent.ID
             || ID == GetFeelingEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
+            || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
-
-        public override bool WantTurnTick()
-            => true;
 
         public override bool HandleEvent(PreferTargetEvent E)
         {
@@ -238,6 +234,14 @@ namespace XRL.World.Effects
             return base.HandleEvent(E);
         }
 
+        public virtual bool HandleEvent(LunarObjectColorChangedEvent E)
+        {
+            SetDisplayName(E.TileColor);
+            TileColor = E.TileColor;
+            DetailColor = E.DetailColor;
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(OriginalMaxKillDistance), OriginalMaxKillDistance);
@@ -273,38 +277,15 @@ namespace XRL.World.Effects
 
         public override bool Render(RenderEvent E)
         {
-            int frameTarget = (int)Utils.FPS_MODULO;
-            bool counterOverride = NameCycleCounter++ > frameTarget;
-            if (Utils.GetFPSModuloOrRandom(Object.BaseID) == 0
-                || counterOverride)
-            {
-                NameCycleCounter = Math.Max(0, NameCycleCounter - frameTarget);
-                SetDisplayName();
-            }
-
             E.RenderEffectIndicator(
                 renderString: "@",
                 tile: Const.MOON_KING_FEVER_TILE,
-                colorString: $"&{RenderTileColor}",
-                detailColor: Utils.GetNextRainbowColor(RenderTileColor).ToString(),
+                colorString: $"&{TileColor}",
+                detailColor: DetailColor,
                 frameHint: (Object.BaseID % 5) +1,
                 durationHint: 10);
 
-            frameTarget = (Object.BaseID % 5) + 1 + 10;
-            counterOverride = EffectCycleCounter++ > frameTarget;
-            if (Utils.CurrentFrame % 60 == frameTarget
-                || counterOverride)
-            {
-                RenderTileColor = Utils.GetRainbowColorAtIndex(RenderTileColorCounter++);
-                EffectCycleCounter = Math.Max(0, EffectCycleCounter - frameTarget);
-            }
-
             return base.Render(E);
-        }
-
-        public override void TurnTick(long TimeTick, int Amount)
-        {
-            base.TurnTick(TimeTick, Amount);
         }
     }
 }

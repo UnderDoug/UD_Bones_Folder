@@ -47,7 +47,7 @@ namespace UD_Bones_Folder.Mod
 
         public const double FPS_MODULO = 8.0;
 
-        public static double CurrentFrame = XRLCore.FrameTimer.Elapsed.TotalMilliseconds / 16.0;
+        public static double CurrentFrame => UD_Bones_LunarColors.GetCurrentFrame();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<string, string> EquipmentFrameByTileColor = new();
@@ -703,8 +703,17 @@ namespace UD_Bones_Folder.Mod
         {
             using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
             Offset = Math.Abs(Offset + rainbowColors.Count) % rainbowColors.Count;
-            Offset = Math.Abs(rainbowColors.Count - Offset - 1);
+            // Offset = Math.Abs(rainbowColors.Count - Offset - 1);
             return rainbowColors[Offset];
+        }
+
+        public static int GetRainbowColorIndex(string Color)
+        {
+            if (!IsRainbowColor(Color))
+                return -1;
+
+            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
+            return rainbowColors.IndexOf(Color);
         }
 
         public static bool IsRainbowColor(string Color)
@@ -726,8 +735,6 @@ namespace UD_Bones_Folder.Mod
                 int colorIndex = rainbowColors.IndexOf(Color);
                 string next = GetRainbowColorAtIndex(colorIndex + 1);
                 NextRainbowColor[Color] = next;
-                if (!PrevRainbowColor.ContainsKey(next))
-                    PrevRainbowColor[next] = Color;
             }
             return NextRainbowColor[Color];
         }
@@ -747,8 +754,6 @@ namespace UD_Bones_Folder.Mod
                 int colorIndex = rainbowColors.IndexOf(Color);
                 string prev = GetRainbowColorAtIndex(colorIndex - 1);
                 PrevRainbowColor[Color] = prev;
-                if (!NextRainbowColor.ContainsKey(prev))
-                    NextRainbowColor[prev] = Color;
             }
             return PrevRainbowColor[Color];
         }
@@ -767,19 +772,22 @@ namespace UD_Bones_Folder.Mod
             return $"{output} {Style}";
         }
 
-        public static int GetFPSModuloOrRandom(int Offset = 0)
+        public static string GetAnimatedRainbowShaderFor(string TileColor, string Style = "sequence")
+            => GetAnimatedRainbowShader(GetRainbowColorIndex(TileColor), Style);
+
+        public static int GetFPSForModulo(int Offset = 0)
         {
             if (CurrentFrame == 0)
-                return Stat.RandomCosmetic(0, 6999) % (int)FPS_MODULO;
-            return (int)Math.Ceiling(((CurrentFrame + Offset) / FPS_MODULO)) % (int)FPS_MODULO;
+                return Stat.Random(0, (YieldRainbowColors().Count() * 1000) - 1);
+            return (int)Math.Ceiling((CurrentFrame + Offset) / FPS_MODULO);
         }
 
         public static string GetAnimatedRainbowShaderForFPS()
-            => GetAnimatedRainbowShader(GetFPSModuloOrRandom())
+            => GetAnimatedRainbowShader(GetFPSForModulo())
             ;
 
         public static string GetRainbowColorForFPS()
-            => GetRainbowColorAtIndex(GetFPSModuloOrRandom())
+            => GetRainbowColorAtIndex(GetFPSForModulo())
             ;
 
         [VariablePostProcessor(Keys = new string[] { "LunarShader" })]
@@ -794,7 +802,7 @@ namespace UD_Bones_Folder.Mod
                         shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
                     else
                     if (int.TryParse(Context.Parameters[0], out int offset))
-                        shader = GetAnimatedRainbowShader(GetFPSModuloOrRandom(offset));
+                        shader = GetAnimatedRainbowShader(GetFPSForModulo(offset));
                 }
                 shader ??= GetAnimatedRainbowShaderForFPS();
 
@@ -818,7 +826,7 @@ namespace UD_Bones_Folder.Mod
                         shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
                     else
                     if (int.TryParse(Context.Parameters[1], out int offset))
-                        shader = GetAnimatedRainbowShader(GetFPSModuloOrRandom(offset));
+                        shader = GetAnimatedRainbowShader(GetFPSForModulo(offset));
                 }
                 return text.Color(shader ?? GetAnimatedRainbowShaderForFPS());
             }

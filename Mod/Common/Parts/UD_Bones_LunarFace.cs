@@ -9,6 +9,7 @@ using XRL.Rules;
 using XRL.World.Anatomy;
 using System.Linq;
 using XRL.Core;
+using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Parts
 {
@@ -87,6 +88,7 @@ namespace XRL.World.Parts
             || ID == GetDisplayNameEvent.ID
             || ID == BeforeBeginTakeActionEvent.ID
             || ID == EquippedEvent.ID
+            || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
@@ -121,22 +123,20 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
+        public override bool HandleEvent(LunarObjectColorChangedEvent E)
+        {
+            if (Utils.GetAnimatedRainbowShaderEquipmentFrameColors(E.TileColor) is string equipmentFrame)
+                ParentObject?.SetEquipmentFrameColors(equipmentFrame);
+
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(TileColor), TileColor);
             E.AddEntry(this, nameof(DetailColor), DetailColor);
-            E.AddEntry(this, "EquipmentFrameColors", ParentObject.GetEquipmentFrameColors("----"));
+            E.AddEntry(this, Const.EQ_FRAME_COLORS, ParentObject.GetEquipmentFrameColors("----"));
             return base.HandleEvent(E);
-        }
-
-        public override bool Render(RenderEvent E)
-        {
-            if (UD_Bones_LunarRegent.CycleColors(ParentObject.Render, ref TileColor, ref DetailColor, ref LastColorFrame, Utils.FPS_MODULO, Offset: ParentObject.BaseID))
-            {
-                if (Utils.GetAnimatedRainbowShaderEquipmentFrameColors(TileColor) is string equipmentFrame)
-                    ParentObject?.SetEquipmentFrameColors(equipmentFrame);
-            }
-            return base.Render(E);
         }
     }
 }

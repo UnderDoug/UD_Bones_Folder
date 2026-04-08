@@ -526,11 +526,11 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static void SetEquipmentFrameColors(this GameObject GameObject, string TopLeft_Left_Right_BottomRight = null)
-            => GameObject.SetStringProperty("EquipmentFrameColors", TopLeft_Left_Right_BottomRight, RemoveIfNull: true)
+            => GameObject.SetStringProperty(Const.EQ_FRAME_COLORS, TopLeft_Left_Right_BottomRight, RemoveIfNull: true)
             ;
 
         public static string GetEquipmentFrameColors(this GameObject GameObject, string Default = null)
-            => GameObject.GetStringProperty("EquipmentFrameColors", Default)
+            => GameObject.GetStringProperty(Const.EQ_FRAME_COLORS, Default)
             ;
 
         public static bool IsEquipment(this GameObject GameObject)

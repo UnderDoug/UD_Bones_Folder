@@ -1,18 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
+using XRL.Rules;
+using XRL.World.Anatomy;
 using XRL.World.Effects;
 
 using UD_Bones_Folder.Mod;
-using XRL.Rules;
-using XRL.World.Anatomy;
-using System.Linq;
+
+using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public abstract class UD_Bones_BaseLunarPart : IScribedPart
+    public abstract class UD_Bones_BaseLunarPart
+        : IScribedPart
+        , IModEventHandler<LunarObjectColorChangedEvent>
     {
         protected string _BonesID;
         public string BonesID
@@ -92,6 +96,9 @@ namespace XRL.World.Parts
             || ID == BeforeTakeActionEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public virtual bool HandleEvent(LunarObjectColorChangedEvent E)
+            => base.HandleEvent(E);
 
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
         {
