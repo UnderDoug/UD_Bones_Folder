@@ -17,5 +17,7 @@ namespace UD_Bones_Folder.Mod
         public const string MOON_KING_FEVER_TILE = "Effects/lunar_regent_fever.png";
 
         public const string EQ_FRAME_COLORS = "EquipmentFrameColors";
+
+        public const string IS_MAD_PROP = "UD_Bones_Folder_IsMad";
     }
 }

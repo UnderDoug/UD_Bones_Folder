@@ -20,6 +20,8 @@ using XRL.World.Parts;
 
 using static XRL.World.Cell;
 
+using Range = XRL.Range;
+
 namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
@@ -559,6 +561,30 @@ namespace UD_Bones_Folder.Mod
                 return true;
 
             return false;
+        }
+
+        public static int SafeModulo(this int Number, int Value)
+            => (Value + (Number % Value)) % Value;
+
+        public static IEnumerable<Range> GetRanges(this IEnumerable<string> Source, int Offset = 0, int? MaxLengthOverride = null)
+        {
+            if (Source.IsNullOrEmpty())
+                yield break;
+
+            int sourceLength = Source.Aggregate(0, (a, n) => a + n.Length);
+            int maxLength = Math.Min(MaxLengthOverride ?? sourceLength, sourceLength);
+            int currentPos = Offset;
+            int finalPos = maxLength - 1;
+            foreach (string element in Source)
+            {
+                if (currentPos >= finalPos)
+                    break;
+
+                int elementEndPos = Math.Min(currentPos + element.Length, finalPos);
+                yield return new(currentPos, elementEndPos);
+
+                currentPos = elementEndPos;
+            }
         }
     }
 }

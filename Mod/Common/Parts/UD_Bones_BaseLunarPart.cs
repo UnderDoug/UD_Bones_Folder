@@ -17,6 +17,7 @@ namespace XRL.World.Parts
     public abstract class UD_Bones_BaseLunarPart
         : IScribedPart
         , IModEventHandler<LunarObjectColorChangedEvent>
+        , IModEventHandler<TidyLunarObjectsEvent>
     {
         protected string _BonesID;
         public string BonesID
@@ -51,6 +52,17 @@ namespace XRL.World.Parts
         }
 
         public bool Persists;
+
+        public UD_Bones_BaseLunarPart()
+            : base()
+        {
+        }
+
+        public UD_Bones_BaseLunarPart(string BonesID)
+            : this()
+        {
+            SetBonesIDInternal(BonesID, true);
+        }
 
         public override void Attach()
         {
@@ -93,7 +105,7 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == BeforeObjectCreatedEvent.ID
-            || ID == BeforeTakeActionEvent.ID
+            || ID == TidyLunarObjectsEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
@@ -109,10 +121,11 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
-        public override bool HandleEvent(BeforeTakeActionEvent E)
+        public virtual bool HandleEvent(TidyLunarObjectsEvent E)
         {
-            if (BonesID == The.Game.GameID
-                && !Persists)
+            if ((BonesID == E.BonesID
+                    && !Persists)
+                || E.Force)
             {
                 ParentObject.Obliterate();
                 return true;

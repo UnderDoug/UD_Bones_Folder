@@ -3,13 +3,22 @@
 using ConsoleLib.Console;
 
 using XRL.Core;
+using XRL.Rules;
 using XRL.World;
 using XRL.World.Parts;
+
+using static XRL.World.Parts.UD_Bones_LunarColors;
+
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
-    public class BonesRender : IRenderable, IComposite, IDisposable
+    public class BonesRender
+        : IRenderable
+        , IComposite
+        , IDisposable
     {
+        private readonly int FrameOffset = Stat.RandomCosmetic(0, 6999);
+
         public string Tile;
 
         public string RenderString = " ";
@@ -17,16 +26,19 @@ namespace UD_Bones_Folder.Mod
         public string ColorString = "";
 
         public string TileColor;
+        protected string MadTileColor;
 
         public char DetailColor;
+        protected string MadDetailColor;
+
+        public int LastFrame = -1;
+        public int KeyframeOfLastFrame = -1;
 
         public bool VFlip;
 
         public bool HFlip;
 
         public bool IsMad;
-
-        private string LastMadTileColor;
 
         public virtual bool WantFieldReflection => false;
 
@@ -249,7 +261,7 @@ namespace UD_Bones_Folder.Mod
 
         public virtual string GetColorString()
             => IsMad
-            ? $"&{LastMadTileColor = Utils.GetRainbowColorForFPS()}"
+            ? $"&{GetMadTileColor()}"
             : ColorString
             ;
 
@@ -265,9 +277,28 @@ namespace UD_Bones_Folder.Mod
 
         public virtual string GetTileColor()
             => IsMad
-            ? $"&{LastMadTileColor = Utils.GetRainbowColorForFPS()}"
+            ? $"&{GetMadTileColor()}"
             : TileColor
             ;
+
+        public virtual string GetMadTileColor()
+        {
+            var e = new ColorAnimationEvent
+            {
+                Offset = FrameOffset,
+                KeyframeOfLastFrame = KeyframeOfLastFrame,
+                CurrentTileColor = MadTileColor,
+                CurrentDetailColor = MadDetailColor,
+            };
+            TryGetLunarColorPair(
+                E: ref e,
+                out MadTileColor,
+                out MadDetailColor,
+                out LastFrame,
+                out KeyframeOfLastFrame);
+
+            return MadTileColor;
+        }
 
         string IRenderable.getTileColor()
             => GetTileColor()
@@ -285,9 +316,12 @@ namespace UD_Bones_Folder.Mod
 
         public virtual char GetDetailColor()
             => IsMad
-            ? Utils.GetNextRainbowColor(LastMadTileColor ?? ColorCodeFromString(GetTileColor()).ToString())[0]
+            ? GetMadDetailColor()
             : DetailColor
             ;
+
+        public virtual char GetMadDetailColor()
+            => GetNextLunarColor(MadTileColor ?? GetMadTileColor())[0];
 
         char IRenderable.getDetailColor()
             => GetDetailColor()
@@ -353,12 +387,16 @@ namespace UD_Bones_Folder.Mod
         }
 
         public virtual ColorChars GetColorChars()
-            => new ColorChars
+        {
+            string madForeground = GetLunarColorAtIndex(GetCurrentAnimationKeyframe(FrameOffset));
+            char madDetail = GetNextLunarColor(madForeground)[0];
+            return new ColorChars
             {
                 background = GetBackgroundColor(),
-                foreground = GetForegroundColor(),
-                detail = GetDetailColor(),
+                foreground = GetIsMad() ? madForeground[0] : GetForegroundColor(),
+                detail = GetIsMad() ? madDetail : GetDetailColor(),
             };
+        }
 
         ColorChars IRenderable.getColorChars()
             => GetColorChars()

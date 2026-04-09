@@ -19,8 +19,6 @@ namespace XRL.World.Parts
         protected string TileColor;
         protected string DetailColor;
 
-        private double LastColorFrame;
-
         public bool TryBeWorn()
         {
             if (ParentObject == null)
@@ -125,7 +123,7 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
         {
-            if (Utils.GetAnimatedRainbowShaderEquipmentFrameColors(E.TileColor) is string equipmentFrame)
+            if (UD_Bones_LunarColors.GetAnimatedLunarShaderEquipmentFrameColors(E.TileColor) is string equipmentFrame)
                 ParentObject?.SetEquipmentFrameColors(equipmentFrame);
 
             return base.HandleEvent(E);

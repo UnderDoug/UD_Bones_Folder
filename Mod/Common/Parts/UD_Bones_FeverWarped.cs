@@ -1,15 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
+
+using XRL.Core;
+using XRL.Collections;
+using XRL.Language;
+using XRL.Rules;
 using XRL.World.Effects;
 
 using UD_Bones_Folder.Mod;
-using XRL.Rules;
-using XRL.Core;
-using XRL.Language;
-using XRL.Collections;
-using System.Linq;
 using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Parts
@@ -17,6 +18,14 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_FeverWarped : UD_Bones_BaseLunarPart
     {
+        private static readonly char[] CRYPTIC_MACHINE_CHARS = new char[40]
+        {
+            '³', '\u00b4', 'µ', '¶', '·', '\u00b8', '¹', 'º', '»', '¼',
+            '½', '¾', '¿', 'À', 'Á', 'Â', 'Ã', 'Ä', 'Å', 'Æ',
+            'Ç', 'È', 'É', 'Ê', 'Ë', 'Ì', 'Í', 'Î', 'Ï', 'Ð',
+            'Ñ', 'Ò', 'Ó', 'Ô', 'Õ', 'Ö', '×', 'Ø', 'Ù', 'Ú'
+        };
+
         protected string TileColor;
         protected string DetailColor;
 
@@ -44,9 +53,11 @@ namespace XRL.World.Parts
             ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
-            ParentObject.SetStringProperty("UD_Bones_Folder_IsMad", $"{true}");
+            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{true}");
 
-            ParentObject.RequirePart<UD_Bones_LunarColors>();
+            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
+                .OverrideBonesID<UD_Bones_LunarColors>(BonesID);
+            bonesColors.Persists = true;
 
             if (ParentObject.IsEquipment())
             {
@@ -109,9 +120,7 @@ namespace XRL.World.Parts
 
         public string GetAdjective()
         {
-            AdjectiveCache ??= $"fever warped"
-                .StartReplace()
-                .ToString();
+            AdjectiveCache ??= UD_Bones_LunarColors.ApplyAnimatedLunarShader("fever warped", TileColor);
 
             return AdjectiveCache;
         }
@@ -120,13 +129,76 @@ namespace XRL.World.Parts
             => -Math.Clamp(Math.Clamp(Tier, 1, 8) / 2, 1, 4)
             ;
 
-        public static string FeverWarpText(string Description, bool DoReplace = true)
+        public static string FeverWarpText(string Description, bool DoShaderReplace = true)
         {
             Description = Description.Strip();
 
+            using var corruptionIndicies = ScopeDisposedList<int>.GetFromPool();
+
+            int startPos = Stat.RandomCosmetic(0, 3);
+            int modOffset = Stat.RandomCosmetic(0, 6999);
+
+            string text = Description;
+            int corruptionToggle = 0;
+            int charCount = Stat.RandomCosmetic(3, 7);
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (charCount-- < 0)
+                {
+                    corruptionToggle++;
+                    charCount = Stat.RandomCosmetic(3, 7);
+                    corruptionIndicies.Add(i);
+                }
+                if ((corruptionToggle + modOffset) % 2 == 0)
+                    continue;
+
+                string before = text[..i];
+                char corruption = CRYPTIC_MACHINE_CHARS.GetRandomElementCosmetic();
+                string after = null;
+                if (i < text.Length - 1)
+                    after = text[(i + 1)..];
+
+                text = $"{before}{corruption}{after}";
+
+                if (i == text.Length - 1
+                    && (corruptionToggle + modOffset) % 2 == 1)
+                    corruptionIndicies.Add(i);
+            }
+            int colorOffset = Stat.RandomCosmetic(1, 4);
+            if (50.in100())
+                colorOffset *= -1;
+            string lunarStart = "=LunarShader:";
+            string lunarEnd = "=";
+            for (int i = corruptionIndicies.Count - 1; i >= 0; i--)
+            {
+                if (corruptionIndicies[i] + colorOffset is int corruptionIndex)
+                {
+                    corruptionIndex = Math.Clamp(corruptionIndex + colorOffset, 0, text.Length - 1);
+
+                    if ((corruptionToggle + modOffset) % 2 == 0)
+                        text = text.Insert(corruptionIndex, lunarEnd);
+                    else
+                        text = text.Insert(corruptionIndex, lunarStart);
+
+                    corruptionToggle--;
+                }
+            }
+
+            if (DoShaderReplace)
+                text = text
+                    .StartReplace()
+                    .ToString();
+
+            if (!text.IsNullOrEmpty())
+                return text;
+
             using var corruptions = ScopeDisposedList<string>.GetFromPool();
             while (corruptions.IsNullOrEmpty() || corruptions.Aggregate(0, (a,n) => a + n.Length) < Description.Length)
-                corruptions.Add(TextFilters.GenerateCrypticWord());
+            {
+                string corruption = TextFilters.GenerateCrypticWord();
+                if (corruption.Length < 7)
+                    corruptions.Add(corruption);
+            }
 
             int corruptionsLength = corruptions.Aggregate(0, (a, n) => a + n.Length);
             int startAt = 0;
@@ -137,23 +209,29 @@ namespace XRL.World.Parts
             int moduloOffset = Stat.RandomCosmetic(0, 6999);
             string output = Description;
 
-            for (int i = 0; i < corruptions.Count; i++)
+            using var corruptionRanges = ScopeDisposedList<Range>.GetFromPoolFilledWith(corruptions.GetRanges(startAt, output.Length));
+            for (int i = 0; i < corruptionRanges.Count; i++)
             {
-                if (corruptions[i] is string corruption)
+                if (corruptions[i] is string corruption
+                    && corruptionRanges[i] is Range corruptionRange)
                 {
-                    if (startAt >= output.Length)
+                    if (corruptionRange.Min >= output.Length)
                         break;
 
                     if ((i + moduloOffset) % 2 == 0)
-                    {
-                        startAt += corruption.Length;
                         continue;
-                    }
-                    int corruptionEnd = Math.Min(startAt + corruption.Length, output.Length - 1);
-                    string beforeCorruption = output[..startAt];
-                    string afterCorruption = output[corruptionEnd..];
-                    output = $"{beforeCorruption}{corruption}{afterCorruption}";
-                    startAt = corruptionEnd;
+
+                    string before = output[..corruptionRange.Min];
+                    int afterStartPos = Math.Min(corruptionRange.Max, output.Length - 1);
+                    string after = output[afterStartPos..];
+
+                    int allowedCorruptionLength = Math.Min(afterStartPos - corruptionRange.Min, corruption.Length);
+                    if (allowedCorruptionLength < 1)
+                        break;
+
+                    corruption = corruption[..allowedCorruptionLength];
+
+                    output = $"{before}{corruption}{after}";
                 }
             }
 
@@ -175,15 +253,16 @@ namespace XRL.World.Parts
                         continue;
                     }
                     int corruptionEnd = Math.Min(startAt + corruption.Length, output.Length - 1);
-                    string beforeCorruption = output[..startAt];
-                    string afterCorruption = output[corruptionEnd..];
-                    string lunarCorruption = $"=LunarShader:{output[beforeCorruption.Length..^afterCorruption.Length]}=";
-                    output = $"{beforeCorruption}{lunarCorruption}{afterCorruption}";
-                    startAt += lunarCorruption.Length;
+                    string before = output[..startAt];
+                    string after = output[corruptionEnd..];
+                    string lunar = $"=LunarShader:{output[before.Length..^after.Length]}=";
+
+                    output = $"{before}{lunar}{after}";
+                    startAt += lunar.Length;
                 }
             }
 
-            if (DoReplace)
+            if (DoShaderReplace)
                 output = output
                     .StartReplace()
                     .ToString();

@@ -47,10 +47,8 @@ namespace UD_Bones_Folder.Mod
 
         public const double FPS_MODULO = 8.0;
 
-        public static double CurrentFrame => UD_Bones_LunarColors.GetCurrentFrame();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        public static Dictionary<string, string> EquipmentFrameByTileColor = new();
+        public static double CurrentFrame => UD_Bones_LunarColors.GetCurrentAnimationFrame();
+        public static double CurrentKeyframe => UD_Bones_LunarColors.GetCurrentAnimationKeyframe();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static Dictionary<string, HashSet<string>> BlueprintsByCategory = new();
@@ -78,12 +76,6 @@ namespace UD_Bones_Folder.Mod
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static HashSet<string> CachedBlueprints = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, string> NextRainbowColor = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, string> PrevRainbowColor = new();
 
         [ModSensitiveCacheInit]
         public static void CacheBlueprintsBySpec()
@@ -558,7 +550,7 @@ namespace UD_Bones_Folder.Mod
 
         [VariableObjectReplacer]
         public static string UD_RegalTitle(DelegateContext Context)
-            => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{Context.Target.BaseID}="
+            => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{(Context.Target?.BaseID)?.ToString() ?? "*"}="
                 .StartReplace()
                 .ToString()
             ;
@@ -684,198 +676,5 @@ namespace UD_Bones_Folder.Mod
             && SpriteManager.GetTextureInfo(Tile) != GetSpriteManagerInvalidInfoNaughty(Tile)
             ;
 
-        public static IEnumerable<string> YieldRainbowColors()
-        {
-            yield return "r";
-            yield return "R";
-            yield return "W";
-            yield return "G";
-            yield return "B";
-            yield return "b";
-            yield return "m";
-        }
-
-        public static ScopeDisposedList<string> ScopeDiscposedRainbowColorsListFromPool()
-            => ScopeDisposedList<string>.GetFromPoolFilledWith(YieldRainbowColors())
-            ;
-
-        public static string GetRainbowColorAtIndex(int Offset)
-        {
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            Offset = Math.Abs(Offset + rainbowColors.Count) % rainbowColors.Count;
-            // Offset = Math.Abs(rainbowColors.Count - Offset - 1);
-            return rainbowColors[Offset];
-        }
-
-        public static int GetRainbowColorIndex(string Color)
-        {
-            if (!IsRainbowColor(Color))
-                return -1;
-
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            return rainbowColors.IndexOf(Color);
-        }
-
-        public static bool IsRainbowColor(string Color)
-            => YieldRainbowColors().Contains(Color)
-            ;
-
-        public static bool IsRainbowColor(char Color)
-            => IsRainbowColor(Color.ToString())
-            ;
-
-        public static string GetNextRainbowColor(string Color)
-        {
-            if (!IsRainbowColor(Color))
-                return null;
-
-            if (!NextRainbowColor.ContainsKey(Color))
-            {
-                using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-                int colorIndex = rainbowColors.IndexOf(Color);
-                string next = GetRainbowColorAtIndex(colorIndex + 1);
-                NextRainbowColor[Color] = next;
-            }
-            return NextRainbowColor[Color];
-        }
-
-        public static string GetNextRainbowColor(char Color)
-            => GetNextRainbowColor(Color.ToString())
-            ;
-
-        public static string GetPrevRainbowColor(string Color)
-        {
-            if (!IsRainbowColor(Color))
-                return null;
-
-            if (!PrevRainbowColor.ContainsKey(Color))
-            {
-                using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-                int colorIndex = rainbowColors.IndexOf(Color);
-                string prev = GetRainbowColorAtIndex(colorIndex - 1);
-                PrevRainbowColor[Color] = prev;
-            }
-            return PrevRainbowColor[Color];
-        }
-
-        public static string GetAnimatedRainbowShader(int Offset = 0, string Style = "sequence")
-        {
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-
-            string output = null;
-            for (int i = 0; i < rainbowColors.Count; i++)
-                output = DelimitedAggregator(output, GetRainbowColorAtIndex(Offset + i), "-");
-
-            if (output.IsNullOrEmpty())
-                return "rainbow";
-
-            return $"{output} {Style}";
-        }
-
-        public static string GetAnimatedRainbowShaderFor(string TileColor, string Style = "sequence")
-            => GetAnimatedRainbowShader(GetRainbowColorIndex(TileColor), Style);
-
-        public static int GetFPSForModulo(int Offset = 0)
-        {
-            if (CurrentFrame == 0)
-                return Stat.Random(0, (YieldRainbowColors().Count() * 1000) - 1);
-            return (int)Math.Ceiling((CurrentFrame + Offset) / FPS_MODULO);
-        }
-
-        public static string GetAnimatedRainbowShaderForFPS()
-            => GetAnimatedRainbowShader(GetFPSForModulo())
-            ;
-
-        public static string GetRainbowColorForFPS()
-            => GetRainbowColorAtIndex(GetFPSForModulo())
-            ;
-
-        [VariablePostProcessor(Keys = new string[] { "LunarShader" })]
-        public static void LunarShaderPost(DelegateContext Context)
-        {
-            if (!Context.Value.IsNullOrEmpty())
-            {
-                string shader = null;
-                if (!Context.Parameters.IsNullOrEmpty())
-                {
-                    if (Context.Parameters[0] == "*")
-                        shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
-                    else
-                    if (int.TryParse(Context.Parameters[0], out int offset))
-                        shader = GetAnimatedRainbowShader(GetFPSForModulo(offset));
-                }
-                shader ??= GetAnimatedRainbowShaderForFPS();
-
-                var oldValue = Context.Value.ToString();
-                Context.Value.Clear();
-                Context.Value.AppendColored(shader, oldValue);
-            }
-        }
-
-        [VariableReplacer(Keys = new string[] { "LunarShader" })]
-        public static string LunarShader(DelegateContext Context)
-        {
-            if (!Context.Parameters.IsNullOrEmpty()
-                && Context.Parameters[0] is string text
-                && !text.IsNullOrEmpty())
-            {
-                string shader = null;
-                if (Context.Parameters.Count > 1)
-                {
-                    if (Context.Parameters[1] == "*")
-                        shader = GetAnimatedRainbowShader(Stat.RandomCosmetic(0, 6999));
-                    else
-                    if (int.TryParse(Context.Parameters[1], out int offset))
-                        shader = GetAnimatedRainbowShader(GetFPSForModulo(offset));
-                }
-                return text.Color(shader ?? GetAnimatedRainbowShaderForFPS());
-            }
-            return null;
-        }
-
-        public static string GetAnimatedRainbowShaderEquipmentFrameColors(int TileColorIndex)
-        {
-            EquipmentFrameByTileColor ??= new();
-            string tileColor = GetRainbowColorAtIndex(TileColorIndex);
-            if (!EquipmentFrameByTileColor.ContainsKey(tileColor))
-            {
-                if (IsRainbowColor(tileColor))
-                {
-                    string color3 = tileColor;
-                    string color2 = GetPrevRainbowColor(color3);
-                    string color1 = GetPrevRainbowColor(color2);
-                    string color4 = GetNextRainbowColor(color3);
-                    string color5 = GetNextRainbowColor(color4);
-                    string color6 = GetNextRainbowColor(color5);
-                    EquipmentFrameByTileColor[tileColor] = $"{color1}{color2}{color5}{color6}";
-                }
-                else
-                    EquipmentFrameByTileColor[tileColor] = null;
-            }
-            return EquipmentFrameByTileColor[tileColor];
-        }
-
-        public static string GetAnimatedRainbowShaderEquipmentFrameColors(string Color)
-        {
-            if (!Color.IsNullOrEmpty()
-                && Color.Length > 1)
-                Color = $"{ColorUtility.FindLastForeground(Color)}";
-
-            if (!IsRainbowColor(Color))
-                return null;
-
-            using var rainbowColors = ScopeDiscposedRainbowColorsListFromPool();
-            return GetAnimatedRainbowShaderEquipmentFrameColors(rainbowColors.IndexOf(Color));
-        }
-
-        public static string GetAnimatedRainbowShaderEquipmentFrame(RenderEvent Render)
-            => GetAnimatedRainbowShaderEquipmentFrameColors($"{Render.GetForegroundColorChar()}")
-            ;
-
-        public static string GetAnimatedRainbowShaderEquipmentFrameColors(IRenderable Render)
-            => Render is RenderEvent renderEvent
-            ? GetAnimatedRainbowShaderEquipmentFrame(renderEvent)
-            : GetAnimatedRainbowShaderEquipmentFrameColors($"{Render.getTileColor()}")
-            ;
     }
 }

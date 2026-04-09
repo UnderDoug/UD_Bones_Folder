@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Qud.API;
 
 using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.Events;
 
 using XRL.Collections;
 using XRL.Rules;
@@ -120,16 +121,8 @@ namespace XRL.World.Parts
             ;
 
         public static void BonesExceptionCleanUp(GameObject Player)
-        {
-            foreach (var bonesObject in Player?.CurrentZone.GetObjectsWithProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) ?? Enumerable.Empty<GameObject>())
-            {
-                if (bonesObject.PartsList.Any(p => ((UD_Bones_BaseLunarPart)p).Persists))
-                    continue;
-
-                if (bonesObject.GetStringProperty(nameof(UD_Bones_BaseLunarPart.BonesID)) == The.Game.GameID)
-                    bonesObject.Obliterate();
-            }
-        }
+            => TidyLunarObjectsEvent.Send(Player, Context: "Exception")
+            ;
 
         public void BonesExceptionCleanUp()
             => BonesExceptionCleanUp(ParentObject)
@@ -299,7 +292,7 @@ namespace XRL.World.Parts
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
                     if (!willDie)
-                        BonesExceptionCleanUp(The.Player);
+                        TidyLunarObjectsEvent.Send(The.Player, Context: "Wish");
 
                     Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
                     return true;

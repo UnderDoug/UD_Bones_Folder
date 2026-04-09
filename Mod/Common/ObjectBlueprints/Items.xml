@@ -5,11 +5,13 @@
     <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
     <part Name="Physics" Weight="1" />
     <part Name="UD_Bones_LunarFace" />
+    <part Name="UD_Bones_LunarColors" />
     <part Name="Commerce" Value="1" />
     <stat Name="Hitpoints" Value="1500" />
     <part Name="SultanMask" Period="7" />
     <part Name="Unreplicable" />
     <part Name="Cursed" />
+    <tag Name="UD_Bones_Folder_IsMad" Value="true" />
     <tag Name="Tier" Value="8" />
     <xtagGrammar Proper="true" />
     <tag Name="Mods" Value="None" />

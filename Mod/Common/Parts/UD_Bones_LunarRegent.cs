@@ -48,8 +48,10 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            ParentObject.SetStringProperty("UD_Bones_Folder_IsMad", $"{true}");
-            ParentObject.RequirePart<UD_Bones_LunarColors>();
+            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
+            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
+                .OverrideBonesID<UD_Bones_LunarColors>(BonesID);
+            bonesColors.Persists = true;
         }
 
         public override bool WantEvent(int ID, int Cascade)

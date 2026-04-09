@@ -89,7 +89,7 @@ namespace XRL.World.Effects
         }
 
         public string GetDisplayName(string TileColor = "r")
-            => $"{(RegalTitle ?? REGAL_TITLE).Color(Utils.GetAnimatedRainbowShaderFor(TileColor))} {"fever".Colored("r")}"
+            => $"{UD_Bones_LunarColors.ApplyAnimatedLunarShader(RegalTitle ?? REGAL_TITLE, TileColor)} {"fever".Colored("r")}"
             ;
 
         private void ApplyChanges()
@@ -282,7 +282,7 @@ namespace XRL.World.Effects
                 tile: Const.MOON_KING_FEVER_TILE,
                 colorString: $"&{TileColor}",
                 detailColor: DetailColor,
-                frameHint: (Object.BaseID % 5) +1,
+                frameHint: (Object.BaseID % 5) + 1,
                 durationHint: 10);
 
             return base.Render(E);
