@@ -70,7 +70,10 @@ namespace XRL.World.Parts
 
             if (ParentObject.TryGetPart(out Description description))
             {
-                OriginalShortDesc = description._Short;
+                if (!description._Short.IsNullOrEmpty())
+                    OriginalShortDesc = description._Short;
+                else
+                    OriginalShortDesc = $"{ParentObject.IndefiniteArticleDescriptiveCategory(true, "wretched")}, warped into an unfamiliar configuration.";
 
                 string bakedDescription = OriginalShortDesc
                     .StartReplace()
@@ -132,142 +135,126 @@ namespace XRL.World.Parts
         public static string FeverWarpText(string Description, bool DoShaderReplace = true)
         {
             Description = Description.Strip();
+            //Utils.Log(Description);
 
-            using var corruptionIndicies = ScopeDisposedList<int>.GetFromPool();
+            using var corruptions = ScopeDisposedList<string>.GetFromPool();
+            while (corruptions.IsNullOrEmpty()
+                || corruptions.Aggregate(0, (a, n) => a + n.Length) <= Description.Length)
+            {
+                string corruption = TextFilters.GenerateCrypticWord();
+                if (corruption.Length < 8)
+                    corruptions.Add(corruption);
+            }
 
-            int startPos = Stat.RandomCosmetic(0, 3);
+            int corruptionsLength = corruptions.Aggregate(0, (a, n) => a + n.Length);
+            int diff = corruptionsLength - Description.Length;
+            int startDiff = (int)Math.Ceiling(diff / 2.0);
+            int endDiff = (int)Math.Floor(diff / 2.0);
+
+            int startAt = 0;
+            if (corruptions.Aggregate(0, (a, n) => a + n.Length) > Description.Length)
+                startAt = Stat.RandomCosmetic(0, diff);
+
+            //Utils.Log($"{1.Indent()}{nameof(diff)}: {diff}, {nameof(startDiff)}: {startDiff}, {nameof(endDiff)}: {endDiff}");
+
+            string firstCorruption = null;
+            if (startDiff > 0)
+                firstCorruption = corruptions.TakeAt(0);
+
+            string lastCorruption = null;
+            if (endDiff > 0
+                && corruptions.Count > 0)
+                lastCorruption = corruptions.TakeAt(corruptions.Count - 1);
+
+            //Utils.Log($"{1.Indent()}{nameof(firstCorruption)}: {firstCorruption?.Length ?? -1}, {nameof(lastCorruption)}: {lastCorruption?.Length ?? -1}");
+
+            if (!firstCorruption.IsNullOrEmpty()
+                && startDiff > 0
+                && startDiff < firstCorruption.Length)
+                corruptions.Insert(0, firstCorruption[..^startDiff]);
+
+            if (!lastCorruption.IsNullOrEmpty()
+                && endDiff > 0
+                && endDiff < lastCorruption.Length)
+                corruptions.Add(lastCorruption[endDiff..]);
+
+            corruptionsLength = corruptions.Aggregate(0, (a, n) => a + n.Length);
+
+            /*Utils.Log($"{1.Indent()}{nameof(corruptionsLength)}: {corruptionsLength}, " +
+                $"{Utils.CallChain(nameof(Description), nameof(Description.Length))}: {Description.Length}");*/
+
+            int originalStart = startAt;
+            int moduloOffset = Stat.RandomCosmetic(0, 6999);
+
+            using var descriptions = ScopeDisposedList<string>.GetFromPool();
+            int startPos = 0;
+            foreach (string corruption in corruptions)
+            {
+                int endPos = Math.Min(startPos + corruption.Length, Description.Length);
+
+                if (startPos < endPos)
+                    descriptions.Add(Description[startPos..endPos]);
+
+                startPos = endPos;
+            }
+
+            // Utils.Log($"{1.Indent()}{descriptions.Aggregate("", (a, n) => a + (!a.IsNullOrEmpty() ? "|" : null) + n)}");
+
             int modOffset = Stat.RandomCosmetic(0, 6999);
 
-            string text = Description;
-            int corruptionToggle = 0;
-            int charCount = Stat.RandomCosmetic(3, 7);
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (charCount-- < 0)
+            string text = descriptions.Count.Aggregate(
+                seed: "",
+                func: delegate (string text, int i)
                 {
-                    corruptionToggle++;
-                    charCount = Stat.RandomCosmetic(3, 7);
-                    corruptionIndicies.Add(i);
-                }
-                if ((corruptionToggle + modOffset) % 2 == 0)
-                    continue;
+                    string next = ((i + moduloOffset) % 2 == 0)
+                        ? descriptions[i]
+                        : corruptions[i];
+                    return text + next;
+                });
 
-                string before = text[..i];
-                char corruption = CRYPTIC_MACHINE_CHARS.GetRandomElementCosmetic();
-                string after = null;
-                if (i < text.Length - 1)
-                    after = text[(i + 1)..];
-
-                text = $"{before}{corruption}{after}";
-
-                if (i == text.Length - 1
-                    && (corruptionToggle + modOffset) % 2 == 1)
-                    corruptionIndicies.Add(i);
-            }
-            int colorOffset = Stat.RandomCosmetic(1, 4);
+            using var fragments = ScopeDisposedList<string>.GetFromPool();
+            int colorOffset = Stat.RandomCosmetic(1, 3);
             if (50.in100())
                 colorOffset *= -1;
-            string lunarStart = "=LunarShader:";
-            string lunarEnd = "=";
-            for (int i = corruptionIndicies.Count - 1; i >= 0; i--)
+
+            startPos = 0;
+            for (int i = 0; i < descriptions.Count; i++)
             {
-                if (corruptionIndicies[i] + colorOffset is int corruptionIndex)
+                if (descriptions[i] is string description)
                 {
-                    corruptionIndex = Math.Clamp(corruptionIndex + colorOffset, 0, text.Length - 1);
+                    if (i > 0)
+                        startPos = Math.Clamp(startPos, 0, Description.Length);
 
-                    if ((corruptionToggle + modOffset) % 2 == 0)
-                        text = text.Insert(corruptionIndex, lunarEnd);
-                    else
-                        text = text.Insert(corruptionIndex, lunarStart);
+                    int endPos = Math.Clamp(startPos + description.Length + colorOffset, 0, Description.Length);
 
-                    corruptionToggle--;
+                    if (startPos <= endPos)
+                        fragments.Add(text[startPos..endPos]);
+
+                    if (i == descriptions.Count - 1
+                        && endPos < Description.Length -1)
+                        fragments.Add(text[endPos..]);
+
+                    startPos = endPos;
                 }
             }
+
+            using var lunarColors = UD_Bones_LunarColors.BorrowScopeDisposedColorsFromPool();
+            text = fragments.Count.Aggregate(
+                seed: "",
+                func: delegate (string text, int i)
+                {
+                    int index = (int)Math.Floor(i / 2.0);
+                    if ((i + moduloOffset) % 2 == 0)
+                        return text + $"=LunarShader:{fragments[i]}:{index.SafeModulo(lunarColors.Count)}=";
+                    return text + fragments[i];
+                });
 
             if (DoShaderReplace)
                 text = text
                     .StartReplace()
                     .ToString();
 
-            if (!text.IsNullOrEmpty())
-                return text;
-
-            using var corruptions = ScopeDisposedList<string>.GetFromPool();
-            while (corruptions.IsNullOrEmpty() || corruptions.Aggregate(0, (a,n) => a + n.Length) < Description.Length)
-            {
-                string corruption = TextFilters.GenerateCrypticWord();
-                if (corruption.Length < 7)
-                    corruptions.Add(corruption);
-            }
-
-            int corruptionsLength = corruptions.Aggregate(0, (a, n) => a + n.Length);
-            int startAt = 0;
-            int diff = corruptionsLength - Description.Length;
-            if (corruptions.Aggregate(0, (a, n) => a + n.Length) > Description.Length)
-                startAt = Stat.RandomCosmetic(0, diff);
-            int originalStart = startAt;
-            int moduloOffset = Stat.RandomCosmetic(0, 6999);
-            string output = Description;
-
-            using var corruptionRanges = ScopeDisposedList<Range>.GetFromPoolFilledWith(corruptions.GetRanges(startAt, output.Length));
-            for (int i = 0; i < corruptionRanges.Count; i++)
-            {
-                if (corruptions[i] is string corruption
-                    && corruptionRanges[i] is Range corruptionRange)
-                {
-                    if (corruptionRange.Min >= output.Length)
-                        break;
-
-                    if ((i + moduloOffset) % 2 == 0)
-                        continue;
-
-                    string before = output[..corruptionRange.Min];
-                    int afterStartPos = Math.Min(corruptionRange.Max, output.Length - 1);
-                    string after = output[afterStartPos..];
-
-                    int allowedCorruptionLength = Math.Min(afterStartPos - corruptionRange.Min, corruption.Length);
-                    if (allowedCorruptionLength < 1)
-                        break;
-
-                    corruption = corruption[..allowedCorruptionLength];
-
-                    output = $"{before}{corruption}{after}";
-                }
-            }
-
-            startAt = Stat.RandomCosmetic(0, diff / 2);
-
-            if (startAt == originalStart)
-                startAt += 1;
-
-            for (int i = 0; i < corruptions.Count; i++)
-            {
-                if (corruptions[i] is string corruption)
-                {
-                    if (startAt >= output.Length)
-                        break;
-
-                    if ((i + moduloOffset) % 2 == 0)
-                    {
-                        startAt += corruption.Length;
-                        continue;
-                    }
-                    int corruptionEnd = Math.Min(startAt + corruption.Length, output.Length - 1);
-                    string before = output[..startAt];
-                    string after = output[corruptionEnd..];
-                    string lunar = $"=LunarShader:{output[before.Length..^after.Length]}=";
-
-                    output = $"{before}{lunar}{after}";
-                    startAt += lunar.Length;
-                }
-            }
-
-            if (DoShaderReplace)
-                output = output
-                    .StartReplace()
-                    .ToString();
-
-            return output;
+            return text;
         }
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)
@@ -351,6 +338,8 @@ namespace XRL.World.Parts
         {
             DisplayNameCache = null;
             AdjectiveCache = null;
+            TileColor = E.TileColor;
+            DetailColor = E.DetailColor;
             return base.HandleEvent(E);
         }
 

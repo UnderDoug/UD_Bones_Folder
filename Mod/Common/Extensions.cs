@@ -412,6 +412,38 @@ namespace UD_Bones_Folder.Mod
             return $"{Object.ThisThese()} {noun}";
         }
 
+        public static string IndefiniteArticleDescriptiveCategory(
+            this GameObject Object,
+            bool Capitalize = false,
+            string Adjective = null
+            )
+        {
+            string noun = Object.GetDescriptiveCategory();
+
+            string indefiniteArticle;
+            if (Object.IsPlural)
+            {
+                noun = noun.Pluralize();
+                indefiniteArticle = "some";
+            }
+            else
+            if (!Grammar.IndefiniteArticleShouldBeAn(Adjective ?? noun))
+                indefiniteArticle = "a";
+            else
+                indefiniteArticle = "an";
+
+            if (Adjective.IsNullOrEmpty())
+                Adjective = " ";
+            else
+                Adjective = $" {Adjective} ";
+
+            string output = $"{indefiniteArticle}{Adjective}{noun}";
+            if (Capitalize)
+                output = output.Capitalize();
+
+            return output;
+        }
+
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
             //Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
