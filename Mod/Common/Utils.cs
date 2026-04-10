@@ -548,12 +548,40 @@ namespace UD_Bones_Folder.Mod
             => UnityEngine.Debug.Log(Message)
             ;
 
-        [VariableObjectReplacer]
-        public static string UD_RegalTitle(DelegateContext Context)
+        [VariableObjectReplacer(Keys = new string[] { "RegalTitle", "UD_RegalTitle" })]
+        public static string RegalTitle(DelegateContext Context)
             => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{(Context.Target?.BaseID)?.ToString() ?? "*"}="
                 .StartReplace()
                 .ToString()
             ;
+
+        [VariableObjectReplacer(Keys = new string[] { "A.RegalTitle" })]
+        public static string UD_A_RegalTitle(DelegateContext Context)
+        {
+            string adjective = null;
+            if (!Context.Parameters.IsNullOrEmpty())
+                adjective = Context.Parameters[0];
+
+            string title = UD_Bones_LunarRegent.GetRegalTitle(Context.Target);
+            string indefiniteArticle = Context.Target?.IsPlural is true
+                ? "some"
+                : adjective?.IndefiniteArticle() ?? title.IndefiniteArticle()
+                ;
+
+            adjective += " ";
+            if (!adjective.StartsWith(" "))
+                adjective = $" {adjective}";
+
+            string shaderOffset = (Context.Target?.BaseID)?.ToString() ?? "*";
+
+            if (Context.Capitalize)
+                indefiniteArticle = indefiniteArticle.Capitalize();
+
+            return $"=LunarShader:{indefiniteArticle}{adjective}{title}:{shaderOffset}="
+                    .StartReplace()
+                    .ToString()
+                ;
+        }
 
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
             where T : IComparable<T>

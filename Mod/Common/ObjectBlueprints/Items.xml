@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <objects>
   <object Name="Lunar Face" Inherits="Sun and Moon Mask">
-    <part Name="Render" DisplayName="=subject.uD_RegalTitle= Face" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
+    <part Name="Render" DisplayName="=subject.RegalTitle= Face" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
     <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
     <part Name="Physics" Weight="1" />
     <part Name="UD_Bones_LunarFace" />

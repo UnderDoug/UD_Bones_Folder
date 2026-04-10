@@ -127,25 +127,7 @@ namespace XRL.World.ZoneBuilders
 
             if (bonesData.Apply(Z, out var MoonKing, saveBonesInfo.IsMad) is true)
             {
-                string regalTitle = UD_Bones_MoonKingFever.REGAL_TITLE;
-
-                if (MoonKing.TryGetEffect(out UD_Bones_MoonKingFever moonKingFever))
-                    regalTitle = moonKingFever.RegalTitle;
-
-                string coloredRegalTitle = $"=LunarShader:{regalTitle}=";
-                string announcement = $"=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!";
-                string madAnnouncement = $"=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= " +
-                    $"from a world vastly different from this one, and will tolerate neither pretenders nor would-be-usurpers!";
-
-                Z.GetCell(0, 0)
-                    ?.AddObject("Widget")
-                    ?.AddPart(
-                        P: new UD_Bones_MoonKingAnnouncer(
-                            BonesID: bonesData.BonesID,
-                            Title: $"A {(saveBonesInfo.IsMad ? "mad " : null)}{coloredRegalTitle} persists!",
-                            Message: !saveBonesInfo.IsMad ? announcement : madAnnouncement,
-                            IsMad: saveBonesInfo.IsMad)
-                        );
+                Z.GetCell(0, 0).AddObject(Const.ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_MoonKingAnnouncer.BonesID)}::{bonesData.BonesID}");
 
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
                 try

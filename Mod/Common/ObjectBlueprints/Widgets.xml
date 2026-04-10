@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<objects>
+  <object Name="UD_Bones_Folder Lunar Announcer" Inherits="Widget">
+    <part Name="Render" DisplayName="[Lunar Announcer Widget]" />
+    <part Name="UD_Bones_MoonKingAnnouncer"
+          Title="=subject.A.RegalTitle= Persists!"
+          Message="=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
+          MadTitle="=subject.A.RegalTitle:mad= Persists!"
+          MadMessage="=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= from a world vastly different from this one, and =FeverWarped:will tolerate neither pretenders nor would-be-usurpers!=" />
+  </object>
+</objects>

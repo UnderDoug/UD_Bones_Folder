@@ -39,6 +39,9 @@ namespace XRL.World.Parts
         public string Title;
         public string Message;
 
+        public string MadTitle;
+        public string MadMessage;
+
         public bool IsMad;
 
         public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
@@ -52,14 +55,12 @@ namespace XRL.World.Parts
         public UD_Bones_MoonKingAnnouncer(
             string BonesID,
             string Title,
-            string Message,
-            bool IsMad)
+            string Message)
             : this()
         {
             SetBonesIDInternal(BonesID, true);
             this.Title = Title;
             this.Message = Message;
-            this.IsMad = IsMad;
         }
 
         public override void Attach()
@@ -85,16 +86,28 @@ namespace XRL.World.Parts
                 {
                     var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
 
-                    string message = Message
+                    string message;
+
+                    string title;
+
+                    if (!MoonKing.IsMad())
+                    {
+                        message = Message;
+                        title = Title;
+                    }
+                    else
+                    {
+                        title = MadTitle;
+                        message = MadMessage;
+                    }
+
+                    title = title
                         .StartReplace()
                         .AddObject(MoonKing)
                         .AddObject(The.Player)
                         .ToString();
 
-                    if (IsMad)
-                        message = UD_Bones_FeverWarped.FeverWarpText(message);
-
-                    string title = Title
+                    message = message
                         .StartReplace()
                         .AddObject(MoonKing)
                         .AddObject(The.Player)
@@ -121,10 +134,21 @@ namespace XRL.World.Parts
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
+            || ID == AfterObjectCreatedEvent.ID
             || ID == ZoneActivatedEvent.ID
             || ID == EndTurnEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public override bool HandleEvent(AfterObjectCreatedEvent E)
+        {
+            if (E.Context.StartsWith($"{nameof(BonesID)}::"))
+            {
+                Utils.Log($"{nameof(UD_Bones_MoonKingAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context})");
+                OverrideBonesID<UD_Bones_MoonKingAnnouncer>(E.Context.Split("::")[1]);
+            }
+            return base.HandleEvent(E);
+        }
 
         public override bool HandleEvent(ZoneActivatedEvent E)
         {

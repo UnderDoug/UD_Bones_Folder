@@ -14,9 +14,12 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 
 using SerializeField = UnityEngine.SerializeField;
+using XRL.World.Text.Attributes;
+using XRL.World.Text.Delegates;
 
 namespace XRL.World.Parts
 {
+    [HasVariableReplacer]
     [Serializable]
     public class UD_Bones_FeverWarped : UD_Bones_BaseLunarPart
     {
@@ -133,6 +136,9 @@ namespace XRL.World.Parts
 
         public static string FeverWarpText(string Description, bool DoShaderReplace = true)
         {
+            if (Description.IsNullOrEmpty())
+                return Description;
+
             Description = Description.Strip();
             //Utils.Log(Description);
 
@@ -351,6 +357,18 @@ namespace XRL.World.Parts
             E.AddEntry(this, "Adjective", GetAdjective());
             E.AddEntry(this, "Description", GetDescription());
             return base.HandleEvent(E);
+        }
+
+        [VariableReplacer(Keys = new string[] { "FeverWarped" })]
+        public static string FeverWarped(DelegateContext Context)
+            => FeverWarpText(Context?.Parameters?[0]);
+
+        [VariablePostProcessor(Keys = new string[] { "FeverWarped" })]
+        public static void FeverWarpedPost(DelegateContext Context)
+        {
+            var oldValue = Context.Value.ToString();
+            Context.Value.Clear();
+            Context.Value.Append(FeverWarpText(oldValue));
         }
     }
 }

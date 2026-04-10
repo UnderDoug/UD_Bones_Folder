@@ -459,16 +459,29 @@ namespace UD_Bones_Folder.Mod
             else
                 indefiniteArticle = "an";
 
-            if (Adjective.IsNullOrEmpty())
-                Adjective = " ";
-            else
-                Adjective = $" {Adjective} ";
+            Adjective += " ";
+            if (!Adjective.StartsWith(" "))
+                Adjective = $" {Adjective}";
 
             string output = $"{indefiniteArticle}{Adjective}{noun}";
             if (Capitalize)
                 output = output.Capitalize();
 
             return output;
+        }
+
+        public static string IndefiniteArticle(this string Word, bool Capitalize = false)
+        {
+            string indefiniteArticle;
+            if (!Grammar.IndefiniteArticleShouldBeAn(Word))
+                indefiniteArticle = "a";
+            else
+                indefiniteArticle = "an";
+
+            if (Capitalize)
+                indefiniteArticle = indefiniteArticle.Capitalize();
+
+            return indefiniteArticle;
         }
 
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
@@ -645,5 +658,13 @@ namespace UD_Bones_Folder.Mod
                 currentPos = elementEndPos;
             }
         }
+
+        public static bool IsMad(this GameObject GameObject)
+            => GameObject
+                ?.GetPropertyOrTag(Const.IS_MAD_PROP, $"{false}")
+                ?.EqualsNoCase($"{true}") is true;
+
+        public static void SetMad(this GameObject GameObject, bool? Value)
+            => GameObject?.SetStringProperty(Const.IS_MAD_PROP, Value?.ToString());
     }
 }
