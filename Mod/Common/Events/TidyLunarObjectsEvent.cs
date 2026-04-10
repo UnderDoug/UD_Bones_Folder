@@ -46,7 +46,7 @@ namespace UD_Bones_Folder.Mod.Events
             if (FromPool() is not TidyLunarObjectsEvent E)
                 return null;
 
-            E.BonesID = BonesID ?? The.Game?.GameID;
+            E.BonesID = BonesID;
             E.Force = Force;
             E.Context = Context;
 
@@ -77,6 +77,12 @@ namespace UD_Bones_Folder.Mod.Events
             )
             => Send(Zone, null, false, Context);
 
+        public static void SendGameID(
+            Zone Zone,
+            string Context = null
+            )
+            => Send(Zone, The.Game?.GameID, false, Context);
+
         public static void Send(
             GameObject Object,
             string BonesID = null,
@@ -90,5 +96,17 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null
             )
             => Send(Object?.CurrentZone, null, false, Context);
+
+        public static void SendGameID(
+            GameObject Object,
+            string Context = null
+            )
+            => Send(Object?.CurrentZone, The.Game?.GameID, false, Context);
+
+        public static void Send(string Context = null)
+            => Send(The.Player, null, false, Context);
+
+        public static void SendGameID(string Context = null)
+            => Send(The.Player, The.Game?.GameID, false, Context);
     }
 }

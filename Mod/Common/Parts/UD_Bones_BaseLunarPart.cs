@@ -64,9 +64,9 @@ namespace XRL.World.Parts
             SetBonesIDInternal(BonesID, true);
         }
 
-        public override void Attach()
+        public override void Initialize()
         {
-            base.Attach();
+            base.Initialize();
             SetBonesID<UD_Bones_BaseLunarPart>(The.Game?.GameID);
         }
 
@@ -123,11 +123,16 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(TidyLunarObjectsEvent E)
         {
-            if ((BonesID == E.BonesID
-                    && !Persists)
+            bool bonesIDMatches = BonesID == E.BonesID
+                || E.BonesID == null;
+
+            bool bonesMatchAndNotPersist = bonesIDMatches
+                && !Persists;
+
+            if (bonesMatchAndNotPersist
                 || E.Force)
             {
-                ParentObject.Obliterate();
+                ParentObject?.Obliterate();
                 return true;
             }
             return base.HandleEvent(E);
@@ -135,9 +140,12 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(BonesID), BonesID);
-            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(LastBonesID), LastBonesID);
-            E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(Persists), Persists);
+            if (!E.Entries.ContainsKey(nameof(UD_Bones_BaseLunarPart)))
+            {
+                E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(BonesID), BonesID);
+                E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(LastBonesID), LastBonesID);
+                E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(Persists), Persists);
+            }
             return base.HandleEvent(E);
         }
     }

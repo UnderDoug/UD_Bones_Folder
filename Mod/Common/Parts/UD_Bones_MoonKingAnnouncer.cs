@@ -8,6 +8,7 @@ using XRL.World.ZoneBuilders;
 using UD_Bones_Folder.Mod;
 using Options = UD_Bones_Folder.Mod.Options;
 using XRL.Core;
+using Qud.UI;
 
 namespace XRL.World.Parts
 {
@@ -80,28 +81,41 @@ namespace XRL.World.Parts
                 && !Message.IsNullOrEmpty()
                 && MoonKing != null)
             {
-                var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
+                try
+                {
+                    var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
 
-                string message = Message
+                    string message = Message
                         .StartReplace()
                         .AddObject(MoonKing)
                         .AddObject(The.Player)
                         .ToString();
 
-                if (IsMad)
-                    message = UD_Bones_FeverWarped.FeverWarpText(message);
+                    if (IsMad)
+                        message = UD_Bones_FeverWarped.FeverWarpText(message);
 
-                Popup.ShowSpace(
-                    Message: message,
-                    Title: Title
+                    string title = Title
                         .StartReplace()
                         .AddObject(MoonKing)
                         .AddObject(The.Player)
-                        .ToString(),
-                    AfterRender: new FlippableRender(render, false),
-                    PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
+                        .ToString();
 
-                ParentObject.Obliterate();
+                    SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
+                    string popupMessage = Markup.Transform(message);
+                    if (UIManager.UseNewPopups)
+                    {
+                        Popup.WaitNewPopupMessage(
+                            message: popupMessage,
+                            contextTitle: title,
+                            afterRender: new FlippableRender(render, false),
+                            PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
+                    }
+                    $"{title} {message}".StartReplace().AddObject(MoonKing).EmitMessage(AlwaysVisible: true);
+                }
+                finally
+                {
+                    ParentObject?.Obliterate();
+                }
             }
         }
 

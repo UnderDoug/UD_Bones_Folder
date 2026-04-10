@@ -130,7 +130,7 @@ namespace XRL.World.Parts
         public static string GetLunarColorAtIndex(int Offset)
         {
             using var colors = BorrowScopeDisposedColorsFromPool();
-            return colors[Offset.SafeModulo(colors.Count)];
+            return colors[Offset.NegSafeModulo(colors.Count)];
         }
         public static int GetLunarColorIndex(string Color)
         {
@@ -252,7 +252,7 @@ namespace XRL.World.Parts
             if (TileColor.IsNullOrEmpty()
                 || E.CurrentTileColor.Length > 1
                 || !IsLunarColor(E.CurrentTileColor)
-                || E.KeyframeOfLastFrame < Keyframe)
+                || E.KeyframeOfLastFrame != Keyframe)
             {
                 TileColor = GetLunarColorAtIndex(Keyframe);
                 DetailColor = GetLunarColorAtIndex(Keyframe + 1);
@@ -293,38 +293,6 @@ namespace XRL.World.Parts
             int? AnimationLengthInFrames = null
             )
             => GetCurrentAnimationKeyframe(Offset, out _, AnimationFrameDuration, AnimationLengthInFrames);
-
-        public override bool Render(RenderEvent E)
-        {
-            var animationEvent = new ColorAnimationEvent
-            {
-                Offset = FrameOffset,
-                KeyframeOfLastFrame = KeyframeOfLastFrame,
-                CurrentTileColor = TileColor,
-                CurrentDetailColor = DetailColor,
-                FrameDuration = AnimationFrameDuration,
-                LengthInFrames = AnimationLengthInFrames,
-            };
-            if (TryGetLunarColorPair(
-                E: ref animationEvent,
-                TileColor: out TileColor,
-                DetailColor: out DetailColor,
-                Frame: out _,
-                Keyframe: out KeyframeOfLastFrame))
-                LunarObjectColorChangedEvent.Send(ParentObject, TileColor, DetailColor, IsMad, KeyframeOfLastFrame);
-
-            if (Options.EnableFlashingLightEffects
-                && E.ColorsVisible
-                && ParentObject.Render is Render render)
-            {
-                render.ColorString = GetTileColor();
-                render.TileColor = GetTileColor();
-
-                if (IsMad)
-                    render.DetailColor = GetDetailColor();
-            }
-            return base.Render(E);
-        }
 
         [VariablePostProcessor(Keys = new string[] { "LunarShader" })]
         public static void LunarShaderPost(DelegateContext Context)
@@ -385,6 +353,38 @@ namespace XRL.World.Parts
                 return ApplyAnimatedLunarShader(text, keyframe);
             }
             return null;
+        }
+
+        public override bool Render(RenderEvent E)
+        {
+            var animationEvent = new ColorAnimationEvent
+            {
+                Offset = FrameOffset,
+                KeyframeOfLastFrame = KeyframeOfLastFrame,
+                CurrentTileColor = TileColor,
+                CurrentDetailColor = DetailColor,
+                FrameDuration = AnimationFrameDuration,
+                LengthInFrames = AnimationLengthInFrames,
+            };
+            if (TryGetLunarColorPair(
+                E: ref animationEvent,
+                TileColor: out TileColor,
+                DetailColor: out DetailColor,
+                Frame: out _,
+                Keyframe: out KeyframeOfLastFrame))
+                LunarObjectColorChangedEvent.Send(ParentObject, TileColor, DetailColor, IsMad, KeyframeOfLastFrame);
+
+            if (Options.EnableFlashingLightEffects
+                && E.ColorsVisible
+                && ParentObject.Render is Render render)
+            {
+                render.ColorString = GetTileColor();
+                render.TileColor = GetTileColor();
+
+                if (IsMad)
+                    render.DetailColor = GetDetailColor();
+            }
+            return base.Render(E);
         }
     }
 }

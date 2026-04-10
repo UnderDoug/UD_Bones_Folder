@@ -295,7 +295,11 @@ namespace UD_Bones_Folder.Mod.UI
                 || MainMenuBones.ReturnToBones != null)
             {
                 Preselected ??= MainMenuBones.ReturnToBones;
-                BonesScroller.scrollContext.selectedPosition = Math.Clamp(Bones.FindIndex(e => e is BonesInfoData bonesData && bonesData.BonesInfo.ID == Preselected.ID), 0, Bones.Count - 1);
+                bool isBones(FrameworkDataElement element)
+                    => element is BonesInfoData bonesData
+                    && bonesData.BonesInfo.ID == Preselected.ID
+                    ;
+                BonesScroller.scrollContext.selectedPosition = Math.Clamp(Bones.FindIndex(isBones), 0, Bones.Count - 1);
             }
             else
             if (SelectFirst)
@@ -309,6 +313,9 @@ namespace UD_Bones_Folder.Mod.UI
 
             BonesScroller.onSelected.RemoveAllListeners();
             BonesScroller.onSelected.AddListener(SelectedBones);
+
+            BonesScroller.onHighlight.RemoveAllListeners();
+            BonesScroller.onHighlight.AddListener(HighlightedBones);
 
             AllBonesMenuBar.onSelected ??= new();
             AllBonesMenuBar.onSelected.RemoveAllListeners();
@@ -364,6 +371,29 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (data is BonesInfoData bonesData)
                 CompletionSource?.TrySetResult(bonesData.BonesInfo);
+        }
+
+        public void HighlightedBones(FrameworkDataElement data)
+        {
+            if (data is BonesInfoData bonesData)
+            {
+                for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
+                {
+                    if (Bones[i] != bonesData)
+                        continue;
+
+                    if (BonesScroller.selectionClones[i] is FrameworkUnityScrollChild selectionCloneI
+                        && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
+                    {
+                        // currently doesn't *do* anything.
+                        // idea was to change the colours on highlight.
+                        saveRow.setBonesData(bonesData);
+                        saveRow.Update();
+                        BonesScroller.PostSetup.Invoke(selectionCloneI, selectionCloneI.scrollContext, bonesData, i);
+                        break;
+                    }
+                }
+            }
         }
 
         public void SelectedAllBones(FrameworkDataElement data)

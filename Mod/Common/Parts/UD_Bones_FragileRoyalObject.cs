@@ -15,9 +15,9 @@ namespace XRL.World.Parts
         public static BallBag<Func<GameObject, bool>> GetDamageFuncBag()
             => new()
             {
-                { MakeItBroken, 150 },
-                { MakeItJackedUp, 100 },
-                { MakeItRusted, 100 },
+                { MakeItBroken, 350 },
+                { MakeItJackedUp, 200 },
+                { MakeItRusted, 200 },
                 { MakeItVeryDamaged, 75 },
                 { MakeItDamaged, 35 },
                 { MakeItDented, 10 },
@@ -26,11 +26,13 @@ namespace XRL.World.Parts
 
         public static bool MakeItBroken(GameObject Object)
             => Object?.HasEffect<Broken>() is not false
+            || Object?.HasEffect<Rusted>() is not false
             || Object.ForceApplyEffect(new Broken())
             ;
 
         public static bool MakeItRusted(GameObject Object)
             => Object?.HasEffect<Rusted>() is not false
+            || Object?.HasEffect<Broken>() is not false
             || Object.ForceApplyEffect(new Rusted())
             ;
 
@@ -89,13 +91,18 @@ namespace XRL.World.Parts
                 {
                     var damageFuncs = GetDamageFuncBag();
 
-                    int attempts = 0;
-                    while (!damageFuncs.IsNullOrEmpty()
-                        && attempts++ < damageFuncs.Count)
-                        if (damageFuncs.PickOne()?.Invoke(ParentObject) is not false)
-                            break;
-
-                    ParentObject.RemovePart(this);
+                    try
+                    {
+                        int attempts = 0;
+                        while (!damageFuncs.IsNullOrEmpty()
+                            && attempts++ < damageFuncs.Count)
+                            if (damageFuncs.PickOne().Invoke(ParentObject))
+                                break;
+                    }
+                    finally
+                    {
+                        ParentObject?.RemovePart(this);
+                    }
                 }
             }
         }

@@ -78,9 +78,6 @@ namespace XRL.World.Parts
             return false;
         }
 
-        public override bool WantTurnTick()
-            => true;
-
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID

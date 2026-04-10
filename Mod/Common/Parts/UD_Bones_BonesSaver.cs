@@ -121,7 +121,7 @@ namespace XRL.World.Parts
             ;
 
         public static void BonesExceptionCleanUp(GameObject Player)
-            => TidyLunarObjectsEvent.Send(Player, Context: "Exception")
+            => TidyLunarObjectsEvent.SendGameID(Player, Context: "Exception")
             ;
 
         public void BonesExceptionCleanUp()
@@ -292,7 +292,7 @@ namespace XRL.World.Parts
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
                     if (!willDie)
-                        TidyLunarObjectsEvent.Send(The.Player, Context: "Wish");
+                        TidyLunarObjectsEvent.SendGameID(Context: "Wish");
 
                     Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
                     return true;

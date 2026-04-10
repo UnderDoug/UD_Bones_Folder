@@ -17,7 +17,21 @@ namespace XRL.World.Parts
 
         public string RegalTitle => GetRegalTitle();
 
-        public bool IsMad;
+        protected bool? _IsMad;
+        public bool IsMad
+        {
+            get
+            {
+                if (ParentObject != null)
+                    _IsMad = ParentObject.GetStringProperty(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}").EqualsNoCase($"{true}");
+                return _IsMad.GetValueOrDefault();
+            }
+            set
+            {
+                _IsMad = value;
+                ParentObject?.SetStringProperty(Const.IS_MAD_PROP, _IsMad.GetValueOrDefault() ? $"{true}" : null, true);
+            }
+        }
 
         public static string GetRegalTitle(GameObject LunarRegent)
         {
@@ -48,6 +62,13 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
+            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
+        }
+
+        public override void Initialize()
+        {
+            base.Initialize();
+
             ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
             var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
                 .OverrideBonesID<UD_Bones_LunarColors>(BonesID);

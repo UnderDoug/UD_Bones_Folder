@@ -13,28 +13,23 @@ using XRL.World.Effects;
 using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 
+using SerializeField = UnityEngine.SerializeField;
+
 namespace XRL.World.Parts
 {
     [Serializable]
     public class UD_Bones_FeverWarped : UD_Bones_BaseLunarPart
     {
-        private static readonly char[] CRYPTIC_MACHINE_CHARS = new char[40]
-        {
-            '³', '\u00b4', 'µ', '¶', '·', '\u00b8', '¹', 'º', '»', '¼',
-            '½', '¾', '¿', 'À', 'Á', 'Â', 'Ã', 'Ä', 'Å', 'Æ',
-            'Ç', 'È', 'É', 'Ê', 'Ë', 'Ì', 'Í', 'Î', 'Ï', 'Ð',
-            'Ñ', 'Ò', 'Ó', 'Ô', 'Õ', 'Ö', '×', 'Ø', 'Ù', 'Ú'
-        };
-
         protected string TileColor;
         protected string DetailColor;
 
-        protected bool TileOnly;
+        [SerializeField]
+        private bool TileOnly;
 
         protected string OriginalShortDesc;
 
-        private string DisplayNameCache;
-        private string AdjectiveCache;
+        protected string DisplayNameCache;
+        protected string AdjectiveCache;
 
         public UD_Bones_FeverWarped()
         {
@@ -50,6 +45,25 @@ namespace XRL.World.Parts
         {
             base.Attach();
 
+            if (ParentObject.TryGetPart(out Description description))
+            {
+                if (!description._Short.IsNullOrEmpty())
+                    OriginalShortDesc = description._Short;
+                else
+                    OriginalShortDesc = $"{ParentObject.IndefiniteArticleDescriptiveCategory(true, "wretched")}, warped into an unfamiliar configuration.";
+
+                string bakedDescription = OriginalShortDesc
+                    .StartReplace()
+                    .AddObject(ParentObject)
+                    .ToString();
+
+                description._Short = FeverWarpText(bakedDescription);
+            }
+        }
+
+        public override void Initialize()
+        {
+            base.Initialize();
             ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
@@ -68,23 +82,8 @@ namespace XRL.World.Parts
                 }
             }
 
-            if (ParentObject.TryGetPart(out Description description))
-            {
-                if (!description._Short.IsNullOrEmpty())
-                    OriginalShortDesc = description._Short;
-                else
-                    OriginalShortDesc = $"{ParentObject.IndefiniteArticleDescriptiveCategory(true, "wretched")}, warped into an unfamiliar configuration.";
-
-                string bakedDescription = OriginalShortDesc
-                    .StartReplace()
-                    .AddObject(ParentObject)
-                    .ToString();
-
-                description._Short = FeverWarpText(bakedDescription);
-            }
-
             var render = ParentObject.RequirePart<Render>();
-            
+
             BonesManager.System.RequireAlternativeTileAndBlueprintForGameObject(
                 BlueprintSpec: new Utils.BlueprintSpec(ParentObject),
                 Blueprint: out string altBlueprint,
@@ -171,7 +170,7 @@ namespace XRL.World.Parts
             if (!firstCorruption.IsNullOrEmpty()
                 && startDiff > 0
                 && startDiff < firstCorruption.Length)
-                corruptions.Insert(0, firstCorruption[..^startDiff]);
+                corruptions.Insert(0, firstCorruption[startDiff..]);
 
             if (!lastCorruption.IsNullOrEmpty()
                 && endDiff > 0
@@ -227,11 +226,11 @@ namespace XRL.World.Parts
 
                     int endPos = Math.Clamp(startPos + description.Length + colorOffset, 0, Description.Length);
 
-                    if (startPos <= endPos)
+                    if (startPos < endPos)
                         fragments.Add(text[startPos..endPos]);
 
                     if (i == descriptions.Count - 1
-                        && endPos < Description.Length -1)
+                        && endPos < Description.Length)
                         fragments.Add(text[endPos..]);
 
                     startPos = endPos;
@@ -245,8 +244,8 @@ namespace XRL.World.Parts
                 {
                     int index = (int)Math.Floor(i / 2.0);
                     if ((i + moduloOffset) % 2 == 0)
-                        return text + $"=LunarShader:{fragments[i]}:{index.SafeModulo(lunarColors.Count)}=";
-                    return text + fragments[i];
+                        return text + fragments[i];
+                    return text + $"=LunarShader:{fragments[i]}:{index.NegSafeModulo(lunarColors.Count)}=";
                 });
 
             if (DoShaderReplace)
@@ -336,8 +335,12 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
         {
-            DisplayNameCache = null;
-            AdjectiveCache = null;
+            if (Options.EnableFlashingLightEffects
+                || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
+            {
+                DisplayNameCache = null;
+                AdjectiveCache = null;
+            }
             TileColor = E.TileColor;
             DetailColor = E.DetailColor;
             return base.HandleEvent(E);

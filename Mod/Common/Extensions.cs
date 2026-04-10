@@ -111,16 +111,26 @@ namespace UD_Bones_Folder.Mod
 
         public static void setBonesData(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
-            SaveRow.deleteButton ??= new();
-            SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
+            SaveRow.SetBonesIcon(BonesData);
+            SaveRow.SetBonesText(BonesData);
+            SaveRow.SetBonesModsDiffer(BonesData);
+            SaveRow.SetBonesDeleteButton();
+            SaveRow.Update();
+        }
 
+        public static void SetBonesIcon(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        {
             var bonesInfo = BonesData.BonesInfo;
             var bonesJSON = bonesInfo?.GetBonesJSON();
+
             var bonesRender = bonesInfo.Render;
+
             var colorChars = bonesRender.GetColorChars();
             var tileColor = colorChars.foreground;
             var detailColor = colorChars.detail;
+
             SaveRow.imageTinyFrame ??= new();
+
             if (bonesJSON != null)
             {
                 SaveRow.imageTinyFrame.sprite = SpriteManager.GetUnitySprite(bonesRender.GetTile());
@@ -149,14 +159,26 @@ namespace UD_Bones_Folder.Mod
             }
 
             if (SaveRow.imageTinyFrame.ThreeColor)
-                SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: true);
-
+                SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: false);
+            
             SaveRow.imageTinyFrame.Sync(force: true);
+        }
+
+        public static void SetBonesText(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        {
+            var bonesInfo = BonesData.BonesInfo;
+
             SaveRow.TextSkins[0].SetText($"{bonesInfo.GetName()}::{bonesInfo.Description}".Colored("W"));
             SaveRow.TextSkins[1].SetText($"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
+        }
+
+        public static void SetBonesModsDiffer(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        {
+            var bonesInfo = BonesData.BonesInfo;
+
             SaveRow.modsDiffer.SetActive(value: true);
             if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsDifferTextSkins)
             {
@@ -170,6 +192,12 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
+        }
+
+        public static void SetBonesDeleteButton(this SaveManagementRow SaveRow)
+        {
+            SaveRow.deleteButton ??= new();
+            SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
             if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
             {
                 foreach (var deleteButtonTextSkin in deleteButtonTextSkins)
@@ -182,7 +210,6 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
-            SaveRow.Update();
         }
 
         public static string Colored(this string Text, string Color)
@@ -595,7 +622,7 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public static int SafeModulo(this int Number, int Value)
+        public static int NegSafeModulo(this int Number, int Value)
             => (Value + (Number % Value)) % Value;
 
         public static IEnumerable<Range> GetRanges(this IEnumerable<string> Source, int Offset = 0, int? MaxLengthOverride = null)

@@ -388,13 +388,13 @@ namespace UD_Bones_Folder.Mod
 
         public virtual ColorChars GetColorChars()
         {
-            string madForeground = GetLunarColorAtIndex(GetCurrentAnimationKeyframe(FrameOffset));
-            char madDetail = GetNextLunarColor(madForeground)[0];
+            // string madForeground = GetLunarColorAtIndex(GetCurrentAnimationKeyframe(FrameOffset));
+            // char madDetail = GetNextLunarColor(madForeground)[0];
             return new ColorChars
             {
                 background = GetBackgroundColor(),
-                foreground = GetIsMad() ? madForeground[0] : GetForegroundColor(),
-                detail = GetIsMad() ? madDetail : GetDetailColor(),
+                foreground = GetForegroundColor(),// GetIsMad() ? madForeground[0] : GetForegroundColor(),
+                detail = GetDetailColor(),// GetIsMad() ? madDetail : GetDetailColor(),
             };
         }
 
