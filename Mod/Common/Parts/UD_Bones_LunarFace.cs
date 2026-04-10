@@ -83,6 +83,7 @@ namespace XRL.World.Parts
             || ID == GetDisplayNameEvent.ID
             || ID == BeforeBeginTakeActionEvent.ID
             || ID == EquippedEvent.ID
+            || ID == GetIntrinsicValueEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
@@ -116,6 +117,12 @@ namespace XRL.World.Parts
                 SetBonesID<UD_Bones_LunarFace>(The.Game?.GameID);
 
             return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetIntrinsicValueEvent E)
+        {
+            E.Value *= -1;
+            return true;
         }
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
