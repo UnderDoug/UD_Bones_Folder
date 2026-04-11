@@ -15,9 +15,6 @@ namespace UD_Bones_Folder.Mod
     [XRL.HasModSensitiveStaticCache]
     public static class UnityExtensions
     {
-        [XRL.ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        public static Dictionary<GameObject, IEnumerable<UnityElement>> UnityElementCache = new();
-
         public class UnityElement
         {
             public static int IDCounter;
@@ -97,14 +94,26 @@ namespace UD_Bones_Folder.Mod
             public string TypeNameString()
                 => $"{Component?.GetType()?.Name ?? "NO_TYPE"} | {Component?.gameObject?.name ?? "NO_NAME"}";
 
-            public string BaseString()
-                => $"{Depth.Indent(MaxIndent: 12)}[ID:{IDString}(P:{Parent?.IDString ?? RootID})]{TypeNameString()}, Children: {(DirectChildren?.Count)?.ToString() ?? "null"}";
+            public string IDStrings()
+                => $"[ID:{IDString}(P:{Parent?.IDString ?? RootID})]";
+
+            public string BaseString(bool IncludeID = false)
+                => $"{Depth.Indent(MaxIndent: 12)}{(IncludeID ? IDStrings() : null)}{TypeNameString()}, Children: {(DirectChildren?.Count)?.ToString() ?? "null"}";
+
+            public IEnumerable<string> ChildStrings()
+            {
+                foreach (var child in DirectChildren)
+                    yield return child.ToString();
+            }
 
             public override string ToString()
-                => Extras
-                    .Aggregate(
-                        seed: BaseString(),
-                        func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{(Depth+2).Indent(MaxIndent: 12)}: {n}"))
+                => ChildStrings()?.Aggregate(
+                    seed: Extras?
+                        .Aggregate(
+                            seed: BaseString(),
+                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{(Depth + 1).Indent(MaxIndent: 12)}: {n}"))
+                        ?? BaseString(),
+                    func: Utils.NewLineDelimitedAggregator)
                 ?? BaseString()
                 ;
 
@@ -141,31 +150,7 @@ namespace UD_Bones_Folder.Mod
                 if (Parent?.SameAs(Other.Parent) is not true)
                     return false;
 
-                //Utils.Log($"{2.Indent()}[{TypeNameString()} ({IDString},{Depth})] same as [{Other.TypeNameString()}] ({Other.IDString},{Other.Depth})");
                 return true;
-            }
-
-            public IEnumerable<UnityElement> Unpack(string prefix = null)
-            {
-                if (Component == null)
-                {
-                    Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(Component)} is null)");
-                    yield break;
-                }
-
-                if (!prefix.IsNullOrEmpty())
-                    prefix += "/";
-
-                prefix += IDString;
-
-                //Utils.Log($"{nameof(Unpack)}({prefix}, {nameof(DirectChildren)}: {DirectChildren?.Count ?? 0})");
-                //Utils.Log($"{nameof(Unpack)}{BaseString()}");
-                yield return this;
-
-                if (!DirectChildren.IsNullOrEmpty())
-                    foreach (var child in DirectChildren)
-                        foreach (var element in child.Unpack(prefix))
-                            yield return element;
             }
         }
 
@@ -182,6 +167,14 @@ namespace UD_Bones_Folder.Mod
                 {
                     label = nameof(rectTransform.rect);
                     value = $"{rectTransform.rect}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(rectTransform.position);
+                    value = $"{rectTransform.position}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(rectTransform.anchoredPosition);
+                    value = $"{rectTransform.anchoredPosition}";
                     output.Add(MakeEntry());
                 }
                 else
@@ -307,10 +300,7 @@ namespace UD_Bones_Folder.Mod
             if (GameObject == null)
                 yield break;
 
-            if (!UnityElementCache.ContainsKey(GameObject))
-                UnityElementCache[GameObject] = GameObject.GetComponentTreeInternal(ParentElement);
-
-            foreach (var element in UnityElementCache[GameObject])
+            foreach (var element in GameObject.GetComponentTreeInternal(ParentElement))
                 if (!RootsOnly
                     || element.IsRoot)
                     yield return element;
@@ -320,16 +310,17 @@ namespace UD_Bones_Folder.Mod
         {
             if (UnityElement == null)
             {
-                //Utils.Log($"No element.");
+                // Utils.Log($"No element.");
                 yield break;
             }
 
             if (UnityElement.Component == null)
             {
-                //Utils.Log($"{UnityElement?.IDString ?? "NO_ID"} had no component.");
+                // Utils.Log($"{UnityElement?.IDString ?? "NO_ID"} had no component.");
                 yield break;
             }
 
+            // Utils.Log($"{UnityElement?.IDString ?? "NO_ID"}");
             yield return UnityElement;
 
             if (UnityElement.Component is Transform transform)
@@ -343,26 +334,14 @@ namespace UD_Bones_Folder.Mod
 
         public static void LogComponentTree(this GameObject GameObject, string Context = null)
         {
+            UnityElement.IDCounter = 0;
             using var output = ScopeDisposedList<UnityElement>.GetFromPool();
             var componentTree = GameObject.GetComponentTree();
             foreach (var element in componentTree)
-            {
-                foreach (var unpacked in element.Unpack())
-                {
-                    if (!output.Any(e => element.SameAs(e)))
-                    {
-                        output.Add(element);
-                        //Utils.Log($"{1.Indent()}: Added {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
-                    }
-                    else
-                    {
-                        //Utils.Log($"{1.Indent()}: Skipped {(element.SameAs(unpacked) ? "root " : null)}element {element.ID}");
-                    }
-                }
-            }
+                if (!output.Any(e => element.SameAs(e)))
+                    output.Add(element);
 
-            Context ??= $"{nameof(LogComponentTree)}({GameObject.GetType().Name}: {GameObject.name}):";
-            Utils.Log(Context);
+            Utils.Log(Context ?? $"{nameof(LogComponentTree)}({GameObject.GetType().Name}: {GameObject.name}):");
 
             if (!output.IsNullOrEmpty())
                 output.Loggregate(

@@ -785,7 +785,7 @@ namespace UD_Bones_Folder.Mod
             )
         {
             var orderedBonesInfos = (await GetSaveBonesInfoAsync())
-                    ?? Enumerable.Empty<SaveBonesInfo>();
+                ?? Enumerable.Empty<SaveBonesInfo>();
 
             if (orderedBonesInfos.IsNullOrEmpty())
             {
@@ -850,7 +850,6 @@ namespace UD_Bones_Folder.Mod
 
                 string somethingWrongString = !orderedBonesInfos.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null;
                 await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}");
-
                 Loading.SetLoadingStatus(null);
             }
             return orderedBonesInfos;
@@ -922,6 +921,82 @@ namespace UD_Bones_Folder.Mod
                 success = false;
             }
             return success;
+        }
+
+        public static async Task<Dictionary<string, string>> GetSaveBonesMenuBarConfigAsync()
+        {
+            var output = new Dictionary<string, string>();
+            string currentPath = null;
+
+            foreach (string bonesPath in BonesPaths)
+            {
+                try
+                {
+                    currentPath = bonesPath;
+                    if (!Directory.Exists(bonesPath))
+                        continue;
+
+                    if (await GetSaveBonesMenuBarConfigRawAsync(bonesPath) is string bonesConfig)
+                    {
+                        if (bonesConfig.Contains('\n')
+                            && bonesConfig.Split('\n') is string[] lines)
+                        {
+                            foreach (var line in lines)
+                            {
+                                if (line.Contains(':')
+                                    && line.Split(':') is string[] kvp
+                                    && kvp.Length > 1
+                                    && !kvp[0].IsNullOrEmpty()
+                                    && !kvp[1].IsNullOrEmpty())
+                                {
+                                    if (!output.ContainsKey(kvp[0]))
+                                        output[kvp[0]] = kvp[1];
+                                }
+                            }
+                        }
+                    }
+
+                }
+                catch (Exception x)
+                {
+                    SeriousBonesError(x, currentPath);
+                    output.Clear();
+                }
+            }
+
+            return output;
+        }
+
+        public static async Task<string> GetSaveBonesMenuBarConfigRawAsync(string Directory)
+        {
+            try
+            {
+                if (Path.GetFileNameWithoutExtension(Directory).EqualsNoCase("mods")
+                    || Path.GetFileNameWithoutExtension(Directory).EqualsNoCase("textures"))
+                    return null;
+
+                if (Path.Combine(Directory, "menubar.config") is string path
+                    && File.Exists(path))
+                {
+                    try
+                    {
+                        return await File.ReadAllTextAsync(path);
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Loading menubar config {path}", x);
+                    }
+                }
+            }
+            catch (ThreadInterruptedException x)
+            {
+                throw x;
+            }
+            catch (Exception x)
+            {
+                Utils.Warn(x);
+            }
+            return null;
         }
     }
 }

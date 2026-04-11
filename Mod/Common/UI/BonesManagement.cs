@@ -32,6 +32,18 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static MenuOption BACK_BUTTON => EmbarkBuilderOverlayWindow.BackMenuOption;
 
+        private static Transform MenuBarParentTransfrom;
+        private static Vector2 MenuBarAnchoredPos;
+        private static Vector2 MenuBarAnchorMin;
+        private static Vector2 MenuBarAnchorMax;
+
+        private static RectTransform BonesScrollerVertScroll;
+        private static VerticalLayoutGroup VLayout;
+
+        private static HasSelectionCaret _SelectionCaret;
+        private static HasSelectionCaret SelectionCaret => _SelectionCaret ??= Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar)
+                ?.GetComponentInChildren<HasSelectionCaret>();
+
         public static List<MenuOption> LegendBarOptions = new List<MenuOption>
         {
             new MenuOption
@@ -87,6 +99,9 @@ namespace UD_Bones_Folder.Mod.UI
         public bool WasInScroller;
 
         public static bool Printed = false;
+
+        protected bool MoveAllBonesMenuBar;
+        protected bool MoveLegendBar;
 
         protected static void InitializeWithUIManager()
         {
@@ -145,61 +160,66 @@ namespace UD_Bones_Folder.Mod.UI
             else
                 Utils.Error($"{nameof(BonesManagement)}.{nameof(Init)}", new NullReferenceException($"{nameof(BackButton)} must not be null"));
 
+            /*if (BonesScroller.GetComponentsInChildren<FrameworkScroller>() is FrameworkScroller[] frameworkScrollers
+                && frameworkScrollers.Length > 1)
+            {
+                foreach (var childRectTransfrom in frameworkScrollers[0].GetComponentsInChildren<RectTransform>())
+                {
+                    if (childRectTransfrom.gameObject.name == "VLayout")
+                    {
+                        BonesScrollerVertScroll = childRectTransfrom;
+                        break;
+                    }
+                }
+                MenuBarParentTransfrom = frameworkScrollers[1].transform.parent;
+                if (frameworkScrollers[1].transform is RectTransform menuBarRectTransfrom)
+                {
+                    Utils.Log($"{nameof(MenuBarParentTransfrom)}.{nameof(menuBarRectTransfrom.rect)}.{nameof(menuBarRectTransfrom.rect.position)}: {menuBarRectTransfrom.rect.position}");
+                    MenuBarAnchoredPos = menuBarRectTransfrom.anchoredPosition;
+                    MenuBarAnchorMin = menuBarRectTransfrom.anchorMin;
+                    MenuBarAnchorMax = menuBarRectTransfrom.anchorMax;
+                }
+                frameworkScrollers[1].gameObject.SetActive(value: false);
+                frameworkScrollers[1].GetNavigationContext().disabled = true;
+                frameworkScrollers[1].choices.Clear();
+                frameworkScrollers[1].selectionClones.Clear();
+                frameworkScrollers[1].DestroyImmediate();
+            }*/
+
+            MenuBarParentTransfrom = BonesScroller.transform;
+
+            
             if (BonesScroller.GetComponentsInChildren<FrameworkScroller>() is FrameworkScroller[] frameworkScrollers
                 && frameworkScrollers.Length > 1)
                 LegendBar = frameworkScrollers[1];
+
+            /*
+            if (LegendBar.GetComponent<RectTransform>() is RectTransform hotkeyBarRectTransform)
+                hotkeyBarRectTransform.Translate(0, hotkeyBarRectTransform.rect.y * 3.5f, 0);
+            */
 
             if (BonesScroller.GetComponentsInChildren<UITextSkin>() is UITextSkin[] uITextSkins)
                 foreach (var uITextSkin in uITextSkins)
                     if (uITextSkin.name == "header")
                         uITextSkin.SetText("{{W|MANAGE BONES}}");
-
-            // AllBonesMenuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            
+            /**/
             AllBonesMenuBar = Instantiate(LegendBar);
+
+            //AllBonesMenuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            //SetParentTransform(AllBonesMenuBar, BonesScroller.transform);
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
-
-            //AllBonesMenuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(AllBonesMenuBar), nameof(AllBonesMenuBar.gameObject))} {AllBonesMenuBar.gameObject.name}");
-            //var menuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
-            //menuBar.gameObject.LogComponentTree($"{Utils.CallChain(nameof(EmbarkBuilderOverlayWindow), nameof(menuBar), nameof(menuBar.gameObject))} {menuBar.gameObject.name}");
-
-            /*
-            // if (AllBonesMenuBar.transform.Find())
-            if (menuBar.transform.Find("KeyMenuOption") is RectTransform keyMenuOption)
-            {
-
-            }*/
-            /*
-            if (AllBonesMenuBar.GetComponentInChildren<LayoutElement>() is LayoutElement allBonesLayout
-                && LegendBar.GetComponentInChildren<LayoutElement>() is LayoutElement legendLayout)
-            {
-                allBonesLayout.preferredWidth = legendLayout.preferredWidth;
-                allBonesLayout.minWidth = legendLayout.minWidth;
-                allBonesLayout.preferredHeight = legendLayout.preferredHeight;
-                allBonesLayout.minHeight = legendLayout.minHeight;
-            }
-            */
+            AllBonesMenuBar.transform.SetAsLastSibling();
 
             LegendBar.transform.SetAsLastSibling();
             
-            if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform)
-                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * -0.5f, 0);
+            if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform
+                && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
+                //allBonesRectTransform.Translate(0, (bonesScrollerParentRectTransform.rect.y * GetConfigBonesMulti()) + (allBonesRectTransform.rect.y * GetConfigMenuMulti()), 0);
+                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);
 
-            if (LegendBar.GetComponent<RectTransform>() is RectTransform hotkeyBarRectTransform)
-                hotkeyBarRectTransform.Translate(0, hotkeyBarRectTransform.rect.y * 0.5f, 0);
-
-            /*
-            instance?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init)));
-            SaveManagement.instance?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance)));
-            Utils.Log("=".ThisManyTimes(45));
-
-            BonesScroller?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init), nameof(BonesScroller)));
-            SaveManagement.instance?.savesScroller?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance), nameof(SaveManagement.instance.savesScroller)));
-            Utils.Log("=".ThisManyTimes(45));
-
-            HotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(BonesManagement), nameof(Init), nameof(HotkeyBar)));
-            SaveManagement.instance?.hotkeyBar?.gameObject.PrintComponents(Utils.CallChain(nameof(SaveManagement), nameof(instance), nameof(SaveManagement.instance.hotkeyBar)));
-            Utils.Log("=".ThisManyTimes(45));
-            */
+            if (LegendBar.GetComponent<RectTransform>() is RectTransform legendBarRectTransform)
+                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);
         }
 
         public void SetParentTransform(Component Component, Transform Transform = null)
@@ -212,11 +232,13 @@ namespace UD_Bones_Folder.Mod.UI
         public void SetupContext()
         {
             //Utils.Log($"{nameof(BonesManagement)}.{nameof(SetupContext)}");
+
             MainNavContext.buttonHandlers = new Dictionary<InputButtonTypes, Action>();
             MainNavContext.buttonHandlers.Set(InputButtonTypes.CancelButton, Event.Helpers.Handle(Exit));
 
             MidHorizNav.SetAxis(InputAxisTypes.NavigationXAxis);
             MidHorizNav.contexts.Clear();
+            MidHorizNav.contexts.Add(AllBonesMenuBar.GetNavigationContext());
             MidHorizNav.contexts.Add(BackButton.navigationContext);
             MidHorizNav.contexts.Add(BonesScroller.GetNavigationContext());
             MidHorizNav.Setup();
@@ -228,6 +250,76 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
+            // ##############################
+
+            /*AllBonesMenuBar?.gameObject.SetActive(value: false);
+            AllBonesMenuBar?.DestroyImmediate();
+            AllBonesMenuBar = null;*/
+
+            /*
+            LegendBar?.gameObject.SetActive(value: false);
+            LegendBar?.DestroyImmediate();
+            LegendBar = null;
+            */
+
+            /*AllBonesMenuBar = Instantiate(LegendBar);
+            //AllBonesMenuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            //SetParentTransform(AllBonesMenuBar, BonesScroller.transform);
+            //SetParentTransform(AllBonesMenuBar, MenuBarParentTransfrom);
+            SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
+            AllBonesMenuBar.transform.SetAsLastSibling();*/
+
+            LegendBar.gameObject.name = "LegendBar";
+            AllBonesMenuBar.gameObject.name = "AllBonesMenuBar";
+
+            /*
+            LegendBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+            //SetParentTransform(LegendBar, BonesScroller.transform);
+            SetParentTransform(LegendBar, MenuBarParentTransfrom);
+            LegendBar.transform.SetAsLastSibling();*/
+
+            /*if (BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
+            {
+                float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
+                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();
+
+                if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform)
+                {
+                    float childWidth = 0;
+                    foreach (var childRect in allBonesRectTransform.GetComponentsInChildren<RectTransform>())
+                    {
+                        if (childRect.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            Utils.Log($"Adding {childRect.rect.width} to {nameof(AllBonesMenuBar)} {nameof(childWidth)}");
+                            childWidth += childRect.rect.width;
+                        }
+                    }
+                    allBonesRectTransform.Translate(
+                        x: bonesScrollerXWithMulti + (childWidth * GetConfigMenuXMulti()),
+                        y: bonesScrollerYWithMulti + (allBonesRectTransform.rect.y * GetConfigMenuYMulti()),
+                        z: 0);
+                }
+
+                if (LegendBar.GetComponent<RectTransform>() is RectTransform legendRectTransform)
+                {
+                    float childWidth = 0;
+                    foreach (var childRect in legendRectTransform.GetComponentsInChildren<RectTransform>())
+                    {
+                        if (childRect.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            Utils.Log($"Adding {childRect.rect.width} to {nameof(LegendBar)} {nameof(childWidth)}");
+                            childWidth += childRect.rect.width;
+                        }
+                    }
+                    legendRectTransform.Translate(
+                        x: bonesScrollerXWithMulti + (childWidth * GetConfigLegendXMulti()),
+                        y: bonesScrollerYWithMulti + (legendRectTransform.rect.y * GetConfigLegendYMulti()),
+                        z: 0);
+                }
+            }*/
+
+            // ##############################
+
             if (!Printed
                 && Printed)
             {
@@ -325,10 +417,17 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar.onHighlight.RemoveAllListeners();
             AllBonesMenuBar.onHighlight.AddListener(HighlightedAllBones);
 
+            //MoveAllBonesMenuBar = true;
+            //MoveLegendBar = true;
+
             SetupContext();
             EnableNavContext();
             UpdateLegendBar();
             UpdateMenuBars();
+
+            Utils.Log("=".ThisManyTimes(45));
+            instance.gameObject.LogComponentTree($"{Utils.CallChain(nameof(BonesManagement), nameof(instance), nameof(instance.gameObject))} {instance.gameObject.name}");
+            Utils.Log("=".ThisManyTimes(45));
         }
 
         public override void Hide()
@@ -385,8 +484,7 @@ namespace UD_Bones_Folder.Mod.UI
                     if (BonesScroller.selectionClones[i] is FrameworkUnityScrollChild selectionCloneI
                         && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
                     {
-                        // currently doesn't *do* anything.
-                        // idea was to change the colours on highlight.
+                        // this *was* working, but seemingly doesn't, now...
                         saveRow.setBonesData(bonesData);
                         saveRow.Update();
                         BonesScroller.PostSetup.Invoke(selectionCloneI, selectionCloneI.scrollContext, bonesData, i);
@@ -401,13 +499,16 @@ namespace UD_Bones_Folder.Mod.UI
             if (data is MenuOption menuData)
             {
                 if (menuData.InputCommand == CMD_INSERT)
+                {
                     HandleDeleteAll();
+                    //CompletionSource?.TrySetResult(null);
+                }
             }
         }
 
         public void HighlightedAllBones(FrameworkDataElement data)
         {
-            if (data is MenuOption menuData)
+            /*if (data is MenuOption menuData)
             {
                 if (menuData.InputCommand == CMD_INSERT
                     && !menuData.Description.StartsWith("{{red|"))
@@ -416,7 +517,7 @@ namespace UD_Bones_Folder.Mod.UI
                 if (menuData.InputCommand != CMD_INSERT
                     && menuData.Description.StartsWith("{{red|"))
                     menuData.Description = menuData.Description.Strip();
-            }
+            }*/
         }
 
         public async Task<SaveBonesInfo> BonesMenu()
@@ -485,85 +586,18 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (await BonesManager.CremateAllMoonKings(DisableNavContext, EnableNavContext) is IEnumerable<SaveBonesInfo> currentBonesInfos)
             {
-                Bones ??= new();
-                Bones.Clear();
                 if (currentBonesInfos.IsNullOrEmpty()
                     || SaveBonesInfosToUIElements(currentBonesInfos) is not IEnumerable<BonesInfoData> bareBones
                     || !bareBones.IsNullOrEmpty())
+                {
                     Exit();
+                }
                 else
                 {
+                    /*Bones ??= new();
+                    Bones.Clear();
                     Bones.AddRange(bareBones);
-                    Show();
-                }
-            }
-
-            if (int.TryParse("1", out int result) && result > 1)
-            {
-                List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
-                if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
-                    buttons = PopupMessage.AcceptCancelButton;
-
-                string title = $"Cremate All".Colored("R");
-                string confirmText = "CREMATE";
-                string typeToConfirmText = "\n\nType '" + confirmText + "' to confirm.";
-                string defaultValue = string.Empty;
-                if (CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.Console)
-                {
-                    typeToConfirmText = string.Empty;
-                    defaultValue = null;
-                }
-                if ((await Popup.AskStringAsync(
-                        Message: "Are you sure you want to cremate {{red|all}} bones?" + typeToConfirmText,
-                        Default: defaultValue,
-                        WantsSpecificPrompt: confirmText,
-                        MaxLength: confirmText.Length)
-                    ) == confirmText)
-                {
-                    DisableNavContext();
-
-                    int countBefore = Bones.Count;
-                    int paddingAmount = countBefore.ToString().Length;
-                    int cremateCounter = 0;
-                    int crematedCounter = 0;
-                    foreach (var frameworkDataElement in Bones)
-                    {
-                        cremateCounter++;
-                        if (frameworkDataElement is not BonesInfoData bonesData
-                            || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
-                            continue;
-
-                        Loading.SetLoadingStatus($"Cremating {cremateCounter.ToString().PadLeft(paddingAmount, '0')}/{countBefore} " +
-                            $":: {bonesInfo.Name.Strip()}");
-
-                        crematedCounter++;
-                        bonesInfo.Cremate();
-                    }
-
-                    EnableNavContext();
-
-                    var comparer = SaveBonesInfo.SaveBonesInfoComparerDescending;
-                    if (await BonesManager.GetSaveBonesInfoAsync() is IEnumerable<SaveBonesInfo> bonesInfos
-                        && bonesInfos.OrderBy(bones => bones, comparer).AsEnumerable() is IEnumerable<SaveBonesInfo> orderedBonesInfos
-                        && SaveBonesInfosToUIElements(orderedBonesInfos) is IEnumerable<BonesInfoData> bareBones
-                        && !bareBones.IsNullOrEmpty())
-                        Bones = new(bareBones);
-                    else
-                        Bones = new();
-
-                    string crematedString = crematedCounter.ToString();
-                    if (crematedCounter != countBefore)
-                        crematedString = crematedString.Colored("red");
-
-                    string somethingWrongString = !Bones.IsNullOrEmpty() ? "\n\n{{K|(something went wrong)}}" : null;
-                    await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}", PopupMessage.AcceptButton);
-
-                    Loading.SetLoadingStatus(null);
-
-                    if (Bones.IsNullOrEmpty())
-                        Exit();
-                    else
-                        Show();
+                    Show();*/
                 }
             }
         }
@@ -617,24 +651,141 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void UpdateLegendBar()
         {
-            // HotkeyBar.gameObject.SetActive(value: true);
+            if (!LegendBar.gameObject.activeSelf)
+                LegendBar.gameObject.SetActive(value: true);
+
             LegendBar.GetNavigationContext().disabled = true;
             LegendBar.BeforeShow(LegendBarOptions);
+
+            if (MoveLegendBar
+                && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
+            {
+                MoveLegendBar = false;
+                float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
+                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();
+
+                if (LegendBar.GetComponent<RectTransform>() is RectTransform legendRectTransform)
+                {
+                    if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
+                    {
+                        foreach (var childImage in legendRectTransform.GetComponentsInChildren<Image>())
+                        {
+                            if (childImage.gameObject.name.StartsWith("KeyMenuOption"))
+                            {
+                                if (legendColor)
+                                    childImage.color = The.Color.Blue.WithAlpha(0.75f);
+                                else
+                                    childImage.color = The.Color.Blue.WithAlpha(0);
+                            }
+                        }
+                    }
+
+                    float childWidth = 0;
+                    foreach (var childRect in legendRectTransform.GetComponentsInChildren<RectTransform>())
+                    {
+                        if (childRect.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            Utils.Log($"Adding {childRect.rect.width} to {nameof(LegendBar)} {nameof(childWidth)}");
+                            childWidth += childRect.rect.width;
+                        }
+                    }
+                    /*legendRectTransform.Translate(
+                        x: bonesScrollerXWithMulti + (childWidth * GetConfigLegendXMulti()),
+                        y: bonesScrollerYWithMulti + (legendRectTransform.rect.y * GetConfigLegendYMulti()),
+                        z: 0);*/
+                    /*legendRectTransform.Translate(
+                        x: legendRectTransform.rect.x * GetConfigLegendXMulti(),
+                        y: bonesScrollerYWithMulti + (legendRectTransform.rect.y * GetConfigLegendYMulti()),
+                        z: 0);*/
+                    //legendRectTransform.anchoredPosition = new(legendRectTransform.anchoredPosition.x, BonesScrollerVertScroll.anchoredPosition.y);
+                    //legendRectTransform.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0, BonesScrollerVertScroll.rect.width);
+                    /*legendRectTransform.Translate(
+                        x: BonesScrollerVertScroll.rect.width * GetConfigBonesXMulti(),
+                        y: bonesScrollerYWithMulti + (legendRectTransform.rect.y * GetConfigLegendYMulti()),
+                        z: 0);*/
+                }
+            }
         }
 
         public void UpdateMenuBars()
         {
             if (!AllBonesMenuBar.gameObject.activeSelf)
                 AllBonesMenuBar.gameObject.SetActive(value: true);
+
             AllBonesMenuBar.GetNavigationContext().disabled = false;
             AllBonesMenuBar.BeforeShow(MenuBarOptions);
-            /*
-            foreach (var selectionClone in AllBonesMenuBar.selectionClones ?? Enumerable.Empty<FrameworkUnityScrollChild>())
+
+            for (int i = 0; i < AllBonesMenuBar.choices.Count; i++)
             {
-                if (selectionClone.gameObject.GetComponent<HasSelectionCaret>() == null)
-                    selectionClone.gameObject.AddComponent<HasSelectionCaret>();
+                if (AllBonesMenuBar.choices[i] is FrameworkDataElement choice
+                    && AllBonesMenuBar.selectionClones[i] is FrameworkUnityScrollChild selection)
+                {
+                    if (selection.FrameworkControl is KeyMenuOption menuOption)
+                    {
+                        if (menuOption.GetComponent<HasSelectionCaret>() is not HasSelectionCaret selectionCaret)
+                        {
+                            selectionCaret = menuOption.gameObject.AddComponent<HasSelectionCaret>();
+
+                            selectionCaret.enabled = true;
+                            selectionCaret.selectable = menuOption.GetComponentInParent<FrameworkContext>();
+
+                            selectionCaret.image = SelectionCaret.image;
+                            selectionCaret.useSelectColor = SelectionCaret.useSelectColor;
+                            selectionCaret.unselectedColor = SelectionCaret.unselectedColor;
+                            selectionCaret.selectedColor = SelectionCaret.selectedColor;
+                        }
+                    }
+                }
             }
-            */
+
+            if (MoveAllBonesMenuBar
+                && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
+            {
+                MoveAllBonesMenuBar = false;
+                float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
+                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();
+
+                if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform)
+                {
+                    if (TryGetConfigParamTyped("MenuColor", s => s?.EqualsNoCase("Yes") is true, out bool menuColor))
+                    {
+                        foreach (var childImage in allBonesRectTransform.GetComponentsInChildren<Image>())
+                        {
+                            if (childImage.gameObject.name.StartsWith("KeyMenuOption"))
+                            {
+                                if (menuColor)
+                                    childImage.color = The.Color.Green.WithAlpha(0.75f);
+                                else
+                                    childImage.color = The.Color.Green.WithAlpha(0);
+                            }
+                        }
+                    }
+
+                    float childWidth = 0;
+                    foreach (var childRect in allBonesRectTransform.GetComponentsInChildren<RectTransform>())
+                    {
+                        if (childRect.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            Utils.Log($"Adding {childRect.rect.width} to {nameof(AllBonesMenuBar)} {nameof(childWidth)}");
+                            childWidth += childRect.rect.width;
+                        }
+                    }
+                    /*allBonesRectTransform.Translate(
+                        x: bonesScrollerXWithMulti + (childWidth * GetConfigMenuXMulti()),
+                        y: bonesScrollerYWithMulti + (allBonesRectTransform.rect.y * GetConfigMenuYMulti()),
+                        z: 0);*/
+                    /*allBonesRectTransform.Translate(
+                        x: allBonesRectTransform.rect.x * GetConfigMenuXMulti(),
+                        y: bonesScrollerYWithMulti + (allBonesRectTransform.rect.y * GetConfigMenuYMulti()),
+                        z: 0);*/
+                    //allBonesRectTransform.anchoredPosition = new(allBonesRectTransform.anchoredPosition.x, BonesScrollerVertScroll.anchoredPosition.y);
+                    //allBonesRectTransform.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0, BonesScrollerVertScroll.rect.width);
+                    allBonesRectTransform.Translate(
+                        x: BonesScrollerVertScroll.rect.width * GetConfigBonesXMulti(),
+                        y: bonesScrollerYWithMulti + (allBonesRectTransform.rect.y * GetConfigMenuYMulti()),
+                        z: 0);
+                }
+            }
         }
 
         public void Update()
@@ -665,5 +816,84 @@ namespace UD_Bones_Folder.Mod.UI
                 })
             : new()
             ;
+
+
+        public bool TryGetConfigParamTyped<T>(string Key, Func<string, T> Parse, out T Result)
+        {
+            Result = default;
+            if (BonesManager.GetSaveBonesMenuBarConfigAsync() is Task<Dictionary<string, string>> paramPairsTask)
+            {
+                Utils.Log($"{Utils.CallChain(nameof(TryGetConfigParamTyped), nameof(paramPairsTask))}({nameof(Key)}: {Key})");
+                paramPairsTask.Wait();
+                if (paramPairsTask.Result is Dictionary<string, string> paramPairs
+                    && paramPairs.TryGetValue(Key, out string valueRaw))
+                {
+                    try
+                    {
+                        Result = Parse(valueRaw);
+                        return true;
+                    }
+                    catch (Exception x)
+                    {
+                        string parseNull = Parse != null
+                            ? " not"
+                            : null
+                            ;
+                        Utils.Error($"Failed to parse {nameof(valueRaw)} of type {typeof(T).Name} using passed {nameof(Parse)} (which was{parseNull} null)", x);
+                        Result = default;
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }
+
+        public float GetConfigBonesYMulti()
+        {
+            if (TryGetConfigParamTyped("BonesYMulti", float.Parse, out float result))
+                return result;
+
+            return 2f;
+        }
+
+        public float GetConfigBonesXMulti()
+        {
+            if (TryGetConfigParamTyped("BonesXMulti", float.Parse, out float result))
+                return result;
+
+            return 0f;
+        }
+
+        public float GetConfigMenuYMulti()
+        {
+            if (TryGetConfigParamTyped("MenuYMulti", float.Parse, out float result))
+                return result;
+
+            return -3.5f;
+        }
+
+        public float GetConfigMenuXMulti()
+        {
+            if (TryGetConfigParamTyped("MenuXMulti", float.Parse, out float result))
+                return result;
+
+            return 0f;
+        }
+
+        public float GetConfigLegendYMulti()
+        {
+            if (TryGetConfigParamTyped("LegendYMulti", float.Parse, out float result))
+                return result;
+
+            return -2.5f;
+        }
+
+        public float GetConfigLegendXMulti()
+        {
+            if (TryGetConfigParamTyped("LegendXMulti", float.Parse, out float result))
+                return result;
+
+            return 0f;
+        }
     }
 }
