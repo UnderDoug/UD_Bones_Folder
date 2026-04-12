@@ -15,6 +15,9 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
+        public string OsseousAshID;
+        public string OsseousAshHandle;
+
         public string ModVersion;
         public long SaveTimeValue;
 
@@ -61,7 +64,7 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"Loading save json {FilePath}", x);
+                Utils.Error($"Loading bones json {FilePath}", x);
             }
 
             if (bonesJSON == null)
@@ -74,6 +77,7 @@ namespace UD_Bones_Folder.Mod
                     Directory = DirPath
                 };
             }
+
             DateTime saveTimeValue;
             try
             {
@@ -103,15 +107,10 @@ namespace UD_Bones_Folder.Mod
 
                 ModVersion = bonesJSON.ModVersion,
 
-                ZoneID = bonesJSON.ZoneID,
                 DeathReason = bonesJSON.DeathReason,
 
                 GenotypeName = bonesJSON.GenotypeName,
                 SubtypeName = bonesJSON.SubtypeName,
-
-                ZoneTerrainType = bonesJSON.ZoneTerrainType,
-                ZoneTier = bonesJSON.ZoneTier,
-                ZoneRegion = bonesJSON.ZoneRegion,
             };
 
             if (!bonesJSON.CharIcon.IsTile())
@@ -123,6 +122,18 @@ namespace UD_Bones_Folder.Mod
                 string olderVersionString = $"Older Version ({bonesJSON.GameVersion})".Colored("R");
                 saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
             }
+
+            BonesSpec bonesSpec = null;
+            try
+            {
+                bonesSpec = await BonesSpec.ReadBonesSpecAsync(saveBonesInfo);
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Loading bones spec {FilePath}", x);
+            }
+
+            saveBonesInfo.BonesSpec = bonesSpec;
 
             return saveBonesInfo;
         }

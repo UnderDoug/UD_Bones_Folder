@@ -76,6 +76,8 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
+                OsseousAshID = Options.OsseousAshID.ToString(),
+                OsseousAshHandle = Options.OsseousAshHandle,
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
@@ -666,5 +668,38 @@ namespace UD_Bones_Folder.Mod
 
         public static void SetMad(this GameObject GameObject, bool? Value)
             => GameObject?.SetStringProperty(Const.IS_MAD_PROP, Value?.ToString());
+
+        public static bool HasLunarRegentBonesID(this GameObject Object, string BonesID = null)
+        {
+            if (Object.GetPart<UD_Bones_LunarRegent>()?.BonesID is not string bonesID)
+                return false;
+
+            return BonesID == null
+                || bonesID == BonesID;
+        }
+
+        public static bool IsSubterranianZ(this int Z)
+            => Z > 10
+            ;
+
+        public static bool IsAerialZ(this int Z)
+            => Z < 10
+            ;
+
+        public static bool IsSurfaceZ(this int Z)
+            => Z == 10
+            ;
+
+        public static bool IsSubterranian(this Zone Zone)
+            => Zone?.Z.IsSubterranianZ() is true
+            ;
+
+        public static bool IsAerial(this Zone Zone)
+            => Zone?.Z.IsAerialZ() is true
+            ;
+
+        public static bool IsSurface(this Zone Zone)
+            => Zone?.Z.IsSurfaceZ() is true
+            ;
     }
 }

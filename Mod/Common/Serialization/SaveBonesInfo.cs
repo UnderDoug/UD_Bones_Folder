@@ -119,6 +119,10 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static string Sav = $"{UD_Bones_BonesSaver.BonesName}.sav";
+        public static string SavGz = $"{Sav}.gz";
+        public static string SavGzBak = $"{SavGz}.bak";
+
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
 
         private static readonly string[] InfoFiles = new string[2]
@@ -127,20 +131,24 @@ namespace UD_Bones_Folder.Mod
             $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
 
+        public Guid OsseousAshID => Guid.TryParse(GetBonesJSON()?.OsseousAshID, out Guid result)
+            ? result
+            : Guid.Empty
+            ;
+
+        public string OsseousAshHandle => GetBonesJSON()?.OsseousAshHandle;
+
         public string FileName;
         public DateTime SaveTimeValue;
 
         public string ModVersion;
 
-        public string ZoneID;
         public string DeathReason;
 
         public string GenotypeName;
         public string SubtypeName;
 
-        public string ZoneTerrainType;
-        public int ZoneTier;
-        public string ZoneRegion;
+        public BonesSpec BonesSpec;
 
         public string Pending => GetBonesJSON()?.Pending;
 
@@ -156,7 +164,7 @@ namespace UD_Bones_Folder.Mod
         private ModsDifferInfo _ModsDiffer;
         public ModsDifferInfo ModsDiffer => _ModsDiffer ??= GetModsDifferInfo();
 
-        public ZoneRequest ZoneRequest => new(ZoneID);
+        public ZoneRequest ZoneRequest => new(BonesSpec.ZoneID);
 
         public bool WasCremated;
 
@@ -169,7 +177,12 @@ namespace UD_Bones_Folder.Mod
         private BonesRender _Render;
         public BonesRender Render => _Render ??= new(GetBonesJSON());
 
+        public string FullBonesPathSav => Path.Combine(Directory, Sav);
+        public string FullBonesPathSavGz => Path.Combine(Directory, SavGz);
+        public string FullBonesPathBak => Path.Combine(Directory, SavGzBak);
+
         public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
+        public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
 
         public SaveBonesInfo()
             : base()
@@ -287,7 +300,6 @@ namespace UD_Bones_Folder.Mod
         {
             yield return $"{nameof(ID)}: {ID}";
             yield return $"{nameof(Name)}: {Name}";
-            yield return $"{nameof(ZoneID)}: {ZoneID}";
 
             yield return $"{nameof(WasCremated)}: {WasCremated}";
 

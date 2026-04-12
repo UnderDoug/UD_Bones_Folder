@@ -75,6 +75,68 @@
   
   -->
   <option
+        ID="UD_Bones_Folder_EnableOsseousAshStartupPopup"
+        DisplayText="Ask about opting in to the {{black|Osseous Ash}} the next time the game is launched"
+        Category="Mod: Bones"
+        Type="Checkbox"
+        Default="Yes">
+    <helptext>
+      When enabled, you'll get a popup when the game first launches asking if you'd like to participate in the {{black|Osseous Ash}} community project. Irrespective of opting in or not, this option will be unchecked so that you won't be asked again.
+
+      The {{black|Osseous Ash}} is a shared community bones cloud from which bones can be loaded and encountered. This is a good option for players who want to experience the fun of encountering bones that aren't their own without the requirement that they know others who are active players of Caves of Qud (and users of this mod).
+
+      The default is {{W|Enabled}}, automatically switches to {{w|Disabled}} after the popup.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_EnableOsseousAshDownloads"
+        DisplayText="Opt in to downloading and encountering bones from the {{black|Osseous Ash}}"
+        Category="Mod: Bones"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, and if you are connected to the internet, whenever a list of bones files would normally be collated, the {{black|Osseous Ash}} will also be queried for a selection of bones files to include.
+
+      The {{black|Osseous Ash}} is a shared community bones cloud from which bones can be loaded and encountered. This is a good option for players who want to experience the fun of encountering bones that aren't their own without the requirement that they know others who are active players of Caves of Qud (and users of this mod).
+
+      When disabled, bones files will only be saved to the local machine (into the &quot;Sync&quot; folder, which syncs with {{b-y-b-b-b sequence|steam}}).
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_EnableOsseousAshUploads"
+        DisplayText="Opt in to uploading bones to the {{black|Osseous Ash}}"
+        Category="Mod: Bones"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, and if you are connected to the internet, whenever a bones file would normally be saved, that bones file will also be uploaded to the {{black|Osseous Ash}}.
+
+      The {{black|Osseous Ash}} is a shared community bones cloud from which bones can be loaded and encountered. This is a good option for players who want to experience the fun of encountering bones that aren't their own without the requirement that they know others who are active players of Caves of Qud (and users of this mod).
+
+      When disabled, bones files will only be saved to the local machine (into the &quot;Sync&quot; folder, which syncs with {{b-y-b-b-b sequence|steam}}).
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_OsseousAshHandle"
+        Requires="UD_Bones_Folder_EnableOsseousAshUploads==Yes"
+        DisplayText="Enable flashing light effects."
+        Category="Mod: Bones"
+        Type="Button"
+        OnClick="UD_Bones_Folder.Mod.Options.SetOsseousAshHandle"
+        Default="{{black|A Mysterious Stranger}}">
+    <helptext>
+      When enabled, items such as the {{rainbow|Lunar Regent}} masks and objects such as mad {{rainbow|Lunar Regent}}s will have visual effects that might trigger photosensitivity.
+
+      When disabled, these effects will be absent.
+
+      The default is &quot;{{black|A Mysterious Stranger}}&quot;.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_EnableFlashingLightEffects"
         DisplayText="Enable flashing light effects."
         Category="Mod: Bones"

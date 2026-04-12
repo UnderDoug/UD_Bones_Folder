@@ -12,6 +12,11 @@ namespace UD_Bones_Folder.Mod
         public const int MIN_SAVE_VERSION = 400;
 
         public const int SERIALIZATION_CHECK = 123457;
+        public const int BONES_SPEC_POS = 111111;
+        public const int BONES_ZONE_POS = 222222;
+        public const int BONES_FINALIZE_POS = 999999;
+
+        public const string OSSEOUS_ASH = "{{black|Osseous Ash}}";
 
         public const string MAD_LUNAR_REGENT_TILE = "Creatures/mad_lunar_regent_human.png";
         public const string MOON_KING_FEVER_TILE = "Effects/lunar_regent_fever.png";

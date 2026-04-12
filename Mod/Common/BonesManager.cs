@@ -42,32 +42,14 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesManager : IScribedSystem
     {
-        public class DeserializationException : Exception
-        {
-            public DeserializationException(string Message)
-                : base(Message) { }
+        #region Consts & PsuedoConsts
 
-            public DeserializationException(string Message, Exception InnerException)
-                : base(Message, InnerException) { }
-        }
+        public static string BonesSyncPath => DataManager.SyncedPath("Bones");
 
-        public class DeserializationVersionException : DeserializationException
-        {
-            public DeserializationVersionException(string Message)
-                : base(Message) { }
+        public static string BonesSavePath => DataManager.SavePath("Bones");
 
-            public DeserializationVersionException(string Message, Exception InnerException)
-                : base(Message, InnerException) { }
-        }
-
-        public class FatalDeserializationVersionException : DeserializationVersionException
-        {
-            public FatalDeserializationVersionException(string Message)
-                : base(Message) { }
-
-            public FatalDeserializationVersionException(string Message, Exception InnerException)
-                : base(Message, InnerException) { }
-        }
+        #endregion
+        #region Static Caches
 
         private static bool _WishContext;
         public static bool WishContext
@@ -76,20 +58,12 @@ namespace UD_Bones_Folder.Mod
             protected set => _WishContext = value;
         }
 
-        protected Dictionary<string, string> TileReplacementsByMissingBlueprint = new();
-
-        protected Dictionary<string, string> BlueprintReplacementsByMissingBlueprint = new();
-
-        public static string BonesSyncPath => DataManager.SyncedPath("Bones");
-
-        public static string BonesSavePath => DataManager.SavePath("Bones");
-
         [GameBasedStaticCache]
         private static List<string> _SaveGameIDs = null;
 
         public static IEnumerable<string> SaveGameIDs => _SaveGameIDs ??= SavesAPI.GetSavedGameInfo()?.Result?.Select(info => info.ID)?.ToList();
 
-        protected static string[] BonesPaths = new string[]
+        public static string[] BonesPaths => new string[]
         {
             BonesSyncPath,
             BonesSavePath,
@@ -98,11 +72,21 @@ namespace UD_Bones_Folder.Mod
         [GameBasedStaticCache(CreateInstance = false)]
         public static BonesManager System;
 
-        private static List<string> _RunningMods;
+        [ModSensitiveStaticCache(CreateEmptyInstance = false)]
+        private static List<string> _RunningMods = null;
         public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
 
         [GameBasedStaticCache(CreateInstance = false)]
         private static bool? _HasSaveBones;
+
+        #endregion
+        #region Instance Caches
+
+        protected Dictionary<string, string> TileReplacementsByMissingBlueprint = new();
+
+        protected Dictionary<string, string> BlueprintReplacementsByMissingBlueprint = new();
+
+        #endregion
 
         private string GameID;
 
@@ -215,10 +199,6 @@ namespace UD_Bones_Folder.Mod
 
                 foreach (var zoneGO in currentZone.GetObjects())
                 {
-                    // Clear object ID's so they get a new one once re-serialzed
-                    //zoneGO._BaseID = 0;
-                    //zoneGO.RemoveStringProperty("id");
-
                     zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
                     zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());
                     zoneGO.SetStringProperty("UsesSlots", zoneGO.UsesSlots, true);
@@ -226,7 +206,7 @@ namespace UD_Bones_Folder.Mod
                     zoneGO.SetStringProperty("Class", zoneGO.GetClass(), true);
                     zoneGO.SetStringProperty("PaintedWall", zoneGO.GetPropertyOrTag("PaintedWall"), true);
                     zoneGO.SetStringProperty("PaintedFence", zoneGO.GetPropertyOrTag("PaintedFence"), true);
-                    zoneGO.SetStringProperty("ImprovisedWeapon", $"{(zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true)}", true);
+                    zoneGO.SetStringProperty("ImprovisedWeapon", $"{zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
                 }
 
                 string bonesFilePath = GetSaveFileFullPath(GameName);
@@ -252,8 +232,14 @@ namespace UD_Bones_Folder.Mod
 
                     writer.Write(saveBonesJSON.GameVersion);
 
+                    writer.Write(BONES_SPEC_POS);
+                    writer.Write(new BonesSpec(MoonKing, currentZone));
+
+                    writer.Write(BONES_ZONE_POS);
+
                     writer.WriteBonesZone(currentZone);
 
+                    writer.Write(BONES_FINALIZE_POS);
                     writer.FinalizeWrite();
 
                     bool restoreBackup = false;
@@ -484,13 +470,7 @@ namespace UD_Bones_Folder.Mod
             SaveBonesInfo SaveBonesInfo
             )
         {
-            string savGz = $"{UD_Bones_BonesSaver.BonesName}.sav.gz";
-            string savGzBak = $"{savGz}.bak";
-
-            string fullBonesPath = Path.Combine(SaveBonesInfo.Directory, savGz);
-            string fullBonesBak = Path.Combine(SaveBonesInfo.Directory, savGzBak);
-            string bonesBakDisplay = DataManager.SanitizePathForDisplay(fullBonesBak);
-            string directoryDisplay = DataManager.SanitizePathForDisplay(SaveBonesInfo.Directory);
+            string bonesPath = SaveBonesInfo.FullBonesPathSavGz;
 
             int versionNumber = -1;
             string versionString = "{unknown}";
@@ -498,12 +478,12 @@ namespace UD_Bones_Folder.Mod
             BonesData bonesData = null;
             try
             {
-                if (!await File.ExistsAsync(fullBonesPath))
+                if (!await File.ExistsAsync(bonesPath))
                 {
-                    fullBonesPath = Path.Combine(SaveBonesInfo.Directory, $"{UD_Bones_BonesSaver.BonesName}.sav");
-                    if (!await File.ExistsAsync(fullBonesPath))
+                    bonesPath = SaveBonesInfo.FullBonesPathSav;
+                    if (!await File.ExistsAsync(bonesPath))
                     {
-                        Utils.Error($"No saved bones exists. ({directoryDisplay})");
+                        Utils.Error($"No saved bones exist. ({SaveBonesInfo.DisplayDirectory})");
                         return bonesData;
                     }
                 }
@@ -514,7 +494,7 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    using var stream = File.OpenRead(fullBonesPath);
+                    using var stream = File.OpenRead(bonesPath);
                     var memory = reader.Stream;
 
                     if (stream.Length >= 2
@@ -532,7 +512,7 @@ namespace UD_Bones_Folder.Mod
                     if (reader.ReadInt32() != SERIALIZATION_CHECK)
                     {
                         versionString = "2.0.167.0 or prior";
-                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version.");
+                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is for incorrect game version.");
                     }
 
                     versionNumber = reader.FileVersion;
@@ -541,10 +521,10 @@ namespace UD_Bones_Folder.Mod
                     {
                         if (versionNumber != XRLGame.SaveVersion)
                         {
-                            string backupPath = fullBonesPath + $"_upgradebackup_{versionNumber}.gz";
+                            string backupPath = bonesPath + $"_upgradebackup_{versionNumber}.gz";
                             if (!File.Exists(backupPath))
                             {
-                                File.Copy(fullBonesPath, backupPath);
+                                File.Copy(bonesPath, backupPath);
                                 string cacheDBPath = Path.Combine(SaveBonesInfo.Directory, "Cache.db");
                                 string cacheDBBackupPath = cacheDBPath + $"_upgradebackup_{versionNumber}.gz";
                                 if (File.Exists(cacheDBPath)
@@ -559,26 +539,68 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     if (reader.FileVersion < MIN_SAVE_VERSION)
-                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version.");
+                        throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is for incorrect game version.");
 
                     if (reader.FileVersion > XRLGame.SaveVersion)
-                        throw new DeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is the incorrect version ({versionString}).");
+                        throw new DeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) " +
+                            $"is for incorrect game version ({versionString}).");
+
+                    BonesSpec bonesSpec = null;
+                    try
+                    {
+                        if (reader.ReadInt32() != BONES_SPEC_POS)
+                            throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing {nameof(BonesSpec)} val-check.");
+
+                        bonesSpec = reader.ReadComposite<BonesSpec>();
+                    }
+                    catch (Exception x)
+                    {
+                        bonesSpec = null;
+                        reader.Errors++;
+                        reader.UnspoolTo(BONES_ZONE_POS, Prior: true);
+                        Utils.Error($"Failed to read {nameof(BonesSpec)}, recovery will be attempted", x);
+                    }
 
                     string bonesID = SaveBonesInfo.ID;
                     Zone loadedZone = null;
                     try
                     {
+                        if (reader.ReadInt32() != BONES_ZONE_POS)
+                            throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing {nameof(Zone)} val-check.");
+
                         loadedZone = reader.ReadBonesZone();
                         if (loadedZone != null
                             && loadedZone.Z > 21)
                             loadedZone.Z = Stat.Random(16, 21);
+                    }
+                    catch (Exception x)
+                    {
+                        loadedZone = null;
+                        reader.Errors++;
+                        reader.UnspoolTo(BONES_FINALIZE_POS, Prior: true);
+                        Utils.Error(x);
+                    }
+
+                    try
+                    {
+                        if (reader.ReadInt32() != BONES_FINALIZE_POS)
+                            throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing Finalization val-check.");
 
                         reader.FinalizeRead();
+
+                        if (bonesSpec == null)
+                        {
+                            if (loadedZone.GetFirstObject(go => go.HasLunarRegentBonesID(bonesID)) is not GameObject lunarRegent)
+                                throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing Lunar Regent for {nameof(BonesSpec)}.");
+
+                            bonesSpec = new BonesSpec(lunarRegent, loadedZone);
+                        }
 
                         bonesData = new(bonesID, ZoneID, loadedZone);
                     }
                     catch (Exception x)
                     {
+                        reader.Errors++;
                         Utils.Error(x);
                         bonesData = null;
                     }
@@ -601,7 +623,7 @@ namespace UD_Bones_Folder.Mod
             catch (Exception x)
             {
                 string message = $"That bones file appears to be corrupt, " +
-                    $"you can try to restore the backup in your bones folder ({bonesBakDisplay}) " +
+                    $"you can try to restore the backup in your bones folder ({SaveBonesInfo.BonesBakDisplay}) " +
                     $"by removing the 'bak' file extension.";
 
                 if (ModManager.TryGetStackMod(x, out var Mod, out var Frame))
@@ -610,18 +632,18 @@ namespace UD_Bones_Folder.Mod
                     {
                         string culpritMethod = method.DeclaringType?.FullName + "." + method.Name;
                         Mod.Error(culpritMethod + "::" + x);
-                        message = $"That bones file is likely not loading because of a mod error from {Mod.DisplayTitleStripped} ({culpritMethod}), " +
-                            $"make sure the correct mods are enabled or contact the mod author.";
+                        message = $"That bones file is likely not loading because of a mod error from " +
+                            $"{Mod.DisplayTitleStripped} ({culpritMethod}), make sure the correct mods are enabled or contact the mod author.";
                     }
                 }
                 else
                 {
                     if (versionNumber < XRLGame.SaveVersion)
-                        message = $"That bones file looks like it's from an older save format revision ({versionString}). Sorry!\n\n" +
+                        message = $"That bones file looks like it's from an older game save format revision ({versionString}). Sorry!\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
                     else
                     if (versionNumber > XRLGame.SaveVersion)
-                        message = $"That bones file looks like it's from a newer save format revision ({versionString}).\n\n" +
+                        message = $"That bones file looks like it's from a newer game save format revision ({versionString}).\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
 
                     MetricsManager.LogException($"{nameof(BonesManager)}.{nameof(ExhumeMoonKing)}::", x, "serialization_error");
@@ -633,7 +655,6 @@ namespace UD_Bones_Folder.Mod
             }
             finally
             {
-                // DataManager.CloseCacheConnection();
                 _HasSaveBones = null;
             }
 
@@ -889,29 +910,34 @@ namespace UD_Bones_Folder.Mod
                     Popup.Show("There are no bones pending for this save.");
                 else
                 {
-                    if (The.Player is GameObject player
-                        && The.ZoneManager.GetZone(bonesInfo.ZoneID) is Zone zone
-                        && player.CurrentCell is Cell currentCell)
+                    if (bonesInfo.BonesSpec.ZoneID is string zoneID)
                     {
-                        if (player.Physics.CurrentCell.RemoveObject(player))
+                        if (The.Player is GameObject player
+                        && The.ZoneManager.GetZone(bonesInfo.BonesSpec.ZoneID) is Zone zone
+                        && player.CurrentCell is Cell currentCell)
                         {
-                            if (zone.GetEmptyCells().GetRandomElement()?.AddObject(player) != null)
+                            if (player.Physics.CurrentCell.RemoveObject(player))
                             {
-                                The.ZoneManager.SetActiveZone(zone);
-                                The.ZoneManager.ProcessGoToPartyLeader();
-                                success = true;
+                                if (zone.GetEmptyCells().GetRandomElement()?.AddObject(player) != null)
+                                {
+                                    The.ZoneManager.SetActiveZone(zone);
+                                    The.ZoneManager.ProcessGoToPartyLeader();
+                                    success = true;
+                                }
+                                else
+                                {
+                                    Popup.Show($"Failed to find a single empty cell in zone {zoneID}.");
+                                    currentCell.AddObject(player);
+                                }
                             }
                             else
-                            {
-                                Popup.Show($"Failed to find a single empty cell in zone {bonesInfo.ZoneID}.");
-                                currentCell.AddObject(player);
-                            }
+                                Popup.Show($"Failed to remove player from their current cell {currentCell.ParentZone.ZoneID}[{currentCell.Location}].");
                         }
                         else
-                            Popup.Show($"Failed to remove player from their current cell {currentCell.ParentZone.ZoneID}[{currentCell.Location}].");
+                            Popup.Show($"Failed to locate the zone with the pending bones ({zoneID}), or the player is in an invalid state.");
                     }
                     else
-                        Popup.Show($"Failed to locate the zone with the pending bones ({bonesInfo.ZoneID}), or the player is in an invalid state.");
+                        Popup.Show($"Weird {nameof(SaveBonesInfo)} with no {nameof(BonesSpec)}.");
                 }
             }
             catch (Exception x)

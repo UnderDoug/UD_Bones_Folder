@@ -19,14 +19,20 @@ namespace XRL.World.Parts
         public class FlippableRender : Renderable
         {
             public bool HFlip;
-            public FlippableRender(IRenderable Source, bool HFlip)
+            public bool VFlip;
+            public FlippableRender(IRenderable Source, bool HFlip, bool VFlip = false)
                 : base(Source)
             {
                 this.HFlip = HFlip;
+                this.VFlip = VFlip;
             }
 
             public override bool getHFlip()
                 => HFlip
+                ;
+
+            public override bool getVFlip()
+                => VFlip
                 ;
         }
 

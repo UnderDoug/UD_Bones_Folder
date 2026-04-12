@@ -117,7 +117,7 @@ namespace XRL.World.WorldBuilders
 
             if (pickedBones != null)
             {
-                BoneZoneID = pickedBones.ZoneID;
+                BoneZoneID = pickedBones.BonesSpec.ZoneID;
                 if (pickedBones.ZoneRequest is ZoneRequest pluckedZR
                     && pluckedZR.Z > 20)
                 {
@@ -138,10 +138,10 @@ namespace XRL.World.WorldBuilders
                     ZoneID: BoneZoneID,
                     Class: nameof(BonesZoneBuilder),
                     Key1: nameof(BonesZoneBuilder.SaveBonesInfoID), Value1: pickedBones.ID,
-                    Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pickedBones.ZoneID);
+                    Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pickedBones.BonesSpec.ZoneID);
 
                 Utils.Info($"Bones pending: {pickedBones.Name}, {pickedBones.GetBonesJSON().Location} " +
-                    $"({pickedBones.ZoneID}) {{{pickedBones.ID}}}");
+                    $"({pickedBones.BonesSpec.ZoneID}) {{{pickedBones.ID}}}");
             }
         }
     }
