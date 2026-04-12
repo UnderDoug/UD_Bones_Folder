@@ -173,8 +173,20 @@ namespace UD_Bones_Folder.Mod
                     value = $"{rectTransform.position}";
                     output.Add(MakeEntry());
 
+                    label = nameof(rectTransform.localPosition);
+                    value = $"{rectTransform.localPosition}";
+                    output.Add(MakeEntry());
+
                     label = nameof(rectTransform.anchoredPosition);
                     value = $"{rectTransform.anchoredPosition}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(rectTransform.offsetMin);
+                    value = $"{rectTransform.offsetMin}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(rectTransform.offsetMax);
+                    value = $"{rectTransform.offsetMax}";
                     output.Add(MakeEntry());
                 }
                 else
@@ -262,6 +274,91 @@ namespace UD_Bones_Folder.Mod
                     label = nameof(frameworkScroller.spacerPrefab);
                     value = $"{frameworkScroller.spacerPrefab?.GetType()?.Name ?? "NO_PREFAB"} | {frameworkScroller.spacerPrefab?.name ?? "NO_PREFAB"}";
                     output.Add(MakeEntry());
+                }
+                else
+                if (Component is FrameworkUnityScrollChild frameworkUnityScrollChild)
+                {
+                    label = nameof(frameworkUnityScrollChild.FrameworkControl);
+                    value = $"{frameworkUnityScrollChild.FrameworkControl?.GetType()?.Name ?? "NO_CONTROL"}";
+                    output.Add(MakeEntry());
+                }
+                else
+                if (Component is LayoutGroup layoutGroup)
+                {
+                    label = nameof(layoutGroup.layoutPriority);
+                    value = $"{layoutGroup.layoutPriority}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.childAlignment);
+                    value = $"{layoutGroup.childAlignment}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.padding);
+                    value = $"{layoutGroup.padding}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.minHeight);
+                    value = $"{layoutGroup.minHeight}";
+                    output.Add(MakeEntry());
+                    
+                    label = nameof(layoutGroup.minWidth);
+                    value = $"{layoutGroup.minWidth}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.preferredHeight);
+                    value = $"{layoutGroup.preferredHeight}";
+                    output.Add(MakeEntry());
+                    
+                    label = nameof(layoutGroup.preferredWidth);
+                    value = $"{layoutGroup.preferredWidth}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.flexibleHeight);
+                    value = $"{layoutGroup.flexibleHeight}";
+                    output.Add(MakeEntry());
+
+                    label = nameof(layoutGroup.flexibleWidth);
+                    value = $"{layoutGroup.flexibleWidth}";
+                    output.Add(MakeEntry());
+
+                    if (Component is HorizontalOrVerticalLayoutGroup horizontalOrVerticalLayoutGroup)
+                    {
+                        label = nameof(horizontalOrVerticalLayoutGroup.spacing);
+                        value = $"{horizontalOrVerticalLayoutGroup.spacing}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.reverseArrangement);
+                        value = $"{horizontalOrVerticalLayoutGroup.reverseArrangement}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childControlHeight);
+                        value = $"{horizontalOrVerticalLayoutGroup.childControlHeight}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childControlWidth);
+                        value = $"{horizontalOrVerticalLayoutGroup.childControlWidth}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childForceExpandHeight);
+                        value = $"{horizontalOrVerticalLayoutGroup.childForceExpandHeight}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childForceExpandWidth);
+                        value = $"{horizontalOrVerticalLayoutGroup.childForceExpandWidth}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childScaleHeight);
+                        value = $"{horizontalOrVerticalLayoutGroup.childScaleHeight}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childScaleWidth);
+                        value = $"{horizontalOrVerticalLayoutGroup.childScaleWidth}";
+                        output.Add(MakeEntry());
+
+                        label = nameof(horizontalOrVerticalLayoutGroup.childScaleWidth);
+                        value = $"{horizontalOrVerticalLayoutGroup.childScaleWidth}";
+                        output.Add(MakeEntry());
+                    }
                 }
             }
             catch (Exception x)

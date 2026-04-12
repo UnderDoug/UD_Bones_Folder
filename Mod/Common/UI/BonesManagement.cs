@@ -207,19 +207,98 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar = Instantiate(LegendBar);
 
             //AllBonesMenuBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
+
             //SetParentTransform(AllBonesMenuBar, BonesScroller.transform);
+            /*SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
+            AllBonesMenuBar.transform.SetAsLastSibling();
+
+            LegendBar.transform.SetAsLastSibling();*/
+
+            LegendBar.gameObject.name = nameof(LegendBar);
+            AllBonesMenuBar.gameObject.name = nameof(AllBonesMenuBar);
+
+            if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform
+                && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform
+                && LegendBar.GetComponent<RectTransform>() is RectTransform legendRectTransform)
+            {
+                //allBonesRectTransform.Translate(0, (bonesScrollerParentRectTransform.rect.y * GetConfigBonesMulti()) + (allBonesRectTransform.rect.y * GetConfigMenuMulti()), 0);
+                //allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);
+
+                allBonesRectTransform.anchoredPosition = legendRectTransform.anchoredPosition;
+                allBonesRectTransform.position = legendRectTransform.position;
+                allBonesRectTransform.localPosition = legendRectTransform.localPosition;
+                allBonesRectTransform.offsetMin = legendRectTransform.offsetMin;
+                allBonesRectTransform.offsetMax = legendRectTransform.offsetMax;
+                //allBonesRectTransform.SetLocalPositionAndRotation(new(0, 0, 0), allBonesRectTransform.rotation);
+                //allBonesRectTransform.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0f, 260f);
+
+                float legendBarPreferredWidth = -2f;
+                float legendBarMinHeight = -2f;
+                foreach (var layoutElement in legendRectTransform.GetComponents<LayoutElement>())
+                {
+                    if (layoutElement.gameObject.name == nameof(LegendBar))
+                    {
+                        legendBarMinHeight = layoutElement.minHeight;
+                        legendBarPreferredWidth = layoutElement.preferredWidth;
+                        break;
+                    }
+
+                }
+
+                if (legendBarPreferredWidth != -2f)
+                {
+                    foreach (var layoutElement in allBonesRectTransform.GetComponents<LayoutElement>())
+                    {
+                        if (layoutElement.gameObject.name == nameof(AllBonesMenuBar))
+                        {
+                            layoutElement.minHeight = legendBarMinHeight;
+                            layoutElement.preferredWidth = legendBarPreferredWidth;
+                            break;
+                        }
+                    }
+                }
+
+                if (TryGetConfigParamTyped("MenuColor", s => s?.EqualsNoCase("Yes") is true, out bool menuColor))
+                {
+                    foreach (var childImage in allBonesRectTransform.GetComponentsInChildren<Image>())
+                    {
+                        if (childImage.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            if (menuColor)
+                                childImage.color = The.Color.Green.WithAlpha(0.75f);
+                            else
+                                childImage.color = The.Color.Green.WithAlpha(0);
+                        }
+                    }
+                }
+                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);
+            }
+
+            if (LegendBar.GetComponent<RectTransform>() is RectTransform legendBarRectTransform)
+            {
+                if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
+                {
+                    foreach (var childImage in legendBarRectTransform.GetComponentsInChildren<Image>())
+                    {
+                        if (childImage.gameObject.name.StartsWith("KeyMenuOption"))
+                        {
+                            if (legendColor)
+                                childImage.color = The.Color.Blue.WithAlpha(0.75f);
+                            else
+                                childImage.color = The.Color.Blue.WithAlpha(0);
+                        }
+                    }
+                }
+                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);
+            }
+
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
             AllBonesMenuBar.transform.SetAsLastSibling();
 
             LegendBar.transform.SetAsLastSibling();
-            
-            if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform
-                && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
-                //allBonesRectTransform.Translate(0, (bonesScrollerParentRectTransform.rect.y * GetConfigBonesMulti()) + (allBonesRectTransform.rect.y * GetConfigMenuMulti()), 0);
-                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);
 
-            if (LegendBar.GetComponent<RectTransform>() is RectTransform legendBarRectTransform)
-                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);
+            LegendBar.gameObject.name = nameof(LegendBar);
+            AllBonesMenuBar.gameObject.name = nameof(AllBonesMenuBar);
         }
 
         public void SetParentTransform(Component Component, Transform Transform = null)
@@ -268,9 +347,6 @@ namespace UD_Bones_Folder.Mod.UI
             //SetParentTransform(AllBonesMenuBar, MenuBarParentTransfrom);
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
             AllBonesMenuBar.transform.SetAsLastSibling();*/
-
-            LegendBar.gameObject.name = "LegendBar";
-            AllBonesMenuBar.gameObject.name = "AllBonesMenuBar";
 
             /*
             LegendBar = Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar);
@@ -715,6 +791,7 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar.GetNavigationContext().disabled = false;
             AllBonesMenuBar.BeforeShow(MenuBarOptions);
 
+            /*
             for (int i = 0; i < AllBonesMenuBar.choices.Count; i++)
             {
                 if (AllBonesMenuBar.choices[i] is FrameworkDataElement choice
@@ -736,7 +813,7 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                     }
                 }
-            }
+            }*/
 
             if (MoveAllBonesMenuBar
                 && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
