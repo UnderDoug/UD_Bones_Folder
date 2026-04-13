@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
@@ -100,14 +101,13 @@ namespace UD_Bones_Folder.Mod
                 SaveTimeValue = saveTimeValue,
 
                 ZoneID = zoneID,
+
+                BonesSpec = new(MoonKing, zone),
+
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
                 GenotypeName = MoonKing.GetGenotype(),
                 SubtypeName = MoonKing.GetSubtype(),
                 Blueprint = MoonKing.Blueprint,
-
-                ZoneTerrainType = zoneTerrainType,
-                ZoneTier = zone.Tier,
-                ZoneRegion = zone.GetRegion(),
             };
         }
 
@@ -701,5 +701,15 @@ namespace UD_Bones_Folder.Mod
         public static bool IsSurface(this Zone Zone)
             => Zone?.Z.IsSurfaceZ() is true
             ;
+
+        public static T WaitResult<T>(this Task<T> Task)
+        {
+            if (Task == null)
+                return default;
+
+            Task.Wait();
+
+            return Task.Result;
+        }
     }
 }

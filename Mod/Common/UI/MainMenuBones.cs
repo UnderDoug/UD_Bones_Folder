@@ -79,19 +79,23 @@ namespace UD_Bones_Folder.Mod.UI
             DoingBonesManagement = false;
             if (((MainMenuOptionData)data)?.Command == "Pick:Bones")
             {
-                if (XRL.UI.Options.ModernUI
-                    && MainMenuBonesOptions?.Enabled is true)
+                if (XRL.UI.Options.ModernUI)
                 {
-                    if (BonesManagement.CheckInit())
+                    await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+
+                    if (MainMenuBonesOptions?.Enabled is true)
                     {
-                        try
+                        if (BonesManagement.CheckInit())
                         {
-                            ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
-                        }
-                        finally
-                        {
-                            UIManager.showWindow("MainMenu");
-                            MainMenu.instance.Reshow();
+                            try
+                            {
+                                ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
+                            }
+                            finally
+                            {
+                                UIManager.showWindow("MainMenu");
+                                MainMenu.instance.Reshow();
+                            }
                         }
                     }
                 }
@@ -102,7 +106,8 @@ namespace UD_Bones_Folder.Mod.UI
         public static void SetBonesMenuOptionEnabled()
         {
             if (MainMenuBonesOptions != null)
-                MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones();
+                MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones()
+                    || OsseousAsh.WantToAsk;
         }
 
         [HarmonyPatch(

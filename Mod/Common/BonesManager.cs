@@ -48,6 +48,10 @@ namespace UD_Bones_Folder.Mod
 
         public static string BonesSavePath => DataManager.SavePath("Bones");
 
+        public static DirectoryInfo BonesSaveSyncInfo => DirectoryInfo.NewSync(BonesSyncPath);
+
+        public static DirectoryInfo BonesSavePathInfo => DirectoryInfo.NewLocal(BonesSavePath);
+
         #endregion
         #region Static Caches
 
@@ -63,10 +67,10 @@ namespace UD_Bones_Folder.Mod
 
         public static IEnumerable<string> SaveGameIDs => _SaveGameIDs ??= SavesAPI.GetSavedGameInfo()?.Result?.Select(info => info.ID)?.ToList();
 
-        public static string[] BonesPaths => new string[]
+        public static DirectoryInfo[] BonesPaths => new DirectoryInfo[]
         {
-            BonesSyncPath,
-            BonesSavePath,
+            BonesSaveSyncInfo,
+            BonesSavePathInfo,
         };
 
         [GameBasedStaticCache(CreateInstance = false)]
@@ -97,6 +101,9 @@ namespace UD_Bones_Folder.Mod
 
         [NonSerialized]
         public Task SaveTask;
+
+        [NonSerialized]
+        public Dictionary<string, bool> Visited = new();
 
         public BonesManager()
         { }
@@ -132,6 +139,20 @@ namespace UD_Bones_Folder.Mod
             // Consider adding code here.
         }
 
+        #region Serialization
+
+        public override void Read(SerializationReader Reader)
+        {
+            Visited = Reader.ReadDictionary<string, bool>();
+        }
+
+        public override void Write(SerializationWriter Writer)
+        {
+            Writer.Write(Visited);
+        }
+
+        #endregion
+
         public string GetBonesDirectory(string FileName = null)
         {
             if (BonesDirectory == null)
@@ -161,6 +182,18 @@ namespace UD_Bones_Folder.Mod
         public string GetInfoFileFullPath(string FileName)
             => GetBonesDirectory($"{FileName}.json")
             ;
+
+        public static IEnumerable<string> GetBonesPaths(bool NonRemoteOnly = false)
+        {
+            foreach (var bonesPath in BonesPaths)
+                if (bonesPath.EnsureExists() is string ensuredPath)
+                yield return ensuredPath;
+
+            if (!NonRemoteOnly
+                && Options.EnableOsseousAshDownloads
+                && OsseousAsh.PathInfo.EnsureExists() is string ensuredOsseousPath)
+                yield return ensuredOsseousPath;
+        }
 
         private Task ReturnSaveTaskNullWithLogMessage(string Message = null)
         {
@@ -323,7 +356,7 @@ namespace UD_Bones_Folder.Mod
             using var cremateSaveBones = ScopeDisposedList<SaveBonesInfo>.GetFromPool();
             string currentPath = null;
             
-            foreach (string bonesPath in BonesPaths)
+            foreach (string bonesPath in GetBonesPaths())
             {
                 try
                 {
@@ -352,7 +385,7 @@ namespace UD_Bones_Folder.Mod
                                         cremateSaveBones.Add(bonesInfo);
                                         continue;
                                     }
-                                    SaveBonesInfo.SetPending(bonesInfo, null).Wait();
+                                    SaveBonesInfo.SetPending(bonesInfo, null);
                                 }
                             }
 
@@ -595,6 +628,7 @@ namespace UD_Bones_Folder.Mod
 
                             bonesSpec = new BonesSpec(lunarRegent, loadedZone);
                         }
+
 
                         bonesData = new(bonesID, ZoneID, loadedZone);
                     }
@@ -880,6 +914,36 @@ namespace UD_Bones_Folder.Mod
             => await CremateAllMoonKings(null, null)
             ;
 
+        public bool IsWorldMapOrVisited(Zone Z)
+            => Z.IsWorldMap()
+            || Visited.ContainsKey(Z.ZoneID)
+            ;
+
+        public void CheckBones(Zone Z)
+        {
+            Visited ??= new();
+
+            if (IsWorldMapOrVisited(Z))
+                return;
+
+            Visited.Add(Z.ZoneID, value: true);
+
+        }
+
+        public override void Register(XRLGame Game, IEventRegistrar Registrar)
+        {
+            Registrar.Register(AfterZoneBuiltEvent.ID);
+            base.Register(Game, Registrar);
+        }
+
+        public override bool HandleEvent(AfterZoneBuiltEvent E)
+        {
+            CheckBones(E.Zone);
+            return base.HandleEvent(E);
+        }
+
+        #region Wishes
+
         [WishCommand(Command = "cremate bones")]
         public static bool ClearBones_WishHandler()
         {
@@ -949,12 +1013,15 @@ namespace UD_Bones_Folder.Mod
             return success;
         }
 
+        #endregion
+        #region Temp
+
         public static async Task<Dictionary<string, string>> GetSaveBonesMenuBarConfigAsync()
         {
             var output = new Dictionary<string, string>();
             string currentPath = null;
 
-            foreach (string bonesPath in BonesPaths)
+            foreach (string bonesPath in GetBonesPaths())
             {
                 try
                 {
@@ -1024,5 +1091,7 @@ namespace UD_Bones_Folder.Mod
             }
             return null;
         }
+
+        #endregion
     }
 }

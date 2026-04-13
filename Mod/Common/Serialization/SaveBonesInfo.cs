@@ -138,7 +138,7 @@ namespace UD_Bones_Folder.Mod
 
         public string OsseousAshHandle => GetBonesJSON()?.OsseousAshHandle;
 
-        public string FileName;
+        public string JSONFilePath;
         public DateTime SaveTimeValue;
 
         public string ModVersion;
@@ -191,7 +191,24 @@ namespace UD_Bones_Folder.Mod
         public string GetName()
             => $"{(IsMad ? "Mad " : null)}{Name}".StartReplace().ToString();
 
-        public static async Task SetPending(SaveBonesInfo BonesInfo, string Pending)
+
+        private static async void SafeWriteSaveBonesJSON(string JSONFilePath, SaveBonesJSON bonesJSON, bool RequireExisting = true)
+        {
+            if (!RequireExisting
+                || await File.ExistsAsync(JSONFilePath))
+            {
+                bool swappedIcon = bonesJSON.IsCharIconSwapped();
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
+
+                File.WriteAllText(JSONFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
+
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
+            }
+        }
+
+        public static void SetPending(SaveBonesInfo BonesInfo, string Pending)
         {
             if (Pending.IsNullOrEmpty())
                 Pending = $"{false}";
@@ -205,18 +222,7 @@ namespace UD_Bones_Folder.Mod
             if (bonesJSON.Pending.EqualsNoCase($"{false}") != Pending.EqualsNoCase($"{false}"))
             {
                 bonesJSON.Pending = Pending;
-                string bonesFilePath = Path.Combine(BonesInfo.Directory, BonesInfo.FileName);
-                if (await File.ExistsAsync(bonesFilePath))
-                {
-                    bool swappedIcon = bonesJSON.IsCharIconSwapped();
-                    if (swappedIcon)
-                        bonesJSON.HotSwapCharIcon();
-
-                    File.WriteAllText(bonesFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
-
-                    if (swappedIcon)
-                        bonesJSON.HotSwapCharIcon();
-                }
+                SafeWriteSaveBonesJSON(Path.Combine(BonesInfo.Directory, BonesInfo.JSONFilePath), bonesJSON);
             }
             else
             {
@@ -227,7 +233,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static async Task IncrementEncountered(SaveBonesInfo BonesInfo)
+        public static void IncrementEncountered(SaveBonesInfo BonesInfo)
         {
             if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
             {
@@ -236,18 +242,19 @@ namespace UD_Bones_Folder.Mod
             }
 
             bonesJSON.Encountered++;
-            string bonesFilePath = Path.Combine(BonesInfo.Directory, BonesInfo.FileName);
-            if (await File.ExistsAsync(bonesFilePath))
+            SafeWriteSaveBonesJSON(Path.Combine(BonesInfo.Directory, BonesInfo.JSONFilePath), bonesJSON);
+        }
+
+        public static void RepairBonesSpec(SaveBonesInfo BonesInfo, BonesSpec BonesSpec)
+        {
+            if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
             {
-                bool swappedIcon = bonesJSON.IsCharIconSwapped();
-                if (swappedIcon)
-                    bonesJSON.HotSwapCharIcon();
-
-                File.WriteAllText(bonesFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
-
-                if (swappedIcon)
-                    bonesJSON.HotSwapCharIcon();
+                Utils.Warn($"Attempted to repair {nameof(SaveBonesJSON)}.{nameof(SaveBonesJSON.BonesSpec)} for null {nameof(SaveBonesJSON)}.");
+                return;
             }
+
+            bonesJSON.BonesSpec = BonesSpec;
+            SafeWriteSaveBonesJSON(Path.Combine(BonesInfo.Directory, BonesInfo.JSONFilePath), bonesJSON, RequireExisting: false);
         }
 
         public static async Task<SaveBonesInfo> GetSaveBonesInfo(string Directory)

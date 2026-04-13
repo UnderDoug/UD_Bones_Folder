@@ -99,7 +99,7 @@
 
       The {{black|Osseous Ash}} is a shared community bones cloud from which bones can be loaded and encountered. This is a good option for players who want to experience the fun of encountering bones that aren't their own without the requirement that they know others who are active players of Caves of Qud (and users of this mod).
 
-      When disabled, bones files will only be saved to the local machine (into the &quot;Sync&quot; folder, which syncs with {{b-y-b-b-b sequence|steam}}).
+      When disabled, bones files will only be saved to the local machine (into the &quot;Sync&quot; folder, which syncs with {{b-b-b-y-b sequence|steam}}).
 
       The default is {{w|Disabled}}.
     </helptext>
@@ -121,19 +121,17 @@
     </helptext>
   </option>
   <option
-        ID="UD_Bones_Folder_OsseousAshHandle"
+        ID="UD_Bones_Folder_StoredOsseousAshHandle"
         Requires="UD_Bones_Folder_EnableOsseousAshUploads==Yes"
-        DisplayText="Enable flashing light effects."
+        DisplayText="Change {{black|Osseous Ash}} Handle"
         Category="Mod: Bones"
         Type="Button"
         OnClick="UD_Bones_Folder.Mod.Options.SetOsseousAshHandle"
-        Default="{{black|A Mysterious Stranger}}">
+        Default="{{K|A Mysterious Stranger}}">
     <helptext>
-      When enabled, items such as the {{rainbow|Lunar Regent}} masks and objects such as mad {{rainbow|Lunar Regent}}s will have visual effects that might trigger photosensitivity.
+      This is the name that will be associated with your bones files when uploaded to the the {{black|Osseous Ash}}.
 
-      When disabled, these effects will be absent.
-
-      The default is &quot;{{black|A Mysterious Stranger}}&quot;.
+      The default is &quot;{{K|A Mysterious Stranger}}&quot;.
     </helptext>
   </option>
   <option

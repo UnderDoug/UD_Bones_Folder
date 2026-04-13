@@ -132,7 +132,7 @@ namespace XRL.World.ZoneBuilders
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
                 try
                 {
-                    SaveBonesInfo.IncrementEncountered(saveBonesInfo).Wait();
+                    SaveBonesInfo.IncrementEncountered(saveBonesInfo);
                 }
                 catch (Exception x)
                 {

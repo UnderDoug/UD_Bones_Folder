@@ -28,9 +28,7 @@ namespace UD_Bones_Folder.Mod
         public string SubtypeName;
         public string Blueprint;
 
-        public string ZoneTerrainType;
-        public int ZoneTier;
-        public string ZoneRegion;
+        public BonesSpec BonesSpec;
 
         public string Pending;
         public int Encountered;
@@ -102,7 +100,7 @@ namespace UD_Bones_Folder.Mod
                 SaveTime = bonesJSON.SaveTime,
                 ModsEnabled = bonesJSON.ModsEnabled,
 
-                FileName = FilePath,
+                JSONFilePath = FilePath,
                 SaveTimeValue = saveTimeValue,
 
                 ModVersion = bonesJSON.ModVersion,
@@ -111,6 +109,8 @@ namespace UD_Bones_Folder.Mod
 
                 GenotypeName = bonesJSON.GenotypeName,
                 SubtypeName = bonesJSON.SubtypeName,
+
+                BonesSpec = bonesJSON.BonesSpec,
             };
 
             if (!bonesJSON.CharIcon.IsTile())
@@ -122,18 +122,6 @@ namespace UD_Bones_Folder.Mod
                 string olderVersionString = $"Older Version ({bonesJSON.GameVersion})".Colored("R");
                 saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
             }
-
-            BonesSpec bonesSpec = null;
-            try
-            {
-                bonesSpec = await BonesSpec.ReadBonesSpecAsync(saveBonesInfo);
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Loading bones spec {FilePath}", x);
-            }
-
-            saveBonesInfo.BonesSpec = bonesSpec;
 
             return saveBonesInfo;
         }

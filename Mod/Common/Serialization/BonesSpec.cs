@@ -1,37 +1,19 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO.Compression;
-using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 
-using Cysharp.Text;
-
-using Platform;
 using Platform.IO;
 using UnityEngine;
 
-using Qud.API;
-using Qud.UI;
-
 using XRL;
-using XRL.Collections;
-using XRL.Rules;
 using XRL.UI;
-using XRL.UI.Framework;
-using XRL.Wish;
 using XRL.World;
 using XRL.World.Parts;
 
 using static UD_Bones_Folder.Mod.Const;
 
-using ColorUtility = ConsoleLib.Console.ColorUtility;
-using CompressionLevel = System.IO.Compression.CompressionLevel;
-
 using GameObject = XRL.World.GameObject;
-using Event = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -79,6 +61,18 @@ namespace UD_Bones_Folder.Mod
                 TerrainTravelClass = zoneTerrain.GetPart<TerrainTravel>()?.TravelClass ?? "none";
             }
         }
+
+        public bool SameAs(BonesSpec Other)
+            => Other != null
+            && BonesID == Other.BonesID
+            && Level == Other.Level
+            && ZoneID == Other.ZoneID
+            && ZoneZ == Other.ZoneZ
+            && ZoneTier == Other.ZoneTier
+            && ZoneTerrainType == Other.ZoneTerrainType
+            && RegionTier == Other.RegionTier
+            && TerrainTravelClass == Other.TerrainTravelClass
+            ;
 
         public static async Task<BonesSpec> ReadBonesSpecAsync(SaveBonesInfo SaveBonesInfo)
         {
