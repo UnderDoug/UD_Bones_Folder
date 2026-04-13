@@ -895,7 +895,7 @@ namespace UD_Bones_Folder.Mod.UI
             ;
 
 
-        public bool TryGetConfigParamTyped<T>(string Key, Func<string, T> Parse, out T Result)
+        public static bool TryGetConfigParamTyped<T>(string Key, Func<string, T> Parse, out T Result)
         {
             Result = default;
             if (BonesManager.GetSaveBonesMenuBarConfigAsync() is Task<Dictionary<string, string>> paramPairsTask)

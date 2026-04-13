@@ -32,6 +32,9 @@ using CompressionLevel = System.IO.Compression.CompressionLevel;
 
 using GameObject = XRL.World.GameObject;
 using Event = XRL.World.Event;
+using System.Net;
+using UD_Bones_Folder.Mod.UI;
+using UnityEngine.Networking;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -136,7 +139,10 @@ namespace UD_Bones_Folder.Mod
 
         public void PrepareBonesPile()
         {
-            // Consider adding code here.
+            if (Options.EnableOsseousAshDownloads)
+            {
+                Utils.Log($"(Pretending) to Download Bones");
+            }
         }
 
         #region Serialization
@@ -284,14 +290,169 @@ namespace UD_Bones_Folder.Mod
                             File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
                             restoreBackup = true;
                         }
-                        using (var memoryStream = new System.IO.MemoryStream())
-                        {
-                            using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
+                            using (var memoryStream = new System.IO.MemoryStream())
                             {
-                                byte[] buffer = writer.Stream.GetBuffer();
-                                gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
+                                using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
+                                {
+                                    byte[] buffer = writer.Stream.GetBuffer();
+                                    gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
+                                }
+                                File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
+
+                            if (Options.EnableOsseousAshUploads)
+                            {
+                                using (var client = UnityWebRequest.Get("osseousash.cloud"))
+                                {
+                                    string baseURI = $"osseousash.cloud/Bones/{The.Game.GameID}/";
+                                    var ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
+
+                                    try
+                                    {
+                                        UnityWebRequest.Put(ftpUrl.Uri, memoryStream.ToArray());
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
+                                    }
+
+
+                                    ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
+                                    try
+                                    {
+                                        UnityWebRequest.Put(ftpUrl.Uri, File.ReadAllText(bonesInfoPath)).SendWebRequest();
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
+                                    }
+                                }
+
+                                using (var client = new WebClient())
+                                {
+                                    /*client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+                                    string baseURI = $"osseousash.cloud/Bones/{The.Game.GameID}/";
+                                    var ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
+                                    client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+
+                                    try
+                                    {
+                                        client.UploadFile(ftpUrl.Uri, WebRequestMethods.Ftp.UploadFile, bonesFilePath);
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
+                                    }
+
+
+                                    ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
+                                    try
+                                    {
+                                        client.UploadFile(ftpUrl.Uri, WebRequestMethods.Ftp.UploadFile, bonesInfoPath);
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
+                                    }*/
+
+                                    /*var request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
+                                    request.Method = WebRequestMethods.Ftp.UploadFile;*/
+
+                                    //request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+                                    /*using (var requestStream = request.GetRequestStream())
+                                    {
+                                        var copyTask = memoryStream.CopyToAsync(requestStream);
+                                        copyTask.Wait();
+                                        using (var response = (FtpWebResponse)request.GetResponse())
+                                        {
+                                            Utils.Log($"Upload Bones Save Complete, status {response.StatusDescription}");
+                                        }
+                                    }*/
+                                    /*using (var requestStream = request.GetRequestStream())
+                                    {
+                                        var copyTask = memoryStream.CopyToAsync(requestStream);
+                                        copyTask.Wait();
+                                        using (var response = (FtpWebResponse)request.GetResponse())
+                                        {
+                                            Utils.Log($"Upload Bones Save Complete, status {response.StatusDescription}");
+                                        }
+                                    }*/
+
+                                    //ftpUrl = new UriBuilder($"ftp.osseousash.cloud/{The.Game.GameID}/{new FileInfo(bonesFilePath).Name}");
+
+                                    /*request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
+                                    request.Method = WebRequestMethods.Ftp.UploadFile;
+
+                                    request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+                                    var mode = global::System.IO.FileMode.Open;
+                                    var access = global::System.IO.FileAccess.Read;
+                                    using (var fileStream = global::System.IO.File.Open(bonesInfoPath, mode, access))
+                                    {
+                                        using (var requestStream = request.GetRequestStream())
+                                        {
+                                            var copyTask = fileStream.CopyToAsync(requestStream);
+                                            copyTask.Wait();
+                                            using (var response = (FtpWebResponse)request.GetResponse())
+                                            {
+                                                Utils.Log($"Upload Bones Info Complete, status {response.StatusDescription}");
+                                            }
+                                        }
+                                    }*/
+                                }
+
+                                /*
+                                using (var client = new WebClient())
+                                {
+                                    var ftpUrl = new UriBuilder("ftp", OSSEOUS_ASH_ADDRESS);
+
+                                    string basepath = "Bones";
+                                    if (BonesManagement.TryGetConfigParamTyped("UploadDir", v => v, out string uploadDir))
+                                        basepath = uploadDir;
+
+                                    ftpUrl.Path = $"{basepath}/{Path.GetFileName(bonesFilePath)}";
+                                    // Get the object used to communicate with the server.
+                                    FtpWebRequest request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
+                                    request.Method = WebRequestMethods.Ftp.UploadFile;
+
+                                    // This example assumes the FTP site uses anonymous logon.
+                                    request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+
+                                    // Copy the contents of the file to the request stream.
+                                    using (var fileStream = global::System.IO.File.Open("testfile.txt", global::System.IO.FileMode.Open, global::System.IO.FileAccess.Read))
+                                    {
+                                        using (var requestStream = request.GetRequestStream())
+                                        {
+                                            await fileStream.CopyToAsync(requestStream);
+                                            using (var response = (FtpWebResponse)request.GetResponse())
+                                            {
+                                                Console.WriteLine($"Upload File Complete, status {response.StatusDescription}");
+                                            }
+                                        }
+                                    }
+
+                                    string ftpSavePath = $"{client.BaseAddress}/{Path.GetFileName(bonesFilePath)}";
+                                    string ftpInfoPath = $"{client.BaseAddress}/{Path.GetFileName(bonesInfoPath)}";
+
+                                    client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
+
+                                    try
+                                    {
+                                        client.UploadFile(ftpSavePath, WebRequestMethods.Ftp.UploadFile, bonesFilePath);
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpSavePath}\"", x);
+                                    }
+
+                                    try
+                                    {
+                                        client.UploadFile(ftpInfoPath, WebRequestMethods.Ftp.UploadFile, bonesInfoPath);
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Error($"Failed to upload to \"{ftpInfoPath}\"", x);
+                                    }
+                                }*/
                             }
-                            File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
                         }
                         MemoryHelper.GCCollect();
                         game.CheckSave(bonesFilePath);
@@ -1042,8 +1203,11 @@ namespace UD_Bones_Folder.Mod
                                     && !kvp[0].IsNullOrEmpty()
                                     && !kvp[1].IsNullOrEmpty())
                                 {
+                                    string key = kvp[0];
+                                    using var valueElements = ScopeDisposedList<string>.GetFromPoolFilledWith(kvp);
+                                    valueElements.RemoveAt(0);
                                     if (!output.ContainsKey(kvp[0]))
-                                        output[kvp[0]] = kvp[1];
+                                        output[key] = valueElements.Aggregate("", (a,n) => Utils.DelimitedAggregator(a, n, ":"));
                                 }
                             }
                         }

@@ -16,6 +16,10 @@ namespace UD_Bones_Folder.Mod
         public const int BONES_ZONE_POS = 222222;
         public const int BONES_FINALIZE_POS = 999999;
 
+        public const string OSSEOUS_ASH_ADDRESS = "osseousash.cloud";
+        public const string OSSEOUS_ASH_UN = "bones@osseousash.cloud";
+        public const string OSSEOUS_ASH_PW = "7K4^7rt5oG?SwAyJ*-";
+
         public const string OSSEOUS_ASH = "{{black|Osseous Ash}}";
         public const string OSSEOUS_ASH_CHECK = "Wot u doin' peeping in here?";
 
