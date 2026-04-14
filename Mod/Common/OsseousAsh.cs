@@ -32,9 +32,11 @@ namespace UD_Bones_Folder.Mod
         [Serializable]
         public class OsseousAshJSON
         {
+            /*
             [JsonIgnore]
-            public Guid ID => Guid.TryParse(GUID, out Guid iD) ? iD : Guid.Empty;
-            public string GUID;
+            public Guid ID => Guid.TryParse(StringGuid, out Guid iD) ? iD : Guid.Empty;
+            public string StringGuid;*/
+            public Guid ID;
             public string Handle;
             public bool AskAtStartup;
 
@@ -55,7 +57,7 @@ namespace UD_Bones_Folder.Mod
 
             public static async Task<OsseousAshJSON> Read()
             {
-                if (TryFindBestBonesPath(out string filePath))
+                if (TryFindBestOsseousAshPath(out string filePath))
                     return await ReadFromFile(filePath);
 
                 return null;
@@ -63,17 +65,18 @@ namespace UD_Bones_Folder.Mod
 
             public static async Task<OsseousAshJSON> ReadOrNew()
             {
-                if (TryFindBestBonesPath(out string filePath))
+                if (TryFindBestOsseousAshPath(out string filePath))
                 {
                     if (!(await File.ExistsAsync(filePath))
                         || await ReadFromFile(filePath) is not OsseousAshJSON osseousAshJSON)
                     {
-                        var iD = Guid.NewGuid();
+                        //var iD = Guid.NewGuid();
                         osseousAshJSON = new OsseousAshJSON
                         {
                             AskAtStartup = true,
                             Handle = DefaultOsseousAshHandle,
-                            GUID = iD.ToString(),
+                            //ID = iD.ToString(),
+                            ID = Guid.NewGuid(),
                         };
                         Options.DoOsseousAshStartupPopup = true;
                         osseousAshJSON.WriteToFile(filePath);
@@ -92,7 +95,7 @@ namespace UD_Bones_Folder.Mod
 
             public void Write()
             {
-                if (TryFindBestBonesPath(out string filePath))
+                if (TryFindBestOsseousAshPath(out string filePath))
                     WriteToFile(filePath);
             }
 
@@ -123,15 +126,18 @@ namespace UD_Bones_Folder.Mod
             {
                 if (this.ID != ID)
                 {
-                    this.GUID = ID.ToString();
+                    //this.ID = ID.ToString();
+                    this.ID = ID;
                     Write();
                 }
             }
         }
 
-        public static string Path => DataManager.SyncedPath(OsseousAshDirectoryName);
+        public static string LocalPath => DataManager.SavePath(OsseousAshDirectoryName);
+        public static string SyncedPath => DataManager.SyncedPath(OsseousAshDirectoryName);
 
-        public static DirectoryInfo PathInfo => DirectoryInfo.NewOnline(Path);
+        public static DirectoryInfo LocalPathInfo => DirectoryInfo.NewOnline(LocalPath);
+        public static DirectoryInfo SyncedPathInfo => DirectoryInfo.NewOnline(SyncedPath);
 
         public static string OsseousAshDirectoryName => "OsseousAsh";
 
@@ -161,18 +167,18 @@ namespace UD_Bones_Folder.Mod
             return Config;
         }
 
-        public static bool TryFindBestBonesPath(out string FilePath)
+        public static bool TryFindBestOsseousAshPath(out string FilePath)
         {
             string currentPath = null;
             FilePath = null;
-            foreach (var bonesPath in BonesManager.GetBonesPaths(NonRemoteOnly: true))
+            foreach (var osseousAshPath in GetOsseousAshPaths())
             {
                 try
                 {
-                    currentPath = bonesPath;
-                    if (Directory.Exists(bonesPath))
+                    currentPath = osseousAshPath;
+                    if (Directory.Exists(osseousAshPath))
                     {
-                        FilePath = Platform.IO.Path.Combine(bonesPath, OsseousAshFileName);
+                        FilePath = Path.Combine(osseousAshPath, OsseousAshFileName);
 
                         if (File.Exists(FilePath))
                             break;
@@ -205,9 +211,15 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             if (FilePath.IsNullOrEmpty())
-                FilePath = Platform.IO.Path.Combine(currentPath, OsseousAshFileName);
+                FilePath = Path.Combine(currentPath, OsseousAshFileName);
 
             return true;
+        }
+
+        public static IEnumerable<string> GetOsseousAshPaths()
+        {
+            yield return SyncedPathInfo;
+            yield return LocalPathInfo;
         }
 
         public static async Task PerformAskAsync()

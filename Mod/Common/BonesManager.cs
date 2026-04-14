@@ -32,9 +32,6 @@ using CompressionLevel = System.IO.Compression.CompressionLevel;
 
 using GameObject = XRL.World.GameObject;
 using Event = XRL.World.Event;
-using System.Net;
-using UD_Bones_Folder.Mod.UI;
-using UnityEngine.Networking;
 using XRL.World.Effects;
 using Newtonsoft.Json;
 
@@ -204,13 +201,12 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<string> GetBonesPaths(bool NonRemoteOnly = false)
         {
             foreach (var bonesPath in BonesPaths)
-                if (bonesPath.EnsureExists() is string ensuredPath)
-                yield return ensuredPath;
+                yield return bonesPath;
 
             if (!NonRemoteOnly
-                && Options.EnableOsseousAshDownloads
-                && OsseousAsh.PathInfo.EnsureExists() is string ensuredOsseousPath)
-                yield return ensuredOsseousPath;
+                && Options.EnableOsseousAshDownloads)
+                foreach (var bonesPath in OsseousAsh.GetOsseousAshPaths())
+                    yield return bonesPath;
         }
 
         private Task ReturnSaveTaskNullWithLogMessage(string Message = null)

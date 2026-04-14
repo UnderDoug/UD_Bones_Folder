@@ -133,10 +133,9 @@ namespace UD_Bones_Folder.Mod
             $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
 
-        public Guid OsseousAshID => Guid.TryParse(GetBonesJSON()?.OsseousAshID, out Guid result)
-            ? result
-            : Guid.Empty
-            ;
+        public Guid OsseousAshID
+            => GetBonesJSON()?.OsseousAshID
+            ?? Guid.Empty;
 
         public string OsseousAshHandle => GetBonesJSON()?.OsseousAshHandle;
 

@@ -62,7 +62,7 @@ namespace UD_Bones_Folder.Mod
                         ?? OsseousAshHandle);
         }
 
-        public static Guid OsseousAshID => Config?.ID ?? Guid.Empty;
+        public static Guid OsseousAshID => EnsureOsseousAshJSON()?.ID ?? Guid.Empty;
 
         private static string BaseHandleDisplayText;
         [OptionFlagUpdate]

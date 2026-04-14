@@ -18,7 +18,7 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
-        public string OsseousAshID;
+        public Guid OsseousAshID;
         public string OsseousAshHandle;
 
         public string ModVersion;

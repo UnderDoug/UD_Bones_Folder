@@ -77,7 +77,7 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
-                OsseousAshID = Options.OsseousAshID.ToString(),
+                OsseousAshID = Options.OsseousAshID,
                 OsseousAshHandle = Options.OsseousAshHandle,
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
