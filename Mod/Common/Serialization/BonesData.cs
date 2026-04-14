@@ -60,7 +60,7 @@ namespace UD_Bones_Folder.Mod
 
             foreach (var cell in Zone.GetCells())
             {
-                cell.Clear(Important: true, Combat: true);
+                cell.Clear(Important: true, Combat: true, alsoExclude: go => go.HasPart<GameUnique>());
 
                 if (BonesZone.GetCell(cell.Location) is not Cell bonesCell)
                     continue;
@@ -118,7 +118,13 @@ namespace UD_Bones_Folder.Mod
 
                                 catchFlag = nameof(Description);
                                 if (MoonKing.TryGetPart(out Description description))
-                                    description._Short = "It was you.";
+                                {
+                                    string whoItWas = OsseousAsh.DefaultOsseousAshHandle;
+                                    if (OsseousAsh.EnsureOsseousAshJSON() is OsseousAsh.OsseousAshJSON config)
+                                        whoItWas = $"=OsseousAshHandle:{config.ID}:Handle:{config.Handle}=";
+
+                                    description._Short = $"It was {whoItWas}.";
+                                }
 
                                 catchFlag = $"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup";
                                 var attitudeSetup = Event.New($"{nameof(UD_Bones_BonesSaver.BonesName)}AttitudeSetup")

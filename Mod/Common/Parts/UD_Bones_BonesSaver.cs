@@ -67,7 +67,7 @@ namespace XRL.World.Parts
             Utils.Log($"{nameof(Parts.Render)}({nameof(moonKing.Render.getColorString)}: {moonKing.Render.getColorString()}, " +
                 $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
                 $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
-*/
+            */
             var brain = moonKing.Brain;
             brain.PartyLeader = null;
             brain.Hibernating = false;
@@ -133,7 +133,10 @@ namespace XRL.World.Parts
             if (!Options.DebugEnableNoHoarding
                 || WishContext)
             {
-                if (E.Dying == ParentObject)
+                if (E.Dying == ParentObject
+                    && ParentObject.CurrentZone is Zone currentZone
+                    && !currentZone.IsWorldMap()
+                    && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
                 {
                     var moonKing = AscendMoonKing(ParentObject, ParentObject.CurrentCell);
                     using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
@@ -268,11 +271,21 @@ namespace XRL.World.Parts
                     The.Core.IDKFA = false;
                 }
 
+                string extraDamageType = Stat.RandomCosmetic(0, 8) switch
+                {
+                    0 => " Fire",
+                    1 => " Cold",
+                    2 => " Electric",
+                    3 => " Acid",
+                    4 => " Bludgeoning",
+                    _ => null,
+                };
+
                 if (!willDie
                     || !The.Player.TakeDamage(
                         Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(110, 150) / 100f)),
                         Message: "from %t desire it be so.",
-                        Attributes: "Unavoidable Cosmic Umbral Vorpal Disintegration",
+                        Attributes: $"Unavoidable Cosmic Umbral Vorpal{extraDamageType}",
                         Owner: killer,
                         Attacker: killer,
                         Source: projectile ?? weapon,

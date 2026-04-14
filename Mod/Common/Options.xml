@@ -49,7 +49,22 @@
         Type="Checkbox"
         Default="No">
     <helptext>
-      When enabled, you'll be asked during world-gen which bones file to exhume (load), if any.
+      When enabled, and if entering a new zone, if the zone rolled to load bones, you'll be asked during zone activation which bones file to exhume (load).
+      
+      You'll only be able to pick from eligible and available bones.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableForcePickingBones"
+        Requires="UD_Bones_Folder_DebugEnablePickingBones==Yes"
+        DisplayText="{{Y|Bones}}: Be asked every zone to pick which {{rainbow|Lunar Regent}} to exhume (force pick bones file)."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, you'll be asked for every new zone which bones file to exhume (load), irrespective of the chance.
       
       You'll only be able to pick from eligible and available bones.
 

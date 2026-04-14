@@ -2,11 +2,13 @@
 using System.Collections.Generic;
 using System.Text;
 
+using XRL.Core;
 using XRL.World.Effects;
 
 using UD_Bones_Folder.Mod;
-using XRL.Core;
 using UD_Bones_Folder.Mod.Events;
+
+using SerializeField = UnityEngine.SerializeField;
 
 namespace XRL.World.Parts
 {
@@ -31,6 +33,16 @@ namespace XRL.World.Parts
                 _IsMad = value;
                 ParentObject?.SetStringProperty(Const.IS_MAD_PROP, _IsMad.GetValueOrDefault() ? $"{true}" : null, true);
             }
+        }
+
+        public string OriginalShortDesc;
+
+        [SerializeField]
+        private bool _DoneDescription;
+        public bool DoneDescription
+        {
+            get => _DoneDescription;
+            protected set => _DoneDescription = value;
         }
 
         public static string GetRegalTitle(GameObject LunarRegent)
@@ -63,6 +75,14 @@ namespace XRL.World.Parts
         {
             base.Attach();
             ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
+
+            if (BonesID != The.Game.GameID
+                && !OriginalShortDesc.IsNullOrEmpty())
+            {
+                if (ParentObject.TryGetPart(out Description description)
+                    && description._Short == OriginalShortDesc)
+                    DoneDescription = false;
+            }
         }
 
         public override void Initialize()
@@ -73,11 +93,17 @@ namespace XRL.World.Parts
             var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
                 .OverrideBonesID<UD_Bones_LunarColors>(BonesID);
             bonesColors.Persists = true;
+
+            if (ParentObject.TryGetPart(out Description description))
+                OriginalShortDesc = description._Short;
+            else
+                OriginalShortDesc = "It was you.";
         }
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
+            || ID == GetShortDescriptionEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
@@ -88,6 +114,20 @@ namespace XRL.World.Parts
             E.AddHonorific($"=LunarShader:{GetRegalTitle()}:{ParentObject.BaseID}=".StartReplace().ToString());
             if (IsMad)
                 E.AddHonorific("mad", DescriptionBuilder.ORDER_ADJUST_SLIGHTLY_EARLY);
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetShortDescriptionEvent E)
+        {
+            if (!DoneDescription
+                && BonesID != The.Game?.GameID
+                && !OriginalShortDesc.IsNullOrEmpty()
+                && ParentObject.TryGetPart(out Description description)
+                && description._Short == OriginalShortDesc)
+            {
+                DoneDescription = true;
+                description._Short = OriginalShortDesc.StartReplace().ToString();
+            }
             return base.HandleEvent(E);
         }
 

@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Newtonsoft.Json;
+
 using Platform.IO;
 
 using Qud.API;
@@ -12,6 +14,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod
 {
+    [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
@@ -27,13 +30,19 @@ namespace UD_Bones_Folder.Mod
         public string GenotypeName;
         public string SubtypeName;
         public string Blueprint;
-
+/*
+        [JsonProperty]
+        public Dictionary<string, string> BonesSpec;
+*/
+        [JsonProperty]
         public BonesSpec BonesSpec;
 
         public string Pending;
         public int Encountered;
 
+        [JsonIgnore]
         private bool CharIconSwapped;
+        [JsonIgnore]
         private string OriginalCharIcon;
 
         public SaveBonesJSON()
@@ -87,6 +96,13 @@ namespace UD_Bones_Folder.Mod
                 saveTimeValue = new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
             }
 
+            var bonesSpec = bonesJSON.BonesSpec
+                ?? new BonesSpec
+                {
+                    Level = bonesJSON.Level,
+                    ZoneID = bonesJSON.ZoneID,
+                };
+
             var saveBonesInfo = new SaveBonesInfo
             {
                 json = bonesJSON,
@@ -110,7 +126,7 @@ namespace UD_Bones_Folder.Mod
                 GenotypeName = bonesJSON.GenotypeName,
                 SubtypeName = bonesJSON.SubtypeName,
 
-                BonesSpec = bonesJSON.BonesSpec,
+                BonesSpec = bonesSpec,
             };
 
             if (!bonesJSON.CharIcon.IsTile())

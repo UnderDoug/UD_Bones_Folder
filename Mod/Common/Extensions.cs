@@ -102,7 +102,7 @@ namespace UD_Bones_Folder.Mod
 
                 ZoneID = zoneID,
 
-                BonesSpec = new(MoonKing, zone),
+                BonesSpec = new BonesSpec(MoonKing, zone),
 
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
                 GenotypeName = MoonKing.GetGenotype(),

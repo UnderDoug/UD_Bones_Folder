@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Newtonsoft.Json;
+
 using Platform.IO;
 
 using Qud.API;
@@ -159,6 +161,7 @@ namespace UD_Bones_Folder.Mod
         public bool IsMad => GetBonesJSON().IsCharIconSwapped()
             || !GenotypeFactory.GenotypesByName.ContainsKey(GenotypeName)
             || !SubtypeFactory.SubtypesByName.ContainsKey(SubtypeName)
+            || !GameObjectFactory.Factory.BlueprintList.Any(bp => bp.Name == GetBonesJSON()?.Blueprint)
             ;
 
         private ModsDifferInfo _ModsDiffer;
@@ -201,7 +204,7 @@ namespace UD_Bones_Folder.Mod
                 if (swappedIcon)
                     bonesJSON.HotSwapCharIcon();
 
-                File.WriteAllText(JSONFilePath, JsonUtility.ToJson(bonesJSON, prettyPrint: true));
+                File.WriteAllText(JSONFilePath, JsonConvert.SerializeObject(bonesJSON, Formatting.Indented));
 
                 if (swappedIcon)
                     bonesJSON.HotSwapCharIcon();

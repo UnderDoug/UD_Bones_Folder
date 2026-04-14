@@ -18,7 +18,7 @@ namespace UD_Bones_Folder.Mod
 
         public const string OSSEOUS_ASH_ADDRESS = "osseousash.cloud";
         public const string OSSEOUS_ASH_UN = "bones@osseousash.cloud";
-        public const string OSSEOUS_ASH_PW = "7K4^7rt5oG?SwAyJ*-";
+        public const string OSSEOUS_ASH_PW = "changed";
 
         public const string OSSEOUS_ASH = "{{black|Osseous Ash}}";
         public const string OSSEOUS_ASH_CHECK = "Wot u doin' peeping in here?";

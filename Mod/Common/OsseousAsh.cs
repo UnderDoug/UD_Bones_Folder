@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Newtonsoft.Json;
+
 using Platform.IO;
 
 using Qud.UI;
@@ -15,17 +17,22 @@ using XRL;
 using XRL.Collections;
 using XRL.UI;
 using XRL.World;
+using XRL.World.Text.Attributes;
+using XRL.World.Text.Delegates;
 
 using static UD_Bones_Folder.Mod.Const;
 using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
 
 namespace UD_Bones_Folder.Mod
 {
+    [HasModSensitiveStaticCache]
     public static class OsseousAsh
     {
+        [JsonObject(MemberSerialization.OptOut)]
         [Serializable]
         public class OsseousAshJSON
         {
+            [JsonIgnore]
             public Guid ID => Guid.TryParse(GUID, out Guid iD) ? iD : Guid.Empty;
             public string GUID;
             public string Handle;
@@ -80,7 +87,7 @@ namespace UD_Bones_Folder.Mod
 
             public void WriteToFile(string FilePath)
             {
-                File.WriteAllText(FilePath, JsonUtility.ToJson(this, prettyPrint: true));
+                File.WriteAllText(FilePath, JsonConvert.SerializeObject(this, Formatting.Indented));
             }
 
             public void Write()
@@ -122,7 +129,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static string Path => Platform.IO.Path.Combine(BonesManager.BonesSyncPath, OsseousAshDirectoryName);
+        public static string Path => DataManager.SyncedPath(OsseousAshDirectoryName);
 
         public static DirectoryInfo PathInfo => DirectoryInfo.NewOnline(Path);
 
@@ -142,6 +149,7 @@ namespace UD_Bones_Folder.Mod
             && (EnsureOsseousAshJSON()?.AskAtStartup is true)
             ;
 
+        [ModSensitiveCacheInit]
         public static OsseousAshJSON EnsureOsseousAshJSON()
         {
             if (Config == null)
@@ -228,18 +236,18 @@ namespace UD_Bones_Folder.Mod
                             $"Irrespective of your choice, you won't be asked again (there's an option to be asked again), and you can always change your decision later in the options menu.",
                         buttons: new List<QudMenuItem>
                         {
-                        new QudMenuItem
-                        {
-                            text = "Opt In",
-                            hotkey = ControlManager.getCommandInputDescription("Accept"),
-                            command = "accept",
-                        },
-                        new QudMenuItem
-                        {
-                            text = "Opt Out",
-                            hotkey = ControlManager.getCommandInputDescription("CmdDelete"),
-                            command = "decline",
-                        },
+                            new QudMenuItem
+                            {
+                                text = "Opt In",
+                                hotkey = ControlManager.getCommandInputDescription("Accept"),
+                                command = "accept",
+                            },
+                            new QudMenuItem
+                            {
+                                text = "Opt Out",
+                                hotkey = ControlManager.getCommandInputDescription("CmdDelete"),
+                                command = "decline",
+                            },
                         },
                         DefaultSelected: 1,
                         title: "{{yellow|New Bones Folder Mod Installation Detected!}}",
@@ -257,13 +265,11 @@ namespace UD_Bones_Folder.Mod
                             buttons: PopupMessage.YesNoButton,
                             DefaultSelected: 1,
                             title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
-                            afterRender: new FlippableRender(
-                                Source: new Renderable(
-                                    Tile: "Tiles2/status_flying.bmp",
-                                    ColorString: "&R",
-                                    TileColor: "&R"),
-                                HFlip: false,
-                                VFlip: true))
+                            afterRender: new Renderable(
+                                Tile: "Abilities/tile_supressive_fire.png",
+                                ColorString: "&y",
+                                TileColor: "&y",
+                                DetailColor: 'R'))
                             ).command == "Yes")
                         {
                             any = true;
@@ -278,10 +284,14 @@ namespace UD_Bones_Folder.Mod
                             buttons: PopupMessage.YesNoButton,
                             DefaultSelected: 1,
                             title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
-                            afterRender: new Renderable(
-                                Tile: "Tiles2/status_flying.bmp",
-                                ColorString: "&W",
-                                TileColor: "&W"))
+                            afterRender: new FlippableRender(
+                                Source: new Renderable(
+                                    Tile: "Abilities/tile_supressive_fire.png",
+                                    ColorString: "&y",
+                                    TileColor: "&y",
+                                    DetailColor: 'W'),
+                                HFlip: false,
+                                VFlip: true))
                             ).command == "Yes")
                         {
                             any = true;
@@ -308,6 +318,55 @@ namespace UD_Bones_Folder.Mod
                         Value: Options.EnableOsseousAshUploads = false);
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns an OsseousAsh Handle, or the word "you" unless no 2PP is specified.
+        /// </summary>
+        /// <remarks>
+        /// Utilises the following params; paired params indicate those are ordered according to the pair; unordered otherwise:
+        /// <list type="bullet">
+        ///     <item>"No2PP"[<see cref="string"/>]: disable second person perspective (case insensitive).</item>
+        ///     <item>OsseousAshID[<see cref="Guid"/>]: string Guid (parsed) to check against for being the current player.</item>
+        ///     <item>"Handle"[<see cref="string"/>]:OsseaousAshHandle[<see cref="string"/>]: literal <see cref="string"/> "Handle" (case insensitive) and then the <see cref="string"/> result to output if the OsseousAsh ID doesn't match this player.</item>
+        /// </list>
+        /// </remarks>
+        /// <param name="Context">Context parameter provided by the <see cref="XRL.World.Text.ReplaceBuilder"/></param>
+        /// <returns>The string "you" or the player's OsseousAsh Handle (if "no2pp"), or the specified OsseousAsh Handle if a specified OsseousAsh ID doesn't match the player's.</returns>
+        [VariableReplacer(Keys = new string[] { "OsseousAshHandle" }, Capitalization = false)]
+        public static string OsseousAshHandle(DelegateContext Context)
+        {
+            if (EnsureOsseousAshJSON() is not OsseousAshJSON config)
+                return "you";
+
+            if (Context.Parameters is not List<string> parameters
+                || parameters.IsNullOrEmpty())
+                return config?.Handle ?? DefaultOsseousAshHandle;
+
+            string you = "you";
+            if (parameters.Any(p => p.EqualsNoCase("No2PP")))
+                you = config?.Handle ?? DefaultOsseousAshHandle;
+
+            foreach (var param in parameters)
+            {
+                if (Guid.TryParse(param, out Guid OAID))
+                {
+                    if (config != null
+                        && config.ID == OAID)
+                        return you;
+                }
+            }
+            
+            for (int i = 0; i < parameters.Count; i++)
+            {
+                if (parameters[i].EqualsNoCase("handle")
+                    && (i + 1) < parameters.Count)
+                {
+                    return parameters[i + 1];
+                }
+            }
+
+            return you;
         }
     }
 }

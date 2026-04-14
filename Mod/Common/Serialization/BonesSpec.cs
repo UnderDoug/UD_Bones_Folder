@@ -1,7 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO.Compression;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+
+using Newtonsoft.Json;
 
 using Platform.IO;
 using UnityEngine;
@@ -17,6 +21,7 @@ using GameObject = XRL.World.GameObject;
 
 namespace UD_Bones_Folder.Mod
 {
+    [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
     public class BonesSpec : IComposite
     {
@@ -46,25 +51,30 @@ namespace UD_Bones_Folder.Mod
         {
             BonesID = The.Game?.GameID;
 
-            Level = LunarRegent.Level;
+            if (LunarRegent != null)
+                Level = LunarRegent.Level;
 
-            ZoneID = Zone.ZoneID;
-            ZoneZ = Zone.GetZoneZ();
-            ZoneTier = Zone.NewTier;
-
-            if (Zone.GetTerrainObject() is GameObject zoneTerrain)
+            if (Zone != null)
             {
-                ZoneTerrainType = zoneTerrain.GetTagOrStringProperty("Terrain", MissingTerrainType);
+                ZoneID = Zone.ZoneID;
+                ZoneZ = Zone.GetZoneZ();
+                ZoneTier = Zone.NewTier;
 
-                int.TryParse(zoneTerrain.GetTag("RegionTier", "1"), out RegionTier);
+                if (Zone.GetTerrainObject() is GameObject zoneTerrain)
+                {
+                    ZoneTerrainType = zoneTerrain.GetTagOrStringProperty("Terrain", MissingTerrainType);
 
-                TerrainTravelClass = zoneTerrain.GetPart<TerrainTravel>()?.TravelClass ?? "none";
+                    int.TryParse(zoneTerrain.GetTag("RegionTier", "1"), out RegionTier);
+
+                    TerrainTravelClass = zoneTerrain.GetPart<TerrainTravel>()?.TravelClass ?? "none";
+                }
             }
         }
 
         public bool SameAs(BonesSpec Other)
             => Other != null
             && BonesID == Other.BonesID
+            && Level != 0
             && Level == Other.Level
             && ZoneID == Other.ZoneID
             && ZoneZ == Other.ZoneZ
@@ -236,10 +246,10 @@ namespace UD_Bones_Folder.Mod
                 && ZoneZ.IsSurfaceZ())
                 return true;
 
-            if (ZoneZ.IsSubterranianZ() != SpecZ.IsSubterranianZ())
+            if (ZoneZ.IsAerialZ() != SpecZ.IsAerialZ())
                 return false;
 
-            if (ZoneZ.IsAerialZ() != SpecZ.IsAerialZ())
+            if (ZoneZ.IsSubterranianZ() != SpecZ.IsSubterranianZ())
                 return false;
 
             int cappedZoneZ = Math.Min(ZoneZ, 20);
@@ -253,6 +263,9 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsWithinSpec(BonesSpec PlayerSpec)
         {
+            if (SameAs(PlayerSpec))
+                return true;
+
             if ((Level / (double)PlayerSpec.Level) < 0.9)
                 return false;
 
@@ -262,7 +275,7 @@ namespace UD_Bones_Folder.Mod
             if (!ZoneStrataWithinThreshold(ZoneZ, PlayerSpec.ZoneZ))
                 return false;
 
-            if (Math.Abs(ZoneTier - PlayerSpec.ZoneZ) > 5)
+            if (Math.Abs(ZoneTier - PlayerSpec.ZoneTier) > 5)
                 return false;
 
             if (ZoneTerrainType != PlayerSpec.ZoneTerrainType)
@@ -280,5 +293,39 @@ namespace UD_Bones_Folder.Mod
         public bool IsWithinSpec(Zone Zone)
             => IsWithinSpec(new BonesSpec(The.Player, Zone))
             ;
+        /*
+        public static implicit operator Dictionary<string, string>(BonesSpec BonesSpec)
+        {
+            var output = new Dictionary<string, string>();
+            foreach (var fieldInfo in typeof(BonesSpec).GetFields())
+            {
+                if (fieldInfo.IsPublic
+                    && !fieldInfo.IsStatic
+                    && fieldInfo.GetValue(BonesSpec)?.ToString() is string value)
+                {
+                    Utils.Log($"set {nameof(Dictionary<string, string>)}[{fieldInfo.Name}] to {value}");
+                    output.Add(fieldInfo.Name, value);
+                }
+            }
+            return output;
+        }
+
+        public static implicit operator BonesSpec(Dictionary<string, string> Dictionary)
+        {
+            var output = new BonesSpec();
+            foreach ((var key, var value) in Dictionary)
+            {
+                if (typeof(BonesSpec).GetField(key) is FieldInfo fieldInfo
+                    && fieldInfo.IsPublic
+                    && !fieldInfo.IsStatic
+                    && Convert.ChangeType(value, fieldInfo.FieldType) is object convertedValue)
+                {
+                    Utils.Log($"set {nameof(BonesSpec)}.{key} to {convertedValue}");
+                    fieldInfo.SetValue(output, convertedValue);
+                }
+            }
+            return output;
+        }
+        */
     }
 }

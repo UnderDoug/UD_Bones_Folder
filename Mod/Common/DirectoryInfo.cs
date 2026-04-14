@@ -3,17 +3,23 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using Platform.IO;
+
+using XRL.World;
 
 namespace UD_Bones_Folder.Mod
 {
-    public struct DirectoryInfo
+    [JsonObject(MemberSerialization.OptOut)]
+    [Serializable]
+    public struct DirectoryInfo : IComposite
     {
         public enum DirectoryType
         {
             None,
             Local,
-            Sync,
+            Synced,
             Online,
         }
 
@@ -36,7 +42,7 @@ namespace UD_Bones_Folder.Mod
         public static DirectoryInfo NewSync(string Path)
             => new DirectoryInfo
             {
-                Type = DirectoryType.Sync,
+                Type = DirectoryType.Synced,
                 Path = Path,
             };
 

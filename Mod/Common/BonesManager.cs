@@ -35,6 +35,8 @@ using Event = XRL.World.Event;
 using System.Net;
 using UD_Bones_Folder.Mod.UI;
 using UnityEngine.Networking;
+using XRL.World.Effects;
+using Newtonsoft.Json;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -105,8 +107,14 @@ namespace UD_Bones_Folder.Mod
         [NonSerialized]
         public Task SaveTask;
 
+        public int ChancePerMyriadForBones => 200;
+
         [NonSerialized]
         public Dictionary<string, bool> Visited = new();
+        [NonSerialized]
+        public Dictionary<string, bool> Alerted = new();
+        [NonSerialized]
+        public List<string> Encountered = new();
 
         public BonesManager()
         { }
@@ -147,14 +155,18 @@ namespace UD_Bones_Folder.Mod
 
         #region Serialization
 
-        public override void Read(SerializationReader Reader)
-        {
-            Visited = Reader.ReadDictionary<string, bool>();
-        }
-
         public override void Write(SerializationWriter Writer)
         {
             Writer.Write(Visited);
+            Writer.Write(Alerted);
+            Writer.Write(Encountered);
+        }
+
+        public override void Read(SerializationReader Reader)
+        {
+            Visited = Reader.ReadDictionary<string, bool>();
+            Alerted = Reader.ReadDictionary<string, bool>();
+            Encountered = Reader.ReadList<string>();
         }
 
         #endregion
@@ -284,174 +296,24 @@ namespace UD_Bones_Folder.Mod
                     bool restoreBackup = false;
                     try
                     {
-                        File.WriteAllText(bonesInfoPath, JsonUtility.ToJson(saveBonesJSON, prettyPrint: true));
+                        File.WriteAllText(bonesInfoPath, JsonConvert.SerializeObject(saveBonesJSON, Formatting.Indented));
                         if (File.Exists(bonesFilePath))
                         {
                             File.Copy(bonesFilePath, bonesFilePath + ".bak", overwrite: true);
                             restoreBackup = true;
                         }
-                            using (var memoryStream = new System.IO.MemoryStream())
+                        using (var memoryStream = new System.IO.MemoryStream())
+                        {
+                            using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
                             {
-                                using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
-                                {
-                                    byte[] buffer = writer.Stream.GetBuffer();
-                                    gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
-                                }
-                                File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
+                                byte[] buffer = writer.Stream.GetBuffer();
+                                gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
+                            }
+                            File.WriteAllBytes(bonesFilePath, memoryStream.ToArray());
 
                             if (Options.EnableOsseousAshUploads)
                             {
-                                using (var client = UnityWebRequest.Get("osseousash.cloud"))
-                                {
-                                    string baseURI = $"osseousash.cloud/Bones/{The.Game.GameID}/";
-                                    var ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
-
-                                    try
-                                    {
-                                        UnityWebRequest.Put(ftpUrl.Uri, memoryStream.ToArray());
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
-                                    }
-
-
-                                    ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
-                                    try
-                                    {
-                                        UnityWebRequest.Put(ftpUrl.Uri, File.ReadAllText(bonesInfoPath)).SendWebRequest();
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
-                                    }
-                                }
-
-                                using (var client = new WebClient())
-                                {
-                                    /*client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-                                    string baseURI = $"osseousash.cloud/Bones/{The.Game.GameID}/";
-                                    var ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
-                                    client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-
-                                    try
-                                    {
-                                        client.UploadFile(ftpUrl.Uri, WebRequestMethods.Ftp.UploadFile, bonesFilePath);
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
-                                    }
-
-
-                                    ftpUrl = new UriBuilder($"{baseURI}{new FileInfo(bonesFilePath).Name}");
-                                    try
-                                    {
-                                        client.UploadFile(ftpUrl.Uri, WebRequestMethods.Ftp.UploadFile, bonesInfoPath);
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpUrl.Uri}\"", x);
-                                    }*/
-
-                                    /*var request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
-                                    request.Method = WebRequestMethods.Ftp.UploadFile;*/
-
-                                    //request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-                                    /*using (var requestStream = request.GetRequestStream())
-                                    {
-                                        var copyTask = memoryStream.CopyToAsync(requestStream);
-                                        copyTask.Wait();
-                                        using (var response = (FtpWebResponse)request.GetResponse())
-                                        {
-                                            Utils.Log($"Upload Bones Save Complete, status {response.StatusDescription}");
-                                        }
-                                    }*/
-                                    /*using (var requestStream = request.GetRequestStream())
-                                    {
-                                        var copyTask = memoryStream.CopyToAsync(requestStream);
-                                        copyTask.Wait();
-                                        using (var response = (FtpWebResponse)request.GetResponse())
-                                        {
-                                            Utils.Log($"Upload Bones Save Complete, status {response.StatusDescription}");
-                                        }
-                                    }*/
-
-                                    //ftpUrl = new UriBuilder($"ftp.osseousash.cloud/{The.Game.GameID}/{new FileInfo(bonesFilePath).Name}");
-
-                                    /*request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
-                                    request.Method = WebRequestMethods.Ftp.UploadFile;
-
-                                    request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-                                    var mode = global::System.IO.FileMode.Open;
-                                    var access = global::System.IO.FileAccess.Read;
-                                    using (var fileStream = global::System.IO.File.Open(bonesInfoPath, mode, access))
-                                    {
-                                        using (var requestStream = request.GetRequestStream())
-                                        {
-                                            var copyTask = fileStream.CopyToAsync(requestStream);
-                                            copyTask.Wait();
-                                            using (var response = (FtpWebResponse)request.GetResponse())
-                                            {
-                                                Utils.Log($"Upload Bones Info Complete, status {response.StatusDescription}");
-                                            }
-                                        }
-                                    }*/
-                                }
-
-                                /*
-                                using (var client = new WebClient())
-                                {
-                                    var ftpUrl = new UriBuilder("ftp", OSSEOUS_ASH_ADDRESS);
-
-                                    string basepath = "Bones";
-                                    if (BonesManagement.TryGetConfigParamTyped("UploadDir", v => v, out string uploadDir))
-                                        basepath = uploadDir;
-
-                                    ftpUrl.Path = $"{basepath}/{Path.GetFileName(bonesFilePath)}";
-                                    // Get the object used to communicate with the server.
-                                    FtpWebRequest request = (FtpWebRequest)WebRequest.Create(ftpUrl.Uri);
-                                    request.Method = WebRequestMethods.Ftp.UploadFile;
-
-                                    // This example assumes the FTP site uses anonymous logon.
-                                    request.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-
-                                    // Copy the contents of the file to the request stream.
-                                    using (var fileStream = global::System.IO.File.Open("testfile.txt", global::System.IO.FileMode.Open, global::System.IO.FileAccess.Read))
-                                    {
-                                        using (var requestStream = request.GetRequestStream())
-                                        {
-                                            await fileStream.CopyToAsync(requestStream);
-                                            using (var response = (FtpWebResponse)request.GetResponse())
-                                            {
-                                                Console.WriteLine($"Upload File Complete, status {response.StatusDescription}");
-                                            }
-                                        }
-                                    }
-
-                                    string ftpSavePath = $"{client.BaseAddress}/{Path.GetFileName(bonesFilePath)}";
-                                    string ftpInfoPath = $"{client.BaseAddress}/{Path.GetFileName(bonesInfoPath)}";
-
-                                    client.Credentials = new NetworkCredential(OSSEOUS_ASH_UN, OSSEOUS_ASH_PW);
-
-                                    try
-                                    {
-                                        client.UploadFile(ftpSavePath, WebRequestMethods.Ftp.UploadFile, bonesFilePath);
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpSavePath}\"", x);
-                                    }
-
-                                    try
-                                    {
-                                        client.UploadFile(ftpInfoPath, WebRequestMethods.Ftp.UploadFile, bonesInfoPath);
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Failed to upload to \"{ftpInfoPath}\"", x);
-                                    }
-                                }*/
+                               // Do some uploading?
                             }
                         }
                         MemoryHelper.GCCollect();
@@ -510,7 +372,8 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(
             Predicate<SaveBonesInfo> Where,
-            bool TidyPending = false
+            bool TidyPending = false,
+            bool IncludeVersionIncompatible = false
             )
         {
             var saveBonesInfos = new List<SaveBonesInfo>();
@@ -535,6 +398,18 @@ namespace UD_Bones_Folder.Mod
                         if (directories[i] is string bonesFolder
                             && await SaveBonesInfo.GetSaveBonesInfo(bonesFolder) is SaveBonesInfo bonesInfo)
                         {
+                            if (!IncludeVersionIncompatible)
+                            {
+                                if (new XRL.Version(bonesInfo.ModVersion) is XRL.Version bonesVersion
+                                    && Utils.ThisMod.Manifest.Version is XRL.Version currentVersion)
+                                {
+                                    if ((currentVersion.Build >= 3) != (bonesVersion.Build >= 3))
+                                    {
+                                        Utils.Log($"Skipping incompatible version mismatch, current: {currentVersion}, bones: {bonesVersion}, for BonesID {bonesInfo.ID}");
+                                        continue;
+                                    }
+                                }
+                            }
                             if (TidyPending)
                             {
                                 if (!bonesInfo.Pending.EqualsNoCase($"{false}"))
@@ -575,7 +450,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static async Task<bool> HasSaveBonesAsync()
-            => _HasSaveBones ??= !(await GetSaveBonesInfoAsync(null)).IsNullOrEmpty()
+            => _HasSaveBones ??= !(await GetSaveBonesInfoAsync(null, IncludeVersionIncompatible: true)).IsNullOrEmpty()
             ;
 
         public static bool HasSaveBones()
@@ -603,8 +478,8 @@ namespace UD_Bones_Folder.Mod
             => (SaveBonesInfo = GetThisRunPendingSaveBonesInfo()) != null
             ;
 
-        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync()
-            => await GetSaveBonesInfoAsync(null)
+        public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(bool IncludeVersionIncompatible = false)
+            => await GetSaveBonesInfoAsync(null, IncludeVersionIncompatible: IncludeVersionIncompatible)
             ;
 
         public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo()
@@ -881,9 +756,9 @@ namespace UD_Bones_Folder.Mod
             Utils.Warn(Event.FinalizeString(sB));
         }
 
-        public BonesData ExhumeMoonKing(string ZoneID, SaveBonesInfo DeathEvent)
+        public BonesData ExhumeMoonKing(string ZoneID, SaveBonesInfo SaveBonesInfo)
         {
-            var exhumation = ExhumeMoonKingAsync(ZoneID, DeathEvent);
+            var exhumation = ExhumeMoonKingAsync(ZoneID, SaveBonesInfo);
             exhumation.Wait();
             return exhumation.Result;
         }
@@ -1000,7 +875,7 @@ namespace UD_Bones_Folder.Mod
             Action AfterDeletionLoop
             )
         {
-            var orderedBonesInfos = (await GetSaveBonesInfoAsync())
+            var orderedBonesInfos = (await GetSaveBonesInfoAsync(IncludeVersionIncompatible: true))
                 ?? Enumerable.Empty<SaveBonesInfo>();
 
             if (orderedBonesInfos.IsNullOrEmpty())
@@ -1080,15 +955,219 @@ namespace UD_Bones_Folder.Mod
             || Visited.ContainsKey(Z.ZoneID)
             ;
 
+        public bool AttemptLoadBones(Zone Z, SaveBonesInfo PickedBones)
+        {
+            Alerted ??= new();
+            BonesData bonesData = null;
+            try
+            {
+                bonesData = BonesData.GetFromSaveBonesInfo(Z.ZoneID, PickedBones);
+            }
+            catch (FatalDeserializationVersionException)
+            {
+                if (!Alerted.TryGetValue(Z.ZoneID, out bool alerted)
+                    || !alerted)
+                {
+                    Popup.ShowYesNo(
+                        Message: $"This bones file has encountered a fatal deserialization exception on the basis of the save version and will likely never load.\n\n" +
+                        $"If you would like to try and recover it, select {PopupMessage.YesNoButton[1].text}, force the zone to load when asked, and then please contact {Utils.AuthorOnPlatforms} with a copy of the bones file: {DataManager.SanitizePathForDisplay(PickedBones.Directory)}.\n\n" +
+                        $"Alternatively, it is recommended that you cremate this bones file, so that it doesn't continue to create issues.\n\n" +
+                        $"Would you like to cremate this bones file?",
+                        callback: (result) =>
+                        {
+                            if (result == DialogResult.Yes)
+                                PickedBones.Cremate();
+                        });
+                    Alerted[Z.ZoneID] = true;
+                }
+                throw;
+            }
+            catch (DeserializationVersionException)
+            {
+                if (!Alerted.TryGetValue(Z.ZoneID, out bool alerted)
+                    || !alerted)
+                {
+                    Popup.ShowYesNo(
+                        Message: $"This bones file has encountered a deserialization version exception on the basis of the save version and will likely not load this run.\n\n" +
+                        $"This bones is for game version {PickedBones.Version}, and will likely load in an appropriately versioned run. If you would like to keep this bones so that it might appear in run on that version of the game, select {PopupMessage.YesNoButton[1].text}, and then force the zone to load when asked.\n\n" +
+                        $"Alternatively, if you're unlikely to switch versions of the game, it is recommended that you cremate this bones file, so that it doesn't continue to create issues.\n\n" +
+                        $"Would you like to cremate this bones file?",
+                        callback: (result) =>
+                        {
+                            if (result == DialogResult.Yes)
+                                PickedBones.Cremate();
+                        });
+                    Alerted[Z.ZoneID] = true;
+                }
+                throw;
+            }
+            catch (Exception x)
+            {
+                Utils.Error(Utils.CallChain(nameof(BonesManager), nameof(AttemptLoadBones)), x);
+                bonesData = null;
+            }
+
+            if (bonesData == null)
+                return false;
+
+            if (Z.GetZoneProperty(nameof(BonesData.BonesID), null) is string existingBonesID)
+            {
+                if (existingBonesID != bonesData.BonesID)
+                    Utils.Warn($"Loading {nameof(SaveBonesInfo)} for zone that has already loaded a different bones: " +
+                        $"{nameof(existingBonesID)} {existingBonesID}, {nameof(bonesData)}.{nameof(bonesData.BonesID)} {bonesData.BonesID}. " +
+                        $"Zone may have errors.");
+                else
+                    Utils.Warn($"{nameof(SaveBonesInfo)} for zone that has already loaded this bones: " +
+                        $"{nameof(existingBonesID)} {existingBonesID}, {nameof(bonesData)}.{nameof(bonesData.BonesID)} {bonesData.BonesID}. " +
+                        $"Zone may have errors.");
+            }
+
+            if (bonesData.Apply(Z, out GameObject lunarRegent, PickedBones.IsMad))
+            {
+                Z.GetCell(0, 0).AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_MoonKingAnnouncer.BonesID)}::{bonesData.BonesID}");
+                Encountered.Add(bonesData.BonesID);
+                Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
+                try
+                {
+                    SaveBonesInfo.IncrementEncountered(PickedBones);
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Encountered)}", x);
+                }
+                return true;
+            }
+            return false;
+        }
+
         public void CheckBones(Zone Z)
         {
             Visited ??= new();
+            Encountered ??= new();
 
             if (IsWorldMapOrVisited(Z))
                 return;
 
             Visited.Add(Z.ZoneID, value: true);
 
+            if (Options.DebugEnableNoExhuming
+                && !Options.DebugEnablePickingBones)
+                return;
+
+            if (The.Player is not GameObject player)
+                return;
+
+            var playerSpec = new BonesSpec(player, Z);
+            // _ = (Dictionary<string, string>)playerSpec;
+            if (GetSaveBonesInfo(b => !Encountered.Contains(b.ID) && b.BonesSpec?.IsWithinSpec(playerSpec) is true) is IEnumerable<SaveBonesInfo> bonesInfos
+                && !bonesInfos.IsNullOrEmpty())
+            {
+                bool byChance = ChancePerMyriadForBones.in10000();
+                if (byChance
+                    || Options.DebugEnableForcePickingBones)
+                {
+                    int selection = 0;
+                    if (Options.DebugEnablePickingBones)
+                    {
+                        using var bonesList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(
+                            items: bonesInfos.OrderBy(b => b, SaveBonesInfo.SaveBonesInfoComparerDescending));
+
+                        using var optionsList = ScopeDisposedList<string>.GetFromPool();
+                        using var renderList = ScopeDisposedList<BonesRender>.GetFromPool();
+                        using var hotkeyList = ScopeDisposedList<char>.GetFromPool();
+
+                        // Add None Please:
+                        optionsList.Add("none please");
+                        renderList.Add(new(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), false));
+                        renderList[0].TileColor = "&K";
+                        renderList[0].DetailColor = 'K';
+                        hotkeyList.Add('n');
+
+                        // Add Roll It!:
+                        optionsList.Add("{{yellow|roll it!}}");
+                        renderList.Add(new("Abilities/sw_skill_pointed_circle.png", ColorString: "&y", TileColor: "&y", DetailColor: 'W'));
+                        hotkeyList.Add('r');
+
+                        int offset = optionsList.Count;
+
+                        foreach (var bones in bonesList)
+                        {
+                            renderList.Add(bones.Render);
+                            string bonesOption = bones.GetName();
+                            if (bones.GetBonesJSON() is SaveBonesJSON bonesJSON)
+                                bonesOption = $"{bonesOption}, {nameof(bonesJSON.Level)}: {bonesJSON.Level}, {nameof(BonesSpec.ZoneTier)}: {bonesJSON.BonesSpec.ZoneTier},\n" +
+                                    $"{nameof(BonesSpec.ZoneTerrainType)}: \"{bonesJSON.BonesSpec.ZoneTerrainType}\", {nameof(SaveBonesJSON.ZoneID)}: {bonesJSON.ZoneID}";
+                            optionsList.Add(bonesOption);
+                            hotkeyList.Add(' ');
+                        }
+
+                        var icon = new BonesRender(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), HFlip: false, IsMad: true);
+
+                        if (bonesInfos.Any(b => b.IsMad))
+                            icon.SetTile(MOON_KING_FEVER_TILE);
+
+                        string neutralRegalTitle = UD_Bones_MoonKingFever.REGAL_TITLE.Pluralize();
+
+                        while (true)
+                        {
+                            var picked = Popup.PickOptionAsync(
+                                Title: $"Eligible =LunarShader:{neutralRegalTitle}:*= For This Zone".StartReplace().ToString(),
+                                Intro: "Pick a lunar regent to exhume, or {{yellow|roll it!}}",
+                                Options: optionsList,
+                                Icons: renderList,
+                                IntroIcon: icon,
+                                AllowEscape: true);
+
+                            picked.Wait();
+                            selection = picked.Result;
+                            if (selection >= offset
+                                && bonesList.TakeAt(selection - offset) is SaveBonesInfo pickedBones)
+                            {
+                                try
+                                {
+                                    if (AttemptLoadBones(Z, pickedBones))
+                                        break;
+                                }
+                                catch (Exception x)
+                                {
+                                    Utils.Error($"Failed to load {nameof(BonesData)} for {nameof(SaveBonesInfo)}.{nameof(pickedBones.ID)} {pickedBones.ID}", x);
+                                }
+                                optionsList.RemoveAt(selection);
+                                renderList.RemoveAt(selection);
+                                hotkeyList.RemoveAt(selection);
+                                continue;
+                            }
+                            Z.SetZoneProperty(nameof(BonesData.BonesID), null);
+                            break;
+                        }
+                    }
+
+                    if (!Options.DebugEnablePickingBones
+                        || (selection == 1
+                            && byChance))
+                    {
+                        var bonesBag = new BallBag<SaveBonesInfo>();
+                        foreach (var bonesInfo in bonesInfos)
+                        {
+                            if (bonesInfo.GetBonesWeight() is int weight)
+                                bonesBag.Add(bonesInfo, weight);
+                        }
+                        while (!bonesBag.IsNullOrEmpty()
+                            && bonesBag.PickOne() is SaveBonesInfo pickedBones)
+                        {
+                            try
+                            {
+                                if (AttemptLoadBones(Z, pickedBones))
+                                    break;
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"Failed to load {nameof(BonesData)} for {nameof(SaveBonesInfo)}.{nameof(pickedBones.ID)} {pickedBones.ID}", x);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         public override void Register(XRLGame Game, IEventRegistrar Registrar)
@@ -1172,6 +1251,65 @@ namespace UD_Bones_Folder.Mod
                 success = false;
             }
             return success;
+        }
+
+        [WishCommand(Command = "manage bones report visited")]
+        public static bool ReportVisited_WishHandler()
+        {
+            try
+            {
+                string title = $"{nameof(BonesManager)} Visited Zones";
+                Utils.Log($"{title}:");
+                System?.Visited.Loggregate(
+                    Proc: kvp => $"{kvp.Key}: {kvp.Value}",
+                    Empty: "empty",
+                    PostProc: s => $"{1.Indent()}: {s}");
+                if (System == null)
+                    Utils.Log($"{1.Indent()}: System not instantiated (this is probably a bug).");
+
+                Popup.Show(
+                    Message: System?.Visited?.Aggregate(
+                        seed: (string)null,
+                        func: (a,n) => Utils.NewLineDelimitedAggregator(a, $"{1.Indent()}: {n.Key}: {n.Value}"))
+                        ?? $"{1.Indent()}: {"System not instantiated".WithColor("red")} (this is probably a bug).",
+                    Title: title.WithColor("yellow"));
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Wish: \"{"manage bones report visited"}\"", x);
+                return false;
+            }
+
+            return true;
+        }
+
+        [WishCommand(Command = "manage bones report encountered")]
+        public static bool ReportEncountered_WishHandler()
+        {
+            try
+            {
+                string title = $"{nameof(BonesManager)} Encountered Bones";
+                Utils.Log($"{title}:");
+                System?.Encountered.Loggregate(
+                    Empty: "empty",
+                    PostProc: s => $"{1.Indent()}: {s}");
+                if (System == null)
+                    Utils.Log($"{1.Indent()}: System not instantiated (this is probably a bug).");
+
+                Popup.Show(
+                    Message: System?.Encountered?.Aggregate(
+                        seed: (string)null,
+                        func: (a,n) => Utils.NewLineDelimitedAggregator(a, $"{1.Indent()}: {n}"))
+                        ?? $"{1.Indent()}: {"System not instantiated".WithColor("red")} (this is probably a bug).",
+                    Title: title.WithColor("yellow"));
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Wish: \"{"manage bones report encountered"}\"", x);
+                return false;
+            }
+
+            return true;
         }
 
         #endregion

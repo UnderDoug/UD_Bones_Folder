@@ -95,7 +95,7 @@ namespace XRL.World.Parts
                     {
                         int attempts = 0;
                         while (!damageFuncs.IsNullOrEmpty()
-                            && attempts++ < damageFuncs.Count)
+                            && attempts++ < (damageFuncs.Count * 2))
                             if (damageFuncs.PickOne().Invoke(ParentObject))
                                 break;
                     }
