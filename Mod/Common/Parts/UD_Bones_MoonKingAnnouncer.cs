@@ -69,12 +69,6 @@ namespace XRL.World.Parts
             this.Message = Message;
         }
 
-        public override void Attach()
-        {
-            base.Attach();
-            ParentObject.Render.DisplayName = "[Moon King Announcer]";
-        }
-
         public void Announce()
         {
             if (!GameObject.Validate(ParentObject))

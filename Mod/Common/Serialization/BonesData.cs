@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
 
 using Kobold;
 
@@ -74,6 +75,7 @@ namespace UD_Bones_Folder.Mod
                 if (bonesCell.Objects is not ObjectRack bonesObjects)
                     continue;
 
+                var lunarRegentCompanions = new Dictionary<GameObject, string>();
                 for (int i = 0; i < bonesObjects.Count; i++)
                 {
                     
@@ -155,13 +157,31 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(GameObject.MakeActive);
                             bonesObject.MakeActive();
 
-                            catchFlag = nameof(GameObject.ForfeitTurn);
+                            if (bonesObject.GetStringProperty(nameof(AllyPet)) is string allyPetID
+                                && allyPetID == BonesID)
+                                lunarRegentCompanions[bonesObject] = nameof(AllyPet);
+                            else
+                            if (bonesObject.GetStringProperty(nameof(GameObject.IsPlayerLed)) is string playerLedID
+                                && playerLedID == BonesID)
+                                lunarRegentCompanions[bonesObject] = nameof(GameObject.IsPlayerLed);
+
+                                catchFlag = nameof(GameObject.ForfeitTurn);
                             bonesObject.ForfeitTurn();
                         }
                         catch (Exception x)
                         {
                             Utils.Error($"{nameof(bonesObjects)}[{i}] ({catchFlag}): {bonesObjectDebugName}", x);
                         }
+                    }
+                }
+                if (MoonKing != null)
+                {
+                    foreach ((var bonesObject, var type) in lunarRegentCompanions)
+                    {
+                        if (type == nameof(AllyPet))
+                            bonesObject.SetAlliedLeader<AllyPet>(MoonKing, Silent: true);
+                        else
+                            bonesObject.Brain?.SetPartyLeader(MoonKing, Silent: true);
                     }
                 }
             }

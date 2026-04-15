@@ -35,6 +35,7 @@ using Event = XRL.World.Event;
 using XRL.World.Effects;
 using Newtonsoft.Json;
 using Random = System.Random;
+using XRL.World.AI;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -178,10 +179,9 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
-        public DirectoryInfo GetBonesDirectory(string FileName = null)
+        public DirectoryInfo GetBonesDirectory()
         {
-            if (BonesDirectory == default
-                || BonesDirectory == DirectoryInfo.Empty)
+            if (BonesDirectory == DirectoryInfo.Empty)
             {
                 BonesDirectory = DirectoryInfo.NewSync(Path.Combine(BonesSyncPath, GameID));
                 try
@@ -203,21 +203,16 @@ namespace UD_Bones_Folder.Mod
                     MetricsManager.LogCallingModError(x);
                     return DirectoryInfo.Empty;
                 }
-
-                BonesDirectory = DirectoryInfo.Empty;
             }
-            if (!FileName.IsNullOrEmpty())
-                return new(BonesDirectory.Type, Path.Combine(BonesDirectory, FileName));
-
             return BonesDirectory;
         }
 
-        public DirectoryInfo GetSaveFileFullPath(string FileName)
-            => GetBonesDirectory($"{FileName}.sav.gz")
+        public string GetSaveFilePath(string FileName)
+            => $"{FileName}.sav.gz"
             ;
 
-        public DirectoryInfo GetInfoFileFullPath(string FileName)
-            => GetBonesDirectory($"{FileName}.json")
+        public string GetInfoFilePath(string FileName)
+            => $"{FileName}.json"
             ;
 
         public static IEnumerable<string> GetBonesPaths(bool NonRemoteOnly = false)
@@ -268,9 +263,23 @@ namespace UD_Bones_Folder.Mod
 
                 foreach (var zoneGO in currentZone.GetObjects())
                 {
-                    if (zoneGO.Brain is Brain brain
-                        && brain.PartyLeader?.IsPlayer() is true)
-                        brain.SetPartyLeader(MoonKing, Silent: true);
+                    if (zoneGO.Brain is Brain brain)
+                    {
+                        if (brain.FindAllegiance<AllyPet>() is AllegianceSet allyPetSet
+                            && allyPetSet.SourceID == The.Player.BaseID)
+                        {
+                            Utils.Log($"{zoneGO.DebugName} is PlayerPet");
+                            zoneGO.SetAlliedLeader<AllyPet>(MoonKing, Silent: true);
+                            zoneGO.SetStringProperty(nameof(AllyPet), GameID);
+                        }
+                        else
+                        if (zoneGO.IsPlayerLed())
+                        {
+                            Utils.Log($"{zoneGO.DebugName} is PlayerLed");
+                            brain.SetPartyLeader(MoonKing, Silent: true);
+                            zoneGO.SetStringProperty(nameof(zoneGO.IsPlayerLed), GameID);
+                        }
+                    }
 
                     zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
                     zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());
@@ -282,8 +291,9 @@ namespace UD_Bones_Folder.Mod
                     zoneGO.SetStringProperty("ImprovisedWeapon", $"{zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
                 }
 
-                var bonesFilePath = GetSaveFileFullPath(GameName);
-                var bonesInfoPath = GetInfoFileFullPath(GameName);
+                var directoryInfo = GetBonesDirectory();
+                var bonesFilePath = directoryInfo.WithFileName(GetSaveFilePath(GameName));
+                var bonesInfoPath = directoryInfo.WithFileName(GetInfoFilePath(GameName));
                 try
                 {
                     if (game.WallTime != null)
@@ -298,7 +308,7 @@ namespace UD_Bones_Folder.Mod
                         game.WallTime.Start();
                     }
 
-                    var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing, bonesInfoPath.Type);
+                    var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing, directoryInfo.Type);
 
                     writer.Start(XRLGame.SaveVersion);
                     writer.Write(SERIALIZATION_CHECK);
@@ -467,7 +477,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo(Predicate<SaveBonesInfo> Where)
-            => GetSaveBonesInfoAsync(Where)?.WaitResult()
+            => GetSaveBonesInfoAsync(Where).WaitResult()
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
@@ -484,7 +494,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static IEnumerable<SaveBonesInfo> GetPendingSaveBonesInfo()
-            => GetPendingSaveBonesInfoAsync()?.WaitResult()
+            => GetPendingSaveBonesInfoAsync().WaitResult()
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
@@ -511,12 +521,12 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static IEnumerable<SaveBonesInfo> GetCrematableSaveBonesInfo(bool IncludeVersionIncompatible = false)
-            => GetCrematableSaveBonesInfoAsync(IncludeVersionIncompatible)?.WaitResult()
+            => GetCrematableSaveBonesInfoAsync(IncludeVersionIncompatible).WaitResult()
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
         public static IEnumerable<SaveBonesInfo> GetSaveBonesInfo()
-            => GetSaveBonesInfoAsync()?.WaitResult()
+            => GetSaveBonesInfoAsync().WaitResult()
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 
@@ -528,7 +538,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static IEnumerable<SaveBonesInfo> GetAvailableSaveBonesInfo()
-            => GetAvailableSaveBonesInfoAsync()?.WaitResult()
+            => GetAvailableSaveBonesInfoAsync().WaitResult()
             ?? Enumerable.Empty<SaveBonesInfo>()
             ;
 

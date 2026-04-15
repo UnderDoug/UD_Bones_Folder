@@ -28,6 +28,8 @@ namespace XRL.World.Parts
     {
         private static bool WishContext;
 
+        public static int MinimumLevelForBones => 5;
+
         public static BonesManager BonesManager => BonesManager.System;
 
         public static string BonesName => "LunarRegent";
@@ -134,7 +136,7 @@ namespace XRL.World.Parts
                 || WishContext)
             {
                 if (E.Dying == ParentObject
-                    && ParentObject.Level > 4
+                    && ParentObject.Level >= MinimumLevelForBones
                     && ParentObject.CurrentZone is Zone currentZone
                     && !currentZone.IsWorldMap()
                     && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
@@ -216,6 +218,15 @@ namespace XRL.World.Parts
 
             if (The.Game?.GameID is not string gameID)
                 return false;
+
+            if (The.Player.Level < MinimumLevelForBones)
+            {
+                if (Popup.ShowYesNoCancel($"The minimum level to makes bones is {MinimumLevelForBones}. You are level {The.Player.Level}.\n\n" +
+                    $"Would you like your level increased to {MinimumLevelForBones} to complete this operation?") == DialogResult.Yes)
+                    The.Player.AwardXP((Leveler.GetXPForLevel(MinimumLevelForBones) - The.Player.Stat("XP")) + 1);
+                else
+                    return true;
+            }
 
             bool willDie = Params?.Contains("die") is true;
 

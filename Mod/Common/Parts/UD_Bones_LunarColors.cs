@@ -386,5 +386,21 @@ namespace XRL.World.Parts
             }
             return base.Render(E);
         }
+
+        public override bool WantEvent(int ID, int Cascade)
+            => base.WantEvent(ID, Cascade)
+            || ID == GetDebugInternalsEvent.ID
+            ;
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(TileColor), TileColor);
+            E.AddEntry(this, nameof(DetailColor), DetailColor);
+            E.AddEntry(this, nameof(FrameOffset), FrameOffset);
+            E.AddEntry(this, nameof(AnimationFrameDuration), AnimationFrameDuration);
+            E.AddEntry(this, nameof(AnimationLengthInFrames), AnimationLengthInFrames);
+            E.AddEntry(this, nameof(KeyframeOfLastFrame), KeyframeOfLastFrame);
+            return base.HandleEvent(E);
+        }
     }
 }

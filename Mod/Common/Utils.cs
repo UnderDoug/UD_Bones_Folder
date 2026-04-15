@@ -568,16 +568,15 @@ namespace UD_Bones_Folder.Mod
                 : adjective?.IndefiniteArticle() ?? title.IndefiniteArticle()
                 ;
 
-            adjective += " ";
-            if (!adjective.StartsWith(" "))
-                adjective = $" {adjective}";
+            if (!adjective.IsNullOrEmpty())
+                adjective += " ";
 
             string shaderOffset = (Context.Target?.BaseID)?.ToString() ?? "*";
 
             if (Context.Capitalize)
                 indefiniteArticle = indefiniteArticle.Capitalize();
 
-            return $"=LunarShader:{indefiniteArticle}{adjective}{title}:{shaderOffset}="
+            return $"{indefiniteArticle} =LunarShader:{adjective}{title}:{shaderOffset}="
                     .StartReplace()
                     .ToString()
                 ;

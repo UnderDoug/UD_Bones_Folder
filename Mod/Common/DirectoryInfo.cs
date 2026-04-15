@@ -106,7 +106,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public readonly bool Exists()
-            => ExistsAsync()?.WaitResult() is true
+            => ExistsAsync().WaitResult() is true
             ;
 
         public async readonly Task<string> EnsureExistsAsync()
@@ -136,8 +136,11 @@ namespace UD_Bones_Folder.Mod
         }
 
         public readonly string EnsureExists()
-            => EnsureExistsAsync()?.WaitResult()
+            => EnsureExistsAsync().WaitResult()
             ;
+
+        public string WithFileName(string FileName)
+            => Platform.IO.Path.Combine(this, FileName);
 
         public override readonly string ToString()
             => this;
