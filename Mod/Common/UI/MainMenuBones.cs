@@ -31,10 +31,8 @@ namespace UD_Bones_Folder.Mod.UI
         {
             Text = "Bones",
             Command = "Pick:Bones",
-            Shortcut = UnityEngine.KeyCode.B,
+            Shortcut = KeyCode.B,
         };
-
-        public static bool DoingBonesManagement;
 
         public static List<AbstractEmbarkBuilderModule> Modules;
 	    public static List<EmbarkBuilderModuleWindowDescriptor> WindowDescriptors;
@@ -76,31 +74,26 @@ namespace UD_Bones_Folder.Mod.UI
         [HarmonyPrefix]
         public static async void SelectedInfo_HandleBones_Prefix(FrameworkDataElement data)
         {
-            DoingBonesManagement = false;
-            if (((MainMenuOptionData)data)?.Command == "Pick:Bones")
+            if (data is MainMenuOptionData menuOptionData
+                && menuOptionData.Command == "Pick:Bones"
+                && XRL.UI.Options.ModernUI)
             {
-                if (XRL.UI.Options.ModernUI)
-                {
-                    await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+                await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
 
-                    if (MainMenuBonesOptions?.Enabled is true)
+                if (MainMenuBonesOptions?.Enabled is true
+                    && BonesManagement.CheckInit())
+                {
+                    try
                     {
-                        if (BonesManagement.CheckInit())
-                        {
-                            try
-                            {
-                                ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
-                            }
-                            finally
-                            {
-                                UIManager.showWindow("MainMenu");
-                                MainMenu.instance.Reshow();
-                            }
-                        }
+                        ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
+                    }
+                    finally
+                    {
+                        UIManager.showWindow("MainMenu");
+                        MainMenu.instance.Reshow();
                     }
                 }
             }
-            DoingBonesManagement = false;
         }
 
         public static void SetBonesMenuOptionEnabled()

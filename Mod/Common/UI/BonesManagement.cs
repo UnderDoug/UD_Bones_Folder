@@ -103,6 +103,8 @@ namespace UD_Bones_Folder.Mod.UI
         protected bool MoveAllBonesMenuBar;
         protected bool MoveLegendBar;
 
+        public Dictionary<SaveManagementRow, GameObject> SelectionChoiceSyncButtons = new();
+
         protected static void InitializeWithUIManager()
         {
             if (instance == null)
@@ -257,7 +259,7 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                     }
                 }
-
+/*
                 if (TryGetConfigParamTyped("MenuColor", s => s?.EqualsNoCase("Yes") is true, out bool menuColor))
                 {
                     foreach (var childImage in allBonesRectTransform.GetComponentsInChildren<Image>())
@@ -271,12 +273,13 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                     }
                 }
-                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);
+                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);*/
+                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * 0.5f, 0);
             }
 
             if (LegendBar.GetComponent<RectTransform>() is RectTransform legendBarRectTransform)
             {
-                if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
+                /*if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
                 {
                     foreach (var childImage in legendBarRectTransform.GetComponentsInChildren<Image>())
                     {
@@ -289,7 +292,8 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                     }
                 }
-                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);
+                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);*/
+                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * 0.5f, 0);
             }
 
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
@@ -501,9 +505,11 @@ namespace UD_Bones_Folder.Mod.UI
             UpdateLegendBar();
             UpdateMenuBars();
 
+            /*
             Utils.Log("=".ThisManyTimes(45));
             instance.gameObject.LogComponentTree($"{Utils.CallChain(nameof(BonesManagement), nameof(instance), nameof(instance.gameObject))} {instance.gameObject.name}");
             Utils.Log("=".ThisManyTimes(45));
+            */
         }
 
         public override void Hide()
@@ -737,12 +743,12 @@ namespace UD_Bones_Folder.Mod.UI
                 && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
             {
                 MoveLegendBar = false;
-                float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
-                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();
+                /*float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
+                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();*/
 
                 if (LegendBar.GetComponent<RectTransform>() is RectTransform legendRectTransform)
                 {
-                    if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
+                    /*if (TryGetConfigParamTyped("LegendColor", s => s?.EqualsNoCase("Yes") is true, out bool legendColor))
                     {
                         foreach (var childImage in legendRectTransform.GetComponentsInChildren<Image>())
                         {
@@ -754,7 +760,7 @@ namespace UD_Bones_Folder.Mod.UI
                                     childImage.color = The.Color.Blue.WithAlpha(0);
                             }
                         }
-                    }
+                    }*/
 
                     float childWidth = 0;
                     foreach (var childRect in legendRectTransform.GetComponentsInChildren<RectTransform>())
@@ -819,12 +825,12 @@ namespace UD_Bones_Folder.Mod.UI
                 && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)
             {
                 MoveAllBonesMenuBar = false;
-                float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
-                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();
+                /*float bonesScrollerYWithMulti = bonesScrollerParentRectTransform.rect.y * GetConfigBonesYMulti();
+                float bonesScrollerXWithMulti = bonesScrollerParentRectTransform.rect.x * GetConfigBonesXMulti();*/
 
                 if (AllBonesMenuBar.GetComponent<RectTransform>() is RectTransform allBonesRectTransform)
                 {
-                    if (TryGetConfigParamTyped("MenuColor", s => s?.EqualsNoCase("Yes") is true, out bool menuColor))
+                    /*if (TryGetConfigParamTyped("MenuColor", s => s?.EqualsNoCase("Yes") is true, out bool menuColor))
                     {
                         foreach (var childImage in allBonesRectTransform.GetComponentsInChildren<Image>())
                         {
@@ -836,7 +842,7 @@ namespace UD_Bones_Folder.Mod.UI
                                     childImage.color = The.Color.Green.WithAlpha(0);
                             }
                         }
-                    }
+                    }*/
 
                     float childWidth = 0;
                     foreach (var childRect in allBonesRectTransform.GetComponentsInChildren<RectTransform>())
@@ -857,10 +863,12 @@ namespace UD_Bones_Folder.Mod.UI
                         z: 0);*/
                     //allBonesRectTransform.anchoredPosition = new(allBonesRectTransform.anchoredPosition.x, BonesScrollerVertScroll.anchoredPosition.y);
                     //allBonesRectTransform.SetInsetAndSizeFromParentEdge(RectTransform.Edge.Left, 0, BonesScrollerVertScroll.rect.width);
-                    allBonesRectTransform.Translate(
+                    
+                    
+                    /*allBonesRectTransform.Translate(
                         x: BonesScrollerVertScroll.rect.width * GetConfigBonesXMulti(),
                         y: bonesScrollerYWithMulti + (allBonesRectTransform.rect.y * GetConfigMenuYMulti()),
-                        z: 0);
+                        z: 0);*/
                 }
             }
         }
@@ -894,7 +902,7 @@ namespace UD_Bones_Folder.Mod.UI
             : new()
             ;
 
-
+/*
         public static bool TryGetConfigParamTyped<T>(string Key, Func<string, T> Parse, out T Result)
         {
             Result = default;
@@ -971,6 +979,6 @@ namespace UD_Bones_Folder.Mod.UI
                 return result;
 
             return 0f;
-        }
+        }*/
     }
 }

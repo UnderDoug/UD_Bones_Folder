@@ -134,6 +134,7 @@ namespace XRL.World.Parts
                 || WishContext)
             {
                 if (E.Dying == ParentObject
+                    && ParentObject.Level > 4
                     && ParentObject.CurrentZone is Zone currentZone
                     && !currentZone.IsWorldMap()
                     && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
@@ -305,7 +306,18 @@ namespace XRL.World.Parts
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
                     if (!willDie)
+                    {
+                        if (currentZone.GetObjects(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == saveBonesInfo.ID).FirstOrDefault() is GameObject lunarRegent)
+                        {
+                            foreach (var zoneGO in currentZone.GetObjects())
+                            {
+                                if (zoneGO.Brain is Brain brain
+                                    && brain.PartyLeader == lunarRegent)
+                                    brain.SetPartyLeader(The.Player, Silent: true);
+                            }
+                        }
                         TidyLunarObjectsEvent.SendGameID(Context: "Wish");
+                    }
 
                     Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
                     return true;

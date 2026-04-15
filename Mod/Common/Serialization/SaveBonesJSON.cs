@@ -18,6 +18,7 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class SaveBonesJSON : SaveGameJSON
     {
+        [JsonProperty]
         public Guid OsseousAshID;
         public string OsseousAshHandle;
 
@@ -36,6 +37,9 @@ namespace UD_Bones_Folder.Mod
 */
         [JsonProperty]
         public BonesSpec BonesSpec;
+
+        [JsonProperty]
+        public DirectoryInfo.DirectoryType DirectoryType;
 
         public string Pending;
         public int Encountered;

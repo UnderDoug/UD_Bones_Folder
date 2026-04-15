@@ -120,8 +120,8 @@ namespace UD_Bones_Folder.Mod
                                 if (MoonKing.TryGetPart(out Description description))
                                 {
                                     string whoItWas = OsseousAsh.DefaultOsseousAshHandle;
-                                    if (OsseousAsh.EnsureOsseousAshJSON() is OsseousAsh.OsseousAshJSON config)
-                                        whoItWas = $"=OsseousAshHandle:{config.ID}:Handle:{config.Handle}=";
+                                    if (OsseousAsh.Config != null)
+                                        whoItWas = $"=OsseousAshHandle:{OsseousAsh.Config.ID}:Handle:{OsseousAsh.Config.Handle}=";
 
                                     description._Short = $"It was {whoItWas}.";
                                 }

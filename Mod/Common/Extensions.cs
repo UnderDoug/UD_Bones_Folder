@@ -9,6 +9,8 @@ using ConsoleLib.Console;
 
 using Kobold;
 
+using Platform.IO;
+
 using UD_Bones_Folder.Mod.UI;
 
 using XRL;
@@ -27,7 +29,12 @@ namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
     {
-        public static SaveBonesJSON CreateSaveBonesJSON(this XRLGame Game, IDeathEvent E, GameObject MoonKing)
+        public static SaveBonesJSON CreateSaveBonesJSON(
+            this XRLGame Game,
+            IDeathEvent E,
+            GameObject MoonKing,
+            DirectoryInfo.DirectoryType DirectoryType
+            )
         {
             var localTimeNow = DateTime.Now;
             long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
@@ -77,8 +84,8 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
-                OsseousAshID = Options.OsseousAshID,
-                OsseousAshHandle = Options.OsseousAshHandle,
+                OsseousAshID = OsseousAsh.Config?.ID ?? Guid.Empty,
+                OsseousAshHandle = OsseousAsh.Config?.Handle ?? OsseousAsh.DefaultOsseousAshHandle,
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
@@ -104,6 +111,8 @@ namespace UD_Bones_Folder.Mod
 
                 BonesSpec = new BonesSpec(MoonKing, zone),
 
+                DirectoryType = DirectoryType,
+
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
                 GenotypeName = MoonKing.GetGenotype(),
                 SubtypeName = MoonKing.GetSubtype(),
@@ -117,6 +126,10 @@ namespace UD_Bones_Folder.Mod
             SaveRow.SetBonesText(BonesData);
             SaveRow.SetBonesModsDiffer(BonesData);
             SaveRow.SetBonesDeleteButton();
+
+            BonesManagement.instance.SelectionChoiceSyncButtons ??= new();
+            SaveRow.SetLocationBox(BonesData);
+
             SaveRow.Update();
         }
 
@@ -175,6 +188,39 @@ namespace UD_Bones_Folder.Mod
             SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
             string bonesID = "{" + bonesInfo.ID + "} ";
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
+        }
+
+        public static void SetLocationBox(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        {
+            var bonesInfo = BonesData.BonesInfo;
+            if (!BonesManagement.instance.SelectionChoiceSyncButtons.TryGetValue(SaveRow, out var locationBox))
+            {
+                locationBox = UnityEngine.GameObject.Instantiate(SaveRow.modsDiffer);
+                BonesManagement.instance.SetParentTransform(locationBox.transform, SaveRow.modsDiffer.transform.parent);
+                locationBox.SetActive(value: true);
+                locationBox.transform.SetAsFirstSibling();
+                BonesManagement.instance.SelectionChoiceSyncButtons[SaveRow] = locationBox;
+            }
+            if (locationBox.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
+            {
+                foreach (var locationBoxTextSkin in locationBoxTextSkins)
+                {
+                    if (locationBoxTextSkin.name == "tct"
+                        || locationBoxTextSkin.gameObject.name == "tct")
+                    {
+                        locationBoxTextSkin.SetText(bonesInfo.DirectoryInfo.Type switch
+                        {
+                            DirectoryInfo.DirectoryType.Synced => "synced".Colored("G"),
+                            DirectoryInfo.DirectoryType.Local => "local".Colored("W"),
+                            DirectoryInfo.DirectoryType.Mod => "modded".Colored("C"),
+                            DirectoryInfo.DirectoryType.Online => "online".Colored("Y"),
+                            _ => "!?".Colored("R"),
+                        });
+                        break;
+                    }
+                }
+            }
+            BonesManagement.instance.SelectionChoiceSyncButtons[SaveRow] = locationBox;
         }
 
         public static void SetBonesModsDiffer(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -678,30 +724,6 @@ namespace UD_Bones_Folder.Mod
                 || bonesID == BonesID;
         }
 
-        public static bool IsSubterranianZ(this int Z)
-            => Z > 10
-            ;
-
-        public static bool IsAerialZ(this int Z)
-            => Z < 10
-            ;
-
-        public static bool IsSurfaceZ(this int Z)
-            => Z == 10
-            ;
-
-        public static bool IsSubterranian(this Zone Zone)
-            => Zone?.Z.IsSubterranianZ() is true
-            ;
-
-        public static bool IsAerial(this Zone Zone)
-            => Zone?.Z.IsAerialZ() is true
-            ;
-
-        public static bool IsSurface(this Zone Zone)
-            => Zone?.Z.IsSurfaceZ() is true
-            ;
-
         public static T WaitResult<T>(this Task<T> Task)
         {
             if (Task == null)
@@ -711,5 +733,22 @@ namespace UD_Bones_Folder.Mod
 
             return Task.Result;
         }
+
+        public static bool DirectoryExistsSafe(this string Path)
+            => !Path.IsNullOrEmpty()
+            && Directory.Exists(Path)
+            ;
+
+        public static bool ContainsAny(this string String, params string[] Strings)
+            => Strings.IsNullOrEmpty()
+            ? String.IsNullOrEmpty()
+            : Strings.Any(s => String.Contains(s))
+            ;
+
+        public static bool ContainsAny(this string String, IEnumerable<string> Strings)
+            => Strings.IsNullOrEmpty()
+            ? String.IsNullOrEmpty()
+            : Strings.Any(s => String.Contains(s))
+            ;
     }
 }

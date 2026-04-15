@@ -25,6 +25,22 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesSpec : IComposite
     {
+        public enum ApproxDepth
+        {
+            /// <summary>Strata 0-9</summary>
+            Sky,
+            /// <summary>Stratum 10</summary>
+            Surface,
+            /// <summary>Strata 11-20</summary>
+            Shallow,
+            /// <summary>Strata 21-40</summary>
+            Deep,
+            /// <summary>Strata 41-997</summary>
+            Abyssal,
+            /// <summary>Strata 998+</summary>
+            CryoClone,
+        }
+
         public static string MissingTerrainType => "Mystery";
 
         public string BonesID;
@@ -240,26 +256,23 @@ namespace UD_Bones_Folder.Mod
             => new(The.Player, Zone)
             ;
 
-        public static bool ZoneStrataWithinThreshold(int SpecZ, int ZoneZ)
-        {
-            if (SpecZ.IsSurfaceZ()
-                && ZoneZ.IsSurfaceZ())
-                return true;
+        public static ApproxDepth GetApproxDepth(int ZoneZ)
+            => ZoneZ switch
+            {
+                >= 998 => ApproxDepth.CryoClone,
+                >= 41 => ApproxDepth.Abyssal,
+                >= 21 => ApproxDepth.Deep,
+                >= 11 => ApproxDepth.Shallow,
+                10 => ApproxDepth.Surface,
+                _ => ApproxDepth.Sky,
+            };
 
-            if (ZoneZ.IsAerialZ() != SpecZ.IsAerialZ())
-                return false;
+        public ApproxDepth GetApproxDepth()
+            => GetApproxDepth(ZoneZ);
 
-            if (ZoneZ.IsSubterranianZ() != SpecZ.IsSubterranianZ())
-                return false;
-
-            int cappedZoneZ = Math.Min(ZoneZ, 20);
-            int cappedSpecZ = Math.Min(SpecZ, 20);
-
-            if (Math.Abs(cappedZoneZ - cappedSpecZ) > 5)
-                return false;
-
-            return true;
-        }
+        public static bool ZoneStrataWithinThreshold(int ZoneZ, int SpecZ)
+            => GetApproxDepth(ZoneZ) == GetApproxDepth(SpecZ)
+            ;
 
         public bool IsWithinSpec(BonesSpec PlayerSpec)
         {

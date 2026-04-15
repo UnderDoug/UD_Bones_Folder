@@ -584,16 +584,18 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
-            where T : IComparable<T>
+            where T : IConvertible
         {
-            Min = Operand1;
-            Max = Operand2;
-            if (Operand1.CompareTo(Operand2) > 0)
-            {
-                Min = Operand2;
-                Max = Operand1;
-            }
+            Min = (T)Convert.ChangeType(Math.Min(Convert.ToUInt64(Operand1), Convert.ToUInt64(Operand2)), typeof(T));
+            Max = (T)Convert.ChangeType(Math.Max(Convert.ToUInt64(Operand1), Convert.ToUInt64(Operand2)), typeof(T));
         }
+
+        public static void GetMinMax(double Operand1, double Operand2, out double Min, out double Max)
+        {
+            Min = Math.Min(Operand1, Operand2);
+            Max = Math.Max(Operand1, Operand2);
+        }
+
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
             => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
             ;

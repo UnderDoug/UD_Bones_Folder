@@ -7,6 +7,9 @@ using Newtonsoft.Json;
 
 using Platform.IO;
 
+using XRL;
+using XRL.Collections;
+using XRL.Core;
 using XRL.World;
 
 namespace UD_Bones_Folder.Mod
@@ -15,13 +18,17 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public struct DirectoryInfo : IComposite
     {
+        [Serializable]
         public enum DirectoryType
         {
             None,
             Local,
             Synced,
+            Mod,
             Online,
         }
+
+        public static DirectoryInfo Empty = default;
 
         public DirectoryType Type;
         public string Path;
@@ -46,12 +53,52 @@ namespace UD_Bones_Folder.Mod
                 Path = Path,
             };
 
+        public static DirectoryInfo NewMod(string Path)
+            => new DirectoryInfo
+            {
+                Type = DirectoryType.Mod,
+                Path = Path,
+            };
+
         public static DirectoryInfo NewOnline(string Path)
             => new DirectoryInfo
             {
                 Type = DirectoryType.Online,
                 Path = Path,
             };
+
+        public static DirectoryInfo NewAssumed(string Path)
+        {
+            using var maybeOnlinePaths = ScopeDisposedList<string>.GetFromPool();
+            maybeOnlinePaths.Add("Online");
+            maybeOnlinePaths.Add("OsseousAsh");
+            maybeOnlinePaths.Add("\\Cloud");
+            maybeOnlinePaths.Add("/Cloud");
+
+            if (Path.ContainsAny("\\Mods\\", "/Mods/", "\\workshop\\content\\333640\\", "/workshop/content/333640/"))
+            {
+                if (Path.ContainsAny(maybeOnlinePaths))
+                    return NewOnline(Path);
+                return NewMod(Path);
+            }
+            if (Path.Contains(XRLCore.SyncedPath))
+            {
+                if (Path.ContainsAny(maybeOnlinePaths))
+                    return NewOnline(Path);
+                return NewSync(Path);
+            }
+            if (Path.Contains(XRLCore.SavePath))
+            {
+                if (Path.ContainsAny(maybeOnlinePaths))
+                    return NewOnline(Path);
+                return NewLocal(Path);
+            }
+            return new DirectoryInfo
+            {
+                Type = DirectoryType.None,
+                Path = Path,
+            };
+        }
 
         public async readonly Task<bool> ExistsAsync()
             => !Path.IsNullOrEmpty()
@@ -66,6 +113,10 @@ namespace UD_Bones_Folder.Mod
         {
             if (Type == DirectoryType.Online
                 && !Options.EnableOsseousAshDownloads)
+                return null;
+
+            if (Type == DirectoryType.Mod
+                || Type == DirectoryType.None)
                 return null;
 
             if (await ExistsAsync())
@@ -89,7 +140,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public override readonly string ToString()
-            => Path;
+            => this;
 
         public override readonly bool Equals(object obj)
         {
@@ -115,7 +166,11 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static implicit operator string(DirectoryInfo DirectoryInfo)
-            => DirectoryInfo.EnsureExists()
-            ;
+        {
+            if (DirectoryInfo.Type >= DirectoryType.Mod)
+                return DirectoryInfo.Path;
+            return DirectoryInfo.EnsureExists()
+                ?? DirectoryInfo.Path;
+        }
     }
 }

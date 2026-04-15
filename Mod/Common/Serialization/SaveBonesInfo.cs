@@ -127,10 +127,9 @@ namespace UD_Bones_Folder.Mod
 
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
 
-        private static readonly string[] InfoFiles = new string[2]
+        private static readonly string[] InfoFiles = new string[1]
         {
             $"{UD_Bones_BonesSaver.BonesName}.json",
-            $"{UD_Bones_BonesSaver.BonesName}.sav.json"
         };
 
         public Guid OsseousAshID
@@ -185,6 +184,25 @@ namespace UD_Bones_Folder.Mod
 
         public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
         public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
+
+        private DirectoryInfo _DirectoryInfo = DirectoryInfo.Empty;
+        public DirectoryInfo DirectoryInfo
+        {
+            get
+            {
+                if (_DirectoryInfo == DirectoryInfo.Empty
+                    && GetBonesJSON() is SaveBonesJSON bonesJSON
+                    && Directory != null)
+                {
+                    DirectoryInfo.DirectoryType type = DirectoryInfo.NewAssumed(Directory).Type;
+                    if (bonesJSON.DirectoryType != DirectoryInfo.DirectoryType.None)
+                        type = bonesJSON.DirectoryType;
+
+                    _DirectoryInfo = new(type, Directory);
+                }
+                return _DirectoryInfo;
+            }
+        }
 
         public SaveBonesInfo()
             : base()
@@ -275,7 +293,7 @@ namespace UD_Bones_Folder.Mod
                         return await SaveBonesJSON.ReadSaveBonesJson(Directory, path);
                     }
                 }
-                if (!Platform.IO.Directory.EnumerateFiles(Directory).Any(f => !f.EndsWith("Cache.db")))
+                if (!Platform.IO.Directory.EnumerateFiles(Directory).Any(f => !f.EndsWith(".json")))
                 {
                     try
                     {

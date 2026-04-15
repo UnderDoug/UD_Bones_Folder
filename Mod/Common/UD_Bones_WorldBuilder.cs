@@ -41,6 +41,8 @@ namespace XRL.World.WorldBuilders
             if (WorldID != "JoppaWorld")
                 return;
 
+            OsseousAsh.PerformAsk();
+
             if (Options.DebugEnableNoExhuming
                 && !Options.DebugEnablePickingBones)
                 return;

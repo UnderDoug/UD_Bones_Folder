@@ -156,6 +156,7 @@ namespace XRL.World.Parts
         {
             E.AddEntry(this, nameof(Cremated), Cremated);
             E.AddEntry(this, nameof(RegalTitle), RegalTitle);
+            E.AddEntry(this, nameof(DoneDescription), DoneDescription);
             return base.HandleEvent(E);
         }
     }

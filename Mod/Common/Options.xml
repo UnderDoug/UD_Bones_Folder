@@ -138,15 +138,62 @@
   <option
         ID="UD_Bones_Folder_StoredOsseousAshHandle"
         Requires="UD_Bones_Folder_EnableOsseousAshUploads==Yes"
-        DisplayText="Change {{black|Osseous Ash}} Handle"
+        DisplayText="{{Y|[}}Manage {{black|Osseous Ash}} Handle{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.Options.SetOsseousAshHandle"
+        OnClick="UD_Bones_Folder.Mod.Options.ManageOsseousAshHandle"
         Default="{{K|A Mysterious Stranger}}">
     <helptext>
       This is the name that will be associated with your bones files when uploaded to the the {{black|Osseous Ash}}.
 
       The default is &quot;{{K|A Mysterious Stranger}}&quot;.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_ChosenPermyriadChance"
+        DisplayText="Choose chance per zone that bones can be encountered."
+        Category="Mod: Bones"
+        Type="Combo"
+        Default="200"
+        Values="10|almost never,50|rarely,125|uncommon,200|default,500|sometimes,1000|frequently,2000|often,4000|not quite half,-1|custom">
+    <helptext>
+      Sets the chance when visiting a zone that an eligible bones file will be searched for and, if found, loaded into a zone.
+      
+      {{c|&#x7;}} almost never - {{C|0.1%}}
+      {{c|&#x7;}} rarely - {{C|0.5%}}
+      {{c|&#x7;}} uncommon - {{C|1.25%}}
+      {{c|&#x7;}} default - {{C|2.0%}}
+      {{c|&#x7;}} sometimes - {{C|5.0%}}
+      {{c|&#x7;}} frequently - {{C|10.0%}}
+      {{c|&#x7;}} often - {{C|20.0%}}
+      {{c|&#x7;}} not quite half - {{C|40.0%}}
+      {{c|&#x7;}} custom - enables a button to enter a {{C|custom value}}
+
+      Keep in mind, humans are notoriously bad at judging probability.
+
+      Note: if you would like to disable encountering bones altogether, there is a debug option (in the {{c|Debug}} category) to pause bones encounters.
+
+      The default is {{W|2.0%}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_CustomPermyriadChance"
+        Requires="UD_Bones_Folder_ChosenPermyriadChance==-1"
+        DisplayText="{{Y|[}}Manage {{W|custom permyriad}} chance{{Y|]}}"
+        Category="Mod: Bones"
+        Type="Button"
+        OnClick="UD_Bones_Folder.Mod.Options.ManageCustomPermyriadChance"
+        Default="200">
+    <helptext>
+      Enter a custom permyriad chance for a given zone to have bones. Permyriad is like percent, but for 10,000 instead of 100. This allows for percentages with 2 significant digits.
+
+      If you want {{W|2.0%}}, enter {{C|200}}.
+      If you want {{W|50.0%}}, enter {{C|5000}}.
+      If you want {{W|0.01%}}, enter {{C|1}}.
+      
+      Note: if you would like to disable encountering bones altogether, there is a debug option (in the {{c|Debug}} category) to pause bones encounters.
+
+      The default is {{W|2.0%}} ({{C|200}}).
     </helptext>
   </option>
   <option

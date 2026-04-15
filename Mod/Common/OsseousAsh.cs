@@ -26,6 +26,8 @@ using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
 namespace UD_Bones_Folder.Mod
 {
     [HasModSensitiveStaticCache]
+    [HasCallAfterGameLoaded]
+    [HasVariableReplacer]
     public static class OsseousAsh
     {
         [JsonObject(MemberSerialization.OptOut)]
@@ -36,9 +38,24 @@ namespace UD_Bones_Folder.Mod
             [JsonIgnore]
             public Guid ID => Guid.TryParse(StringGuid, out Guid iD) ? iD : Guid.Empty;
             public string StringGuid;*/
+            [JsonProperty]
             public Guid ID;
             public string Handle;
-            public bool AskAtStartup;
+
+            [JsonIgnore]
+            private bool _AskAtStartup;
+            [JsonProperty]
+            public bool AskAtStartup
+            {
+                get => _AskAtStartup;
+                set
+                {
+                    WriteAskAtStartup(value);
+                }
+            }
+
+            [JsonIgnore]
+            private HashSet<string> LockedMembers = new();
 
             public static async Task<OsseousAshJSON> ReadFromFile(string FilePath)
             {
@@ -78,11 +95,11 @@ namespace UD_Bones_Folder.Mod
                             //ID = iD.ToString(),
                             ID = Guid.NewGuid(),
                         };
-                        Options.DoOsseousAshStartupPopup = true;
+                        Options.EnableOsseousAshStartupPopup = true;
                         osseousAshJSON.WriteToFile(filePath);
                         return osseousAshJSON;
                     }
-                    Options.DoOsseousAshStartupPopup = osseousAshJSON.AskAtStartup;
+                    Options.EnableOsseousAshStartupPopup = osseousAshJSON.AskAtStartup;
                     return osseousAshJSON;
                 }
                 return null;
@@ -99,15 +116,27 @@ namespace UD_Bones_Folder.Mod
                     WriteToFile(filePath);
             }
 
-            public void WriteAskAtStartup(bool AskAtStartup)
+            public void WriteAskAtStartup(bool Value, bool Propagate = true)
             {
-                if (this.AskAtStartup != AskAtStartup)
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(AskAtStartup))
+                    && _AskAtStartup != Value)
                 {
-                    this.AskAtStartup = AskAtStartup;
-                    XRL.UI.Options.SetOption(
-                        ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshStartupPopup)}",
-                        Value: Options.EnableOsseousAshStartupPopup = AskAtStartup);
-                    Write();
+                    LockedMembers.Add(nameof(AskAtStartup));
+                    try
+                    {
+                        _AskAtStartup = Value;
+
+                        Write();
+
+                        XRL.UI.Options.SetOption(
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshStartupPopup)}",
+                            Value: Options.EnableOsseousAshStartupPopup = Value);
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(AskAtStartup));
+                    }
                 }
             }
 
@@ -141,30 +170,38 @@ namespace UD_Bones_Folder.Mod
 
         public static string OsseousAshDirectoryName => "OsseousAsh";
 
-        public static string OsseousAshFileName => $"{OsseousAshDirectoryName}.guid";
+        public static string OsseousAshFileName => $"{OsseousAshDirectoryName}.json";
 
         public static string DefaultOsseousAshHandle => "{{K|A Mysterious Stranger}}";
 
         public const string OSSEOUS_ASH_UPLOADS = "{{yellow|uploads}}";
         public const string OSSEOUS_ASH_DOWNLOADS = "{{red|downloads}}";
 
-        public static OsseousAshJSON Config;
+
+        private static OsseousAshJSON _Config;
+        public static OsseousAshJSON Config
+        {
+            get
+            {
+                if (_Config == null)
+                {
+                    var osseousAshTask = OsseousAshJSON.ReadOrNew();
+                    osseousAshTask.Wait();
+                    _Config = osseousAshTask.Result;
+                }
+                return _Config;
+            }
+        }
 
         public static bool WantToAsk
-            => Options.DoOsseousAshStartupPopup
-            && (EnsureOsseousAshJSON()?.AskAtStartup is true)
+            => Options.EnableOsseousAshStartupPopup
+            && (Config?.AskAtStartup is true)
             ;
 
         [ModSensitiveCacheInit]
-        public static OsseousAshJSON EnsureOsseousAshJSON()
+        public static void EnsureOsseousAshJSON()
         {
-            if (Config == null)
-            {
-                var osseousAshTask = OsseousAshJSON.ReadOrNew();
-                osseousAshTask.Wait();
-                Config = osseousAshTask.Result;
-            }
-            return Config;
+            _ = Config;
         }
 
         public static bool TryFindBestOsseousAshPath(out string FilePath)
@@ -176,7 +213,7 @@ namespace UD_Bones_Folder.Mod
                 try
                 {
                     currentPath = osseousAshPath;
-                    if (Directory.Exists(osseousAshPath))
+                    if (!currentPath.DirectoryExistsSafe())
                     {
                         FilePath = Path.Combine(osseousAshPath, OsseousAshFileName);
 
@@ -193,9 +230,9 @@ namespace UD_Bones_Folder.Mod
             }
 
             if (FilePath.IsNullOrEmpty())
-                currentPath = BonesManager.BonesSyncPath;
+                currentPath = SyncedPathInfo;
 
-            if (!Directory.Exists(currentPath))
+            if (!currentPath.DirectoryExistsSafe())
             {
                 try
                 {
@@ -207,7 +244,7 @@ namespace UD_Bones_Folder.Mod
                     return false;
                 }
             }
-            if (!Directory.Exists(currentPath))
+            if (!currentPath.DirectoryExistsSafe())
                 return false;
 
             if (FilePath.IsNullOrEmpty())
@@ -216,10 +253,21 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-        public static IEnumerable<string> GetOsseousAshPaths()
+        public static IEnumerable<string> GetOsseousAshPaths(bool Ensure = false)
         {
-            yield return SyncedPathInfo;
-            yield return LocalPathInfo;
+            if (Ensure)
+            {
+                yield return SyncedPathInfo;
+                yield return LocalPathInfo;
+            }
+            else
+            {
+                if (SyncedPathInfo.Path is string syncPath)
+                    yield return syncPath;
+
+                if (LocalPathInfo.Path is string localPath)
+                    yield return localPath;
+            }
         }
 
         public static async Task PerformAskAsync()
@@ -228,24 +276,28 @@ namespace UD_Bones_Folder.Mod
             await AskOnStartup();
         }
 
+        [CallAfterGameLoaded]
+        public static void PerformAsk()
+        {
+            PerformAskAsync().Wait();
+        }
+
         public static async Task AskOnStartup()
         {
             if (GameManager.AwakeComplete)
             {
                 if (WantToAsk)
                 {
-                    if (EnsureOsseousAshJSON() != null)
-                        Config.WriteAskAtStartup(false);
-                    else
-                        Options.DoOsseousAshStartupPopup = false;
-
-                    var choice = await Popup.NewPopupMessageAsync(
-                        message: $"Welcome to the {Utils.ThisMod.DisplayTitle} mod!\n\n" +
+                    Options.EnableOsseousAshStartupPopup = false;
+                    try
+                    {
+                        var choice = await Popup.NewPopupMessageAsync(
+                        message: $"Welcome to the {Utils.ThisMod?.DisplayTitle ?? "Bones(alpha)"} mod!\n\n" +
                             $"We've detected that this is the first time you've launched the game with this mod installed and wanted to let you know about the {OSSEOUS_ASH} community bones cloud.\n\n" +
                             $"Participation in the project is entirely optional but could greatly enhance your experience with the Bones Folder:\n" +
                             $"{"\u0007".Colored("red")} Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.\n" +
                             $"{"\u0007".Colored("yellow")} Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, and, if you choose one, will associate a handle with the uploaded bones.\n\n" +
-                            $"Irrespective of your choice, you won't be asked again (there's an option to be asked again), and you can always change your decision later in the options menu.",
+                            $"Irrespective of your choice, you won't be asked again, and you can always change your decision later in the options menu.",
                         buttons: new List<QudMenuItem>
                         {
                             new QudMenuItem
@@ -269,65 +321,71 @@ namespace UD_Bones_Folder.Mod
                             TileColor: "&y",
                             DetailColor: 'K'));
 
-                    if (choice.command == "accept")
-                    {
-                        bool any = false;
-                        if ((await Popup.NewPopupMessageAsync(
-                            message: $"Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.",
-                            buttons: PopupMessage.YesNoButton,
-                            DefaultSelected: 1,
-                            title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
-                            afterRender: new Renderable(
-                                Tile: "Abilities/tile_supressive_fire.png",
-                                ColorString: "&y",
-                                TileColor: "&y",
-                                DetailColor: 'R'))
-                            ).command == "Yes")
+                        if (choice.command == "accept")
                         {
-                            any = true;
-                            XRL.UI.Options.SetOption(
-                                ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshDownloads)}",
-                                Value: Options.EnableOsseousAshDownloads = true);
-                        }
-
-                        if ((await Popup.NewPopupMessageAsync(
-                            message: $"Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, " +
-                                "and, if you choose one, will associate a handle with the uploaded bones.",
-                            buttons: PopupMessage.YesNoButton,
-                            DefaultSelected: 1,
-                            title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
-                            afterRender: new FlippableRender(
-                                Source: new Renderable(
+                            bool any = false;
+                            if ((await Popup.NewPopupMessageAsync(
+                                message: $"Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.",
+                                buttons: PopupMessage.YesNoButton,
+                                DefaultSelected: 1,
+                                title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
+                                afterRender: new Renderable(
                                     Tile: "Abilities/tile_supressive_fire.png",
                                     ColorString: "&y",
                                     TileColor: "&y",
-                                    DetailColor: 'W'),
-                                HFlip: false,
-                                VFlip: true))
-                            ).command == "Yes")
-                        {
-                            any = true;
+                                    DetailColor: 'R'))
+                                ).command == "Yes")
+                            {
+                                any = true;
+                                XRL.UI.Options.SetOption(
+                                    ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshDownloads)}",
+                                    Value: Options.EnableOsseousAshDownloads = true);
+                            }
 
-                            XRL.UI.Options.SetOption(
-                                ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
-                                Value: Options.EnableOsseousAshUploads = true);
-                            await Options.SetOsseousAshHandle("{{yellow|Last question, I promise!}}");
+                            if ((await Popup.NewPopupMessageAsync(
+                                message: $"Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, " +
+                                    "and, if you choose one, will associate a handle with the uploaded bones.",
+                                buttons: PopupMessage.YesNoButton,
+                                DefaultSelected: 1,
+                                title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_UPLOADS}?",
+                                afterRender: new FlippableRender(
+                                    Source: new Renderable(
+                                        Tile: "Abilities/tile_supressive_fire.png",
+                                        ColorString: "&y",
+                                        TileColor: "&y",
+                                        DetailColor: 'W'),
+                                    HFlip: false,
+                                    VFlip: true))
+                                ).command == "Yes")
+                            {
+                                any = true;
+
+                                XRL.UI.Options.SetOption(
+                                    ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
+                                    Value: Options.EnableOsseousAshUploads = true);
+                                await Options.ManageOsseousAshHandle();
+                            }
+
+                            if (any)
+                                return;
+
+                            await Popup.ShowAsync("You haven't been opted in.\n\n" +
+                                "If you'd like to change your mind at any time, there are options available in the options menu.");
                         }
 
-                        if (any)
-                            return;
+                        XRL.UI.Options.SetOption(
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
+                            Value: Options.EnableOsseousAshDownloads = true);
 
-                        await Popup.ShowAsync("You haven't been opted in.\n\n" +
-                            "If you'd like to change your mind at any time, there are options available in the options menu.");
+                        XRL.UI.Options.SetOption(
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
+                            Value: Options.EnableOsseousAshUploads = false);
                     }
-
-                    XRL.UI.Options.SetOption(
-                        ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
-                        Value: Options.EnableOsseousAshDownloads = true);
-
-                    XRL.UI.Options.SetOption(
-                        ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
-                        Value: Options.EnableOsseousAshUploads = false);
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Failed to ask player about Osseous Ash", x);
+                        Options.EnableOsseousAshStartupPopup = true;
+                    }
                 }
             }
         }
@@ -348,23 +406,22 @@ namespace UD_Bones_Folder.Mod
         [VariableReplacer(Keys = new string[] { "OsseousAshHandle" }, Capitalization = false)]
         public static string OsseousAshHandle(DelegateContext Context)
         {
-            if (EnsureOsseousAshJSON() is not OsseousAshJSON config)
+            if (Config == null)
                 return "you";
 
             if (Context.Parameters is not List<string> parameters
                 || parameters.IsNullOrEmpty())
-                return config?.Handle ?? DefaultOsseousAshHandle;
+                return Config.Handle ?? DefaultOsseousAshHandle;
 
             string you = "you";
             if (parameters.Any(p => p.EqualsNoCase("No2PP")))
-                you = config?.Handle ?? DefaultOsseousAshHandle;
+                you = Config.Handle ?? DefaultOsseousAshHandle;
 
             foreach (var param in parameters)
             {
                 if (Guid.TryParse(param, out Guid OAID))
                 {
-                    if (config != null
-                        && config.ID == OAID)
+                    if (Config.ID == OAID)
                         return you;
                 }
             }

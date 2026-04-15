@@ -57,7 +57,7 @@ namespace XRL.World.Parts
 
             damage = Math.Min(hitpoints.BaseValue - 1, damage);
 
-            return Object.TakeDamage(damage, "", Attributes: "Unavoidable", Environmental: true);
+            return Object.TakeDamage(damage, "from =LunarShader:migrating:*= to this reality!", Attributes: "Unavoidable", Environmental: true);
         }
 
         public static bool MakeItDented(GameObject Object)
