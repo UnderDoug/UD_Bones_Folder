@@ -13,11 +13,12 @@ namespace XRL.World.Effects
     [Serializable]
     public class UD_Bones_MoonKingFever
         : IScribedEffect
+        , IModEventHandler<AfterBonesZoneLoadedEvent>
         , IModEventHandler<LunarObjectColorChangedEvent>
     {
         public const int MAX_DIST = 9999;
 
-        public const string REGAL_TITLE = "Moon Regent";
+        public const string REGAL_TITLE = "Moon King";
 
         public static string[] MoonKingColors = new string[7] { "r", "R", "W", "G", "B", "b", "m", };
 
@@ -148,12 +149,18 @@ namespace XRL.World.Effects
 
         public override bool WantEvent(int ID, int cascade)
             => base.WantEvent(ID, cascade)
+            || ID == AfterBonesZoneLoadedEvent.ID
             || ID == PreferTargetEvent.ID
             || ID == GetFeelingEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public virtual bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        {
+            return base.HandleEvent(E);
+        }
 
         public override bool HandleEvent(PreferTargetEvent E)
         {

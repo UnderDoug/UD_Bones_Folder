@@ -340,7 +340,7 @@ namespace UD_Bones_Folder.Mod
                     writer.Write(saveBonesJSON.GameVersion);
 
                     writer.Write(BONES_SPEC_POS);
-                    writer.Write(new BonesSpec(LunarRegent, currentZone));
+                    writer.WriteComposite(new BonesSpec(LunarRegent, currentZone));
 
                     writer.Write(BONES_ZONE_POS);
 

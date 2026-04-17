@@ -29,11 +29,11 @@
     <part Name="Description" Short="In a dusty corner of the past, nameless workers glazed striated marble and inlaid it with amethyst to house the earthly gear of some =LunarShader:Moon Sovram:*= returned." />
     <part Name="Container" />
     <part Name="Inventory" />
-    <part Name="Physics" Weight="300" />
-    <part Name="Metal" />
+    <part Name="Physics" Weight="300" Takeable="true" />
+    <part Name="Stone" />
     <stat Name="AV" Value="15" />
     <stat Name="Hitpoints" Value="5000" />
-    <part Name="UD_Bones_LunarReliquary" />
+    <part Name="UD_Bones_LunarReliquary" IsProtected="true" WantsToDropOnLoad="true" WantsRemoveOnDamage="false" />
     <part Name="UD_Bones_LunarColors" />
     <part Name="Unreplicable" />
     <tag Name="UD_Bones_Folder_IsMad" Value="true" />

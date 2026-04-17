@@ -54,7 +54,7 @@ namespace XRL.World.Parts
                             appointment = Female;
                     }
                 }
-                if (Adjective.IsNullOrEmpty())
+                if (!Adjective.IsNullOrEmpty())
                     appointment = $"{Adjective} {appointment}";
                 return appointment;
             }
@@ -138,6 +138,12 @@ namespace XRL.World.Parts
                 Female = "Viscountess",
                 Neutral = "Viscountum",
             },
+            new Appointment
+            {
+                Male = "Jester",
+                Female = "Jester",
+                Neutral = "Jester",
+            },
         };
 
         protected string TileColor;
@@ -153,30 +159,12 @@ namespace XRL.World.Parts
         private int AppointmentIndex => (ParentObject?.BaseID ?? Stat.RandomCosmetic(0, 7000)) % LunarApointments.Count;
         public Appointment LunarAppointment => LunarApointments[AppointmentIndex];
 
-        public static string MissingLunarRegent => "some =LunarShader:Moon Sovran:*= lost to time";
-
         private string _BakedLunarAppointment;
         public string BakedLunarAppointment 
             => ParentObject != null 
             ? _BakedLunarAppointment ??= LunarAppointment.GetFor(ParentObject, AppointmentAdjective)
             : LunarAppointment.GetFor(null, AppointmentAdjective)
             ;
-
-        protected bool? _IsMad;
-        public bool IsMad
-        {
-            get
-            {
-                if (ParentObject != null)
-                    _IsMad = ParentObject.GetStringProperty(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}").EqualsNoCase($"{true}");
-                return _IsMad.GetValueOrDefault();
-            }
-            set
-            {
-                _IsMad = value;
-                ParentObject?.SetStringProperty(Const.IS_MAD_PROP, _IsMad.GetValueOrDefault() ? $"{true}" : null, true);
-            }
-        }
 
         public Type AllyReasonType;
 
@@ -232,7 +220,6 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
             ParentObject.RequirePart<UD_Bones_LunarColors>();
 
             PerformAllyship();
@@ -248,9 +235,14 @@ namespace XRL.World.Parts
             return part;
         }
 
-        public bool PerformAllyship(GameObject LunarRegent = null, bool Force = false)
+        public bool PerformAllyship(
+            GameObject LunarRegent = null,
+            bool Force = false,
+            bool Initial = false
+            )
         {
-            if (!Force)
+            if (!Force
+                && !Initial)
             {
                 if (!DoneAllyship)
                     return DoneAllyship;
@@ -269,14 +261,25 @@ namespace XRL.World.Parts
                     && Activator.CreateInstance(AllyReasonType) is IAllyReason allyReason)
                 {
                     DoneAllyship = true;
+
+                    if (Initial)
+                        brain.Allegiance?.Clear();
+
+                    SetLunarRegentReference(LunarRegent);
                     brain.TakeAllegiance(LunarRegent, allyReason);
                     brain.SetPartyLeader(LunarRegent, Silent: true);
-                    Utils.Log($"{ParentObject?.DebugName ?? "NO_COURTIER"} made follower of {LunarRegent?.DebugName ?? "NO_REGENT"} for reason {allyReason.GetType().Name}.");
+
+                    string parentObjectName = ParentObject?.DebugName ?? "NO_COURTIER";
+                    string lunarRegentName = LunarRegent?.DebugName ?? "NO_REGENT";
+                    string allyReasonName = allyReason.GetType().Name;
+                    Utils.Log($"{parentObjectName} made follower of {lunarRegentName} for reason {allyReasonName}.");
                 }
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed to create instance of {AllyReasonType?.Name ?? "NO_ALLY_TYPE"} for {ParentObject?.DebugName ?? "NO_COURTIER"}", x);
+                string allyTypeName = AllyReasonType?.Name ?? "NO_ALLY_TYPE";
+                string parentObjectName = ParentObject?.DebugName ?? "NO_COURTIER";
+                Utils.Error($"Failed to create instance of {allyTypeName} for {parentObjectName}", x);
                 DoneAllyship = true;
             }
             return DoneAllyship;
@@ -292,23 +295,16 @@ namespace XRL.World.Parts
 
         public string GetDescription()
         {
-            string lunarRegents;
-            string possessive;
 
-            var lunarRegent = GameObject.FindByID(LunarRegenBaseID);
-            if (lunarRegent != null)
-            {
-                lunarRegents = "=object.refname's=";
+            string lunarRegents = !BakedLunarRegentName.IsNullOrEmpty() 
+                ? Grammar.MakePossessive(BakedLunarRegentName)
+                : Grammar.MakePossessive(MissingLunarRegent)
+                ;
+
+            string possessive = "their";
+
+            if (LunarRegent != null)
                 possessive = "=object.possessive=";
-            }
-            else
-            {
-                lunarRegents = !BakedLunarRegentName.IsNullOrEmpty() 
-                    ? Grammar.MakePossessive(BakedLunarRegentName)
-                    : Grammar.MakePossessive(MissingLunarRegent)
-                    ;
-                possessive = "their";
-            }
 
             var sB = Event.NewStringBuilder();
             sB.Append(GetAdjective().Capitalize()).Append(": ")
@@ -320,8 +316,8 @@ namespace XRL.World.Parts
                 .StartReplace()
                 .AddObject(ParentObject);
 
-            if (lunarRegent != null)
-                rB.AddObject(lunarRegent);
+            if (LunarRegent != null)
+                rB.AddObject(LunarRegent);
 
             return rB.ToString();
         }
@@ -347,21 +343,13 @@ namespace XRL.World.Parts
                 case 0:
                     orderAdjustment = 0;
                     E.AddHonorific(appointment, orderAdjustment);
-                    if (IsMad)
-                        E.AddHonorific("mad", orderAdjustment + DescriptionBuilder.ORDER_ADJUST_SLIGHTLY_EARLY);
                     break;
                 case 1:
-                    string title = appointment;
-                    if (IsMad)
-                        title = $"mad {title}";
-                    E.AddTitle(title, orderAdjustment);
+                    E.AddTitle(appointment, orderAdjustment);
                     break;
                 case 2:
                 default:
-                    string epithet = appointment;
-                    if (IsMad)
-                        epithet = $"mad {epithet}";
-                    E.AddEpithet(epithet, orderAdjustment);
+                    E.AddEpithet(appointment, orderAdjustment);
                     break;
             }
             return base.HandleEvent(E);
@@ -375,18 +363,6 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(ZoneActivatedEvent E)
         {
-            // _LunarRegent = null;
-            return base.HandleEvent(E);
-        }
-
-        public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
-        {
-            if (ParentObject.Render is Render lunarRender
-                && !lunarRender.Visible)
-                lunarRender.Visible = true;
-
-            if (LunarRegent != null)
-                BakedLunarRegentNameStripped = LunarRegent.GetReferenceDisplayName(Stripped: true);
 
             return base.HandleEvent(E);
         }

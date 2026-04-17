@@ -6,12 +6,20 @@ using XRL.World.Effects;
 
 using UD_Bones_Folder.Mod;
 using XRL.Rules;
+using Qud.API;
+using UD_Bones_Folder.Mod.Events;
 
 namespace XRL.World.Parts
 {
     [Serializable]
     public class UD_Bones_FragileLunarObject : UD_Bones_BaseLunarSubject
     {
+        public bool WantsToDropOnLoad;
+
+        public bool IsProtected;
+
+        public bool WantsRemoveOnDamage;
+
         public static BallBag<Func<GameObject, bool>> GetDamageFuncBag()
             => new()
             {
@@ -80,17 +88,31 @@ namespace XRL.World.Parts
             => true
             ;
 
-        public void AttemptDamageAndRemove(bool Force = false)
+        public bool TryBeDropped()
         {
+            if (!WantsToDropOnLoad)
+                return false;
+
+            EquipmentAPI.DropObject(ParentObject);
+            return ParentObject != null
+                && ParentObject.Holder == null
+                ;
+        }
+
+        public void AttemptDamage(bool Force = false, bool Remove = true)
+        {
+            if (ParentObject == null)
+                    return;
+
             if (!Force)
             {
-                if (ParentObject == null)
+                if (IsProtected)
                     return;
 
                 if (ParentObject.InInventory is not GameObject holder)
                     return;
 
-                UD_Bones_BaseLunarPart lunarPart = null;
+                UD_Bones_BaseLunarPart lunarPart;
 
                 if ((lunarPart = holder.GetPart<UD_Bones_LunarRegent>()) == null
                     && (lunarPart = holder.GetPart<UD_Bones_LunarReliquary>()) == null)
@@ -115,7 +137,8 @@ namespace XRL.World.Parts
             }
             finally
             {
-                ParentObject?.RemovePart(this);
+                if (Remove)
+                    ParentObject?.RemovePart(this);
             }
         }
 
@@ -125,32 +148,45 @@ namespace XRL.World.Parts
 
         public override void TurnTick(long TimeTick, int Amount)
         {
-            AttemptDamageAndRemove();
+            AttemptDamage(WantsRemoveOnDamage);
             base.TurnTick(TimeTick, Amount);
         }
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == EndTurnEvent.ID
-            || ID == DroppedEvent.ID
+            || ID == AfterBonesZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(EndTurnEvent E)
         {
-            AttemptDamageAndRemove();
+            if (!TryBeDropped())
+                AttemptDamage(WantsRemoveOnDamage);
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(DroppedEvent E)
         {
-            AttemptDamageAndRemove();
+            AttemptDamage(WantsRemoveOnDamage);
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        {
+            if (!TryBeDropped())
+                AttemptDamage(WantsRemoveOnDamage);
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            E.AddEntry(this, "Present", true);
+            if (!E.Entries.ContainsKey(nameof(UD_Bones_FragileLunarObject)))
+            {
+                E.AddEntry(nameof(UD_Bones_FragileLunarObject), "Present", true);
+                E.AddEntry(nameof(UD_Bones_FragileLunarObject), nameof(WantsToDropOnLoad), WantsToDropOnLoad);
+                E.AddEntry(nameof(UD_Bones_FragileLunarObject), nameof(IsProtected), IsProtected);
+            }
             return base.HandleEvent(E);
         }
     }

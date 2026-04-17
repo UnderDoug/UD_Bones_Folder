@@ -25,6 +25,7 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesSpec : IComposite
     {
+        [Serializable]
         public enum ApproxDepth
         {
             /// <summary>Strata 0-9</summary>
@@ -306,39 +307,5 @@ namespace UD_Bones_Folder.Mod
         public bool IsWithinSpec(Zone Zone)
             => IsWithinSpec(new BonesSpec(The.Player, Zone))
             ;
-        /*
-        public static implicit operator Dictionary<string, string>(BonesSpec BonesSpec)
-        {
-            var output = new Dictionary<string, string>();
-            foreach (var fieldInfo in typeof(BonesSpec).GetFields())
-            {
-                if (fieldInfo.IsPublic
-                    && !fieldInfo.IsStatic
-                    && fieldInfo.GetValue(BonesSpec)?.ToString() is string value)
-                {
-                    Utils.Log($"set {nameof(Dictionary<string, string>)}[{fieldInfo.Name}] to {value}");
-                    output.Add(fieldInfo.Name, value);
-                }
-            }
-            return output;
-        }
-
-        public static implicit operator BonesSpec(Dictionary<string, string> Dictionary)
-        {
-            var output = new BonesSpec();
-            foreach ((var key, var value) in Dictionary)
-            {
-                if (typeof(BonesSpec).GetField(key) is FieldInfo fieldInfo
-                    && fieldInfo.IsPublic
-                    && !fieldInfo.IsStatic
-                    && Convert.ChangeType(value, fieldInfo.FieldType) is object convertedValue)
-                {
-                    Utils.Log($"set {nameof(BonesSpec)}.{key} to {convertedValue}");
-                    fieldInfo.SetValue(output, convertedValue);
-                }
-            }
-            return output;
-        }
-        */
     }
 }

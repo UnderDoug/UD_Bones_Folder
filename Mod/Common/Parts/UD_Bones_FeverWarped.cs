@@ -29,6 +29,9 @@ namespace XRL.World.Parts
         [SerializeField]
         private bool TileOnly;
 
+        [SerializeField]
+        private bool CosmeticOnly;
+
         protected string OriginalShortDesc;
 
         protected string DisplayNameCache;
@@ -43,6 +46,12 @@ namespace XRL.World.Parts
         {
             this.TileOnly = TileOnly;
         }
+
+        public static UD_Bones_FeverWarped NewCosmeticOnly()
+            => new UD_Bones_FeverWarped
+            {
+                CosmeticOnly = true,
+            };
 
         public override void Attach()
         {
@@ -85,25 +94,28 @@ namespace XRL.World.Parts
                 }
             }
 
-            var render = ParentObject.RequirePart<Render>();
+            if (!CosmeticOnly)
+            {
+                var render = ParentObject.RequirePart<Render>();
 
-            BonesManager.System.RequireAlternativeTileAndBlueprintForGameObject(
-                BlueprintSpec: new Utils.BlueprintSpec(ParentObject),
-                Blueprint: out string altBlueprint,
-                Tile: out string altTile);
+                BonesManager.System.RequireAlternativeTileAndBlueprintForGameObject(
+                    BlueprintSpec: new Utils.BlueprintSpec(ParentObject),
+                    Blueprint: out string altBlueprint,
+                    Tile: out string altTile);
 
-            if (!TileOnly)
-                ParentObject.Blueprint = altBlueprint;
+                if (!TileOnly)
+                    ParentObject.Blueprint = altBlueprint;
 
-            render.Tile = altTile;
+                render.Tile = altTile;
 
-            string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
+                string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
 
-            if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
-                render.HFlip = true;
+                if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
+                    render.HFlip = true;
 
-            if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
-                render.VFlip = true;
+                if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
+                    render.VFlip = true;
+            }
         }
 
         public bool IsTileOnly()

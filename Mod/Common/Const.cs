@@ -31,5 +31,7 @@ namespace UD_Bones_Folder.Mod
         public const string EQ_FRAME_COLORS = "EquipmentFrameColors";
 
         public const string IS_MAD_PROP = "UD_Bones_Folder_IsMad";
+
+        public const string LUNAR_RELIQUARY_BLUEPRINT = "Lunar Reliquary";
     }
 }

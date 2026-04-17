@@ -46,7 +46,7 @@ namespace XRL.World.Parts
                 MetricsManager.LogCallingModError($"Failed to add {nameof(UD_Bones_BonesSaver)} to player.");
         }
 
-        public static GameObject AscendMoonKing(
+        public static GameObject AscendLunarRegent(
             GameObject Player,
             Cell TargetCell
             )
@@ -54,11 +54,52 @@ namespace XRL.World.Parts
             if (!Player.CanBeReplicated(Player, BonesName, Temporary: false))
                 return null;
 
-            var moonKing = Player.DeepCopy();
+            var lunarRegent = Player.DeepCopy();
 
-            moonKing.RestorePristineHealth();
+            using var lunarRegentInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(
+                items: lunarRegent.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
+            var lunarReliquary = GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT);
+            Utils.Log($"{nameof(lunarReliquary)}: {lunarReliquary.DebugName ?? "NO_RELIQUARY"}");
+            var reliquaryInventory = lunarReliquary?.Inventory;
+            Utils.Log($"{1.Indent()}{nameof(reliquaryInventory)}: {(reliquaryInventory != null ? "inventory exists!" : "NO_INVENTORY")}");
+            foreach (var lunarRegentItem in lunarRegentInventoryList)
+            {
+                lunarRegentItem.RequirePart<UD_Bones_FragileLunarObject>();
 
-            moonKing.RenderForUI("SaveGameInfo", true);
+                if (lunarRegentItem.Equipped != null
+                    || lunarRegentItem.GetBlueprint().InheritsFrom("Grenade")
+                    || lunarRegentItem.GetBlueprint().InheritsFrom("Tonic")
+                    || lunarRegentItem.GetBlueprint().InheritsFrom("Projectile")
+                    || lunarRegentItem.GetBlueprint().InheritsFrom("Energy Cell")
+                    || lunarRegentItem.GetBlueprint().InheritsFrom("BaseThrownWeapon"))
+                    continue;
+
+                if (lunarReliquary != null)
+                {
+                    lunarRegent.Inventory?.RemoveObject(lunarRegentItem);
+                    reliquaryInventory.AddObject(lunarRegentItem, Silent: true);
+                    continue;
+                }
+                lunarRegentItem.SetStringProperty($"{nameof(UD_Bones_FragileLunarObject)}.DropOnLoad", $"{true}");
+            }
+
+            if (lunarReliquary != null)
+            {
+                lunarRegent.Inventory.AddObject(lunarReliquary);
+                if (!lunarRegent.Inventory.InventoryContains(lunarReliquary))
+                {
+                    Utils.Error($"Failed to give {lunarRegent?.DebugName?.Strip() ?? "NO_REGENT"} =subject.possessive= {nameof(lunarReliquary)}"
+                        .StartReplace()
+                        .AddObject(lunarRegent)
+                        );
+                    TargetCell.AddObject(lunarReliquary);
+                }
+            }
+
+            lunarRegent.RestorePristineHealth();
+
+            lunarRegent.RenderForUI("SaveGameInfo", true);
+
             /*
             var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
 
@@ -70,7 +111,8 @@ namespace XRL.World.Parts
                 $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
                 $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
             */
-            var brain = moonKing.Brain;
+
+            var brain = lunarRegent.Brain;
             brain.PartyLeader = null;
             brain.Hibernating = false;
             brain.Staying = false;
@@ -82,25 +124,25 @@ namespace XRL.World.Parts
             if (Player != null)
             {
                 brain.AddOpinion<OpinionMollify>(Player);
-                Player.AddOpinion<OpinionMollify>(moonKing);
+                Player.AddOpinion<OpinionMollify>(lunarRegent);
             }
 
             if (TargetCell == null)
             {
-                moonKing.Obliterate();
+                lunarRegent.Obliterate();
                 return null;
             }
 
-            if (moonKing.Render is Render render)
+            if (lunarRegent.Render is Render render)
                 render.Visible = false;
 
-            var lunarRegentPart = moonKing.RequirePart<UD_Bones_LunarRegent>();
+            var lunarRegentPart = lunarRegent.RequirePart<UD_Bones_LunarRegent>();
 
             lunarRegentPart.Onset();
 
             if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
             {
-                if (moonKing.ReceiveObject(lunarRegentMask))
+                if (lunarRegent.ReceiveObject(lunarRegentMask))
                 {
                     if (lunarRegentMask.TryGetPart(out UD_Bones_LunarFace lunarFace))
                         lunarFace.TryBeWorn();
@@ -111,11 +153,11 @@ namespace XRL.World.Parts
 
             brain.PerformEquip();
 
-            TargetCell.AddObject(moonKing);
+            TargetCell.AddObject(lunarRegent);
 
-            moonKing.MakeActive();
+            lunarRegent.MakeActive();
 
-            return moonKing;
+            return lunarRegent;
         }
 
         public void mutate(GameObject player)
@@ -141,23 +183,7 @@ namespace XRL.World.Parts
                     && !currentZone.IsWorldMap()
                     && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
                 {
-                    var moonKing = AscendMoonKing(ParentObject, ParentObject.CurrentCell);
-                    using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
-                    foreach (var moonKingItem in moonKingInventory)
-                    {
-                        moonKingItem.RequirePart<UD_Bones_FragileLunarObject>();
-
-                        if (moonKingItem.Equipped != null
-                            || moonKingItem.GetBlueprint().InheritsFrom("Grenade")
-                            || moonKingItem.GetBlueprint().InheritsFrom("Tonic")
-                            || moonKingItem.GetBlueprint().InheritsFrom("Projectile")
-                            || moonKingItem.GetBlueprint().InheritsFrom("Energy Cell")
-                            || moonKingItem.GetBlueprint().InheritsFrom("BaseThrownWeapon"))
-                            continue;
-
-                        EquipmentAPI.DropObject(moonKingItem);
-                    }
-
+                    var moonKing = AscendLunarRegent(ParentObject, ParentObject.CurrentCell);
                     bool success = true;
                     try
                     {

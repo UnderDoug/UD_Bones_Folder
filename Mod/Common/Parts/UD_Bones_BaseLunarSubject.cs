@@ -16,12 +16,13 @@ namespace XRL.World.Parts
     [Serializable]
     public abstract class UD_Bones_BaseLunarSubject : UD_Bones_BaseLunarPart
     {
-        public string BakedLunarRegentNameStripped;
+        public static string MissingLunarRegent => "some =LunarShader:Moon Sovran:*= lost to time";
+
         public string BakedLunarRegentName;
 
         protected GameObjectReference LunarRegentReference = new();
 
-        public int LunarRegenBaseID => LunarRegent?.BaseID ?? -1;
+        public int LunarRegentBaseID => LunarRegent?.BaseID ?? -1;
         public GameObject LunarRegent
             => LunarRegentReference.TryEnsureObject(out GameObject lunarRegent)
             ? lunarRegent
@@ -48,10 +49,20 @@ namespace XRL.World.Parts
 
         }
 
+        public override IPart DeepCopy(GameObject Parent, Func<GameObject, GameObject> MapInv)
+        {
+            var part = base.DeepCopy(Parent, MapInv) as UD_Bones_BaseLunarSubject;
+            part.BakedLunarRegentName = null;
+            part.LunarRegentReference = null;
+            return part;
+        }
+
         public virtual void SetLunarRegentReference(GameObject LunarRegent)
         {
             LunarRegentReference ??= new();
             LunarRegentReference.Set(LunarRegent);
+            if (LunarRegent != null)
+                BakedLunarRegentName = $"=subject.RegalTitle= {LunarRegent.BaseDisplayName}";
         }
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)
@@ -65,11 +76,20 @@ namespace XRL.World.Parts
             || ID == GetDebugInternalsEvent.ID
             ;
 
+        public override bool HandleEvent(TidyLunarObjectsEvent E)
+        {
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
             => base.HandleEvent(E);
 
-        public override bool HandleEvent(TidyLunarObjectsEvent E)
+        public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
         {
+            if (E.BonesID == BonesID
+                && E.LunarRegent != null)
+                SetLunarRegentReference(E.LunarRegent);
+
             return base.HandleEvent(E);
         }
 
@@ -78,8 +98,7 @@ namespace XRL.World.Parts
             if (!E.Entries.ContainsKey(nameof(UD_Bones_BaseLunarSubject)))
             {
                 E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(LunarRegent), LunarRegent != null ? "not null" : "null");
-                E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(LunarRegenBaseID), LunarRegenBaseID);
-                E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(BakedLunarRegentNameStripped), BakedLunarRegentNameStripped);
+                E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(LunarRegentBaseID), LunarRegentBaseID);
                 E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(BakedLunarRegentName), BakedLunarRegentName);
             }
             return base.HandleEvent(E);

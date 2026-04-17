@@ -18,12 +18,10 @@ using XRL.Language;
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_LunarReliquary : UD_Bones_BaseLunarSubject
+    public class UD_Bones_LunarReliquary : UD_Bones_FragileLunarObject
     {
         protected string TileColor;
         protected string DetailColor;
-
-        public static string MissingLunarRegent => "some =LunarShader:Moon Sovran:*= lost to time";
 
         protected bool? _IsMad;
         public bool IsMad
@@ -41,62 +39,10 @@ namespace XRL.World.Parts
             }
         }
 
-        public Type AllyReasonType;
-
-        private bool _DoneAllyship;
-        public bool DoneAllyship
-        {
-            get => _DoneAllyship;
-            protected set => _DoneAllyship = value;
-        }
-
-        public override void FinalizeRead(SerializationReader Reader)
-        {
-            base.FinalizeRead(Reader);
-            if (AllyReasonType == null
-                || AllyReasonType.InheritsFrom(typeof(IAllyReason)))
-                AllyReasonType = typeof(AllyProselytize);
-        }
-
         public override void Attach()
         {
             base.Attach();
-            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
             ParentObject.RequirePart<UD_Bones_LunarColors>();
-        }
-
-        public override IPart DeepCopy(GameObject Parent, Func<GameObject, GameObject> MapInv)
-        {
-            var part = base.DeepCopy(Parent, MapInv) as UD_Bones_LunarReliquary;
-            part.BakedLunarRegentNameStripped = null;
-            part.BakedLunarRegentName = null;
-            part.LunarRegentReference = null;
-            return part;
-        }
-
-        public bool PerformAllyship()
-        {
-            try
-            {
-                if (!DoneAllyship
-                    && BonesID != The.Game.GameID
-                    && ParentObject.Brain is Brain brain
-                    && ParentObject.CurrentZone is Zone currentZone
-                    && currentZone.TryFindLunarRegent(BonesID, out GameObject lunarRegent)
-                    && Activator.CreateInstance(AllyReasonType) is IAllyReason allyReason)
-                {
-                    DoneAllyship = true;
-                    brain.TakeAllegiance(lunarRegent, allyReason);
-                    brain.SetPartyLeader(lunarRegent, Silent: true);
-                    Utils.Log($"{ParentObject?.DebugName ?? "NO_COURTIER"} made follower of {LunarRegent?.DebugName ?? "NO_REGENT"} for reason {allyReason.GetType().Name}.");
-                }
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Failed to create instance of {AllyReasonType?.Name ?? "NO_ALLY_TYPE"} for {ParentObject?.DebugName ?? "NO_COURTIER"}", x);
-                DoneAllyship = true;
-            }
-            return DoneAllyship;
         }
 
         public override void Initialize()
@@ -117,36 +63,21 @@ namespace XRL.World.Parts
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == ZoneActivatedEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
+            || ID == AfterBonesZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(GetDisplayNameEvent E)
         {
-            if (ParentObject.Render is Render render
-                && render.DisplayName.Contains("@@")
-                && !BakedLunarRegentNameStripped.IsNullOrEmpty()
-                && LunarRegenBaseID >1)
-            {
-                BakedLunarRegentName = $"=LunarShader:{Grammar.MakePossessive(BakedLunarRegentNameStripped)}:{LunarRegenBaseID}=";
-                render.DisplayName = render.DisplayName.Replace("@@LunarRegent@@", BakedLunarRegentName);
-            }
-            string baseReplacement;
-            if (GameObject.Validate(LunarRegent))
-            {
-                baseReplacement = $"=subject.Refname's|LunarShader:{LunarRegenBaseID}= reliquary"
-                    .StartReplace()
-                    .AddObject(LunarRegent)
-                    .ToString();
-            }
-            else
-            {
-                baseReplacement = E.GetPrimaryBase()
-                    .StartReplace()
-                    .ToString();
-            }
+            string baseReplacement = E.GetPrimaryBase();
 
-            E.ReplacePrimaryBase(baseReplacement);
-
+            if (baseReplacement.Contains("@@LunarRegent@@"))
+            {
+                E.ReplacePrimaryBase(baseReplacement
+                    .Replace("@@LunarRegent@@", BakedLunarRegentName ?? MissingLunarRegent)
+                    .StartReplace()
+                    .ToString());
+            }
             return base.HandleEvent(E);
         }
 
@@ -168,9 +99,17 @@ namespace XRL.World.Parts
                 && !lunarRender.Visible)
                 lunarRender.Visible = true;
 
-            if (LunarRegent != null)
-                BakedLunarRegentNameStripped = LunarRegent.GetReferenceDisplayName(Stripped: true);
+            return base.HandleEvent(E);
+        }
 
+        public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        {
+            if (E.LunarRegent == null
+                || E.LunarRegent.HasPart<UD_Bones_FeverWarped>()
+                && !ParentObject.HasPart<UD_Bones_FeverWarped>())
+            {
+                ParentObject.AddPart(UD_Bones_FeverWarped.NewCosmeticOnly());
+            }
             return base.HandleEvent(E);
         }
 
@@ -184,17 +123,20 @@ namespace XRL.World.Parts
         public override bool FireEvent(Event E)
         {
             if (E.ID == "AfterContentsTaken")
+            {
                 foreach (var containedObject in ParentObject.Inventory.GetObjectsDirect())
                     if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
-                        fragileObject.AttemptDamageAndRemove(Force: true);
+                        fragileObject.AttemptDamage(Force: true, Remove: fragileObject.WantsRemoveOnDamage);
+
+                IsProtected = false;
+                AttemptDamage(Force: true, Remove: WantsRemoveOnDamage);
+            }
 
             return base.FireEvent(E);
         }
 
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            E.AddEntry(this, nameof(DoneAllyship), DoneAllyship);
-            E.AddEntry(this, nameof(ParentObject.Brain.PartyLeader), ParentObject?.Brain?.PartyLeader?.DebugName ?? "NO_LEADER");
             return base.HandleEvent(E);
         }
     }
