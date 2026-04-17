@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <objects>
+  
   <object Name="Lunar Face" Inherits="Sun and Moon Mask">
     <part Name="Render" DisplayName="=subject.RegalTitle= Face" Tile="Items/lunar_regent_mask3.png" TileColor="&amp;W" DetailColor="B" />
     <part Name="Description" Short="Potential dances the spectrum across a quietly knowing countenance. The mask's wearer shares this knowing." />
@@ -22,4 +23,27 @@
     <tag Name="IncludeInDynamicSemanticTables" />
     <tag Name="ExcludeFromDynamicEncounters" Value="*noinherit" />
   </object>
+  
+  <object Name="Lunar Reliquary" Inherits="Reliquary">
+    <part Name="Render" DisplayName="@@LunarRegent@@ reliquary" Tile="Items/sw_reliquary.bmp" TileColor="&amp;W" DetailColor="B" />
+    <part Name="Description" Short="In a dusty corner of the past, nameless workers glazed striated marble and inlaid it with amethyst to house the earthly gear of some =LunarShader:Moon Sovram:*= returned." />
+    <part Name="Container" />
+    <part Name="Inventory" />
+    <part Name="Physics" Weight="300" />
+    <part Name="Metal" />
+    <stat Name="AV" Value="15" />
+    <stat Name="Hitpoints" Value="5000" />
+    <part Name="UD_Bones_LunarReliquary" />
+    <part Name="UD_Bones_LunarColors" />
+    <part Name="Unreplicable" />
+    <tag Name="UD_Bones_Folder_IsMad" Value="true" />
+    <tag Name="Tier" Value="8" />
+    <xtagGrammar Proper="true" />
+    <tag Name="Mods" Value="None" />
+    <tag Name="EquipmentFrameColors" Value="RWBG" />
+    <stag Name="Contemporary" />
+    <tag Name="IncludeInDynamicSemanticTables" />
+    <tag Name="ExcludeFromDynamicEncounters" Value="*noinherit" />
+  </object>
+  
 </objects>

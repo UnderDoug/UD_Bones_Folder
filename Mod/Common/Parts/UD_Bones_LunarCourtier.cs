@@ -1,0 +1,415 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+using XRL.Core;
+using XRL.World.Effects;
+
+using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.Events;
+
+using SerializeField = UnityEngine.SerializeField;
+using XRL.Rules;
+using XRL.World.AI;
+using XRL.World.Parts.Mutation;
+using XRL.World.Parts.Skill;
+using XRL.Language;
+
+namespace XRL.World.Parts
+{
+    [Serializable]
+    public class UD_Bones_LunarCourtier : UD_Bones_BaseLunarSubject
+    {
+        public struct Appointment
+        {
+            public bool IsPlural;
+            public string Male;
+            public string Female;
+            public string Neutral;
+
+            public readonly Appointment GetPlural()
+                => new Appointment
+                {
+                    IsPlural = true,
+                    Male = Male.Pluralize(),
+                    Female = Female.Pluralize(),
+                    Neutral = Neutral.Pluralize(),
+                };
+
+            public readonly string GetFor(GameObject Courtier, string Adjective = null)
+            {
+                if (Courtier?.IsPlural is true
+                    && !IsPlural)
+                    return GetPlural().GetFor(Courtier, Adjective);
+
+                string appointment = Neutral;
+                if (Courtier != null)
+                {
+                    if (Courtier?.GetGender() is Gender courtierGender)
+                    {
+                        if (courtierGender.Name.ToLower().Contains("male"))
+                            appointment = Male;
+                        else
+                        if (courtierGender.Name.ToLower().Contains("female"))
+                            appointment = Female;
+                    }
+                }
+                if (Adjective.IsNullOrEmpty())
+                    appointment = $"{Adjective} {appointment}";
+                return appointment;
+            }
+
+            public override readonly string ToString()
+                => $"{nameof(Male)}: {Male}, {nameof(Female)}: {Female}, {nameof(Neutral)}: {Neutral}"
+                ;
+        }
+
+        public static List<Appointment> LunarApointments => new()
+        {
+            new Appointment
+            {
+                Male = "Baron",
+                Female = "Baroness",
+                Neutral = "Barum",
+            },
+            new Appointment
+            {
+                Male = "Baronet",
+                Female = "Baronetess",
+                Neutral = "Baronetum",
+            },
+            new Appointment
+            {
+                Male = "Comte",
+                Female = "Comtesse",
+                Neutral = "Comtum",
+            },
+            new Appointment
+            {
+                Male = "Consort",
+                Female = "Consort",
+                Neutral = "Consort",
+            },
+            new Appointment
+            {
+                Male = "Count",
+                Female = "Countess",
+                Neutral = "Countum",
+            },
+            new Appointment
+            {
+                Male = "Duke",
+                Female = "Duchess",
+                Neutral = "Dukum",
+            },
+            new Appointment
+            {
+                Male = "Grand Duke",
+                Female = "Grand Duchess",
+                Neutral = "Grand Dukum",
+            },
+            new Appointment
+            {
+                Male = "Lord",
+                Female = "Lady",
+                Neutral = "Laird",
+            },
+            new Appointment
+            {
+                Male = "Marquess",
+                Female = "Marchioness",
+                Neutral = "Marquem",
+            },
+            new Appointment
+            {
+                Male = "Prince",
+                Female = "Princess",
+                Neutral = "Princum",
+            },
+            new Appointment
+            {
+                Male = "Vicomte",
+                Female = "Vicomtesse",
+                Neutral = "Vicomtum",
+            },
+            new Appointment
+            {
+                Male = "Viscount",
+                Female = "Viscountess",
+                Neutral = "Viscountum",
+            },
+        };
+
+        protected string TileColor;
+        protected string DetailColor;
+
+        public string AppointmentAdjective => (ParentObject?.BaseID ?? Stat.RandomCosmetic(0, 7000)) % 4 > 0
+            ? "Moon"
+            : "Lunar"
+            ;
+
+        protected string AdjectiveCache;
+
+        private int AppointmentIndex => (ParentObject?.BaseID ?? Stat.RandomCosmetic(0, 7000)) % LunarApointments.Count;
+        public Appointment LunarAppointment => LunarApointments[AppointmentIndex];
+
+        public static string MissingLunarRegent => "some =LunarShader:Moon Sovran:*= lost to time";
+
+        private string _BakedLunarAppointment;
+        public string BakedLunarAppointment 
+            => ParentObject != null 
+            ? _BakedLunarAppointment ??= LunarAppointment.GetFor(ParentObject, AppointmentAdjective)
+            : LunarAppointment.GetFor(null, AppointmentAdjective)
+            ;
+
+        protected bool? _IsMad;
+        public bool IsMad
+        {
+            get
+            {
+                if (ParentObject != null)
+                    _IsMad = ParentObject.GetStringProperty(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}").EqualsNoCase($"{true}");
+                return _IsMad.GetValueOrDefault();
+            }
+            set
+            {
+                _IsMad = value;
+                ParentObject?.SetStringProperty(Const.IS_MAD_PROP, _IsMad.GetValueOrDefault() ? $"{true}" : null, true);
+            }
+        }
+
+        public Type AllyReasonType;
+
+        private bool _DoneAllyship;
+        public bool DoneAllyship
+        {
+            get => _DoneAllyship;
+            protected set => _DoneAllyship = value;
+        }
+
+        public override NoInfluenceSet NoInfluence => new NoInfluenceSet
+        {
+            Name = nameof(UD_Bones_LunarRegent),
+            DisplayName = LunarRegent != null
+                ? $"dedication to =subject.refname="
+                    .StartReplace()
+                    .AddObject(LunarRegent)
+                    .ToString()
+                : MissingLunarRegent,
+            Exclusions = new List<string>
+            {
+                nameof(Domination),
+            },
+            Messages = new Dictionary<string, string>
+            {
+                {
+                    nameof(Beguiling),
+                    "=subject.T= knows there is only one =LunarShader:Moon King=. =subject.Subjective= also knows it's not =object.objective=!"
+                },
+                {
+                    nameof(Persuasion_Proselytize),
+                    "Are you sure you don't want to join us instead? Well... there can only be one!"
+                },
+                {
+                    nameof(LoveTonicApplicator),
+                    "The tonic failed to cure =subject.t= of =subject.possessive= @@DisplayName@@!"
+                },
+                {
+                    "default",
+                    "=subject.T's= @@DisplayName@@ makes =subject.objective= insensible to your blandishments!"
+                },
+            }
+        };
+
+        public override void FinalizeRead(SerializationReader Reader)
+        {
+            base.FinalizeRead(Reader);
+            if (AllyReasonType == null
+                || AllyReasonType.InheritsFrom(typeof(IAllyReason)))
+                AllyReasonType = typeof(AllyProselytize);
+        }
+
+        public override void Attach()
+        {
+            base.Attach();
+            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
+            ParentObject.RequirePart<UD_Bones_LunarColors>();
+
+            PerformAllyship();
+        }
+
+        public override IPart DeepCopy(GameObject Parent, Func<GameObject, GameObject> MapInv)
+        {
+            var part = base.DeepCopy(Parent, MapInv) as UD_Bones_LunarCourtier;
+            part.DoneAllyship = false;
+            part.LunarRegentReference = null;
+            part.AdjectiveCache = null;
+            part._BakedLunarAppointment = null;
+            return part;
+        }
+
+        public bool PerformAllyship(GameObject LunarRegent = null, bool Force = false)
+        {
+            if (!Force)
+            {
+                if (!DoneAllyship)
+                    return DoneAllyship;
+
+                if (BonesID == The.Game.GameID)
+                    return DoneAllyship;
+
+                if (LunarRegent == null
+                    && ParentObject.CurrentZone is Zone currentZone
+                    && !currentZone.TryFindLunarRegent(BonesID, out LunarRegent))
+                    return DoneAllyship;
+            }
+            try
+            {
+                if (ParentObject.Brain is Brain brain
+                    && Activator.CreateInstance(AllyReasonType) is IAllyReason allyReason)
+                {
+                    DoneAllyship = true;
+                    brain.TakeAllegiance(LunarRegent, allyReason);
+                    brain.SetPartyLeader(LunarRegent, Silent: true);
+                    Utils.Log($"{ParentObject?.DebugName ?? "NO_COURTIER"} made follower of {LunarRegent?.DebugName ?? "NO_REGENT"} for reason {allyReason.GetType().Name}.");
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed to create instance of {AllyReasonType?.Name ?? "NO_ALLY_TYPE"} for {ParentObject?.DebugName ?? "NO_COURTIER"}", x);
+                DoneAllyship = true;
+            }
+            return DoneAllyship;
+        }
+
+        public override void Initialize()
+        {
+            base.Initialize();
+        }
+
+        public string GetAdjective()
+            => AdjectiveCache ??= UD_Bones_LunarColors.ApplyAnimatedLunarShader("lunar courtier", TileColor);
+
+        public string GetDescription()
+        {
+            string lunarRegents;
+            string possessive;
+
+            var lunarRegent = GameObject.FindByID(LunarRegenBaseID);
+            if (lunarRegent != null)
+            {
+                lunarRegents = "=object.refname's=";
+                possessive = "=object.possessive=";
+            }
+            else
+            {
+                lunarRegents = !BakedLunarRegentName.IsNullOrEmpty() 
+                    ? Grammar.MakePossessive(BakedLunarRegentName)
+                    : Grammar.MakePossessive(MissingLunarRegent)
+                    ;
+                possessive = "their";
+            }
+
+            var sB = Event.NewStringBuilder();
+            sB.Append(GetAdjective().Capitalize()).Append(": ")
+                .Append(ParentObject.ThisTheseDescriptiveCategory()).Append(" =subject.verb:are= a member of ")
+                .Append(lunarRegents).Append(" =LunarShader:Moon Court:").Append(ParentObject.BaseID)
+                .Append("= and respects only ").Append(possessive).Append(" authority!");
+
+            var rB = Event.FinalizeString(sB)
+                .StartReplace()
+                .AddObject(ParentObject);
+
+            if (lunarRegent != null)
+                rB.AddObject(lunarRegent);
+
+            return rB.ToString();
+        }
+
+        public override bool WantEvent(int ID, int Cascade)
+            => base.WantEvent(ID, Cascade)
+            || ID == GetDisplayNameEvent.ID
+            || ID == GetShortDescriptionEvent.ID
+            || ID == EarlyBeforeBeginTakeActionEvent.ID
+            || ID == ZoneActivatedEvent.ID
+            || ID == LunarObjectColorChangedEvent.ID
+            || ID == GetDebugInternalsEvent.ID
+            ;
+
+        public override bool HandleEvent(GetDisplayNameEvent E)
+        {
+            string appointment = $"=LunarShader:{BakedLunarAppointment}:{ParentObject.BaseID}="
+                .StartReplace()
+                .ToString();
+            int orderAdjustment = DescriptionBuilder.ORDER_ADJUST_LATE;
+            switch (ParentObject.BaseID % 3)
+            {
+                case 0:
+                    orderAdjustment = 0;
+                    E.AddHonorific(appointment, orderAdjustment);
+                    if (IsMad)
+                        E.AddHonorific("mad", orderAdjustment + DescriptionBuilder.ORDER_ADJUST_SLIGHTLY_EARLY);
+                    break;
+                case 1:
+                    string title = appointment;
+                    if (IsMad)
+                        title = $"mad {title}";
+                    E.AddTitle(title, orderAdjustment);
+                    break;
+                case 2:
+                default:
+                    string epithet = appointment;
+                    if (IsMad)
+                        epithet = $"mad {epithet}";
+                    E.AddEpithet(epithet, orderAdjustment);
+                    break;
+            }
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetShortDescriptionEvent E)
+        {
+            E.Postfix.AppendRules(GetDescription());
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(ZoneActivatedEvent E)
+        {
+            // _LunarRegent = null;
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
+        {
+            if (ParentObject.Render is Render lunarRender
+                && !lunarRender.Visible)
+                lunarRender.Visible = true;
+
+            if (LunarRegent != null)
+                BakedLunarRegentNameStripped = LunarRegent.GetReferenceDisplayName(Stripped: true);
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(LunarObjectColorChangedEvent E)
+        {
+            if (Options.EnableFlashingLightEffects
+                || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
+            {
+                AdjectiveCache = null;
+            }
+            TileColor = E.TileColor;
+            DetailColor = E.DetailColor;
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(LunarAppointment), LunarAppointment.GetFor(ParentObject, AppointmentAdjective));
+            E.AddEntry(this, nameof(BakedLunarAppointment), BakedLunarAppointment);
+            E.AddEntry(this, nameof(DoneAllyship), DoneAllyship);
+            E.AddEntry(this, nameof(ParentObject.Brain.PartyLeader), ParentObject?.Brain?.PartyLeader?.DebugName ?? "NO_LEADER");
+            return base.HandleEvent(E);
+        }
+    }
+}

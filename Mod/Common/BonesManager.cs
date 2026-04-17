@@ -232,10 +232,62 @@ namespace UD_Bones_Folder.Mod
             return SaveTask = null;
         }
 
+        public static void PrepareZoneObjectsForNextRun(Zone Z, GameObject LunarRegent, string GameID)
+        {
+            foreach (var zoneGO in Z.GetObjects())
+            {
+                if (zoneGO.Brain is Brain brain)
+                {
+                    if (zoneGO.IsPlayerLed())
+                    {
+                        if (brain.Allegiance?.SourceID == The.Player.BaseID)
+                        {
+                            var reasonType = brain.Allegiance.Reason.GetType();
+                            var courtierPart = zoneGO.RequirePart<UD_Bones_LunarCourtier>();
+                            courtierPart.OverrideBonesID<UD_Bones_LunarCourtier>(GameID);
+                            courtierPart.AllyReasonType = reasonType;
+                            Utils.Log($"{zoneGO.DebugName} is PlayerLed: {reasonType.Name ?? "NO_TYPE"}");
+                            /*try
+                            {
+                                if (Activator.CreateInstance(reasonType) is IAllyReason allyReason)
+                                {
+                                    Utils.Log($"{1.Indent()}: Assembly: {assemblyName}");
+                                    Utils.Log($"{1.Indent()}: Type: {reasonType.Name}");
+                                    zoneGO.SetStringProperty(nameof(GameObject.IsPlayerLed), GameID);
+                                    zoneGO.SetStringProperty($"{nameof(GameObject.IsPlayerLed)}::Assembly", $"{assemblyName}");
+                                    zoneGO.SetStringProperty($"{nameof(GameObject.IsPlayerLed)}::Type", $"{reasonType.Name}");
+                                }
+                                else
+                                {
+                                    Utils.Log($"Failed to create instance of {reasonType} for {zoneGO.DebugName}, but no exception thrown.");
+                                }
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"Failed to create instance of {reasonType} for {zoneGO.DebugName}", x);
+                                zoneGO.SetStringProperty(nameof(GameObject.IsPlayerLed), null, true);
+                                zoneGO.SetStringProperty($"{nameof(GameObject.IsPlayerLed)}::Assembly", null, true);
+                                zoneGO.SetStringProperty($"{nameof(GameObject.IsPlayerLed)}::Type", null, true);
+                            }*/
+                        }
+                    }
+                }
+
+                zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
+                zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());
+                zoneGO.SetStringProperty("UsesSlots", zoneGO.UsesSlots, true);
+                zoneGO.SetStringProperty("Species", zoneGO.GetSpecies(), true);
+                zoneGO.SetStringProperty("Class", zoneGO.GetClass(), true);
+                zoneGO.SetStringProperty("PaintedWall", zoneGO.GetPropertyOrTag("PaintedWall"), true);
+                zoneGO.SetStringProperty("PaintedFence", zoneGO.GetPropertyOrTag("PaintedFence"), true);
+                zoneGO.SetStringProperty("ImprovisedWeapon", $"{zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
+            }
+        }
+
         public Task HoardBones(
             string GameName,
             IDeathEvent DeathEvent,
-            GameObject MoonKing
+            GameObject LunarRegent
             )
         {
             using (DelayShutdown.AutoScopeForceMainThread())
@@ -261,35 +313,7 @@ namespace UD_Bones_Folder.Mod
 
                 using var status = Loading.StartTask(message);
 
-                foreach (var zoneGO in currentZone.GetObjects())
-                {
-                    if (zoneGO.Brain is Brain brain)
-                    {
-                        if (brain.FindAllegiance<AllyPet>() is AllegianceSet allyPetSet
-                            && allyPetSet.SourceID == The.Player.BaseID)
-                        {
-                            Utils.Log($"{zoneGO.DebugName} is PlayerPet");
-                            zoneGO.SetAlliedLeader<AllyPet>(MoonKing, Silent: true);
-                            zoneGO.SetStringProperty(nameof(AllyPet), GameID);
-                        }
-                        else
-                        if (zoneGO.IsPlayerLed())
-                        {
-                            Utils.Log($"{zoneGO.DebugName} is PlayerLed");
-                            brain.SetPartyLeader(MoonKing, Silent: true);
-                            zoneGO.SetStringProperty(nameof(zoneGO.IsPlayerLed), GameID);
-                        }
-                    }
-
-                    zoneGO.SetIntProperty("Tier", zoneGO.GetTier());
-                    zoneGO.SetIntProperty("TechTier", zoneGO.GetTechTier());
-                    zoneGO.SetStringProperty("UsesSlots", zoneGO.UsesSlots, true);
-                    zoneGO.SetStringProperty("Species", zoneGO.GetSpecies(), true);
-                    zoneGO.SetStringProperty("Class", zoneGO.GetClass(), true);
-                    zoneGO.SetStringProperty("PaintedWall", zoneGO.GetPropertyOrTag("PaintedWall"), true);
-                    zoneGO.SetStringProperty("PaintedFence", zoneGO.GetPropertyOrTag("PaintedFence"), true);
-                    zoneGO.SetStringProperty("ImprovisedWeapon", $"{zoneGO.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
-                }
+                PrepareZoneObjectsForNextRun(currentZone, LunarRegent, GameID);
 
                 var directoryInfo = GetBonesDirectory();
                 var bonesFilePath = directoryInfo.WithFileName(GetSaveFilePath(GameName));
@@ -308,7 +332,7 @@ namespace UD_Bones_Folder.Mod
                         game.WallTime.Start();
                     }
 
-                    var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, MoonKing, directoryInfo.Type);
+                    var saveBonesJSON = game.CreateSaveBonesJSON(DeathEvent, LunarRegent, directoryInfo.Type);
 
                     writer.Start(XRLGame.SaveVersion);
                     writer.Write(SERIALIZATION_CHECK);
@@ -316,7 +340,7 @@ namespace UD_Bones_Folder.Mod
                     writer.Write(saveBonesJSON.GameVersion);
 
                     writer.Write(BONES_SPEC_POS);
-                    writer.Write(new BonesSpec(MoonKing, currentZone));
+                    writer.Write(new BonesSpec(LunarRegent, currentZone));
 
                     writer.Write(BONES_ZONE_POS);
 

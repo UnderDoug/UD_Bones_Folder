@@ -293,7 +293,7 @@ namespace UD_Bones_Folder.Mod.UI
                     }
                 }
                 legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);*/
-                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * 0.5f, 0);
+                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * 1.5f, 0);
             }
 
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);

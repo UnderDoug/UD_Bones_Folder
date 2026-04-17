@@ -21,26 +21,6 @@ namespace XRL.World.Effects
 
         public static string[] MoonKingColors = new string[7] { "r", "R", "W", "G", "B", "b", "m", };
 
-        public static Dictionary<string, string> NoInfluenceMessages => new()
-        {
-            {
-                "Beguiling",
-                "=subject.T= knows there is only one =LunarShader:Moon King=. =subject.Subjective= also knows it's =subject.objective=!"
-            },
-            {
-                "Persuasion_Proselytize",
-                "Are you sure you don't want to join =subject.t= instead? Well... there can only be one!"
-            },
-            {
-                "LoveTonicApplicator",
-                "The tonic failed to cure =subject.t= of =subject.possessive= @@DisplayName@@!"
-            },
-            {
-                "default",
-                "=subject.T's= @@DisplayName@@ makes =subject.objective= insensible to your blandishments!"
-            },
-        };
-
         private int OriginalMaxKillDistance;
 
         private bool AlreadyPreacher;
@@ -163,7 +143,6 @@ namespace XRL.World.Effects
         {
             Registrar.Register("AfterDeepCopyWithoutEffects");
             Registrar.Register("BeforeDeepCopyWithoutEffects");
-            Registrar.Register("CanBeInfluenced");
             base.Register(Object, Registrar);
         }
 
@@ -259,18 +238,6 @@ namespace XRL.World.Effects
                 else
                 if (E.ID == "AfterDeepCopyWithoutEffects")
                     ApplyChanges();
-                else
-                if (E.ID == "CanBeInfluenced")
-                {
-                    string influenceType = E.GetStringParameter("Type", "default");
-                    if (influenceType != nameof(Parts.Mutation.Domination)
-                        && NoInfluenceMessages.TryGetValue(influenceType, out string influenceMessage))
-                    {
-                        //Utils.Log($"CanBeInfluenced, Type: {influenceType}");
-                        E.SetParameter("Message", influenceMessage.StartReplace().AddObject(Object).ToString().Replace("@@DisplayName@@", GetDisplayName()));
-                        return false;
-                    }
-                }
             }
             return base.FireEvent(E);
         }

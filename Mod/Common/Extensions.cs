@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -750,5 +751,34 @@ namespace UD_Bones_Folder.Mod
             ? String.IsNullOrEmpty()
             : Strings.Any(s => String.Contains(s))
             ;
+
+        public static bool InheritsFrom(
+            [NotNullWhen(true)] this Type Type,
+            [NotNullWhen(true)] Type OtherType,
+            bool IncludeSelf = true)
+            => Type != null
+            && OtherType != null
+            && ((IncludeSelf
+                    && Type == OtherType)
+                || OtherType.IsSubclassOf(Type)
+                || Type.IsAssignableFrom(OtherType)
+                || (Type.YieldInheritedTypes().ToList() is List<Type> inheritedTypes
+                    && inheritedTypes.Contains(OtherType)));
+
+        public static bool TryFindLunarRegent(this Zone Z, string BonesID, out GameObject LunarRegent)
+            => (LunarRegent = Z.GetObjects(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID).FirstOrDefault()) != null
+            ;
+
+        public static bool TryEnsureObject(this GameObjectReference GameObjectReference, out GameObject Object)
+        {
+            if (!GameObject.Validate(ref GameObjectReference.Object))
+            {
+                if (GameObject.FindByID(GameObjectReference.ID) is GameObject foundObject)
+                    GameObjectReference.Set(foundObject);
+                else
+                    GameObjectReference.Clear();
+            }
+            return (Object = GameObjectReference.Object) != null;
+        }
     }
 }

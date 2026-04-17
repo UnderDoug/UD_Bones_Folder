@@ -13,7 +13,7 @@ using Qud.UI;
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_MoonKingAnnouncer : UD_Bones_BaseLunarPart
+    public class UD_Bones_MoonKingAnnouncer : UD_Bones_BaseLunarSubject
     {
         [Serializable]
         public class FlippableRender : Renderable

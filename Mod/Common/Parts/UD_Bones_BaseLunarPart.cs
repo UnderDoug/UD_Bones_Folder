@@ -19,6 +19,30 @@ namespace XRL.World.Parts
         , IModEventHandler<LunarObjectColorChangedEvent>
         , IModEventHandler<TidyLunarObjectsEvent>
     {
+        public class NoInfluenceSet
+        {
+            public string Name;
+            public string DisplayName;
+            public List<string> Exclusions;
+            public Dictionary<string, string> Messages;
+
+            public string GetFor(string Type)
+                => Type != null
+                    && !Messages.IsNullOrEmpty()
+                    && Messages.TryGetValue(Type, out string message)
+                ? message
+                : null
+                ;
+
+            public bool IsExcluded(string Type)
+                => Type != null
+                && !Exclusions.IsNullOrEmpty()
+                && Exclusions.Contains(Type)
+                ;
+        }
+
+        public virtual NoInfluenceSet NoInfluence { get; } = null;
+
         protected string _BonesID;
         public string BonesID
         {
@@ -102,6 +126,12 @@ namespace XRL.World.Parts
             base.FinalizeRead(Reader);
         }
 
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register("CanBeInfluenced");
+            base.Register(Object, Registrar);
+        }
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == BeforeObjectCreatedEvent.ID
@@ -147,6 +177,28 @@ namespace XRL.World.Parts
                 E.AddEntry(nameof(UD_Bones_BaseLunarPart), nameof(Persists), Persists);
             }
             return base.HandleEvent(E);
+        }
+
+        public override bool FireEvent(Event E)
+        {
+            if (E.ID == "CanBeInfluenced"
+                && NoInfluence != null)
+            {
+                string influenceType = E.GetStringParameter("Type", "default");
+                if (NoInfluence.IsExcluded(influenceType)
+                    && NoInfluence.GetFor(influenceType) is string influenceMessage)
+                {
+                    E.SetParameter(
+                        Name: "Message",
+                        Value: influenceMessage
+                            .StartReplace()
+                            .AddObject(ParentObject)
+                            .ToString()
+                            .Replace("@@DisplayName@@", NoInfluence.DisplayName));
+                    return false;
+                }
+            }
+            return base.FireEvent(E);
         }
     }
 }

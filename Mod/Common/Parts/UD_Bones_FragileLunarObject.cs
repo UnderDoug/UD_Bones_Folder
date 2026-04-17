@@ -10,7 +10,7 @@ using XRL.Rules;
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_FragileRoyalObject : UD_Bones_BaseLunarPart
+    public class UD_Bones_FragileLunarObject : UD_Bones_BaseLunarSubject
     {
         public static BallBag<Func<GameObject, bool>> GetDamageFuncBag()
             => new()
@@ -80,30 +80,42 @@ namespace XRL.World.Parts
             => true
             ;
 
-        public void AttemptDamageAndRemove()
+        public void AttemptDamageAndRemove(bool Force = false)
         {
-            if (ParentObject != null)
+            if (!Force)
             {
-                if (ParentObject.InInventory is not GameObject holder
-                    || !holder.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
-                    || lunarRegent.BonesID != BonesID
-                    || BonesID == null)
-                {
-                    var damageFuncs = GetDamageFuncBag();
+                if (ParentObject == null)
+                    return;
 
-                    try
-                    {
-                        int attempts = 0;
-                        while (!damageFuncs.IsNullOrEmpty()
-                            && attempts++ < (damageFuncs.Count * 2))
-                            if (damageFuncs.PickOne().Invoke(ParentObject))
-                                break;
-                    }
-                    finally
-                    {
-                        ParentObject?.RemovePart(this);
-                    }
-                }
+                if (ParentObject.InInventory is not GameObject holder)
+                    return;
+
+                UD_Bones_BaseLunarPart lunarPart = null;
+
+                if ((lunarPart = holder.GetPart<UD_Bones_LunarRegent>()) == null
+                    && (lunarPart = holder.GetPart<UD_Bones_LunarReliquary>()) == null)
+                    return;
+
+                if (lunarPart == null)
+                    return;
+
+                if (BonesID != null
+                    && lunarPart.BonesID != BonesID)
+                    return;
+            }
+
+            var damageFuncs = GetDamageFuncBag();
+            try
+            {
+                int attempts = 0;
+                while (!damageFuncs.IsNullOrEmpty()
+                    && attempts++ < (damageFuncs.Count * 2))
+                    if (damageFuncs.PickOne().Invoke(ParentObject))
+                        break;
+            }
+            finally
+            {
+                ParentObject?.RemovePart(this);
             }
         }
 

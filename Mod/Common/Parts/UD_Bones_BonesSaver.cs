@@ -145,7 +145,7 @@ namespace XRL.World.Parts
                     using var moonKingInventory = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(moonKing.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
                     foreach (var moonKingItem in moonKingInventory)
                     {
-                        moonKingItem.RequirePart<UD_Bones_FragileRoyalObject>();
+                        moonKingItem.RequirePart<UD_Bones_FragileLunarObject>();
 
                         if (moonKingItem.Equipped != null
                             || moonKingItem.GetBlueprint().InheritsFrom("Grenade")
@@ -318,7 +318,7 @@ namespace XRL.World.Parts
                 {
                     if (!willDie)
                     {
-                        if (currentZone.GetObjects(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == saveBonesInfo.ID).FirstOrDefault() is GameObject lunarRegent)
+                        if (currentZone.TryFindLunarRegent(saveBonesInfo.ID, out GameObject lunarRegent))
                         {
                             foreach (var zoneGO in currentZone.GetObjects())
                             {

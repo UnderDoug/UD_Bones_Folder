@@ -75,10 +75,10 @@ namespace UD_Bones_Folder.Mod
                 if (bonesCell.Objects is not ObjectRack bonesObjects)
                     continue;
 
-                var lunarRegentCompanions = new Dictionary<GameObject, string>();
+                Dictionary<string, GameObject> lunarRegents = null;
+                Dictionary<string, HashSet<UD_Bones_LunarCourtier>> lunarRegentCompanions = null;
                 for (int i = 0; i < bonesObjects.Count; i++)
                 {
-                    
                     if (bonesObjects[i] is GameObject bonesObject)
                     {
                         string bonesObjectDebugName = bonesObject.DebugName;
@@ -87,7 +87,28 @@ namespace UD_Bones_Folder.Mod
                         {
                             bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
                             catchFlag = nameof(Extensions.ApplyRegistrar);
+
+                            // Anything you want to do to objects, do it AFTER here
+                            // ####################################################
+
                             bonesObject.ApplyRegistrar();
+
+                            if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                            {
+                                lunarRegents ??= new();
+                                lunarRegents[lunarRegentPart.BonesID] = bonesObject;
+                            }
+                            else
+                            if (bonesObject.TryGetPart(out UD_Bones_LunarCourtier lunarCoutierPart))
+                            {
+                                lunarRegentCompanions ??= new();
+
+                                if (!lunarRegentCompanions.ContainsKey(lunarCoutierPart.BonesID)
+                                    || lunarRegentCompanions[lunarCoutierPart.BonesID] == null)
+                                    lunarRegentCompanions[lunarCoutierPart.BonesID] = new();
+
+                                lunarRegentCompanions[lunarCoutierPart.BonesID].Add(lunarCoutierPart);
+                            }
 
                             catchFlag = nameof(Extensions.FeverWarp);
                             bonesObject.FeverWarp(BonesID);
@@ -109,7 +130,7 @@ namespace UD_Bones_Folder.Mod
                                 {
                                     catchFlag = $"{nameof(IsMad)}: true";
                                     MoonKing.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
-                                    if (MoonKing.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                                    if (MoonKing.TryGetPart(out lunarRegentPart))
                                         lunarRegentPart.IsMad = true;
                                 }
                                 else
@@ -157,15 +178,7 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(GameObject.MakeActive);
                             bonesObject.MakeActive();
 
-                            if (bonesObject.GetStringProperty(nameof(AllyPet)) is string allyPetID
-                                && allyPetID == BonesID)
-                                lunarRegentCompanions[bonesObject] = nameof(AllyPet);
-                            else
-                            if (bonesObject.GetStringProperty(nameof(GameObject.IsPlayerLed)) is string playerLedID
-                                && playerLedID == BonesID)
-                                lunarRegentCompanions[bonesObject] = nameof(GameObject.IsPlayerLed);
-
-                                catchFlag = nameof(GameObject.ForfeitTurn);
+                            catchFlag = nameof(GameObject.ForfeitTurn);
                             bonesObject.ForfeitTurn();
                         }
                         catch (Exception x)
@@ -174,16 +187,21 @@ namespace UD_Bones_Folder.Mod
                         }
                     }
                 }
-                if (MoonKing != null)
+                if (!lunarRegents.IsNullOrEmpty()
+                    && !lunarRegentCompanions.IsNullOrEmpty())
                 {
-                    foreach ((var bonesObject, var type) in lunarRegentCompanions)
+                    foreach ((var regentID , var lunarRegent) in lunarRegents)
                     {
-                        if (type == nameof(AllyPet))
-                            bonesObject.SetAlliedLeader<AllyPet>(MoonKing, Silent: true);
-                        else
-                            bonesObject.Brain?.SetPartyLeader(MoonKing, Silent: true);
+                        if (lunarRegentCompanions.TryGetValue(regentID, out var lunarCompanions)
+                            && !lunarCompanions.IsNullOrEmpty())
+                        {
+                            foreach (var lunarCompanion in lunarCompanions)
+                                lunarCompanion.PerformAllyship(lunarRegent, Force: true);
+                        }
                     }
                 }
+                lunarRegents?.Clear();
+                lunarRegentCompanions?.Clear();
             }
             return MoonKing != null;
         }

@@ -31,10 +31,7 @@ namespace UD_Bones_Folder.Mod
         public string GenotypeName;
         public string SubtypeName;
         public string Blueprint;
-/*
-        [JsonProperty]
-        public Dictionary<string, string> BonesSpec;
-*/
+
         [JsonProperty]
         public BonesSpec BonesSpec;
 

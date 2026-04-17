@@ -9,6 +9,8 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 
 using SerializeField = UnityEngine.SerializeField;
+using XRL.World.Parts.Mutation;
+using XRL.World.Parts.Skill;
 
 namespace XRL.World.Parts
 {
@@ -45,9 +47,39 @@ namespace XRL.World.Parts
             protected set => _DoneDescription = value;
         }
 
+        public override NoInfluenceSet NoInfluence => new NoInfluenceSet
+        {
+            Name = nameof(UD_Bones_LunarRegent),
+            DisplayName = ParentObject?.GetEffect<UD_Bones_MoonKingFever>()?.GetDisplayName()
+                ?? new UD_Bones_MoonKingFever().GetDisplayName(ParentObject?.Render?.TileColor),
+            Exclusions = new List<string>
+            {
+                nameof(Domination),
+            },
+            Messages = new Dictionary<string, string>
+            {
+                {
+                    nameof(Beguiling),
+                    "=subject.T= knows there is only one =LunarShader:Moon King=. =subject.Subjective= also knows it's =subject.objective=!"
+                },
+                {
+                    nameof(Persuasion_Proselytize),
+                    "Are you sure you don't want to join =subject.t= instead? Well... there can only be one!"
+                },
+                {
+                    nameof(LoveTonicApplicator),
+                    "The tonic failed to cure =subject.t= of =subject.possessive= @@DisplayName@@!"
+                },
+                {
+                    "default",
+                    "=subject.T's= @@DisplayName@@ makes =subject.objective= insensible to your blandishments!"
+                },
+            }
+        };
+
         public static string GetRegalTitle(GameObject LunarRegent)
         {
-            string regalTerm = "Regent";
+            string regalTerm = "Sovran";
             if (LunarRegent?.GetGender() is Gender regentGender)
             {
                 if (regentGender.Name.ToLower().Contains("male"))
