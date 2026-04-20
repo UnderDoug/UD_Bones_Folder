@@ -204,6 +204,10 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public bool IsOnline => DirectoryInfo.Type == DirectoryInfo.DirectoryType.Online;
+
+        public bool IsCrematable => DirectoryInfo.Type < DirectoryInfo.DirectoryType.Mod;
+
         public SaveBonesInfo()
             : base()
         { }
@@ -214,6 +218,13 @@ namespace UD_Bones_Folder.Mod
 
         private static async void SafeWriteSaveBonesJSON(string JSONFilePath, SaveBonesJSON bonesJSON, bool RequireExisting = true)
         {
+            if (bonesJSON.DirectoryType >= DirectoryInfo.DirectoryType.Mod)
+            {
+                // put some PUT request here for "Online" once that's set up.
+                // put some config-like writing here for "Mod" once that's set up.
+                return;
+            }
+
             if (!RequireExisting
                 || await File.ExistsAsync(JSONFilePath))
             {
@@ -605,11 +616,17 @@ namespace UD_Bones_Folder.Mod
             };
         }
 
-        public int CompareTo(SaveBonesInfo other)
-            => other != null
-            ? SaveTimeValue.CompareTo(other.SaveTimeValue)
-            : -1
-            ;
+        public int CompareTo(SaveBonesInfo Other)
+        {
+            if (Other == null)
+                return -1;
+
+            int timeComp = SaveTimeValue.CompareTo(Other.SaveTimeValue);
+            if (timeComp != 0)
+                return timeComp;
+
+            return Other.DirectoryInfo.Type.CompareTo(DirectoryInfo.Type);
+        }
 
         public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)
             => DateTime.Compare(

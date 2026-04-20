@@ -780,5 +780,29 @@ namespace UD_Bones_Folder.Mod
             }
             return (Object = GameObjectReference.Object) != null;
         }
+
+        public static async Task<byte[]> ReadAllBytesAsync(this System.IO.Stream Stream)
+        {
+            if (Stream is System.IO.MemoryStream inMemoryStream)
+                return inMemoryStream.ToArray();
+
+            using (var outStream = new System.IO.MemoryStream())
+            {
+                await Stream.CopyToAsync(outStream);
+                return outStream.ToArray();
+            }
+        }
+
+        public static byte[] ReadAllBytes(this System.IO.Stream Stream)
+            => Stream.ReadAllBytesAsync().WaitResult()
+            ;
+
+        public static async Task<byte[]> ReadAllBytesAsync(this System.IO.StreamReader StreamReader)
+            => await StreamReader.BaseStream.ReadAllBytesAsync()
+            ;
+
+        public static byte[] ReadAllBytes(this System.IO.StreamReader StreamReader)
+            => StreamReader.ReadAllBytesAsync().WaitResult()
+            ;
     }
 }

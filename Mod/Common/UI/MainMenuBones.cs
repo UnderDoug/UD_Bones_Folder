@@ -60,7 +60,6 @@ namespace UD_Bones_Folder.Mod.UI
                     else
                         MainMenu.LeftOptions.Insert(placementIndex + 1, MainMenuBonesOptions);
                 }
-
                 MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones();
             }
 

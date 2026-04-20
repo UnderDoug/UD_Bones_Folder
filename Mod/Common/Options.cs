@@ -39,9 +39,20 @@ namespace UD_Bones_Folder.Mod
         // General Settings
         [OptionFlag] public static bool EnableFlashingLightEffects;
 
-        [OptionFlag] public static int ChosenPermyriadChance;
+        private static int _ChosenPermyriadChance;
+        [OptionFlag] public static int ChosenPermyriadChance
+        {
+            get => _ChosenPermyriadChance;
+            set
+            {
+                _ChosenPermyriadChance = value;
+                if (value != -1)
+                    LastNonCustomChosenPermyriadChance = value;
+            }
+        }
+        private static int? LastNonCustomChosenPermyriadChance;
 
-        private static int DefaultPermyriadChance => ChosenPermyriadChance > 0 ? ChosenPermyriadChance : 200;
+        private static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
         [OptionFlag] public static int? CustomPermyriadChance;
 
         public static async Task ManageCustomPermyriadChance()
@@ -90,8 +101,8 @@ namespace UD_Bones_Folder.Mod
             var confirmResult = await Popup.ShowYesNoCancelAsync(
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("You've entered ")
-                            .AppendColored("W", $"{CustomPermyriadChance ?? DefaultPermyriadChance}").Append(", which is the equivalent of ")
-                            .AppendColored("C", $"{(CustomPermyriadChance ?? DefaultPermyriadChance) / 100.0:0.0#}%")
+                            .AppendColored("W", $"{Selected ?? DefaultPermyriadChance}").Append(", which is the equivalent of ")
+                            .AppendColored("C", $"{(Selected ?? DefaultPermyriadChance) / 100.0:0.0#}%")
                             .Append(".").AppendLine().AppendLine()
                             .Append("Keep this value?"))
                     );
@@ -123,9 +134,9 @@ namespace UD_Bones_Folder.Mod
         public static int GetPermyriadChanceForBones()
         {
             int chance = ChosenPermyriadChance != -1
-            ? ChosenPermyriadChance
-            : CustomPermyriadChance ?? DefaultPermyriadChance
-            ;
+                ? ChosenPermyriadChance
+                : CustomPermyriadChance ?? DefaultPermyriadChance
+                ;
             return Math.Clamp(chance, 1, 10000);
         }
 

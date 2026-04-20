@@ -63,6 +63,81 @@ namespace UD_Bones_Folder.Mod
             return size;
         }
 
+        public static SaveBonesInfo InfoFromJson(
+            SaveBonesJSON SaveBonesJSON,
+            string DirPath,
+            string FilePath,
+            long SaveSize
+            )
+        {
+            if (SaveBonesJSON == null)
+            {
+                return new SaveBonesInfo
+                {
+                    Name = "Corrupt info file".Colored("R"),
+                    Size = $"Total size: {SaveSize / 1000}kb",
+                    Info = "",
+                    Directory = DirPath
+                };
+            }
+
+            DateTime saveTimeValue;
+            try
+            {
+                saveTimeValue = new DateTime(SaveBonesJSON.SaveTimeValue).ToLocalTime();
+            }
+            catch //(Exception x)
+            {
+                // Utils.Error(Utils.CallChain(nameof(SaveBonesJSON), nameof(ReadSaveBonesJson)), x);
+                saveTimeValue = new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
+            }
+
+            var bonesSpec = SaveBonesJSON.BonesSpec
+                ?? new BonesSpec
+                {
+                    Level = SaveBonesJSON.Level,
+                    ZoneID = SaveBonesJSON.ZoneID,
+                };
+
+            var saveBonesInfo = new SaveBonesInfo
+            {
+                json = SaveBonesJSON,
+                Directory = DirPath,
+                Size = $"Total size: {SaveSize / 1000}kb",
+                ID = SaveBonesJSON.ID,
+                Version = SaveBonesJSON.GameVersion,
+                Name = SaveBonesJSON.Name,
+                Description = $"Level {SaveBonesJSON.Level} {SaveBonesJSON.GenoSubType}",// [{json.GameMode}]",
+                Info = $"{SaveBonesJSON.Location}, {SaveBonesJSON.InGameTime} turn {SaveBonesJSON.Turn}",
+                SaveTime = SaveBonesJSON.SaveTime,
+                ModsEnabled = SaveBonesJSON.ModsEnabled,
+
+                JSONFilePath = FilePath,
+                SaveTimeValue = saveTimeValue,
+
+                ModVersion = SaveBonesJSON.ModVersion,
+
+                DeathReason = SaveBonesJSON.DeathReason,
+
+                GenotypeName = SaveBonesJSON.GenotypeName,
+                SubtypeName = SaveBonesJSON.SubtypeName,
+
+                BonesSpec = bonesSpec,
+            };
+
+            if (!SaveBonesJSON.CharIcon.IsTile())
+                SaveBonesJSON.HotSwapCharIcon();
+
+            if (SaveBonesJSON.SaveVersion < 395
+                || SaveBonesJSON.SaveVersion > 400)
+            {
+                string olderVersionString = $"Older Version ({SaveBonesJSON.GameVersion})".Colored("R");
+                saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
+            }
+
+            return saveBonesInfo;
+        }
+
         public static async Task<SaveBonesInfo> ReadSaveBonesJson(string DirPath, string FilePath)
         {
             SaveBonesJSON bonesJSON = null;
@@ -74,73 +149,7 @@ namespace UD_Bones_Folder.Mod
             {
                 Utils.Error($"Loading bones json {FilePath}", x);
             }
-
-            if (bonesJSON == null)
-            {
-                return new SaveBonesInfo
-                {
-                    Name = "Corrupt info file".Colored("R"),
-                    Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
-                    Info = "",
-                    Directory = DirPath
-                };
-            }
-
-            DateTime saveTimeValue;
-            try
-            {
-                saveTimeValue = new DateTime(bonesJSON.SaveTimeValue).ToLocalTime();
-            }
-            catch //(Exception x)
-            {
-                // Utils.Error(Utils.CallChain(nameof(SaveBonesJSON), nameof(ReadSaveBonesJson)), x);
-                saveTimeValue = new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
-            }
-
-            var bonesSpec = bonesJSON.BonesSpec
-                ?? new BonesSpec
-                {
-                    Level = bonesJSON.Level,
-                    ZoneID = bonesJSON.ZoneID,
-                };
-
-            var saveBonesInfo = new SaveBonesInfo
-            {
-                json = bonesJSON,
-                Directory = DirPath,
-                Size = $"Total size: {GetDirectorySize(DirPath) / 1000}kb",
-                ID = bonesJSON.ID,
-                Version = bonesJSON.GameVersion,
-                Name = bonesJSON.Name,
-                Description = $"Level {bonesJSON.Level} {bonesJSON.GenoSubType}",// [{json.GameMode}]",
-                Info = $"{bonesJSON.Location}, {bonesJSON.InGameTime} turn {bonesJSON.Turn}",
-                SaveTime = bonesJSON.SaveTime,
-                ModsEnabled = bonesJSON.ModsEnabled,
-
-                JSONFilePath = FilePath,
-                SaveTimeValue = saveTimeValue,
-
-                ModVersion = bonesJSON.ModVersion,
-
-                DeathReason = bonesJSON.DeathReason,
-
-                GenotypeName = bonesJSON.GenotypeName,
-                SubtypeName = bonesJSON.SubtypeName,
-
-                BonesSpec = bonesSpec,
-            };
-
-            if (!bonesJSON.CharIcon.IsTile())
-                bonesJSON.HotSwapCharIcon();
-
-            if (bonesJSON.SaveVersion < 395
-                || bonesJSON.SaveVersion > 400)
-            {
-                string olderVersionString = $"Older Version ({bonesJSON.GameVersion})".Colored("R");
-                saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
-            }
-
-            return saveBonesInfo;
+            return InfoFromJson(bonesJSON, DirPath, FilePath, GetDirectorySize(DirPath));
         }
 
         public bool IsCharIconSwapped()
