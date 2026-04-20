@@ -1263,7 +1263,7 @@ namespace UD_Bones_Folder.Mod
                         while (true)
                         {
                             string title = $"Eligible =LunarShader:{neutralRegalTitle}:*= For This Zone".StartReplace().ToString();
-                            if (optionsList.Count <= offset)
+                            if (optionsList.Count < offset)
                             {
                                 if (UIManager.UseNewPopups)
                                 {

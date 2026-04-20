@@ -53,7 +53,23 @@ namespace UD_Bones_Folder.Mod
         private static int? LastNonCustomChosenPermyriadChance;
 
         private static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
-        [OptionFlag] public static int? CustomPermyriadChance;
+        private static int? _CustomPermyriadChance;
+        [OptionFlag] public static int? CustomPermyriadChance
+        {
+            get
+            {
+                if (The.Game?.GetIntGameState($"{MOD_PREFIX}{nameof(CustomPermyriadChance)}", -1) is int _customPermyriadChance
+                    && _customPermyriadChance >= 0)
+                    return _CustomPermyriadChance = _customPermyriadChance;
+
+                return _CustomPermyriadChance;
+            }
+            set
+            {
+                The.Game?.SetIntGameState($"{MOD_PREFIX}{nameof(CustomPermyriadChance)}", value.GetValueOrDefault());
+                _CustomPermyriadChance = value;
+            }
+        }
 
         public static async Task ManageCustomPermyriadChance()
         {
