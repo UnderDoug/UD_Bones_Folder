@@ -113,12 +113,11 @@ namespace XRL.World.Parts
                         .AddObject(The.Player)
                         .ToString();
 
-                    SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
-                    string popupMessage = Markup.Transform(message);
                     if (UIManager.UseNewPopups)
                     {
+                        SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
                         Popup.WaitNewPopupMessage(
-                            message: popupMessage,
+                            message: Markup.Transform(message),
                             contextTitle: title,
                             afterRender: new FlippableRender(render, false),
                             PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
