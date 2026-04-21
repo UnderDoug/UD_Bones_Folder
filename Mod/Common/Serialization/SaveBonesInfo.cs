@@ -625,7 +625,7 @@ namespace UD_Bones_Folder.Mod
             if (timeComp != 0)
                 return timeComp;
 
-            return Other.DirectoryInfo.Type.CompareTo(DirectoryInfo.Type);
+            return DirectoryInfo.Type.CompareTo(Other.DirectoryInfo.Type);
         }
 
         public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)

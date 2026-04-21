@@ -395,7 +395,7 @@ namespace UD_Bones_Folder.Mod
             string Empty = null,
             Func<string, string> PostProc = null
             )
-            => Utils.Loggregrate(
+            => Utils.Loggregate(
                 Source: Source,
                 Proc: Proc,
                 Empty: Empty,

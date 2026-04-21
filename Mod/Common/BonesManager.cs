@@ -540,6 +540,9 @@ namespace UD_Bones_Folder.Mod
                                 && !IsVersionCompatible(osseousAshBonesInfo))
                                 continue;
 
+                            if (saveBonesInfos.Any(b => b.ID == osseousAshBonesInfo.ID))
+                                continue;
+
                             if (Where?.Invoke(osseousAshBonesInfo) is not false)
                                 saveBonesInfos.Add(osseousAshBonesInfo);
                         }

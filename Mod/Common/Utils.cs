@@ -637,7 +637,7 @@ namespace UD_Bones_Folder.Mod
             return Source;
         }
 
-        public static IEnumerable<T> Loggregrate<T>(
+        public static IEnumerable<T> Loggregate<T>(
             IEnumerable<T> Source,
             Func<T, string> Proc = null,
             string Empty = null,

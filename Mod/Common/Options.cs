@@ -54,20 +54,15 @@ namespace UD_Bones_Folder.Mod
 
         private static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
         private static int? _CustomPermyriadChance;
-        [OptionFlag] public static int? CustomPermyriadChance
+        [OptionFlag] public static int CustomPermyriadChance
         {
-            get
-            {
-                if (The.Game?.GetIntGameState($"{MOD_PREFIX}{nameof(CustomPermyriadChance)}", -1) is int _customPermyriadChance
-                    && _customPermyriadChance >= 0)
-                    return _CustomPermyriadChance = _customPermyriadChance;
-
-                return _CustomPermyriadChance;
-            }
+            get => _CustomPermyriadChance ?? DefaultPermyriadChance;
             set
             {
-                The.Game?.SetIntGameState($"{MOD_PREFIX}{nameof(CustomPermyriadChance)}", value.GetValueOrDefault());
-                _CustomPermyriadChance = value;
+                if (value >= 0)
+                    _CustomPermyriadChance = value;
+                else
+                    _CustomPermyriadChance = null;
             }
         }
 
@@ -100,10 +95,10 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendLine();
             sB.Append("The amount you enter, when divided by 100, will be the percent chance.")
                 .AppendLine();
-            sB.Append("The currently stored value is ").AppendColored("W", $"{CustomPermyriadChance ?? DefaultPermyriadChance}")
-                .Append(" which is equivalent to ").AppendColored("C", $"{(CustomPermyriadChance ?? DefaultPermyriadChance) / 100.0:0.0#}%").Append(".");
+            sB.Append("The currently stored value is ").AppendColored("W", $"{CustomPermyriadChance}")
+                .Append(" which is equivalent to ").AppendColored("C", $"{(CustomPermyriadChance) / 100.0:0.0#}%").Append(".");
 
-            return await Popup.AskNumberAsync(Event.FinalizeString(sB), CustomPermyriadChance ?? DefaultPermyriadChance, 1, 10000);
+            return await Popup.AskNumberAsync(Event.FinalizeString(sB), CustomPermyriadChance, 1, 10000);
         }
 
         private static async Task<bool?> ConfirmCustomPermyriadChanceForBones(int? Selected)
@@ -117,8 +112,8 @@ namespace UD_Bones_Folder.Mod
             var confirmResult = await Popup.ShowYesNoCancelAsync(
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("You've entered ")
-                            .AppendColored("W", $"{Selected ?? DefaultPermyriadChance}").Append(", which is the equivalent of ")
-                            .AppendColored("C", $"{(Selected ?? DefaultPermyriadChance) / 100.0:0.0#}%")
+                            .AppendColored("W", $"{Selected ?? CustomPermyriadChance}").Append(", which is the equivalent of ")
+                            .AppendColored("C", $"{(Selected ?? CustomPermyriadChance) / 100.0:0.0#}%")
                             .Append(".").AppendLine().AppendLine()
                             .Append("Keep this value?"))
                     );
@@ -141,8 +136,8 @@ namespace UD_Bones_Folder.Mod
             await Popup.ShowAsync(
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("Your custom permyriad chance (")
-                            .AppendColored("W", $"{CustomPermyriadChance ?? DefaultPermyriadChance}").Append(", ")
-                            .AppendColored("C", $"{(CustomPermyriadChance ?? DefaultPermyriadChance) / 100.0:0.0#}%")
+                            .AppendColored("W", $"{CustomPermyriadChance}").Append(", ")
+                            .AppendColored("C", $"{(CustomPermyriadChance) / 100.0:0.0#}%")
                             .Append(") remains unchanged."))
                     );
         }
@@ -151,7 +146,7 @@ namespace UD_Bones_Folder.Mod
         {
             int chance = ChosenPermyriadChance != -1
                 ? ChosenPermyriadChance
-                : CustomPermyriadChance ?? DefaultPermyriadChance
+                : CustomPermyriadChance
                 ;
             return Math.Clamp(chance, 1, 10000);
         }

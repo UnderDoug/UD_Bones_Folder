@@ -245,16 +245,24 @@ namespace XRL.World.Parts
             if (The.Game?.GameID is not string gameID)
                 return false;
 
+            bool willDie = Params?.Contains("die") is true;
+            bool noSave = Params?.Contains("eligible") is true;
+
             if (The.Player.Level < MinimumLevelForBones)
             {
-                if (Popup.ShowYesNoCancel($"The minimum level to makes bones is {MinimumLevelForBones}. You are level {The.Player.Level}.\n\n" +
-                    $"Would you like your level increased to {MinimumLevelForBones} to complete this operation?") == DialogResult.Yes)
+                if (noSave
+                    || Popup.ShowYesNoCancel($"The minimum level to makes bones is {MinimumLevelForBones}. You are level {The.Player.Level}.\n\n" +
+                        $"Would you like your level increased to {MinimumLevelForBones} to complete this operation?"
+                        ) == DialogResult.Yes)
+                {
                     The.Player.AwardXP((Leveler.GetXPForLevel(MinimumLevelForBones) - The.Player.Stat("XP")) + 1);
+                    // Add any other eligibility enforcing code here.
+                }
                 else
                     return true;
             }
-
-            bool willDie = Params?.Contains("die") is true;
+            if (noSave)
+                return true;
 
             if (willDie
                 && Popup.ShowYesNo($"You have flagged that you would like to die to make these bones.\n\n" +
