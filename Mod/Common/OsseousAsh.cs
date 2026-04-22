@@ -507,7 +507,7 @@ namespace UD_Bones_Folder.Mod
                         if (JObject.Parse(result) is JObject jObject
                             && jObject["success"].ToObject<Guid>() is Guid parsedToken)
                         {
-                            Utils.Log($"{nameof(PostBones)} successfully created new bones on server at \"{Host}\"" +
+                            Utils.Info($"Successfully created new BonesInfo on server at \"{Host}\"" +
                                 $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})" +
                                 $" - {nameof(parsedToken)}: {parsedToken}");
 
@@ -522,6 +522,7 @@ namespace UD_Bones_Folder.Mod
                         canPut = false;
                     }
                 }
+
                 if (canPut)
                 {
                     httpReq = (HttpWebRequest)WebRequest.Create(BonesSavGzPutRoute(BonesID));
@@ -531,7 +532,10 @@ namespace UD_Bones_Folder.Mod
 
                     using (var streamWriter = new System.IO.StreamWriter(httpReq.GetRequestStream()))
                     {
-                        streamWriter.Write(SavGz);
+                        using (var savGzStream = new System.IO.MemoryStream(SavGz))
+                        {
+                            savGzStream.CopyTo(streamWriter.BaseStream);
+                        }
                     }
 
                     httpRes = (HttpWebResponse)httpReq.GetResponse();
@@ -545,7 +549,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 var bonesIDString = jObject[nameof(BonesID)].ToObject<string>();
                                 var savGzString = jObject[nameof(BonesID)].ToObject<string>();
-                                Utils.Log($"{nameof(PostBones)} successfully created new bones on server at \"{Host}\" - {httpRes.StatusCode} ({(int)httpRes.StatusCode}) - {jObject}");
+                                Utils.Info($"Successfully added \".sav.gz\" blob to BonesRecord on server at \"{Host}\" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
                                 return true;
                             }
                         }
@@ -587,7 +591,7 @@ namespace UD_Bones_Folder.Mod
                         SaveBonesJSON[] jsonArray = null;
                         try
                         {
-                            jsonArray = jObject["data"].ToObject<SaveBonesJSON[]>();
+                            jsonArray = JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
                         }
                         catch (Exception x)
                         {
@@ -597,12 +601,12 @@ namespace UD_Bones_Folder.Mod
                         foreach (var saveBonesJSON in jsonArray)
                             saveBonesInfos.Add(SaveBonesJSON.InfoFromJson(saveBonesJSON, BonesInfoGetRoute(saveBonesJSON.ID), "SavGz", 0));
 
-                        Utils.Log($"{nameof(GetBonesInfos)} got {saveBonesInfos.Count} SaveBonesInfo from OsseousAsh - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        // Utils.Log($"{nameof(GetBonesInfos)} got {saveBonesInfos.Count} SaveBonesInfo from OsseousAsh - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                     }
                     else
                     if (httpRes.StatusCode == HttpStatusCode.NoContent)
                     {
-                        Utils.Log($"{nameof(GetBonesInfos)} got no SaveBonesInfo from OsseousAsh - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        // Utils.Log($"{nameof(GetBonesInfos)} got no SaveBonesInfo from OsseousAsh - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                     }
                     else
                     {
@@ -632,9 +636,14 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
+                        if (streamReader.ReadAllBytes() is byte[] rawBuffer)
+                        {
+                            //Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from OsseousAsh ({rawBuffer.Length} bytes) - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            return rawBuffer;
+                        }
                         if (Convert.FromBase64String(Encoding.UTF8.GetString(streamReader.ReadAllBytes())) is byte[] buffer)
                         {
-                            Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from OsseousAsh ({buffer.Length} bytes) - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            //Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from OsseousAsh ({buffer.Length} bytes) - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                             return buffer;
                         }
                     }

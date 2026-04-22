@@ -446,6 +446,10 @@ namespace UD_Bones_Folder.Mod
 
         public static bool IsVersionCompatible(SaveBonesInfo SaveBonesInfo)
         {
+            // look into this. Might be getting "ghost" results.
+            if (SaveBonesInfo.ModVersion.IsNullOrEmpty())
+                return false;
+
             if (new XRL.Version(SaveBonesInfo.ModVersion) is XRL.Version bonesVersion
                 && Utils.ThisMod.Manifest.Version is XRL.Version currentVersion)
             {
@@ -716,6 +720,8 @@ namespace UD_Bones_Folder.Mod
                         stream.ReadByte();
 
                     stream.Position = 0L;
+
+                    // look at using `Convert.FromBase64String(Encoding.UTF8.GetString(` to convert the stream if the first gzip attempt fails
 
                     using var gZipStream = new GZipStream(stream, CompressionMode.Decompress);
                     await gZipStream.CopyToAsync(memory);
