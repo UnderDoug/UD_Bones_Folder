@@ -14,6 +14,7 @@ using XRL.World.AI;
 using XRL.World.Parts.Mutation;
 using XRL.World.Parts.Skill;
 using XRL.Language;
+using XRL.Collections;
 
 namespace XRL.World.Parts
 {
@@ -124,10 +125,13 @@ namespace XRL.World.Parts
         {
             if (E.ID == "AfterContentsTaken")
             {
-                foreach (var containedObject in ParentObject.Inventory.GetObjectsDirect())
-                    if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
-                        fragileObject.AttemptDamage(Force: true, Remove: fragileObject.WantsRemoveOnDamage);
-
+                if (ParentObject.Inventory.GetObjectCount() > 0)
+                {
+                    using var containedObjects = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(ParentObject.Inventory.GetObjects());
+                    foreach (var containedObject in containedObjects)
+                        if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
+                            fragileObject.AttemptDamage(Force: true, Remove: fragileObject.WantsRemoveOnDamage);
+                }
                 IsProtected = false;
                 AttemptDamage(Force: true, Remove: WantsRemoveOnDamage);
             }

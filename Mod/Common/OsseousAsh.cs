@@ -172,6 +172,7 @@ namespace UD_Bones_Folder.Mod
         public static DirectoryInfo SyncedPathInfo => DirectoryInfo.NewOnline(SyncedPath);
         
         public static string Host => "http://localhost:8000/";
+        //public static string Host => "http://osseousash.cloud/";
 
         public static string OsseousAshDirectoryName => "OsseousAsh";
 
@@ -592,6 +593,7 @@ namespace UD_Bones_Folder.Mod
                         try
                         {
                             jsonArray = JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
+                            //jsonArray = jObject["data"].ToObject<SaveBonesJSON[]>();
                         }
                         catch (Exception x)
                         {

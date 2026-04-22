@@ -94,9 +94,14 @@ namespace XRL.World.Parts
                 return false;
 
             EquipmentAPI.DropObject(ParentObject);
-            return ParentObject != null
-                && ParentObject.Holder == null
-                ;
+
+            bool wasDropped = ParentObject != null
+                && ParentObject.Holder == null;
+
+            if (wasDropped)
+                WantsToDropOnLoad = false;
+
+            return wasDropped;
         }
 
         public void AttemptDamage(bool Force = false, bool Remove = true)
