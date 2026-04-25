@@ -26,7 +26,7 @@
   
   <object Name="Lunar Reliquary" Inherits="Reliquary">
     <part Name="Render" DisplayName="@@LunarRegent@@ reliquary" Tile="Items/sw_reliquary.bmp" TileColor="&amp;W" DetailColor="B" />
-    <part Name="Description" Short="In a dusty corner of the past, nameless workers glazed striated marble and inlaid it with amethyst to house the earthly gear of some =LunarShader:Moon Sovram:*= returned." />
+    <part Name="Description" Short="In a dusty corner of the past, nameless workers glazed striated marble and inlaid it with amethyst to house the earthly gear of some =LunarShader:Moon Sovran:*= returned." />
     <part Name="Container" />
     <part Name="Inventory" />
     <part Name="Physics" Weight="300" Takeable="true" />

@@ -58,10 +58,10 @@ namespace XRL.World.Parts
 
             using var lunarRegentInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(
                 items: lunarRegent.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
+
             var lunarReliquary = GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT);
-            Utils.Log($"{nameof(lunarReliquary)}: {lunarReliquary.DebugName ?? "NO_RELIQUARY"}");
             var reliquaryInventory = lunarReliquary?.Inventory;
-            Utils.Log($"{1.Indent()}{nameof(reliquaryInventory)}: {(reliquaryInventory != null ? "inventory exists!" : "NO_INVENTORY")}");
+
             foreach (var lunarRegentItem in lunarRegentInventoryList)
             {
                 lunarRegentItem.RequirePart<UD_Bones_FragileLunarObject>();
@@ -220,10 +220,6 @@ namespace XRL.World.Parts
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(The.Game.GameID), The.Game.GameID);
-            if (BonesManager.GetThisRunPendingSaveBonesInfo() is SaveBonesInfo saveBonesInfo)
-                E.AddEntry(this, "Pending Bones", saveBonesInfo.GetDebugLines().Aggregate("", Utils.NewLineDelimitedAggregator));
-            else
-                E.AddEntry(this, "Pending Bones", "none");
             E.AddEntry(this, nameof(Options.DebugEnableNoHoarding), Options.DebugEnableNoHoarding);
             E.AddEntry(this, nameof(Options.DebugEnableNoExhuming), Options.DebugEnableNoExhuming);
             E.AddEntry(this, nameof(Options.DebugEnablePickingBones), Options.DebugEnablePickingBones);
@@ -247,6 +243,7 @@ namespace XRL.World.Parts
 
             bool willDie = Params?.Contains("die") is true;
             bool noSave = Params?.Contains("eligible") is true;
+            bool noAsk = Params?.Contains("-f") is true;
 
             if (The.Player.Level < MinimumLevelForBones)
             {
@@ -255,7 +252,10 @@ namespace XRL.World.Parts
                         $"Would you like your level increased to {MinimumLevelForBones} to complete this operation?"
                         ) == DialogResult.Yes)
                 {
+                    bool originalPopupSuppress = Popup.Suppress;
+                    Popup.Suppress = true;
                     The.Player.AwardXP((Leveler.GetXPForLevel(MinimumLevelForBones) - The.Player.Stat("XP")) + 1);
+                    Popup.Suppress = originalPopupSuppress;
                     // Add any other eligibility enforcing code here.
                 }
                 else
@@ -265,8 +265,10 @@ namespace XRL.World.Parts
                 return true;
 
             if (willDie
+                && !noAsk
                 && Popup.ShowYesNo($"You have flagged that you would like to die to make these bones.\n\n" +
-                $"Last chance to back out, this will atually, genuinely, end your run.") != DialogResult.Yes)
+                    $"Last chance to back out, this will atually, genuinely, end your run."
+                    ) != DialogResult.Yes)
                 return true;
 
             WishContext = true;

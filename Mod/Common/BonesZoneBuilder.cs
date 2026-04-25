@@ -48,15 +48,6 @@ namespace XRL.World.ZoneBuilders
                 return true;
             }
 
-            string gameID = The.Game?.GameID;
-            if (saveBonesInfo.Pending != gameID)
-            {
-                string pending = saveBonesInfo.Pending.EqualsNoCase($"{false}") ? "none (this is an error)" : saveBonesInfo.Pending;
-                Utils.Warn($"Loading mismatched {nameof(UD_Bones_Folder.Mod.SaveBonesInfo)} for this {nameof(SaveGameInfo)}: " +
-                    $"expected {pending}, got {gameID}. " +
-                    $"Zone may be nonsensically placed.");
-            }
-
             if (saveBonesInfo.Encountered > 0)
             {
                 Utils.Warn($"Loading bones previously encountered {saveBonesInfo.Encountered.Things("time")}. " +
@@ -132,7 +123,7 @@ namespace XRL.World.ZoneBuilders
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
                 try
                 {
-                    SaveBonesInfo.IncrementEncountered(saveBonesInfo);
+                    // SaveBonesInfo.IncrementEncountered(saveBonesInfo);
                 }
                 catch (Exception x)
                 {

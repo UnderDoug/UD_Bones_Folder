@@ -52,7 +52,7 @@ namespace UD_Bones_Folder.Mod
         }
         private static int? LastNonCustomChosenPermyriadChance;
 
-        private static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
+        public static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
         private static int? _CustomPermyriadChance;
         [OptionFlag] public static int CustomPermyriadChance
         {

@@ -18,6 +18,9 @@ using XRL.Core;
 using XRL.Collections;
 using UD_Bones_Folder.Mod.Events;
 using XRL.World.ZoneParts;
+using XRL.World.Capabilities;
+using XRL.World.Parts.Skill;
+using XRL.World.Parts.Mutation;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -29,15 +32,25 @@ namespace UD_Bones_Folder.Mod
         public string ZoneID;
         public Zone BonesZone;
 
+        public Guid OsseousAshID;
+        public string OsseousAshHandle;
+
         public BonesData()
         { }
 
-        public BonesData(string BonesID, string ZoneID, Zone BonesZone)
+        public BonesData(string BonesID, string ZoneID, Zone BonesZone, Guid? OsseousAshID = null, string OsseousAshHandle = null)
             : this()
         {
             this.BonesID = BonesID;
             this.ZoneID = ZoneID;
             this.BonesZone = BonesZone;
+
+            if (OsseousAshID != null
+                && !OsseousAshHandle.IsNullOrEmpty())
+            {
+                this.OsseousAshID = OsseousAshID.GetValueOrDefault();
+                this.OsseousAshHandle = OsseousAshHandle;
+            }
         }
 
         public static BonesData GetFromSaveBonesInfo(string ZoneID, SaveBonesInfo SaveBonesInfo)
@@ -55,9 +68,10 @@ namespace UD_Bones_Folder.Mod
             foreach (var zonePart in BonesZone.Parts ?? Enumerable.Empty<IZonePart>())
                 Zone.AddPart(zonePart, true);
 
-
             Dictionary<string, GameObject> lunarRegents = null;
             Dictionary<string, HashSet<UD_Bones_LunarCourtier>> lunarRegentCompanions = null;
+            using var crossGameObjects = ScopeDisposedList<CrossGameObject>.GetFromPool();
+            using var shallowRelationships = ScopeDisposedList<ShallowRelationship>.GetFromPool();
             foreach (var cell in Zone.GetCells())
             {
                 if (BonesZone.GetCell(cell.Location) is not Cell bonesCell)
@@ -73,6 +87,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (bonesCell.Objects is not ObjectRack bonesObjects)
                     continue;
+
                 for (int i = 0; i < bonesObjects.Count; i++)
                 {
                     if (bonesObjects[i] is GameObject bonesObject)
@@ -81,10 +96,17 @@ namespace UD_Bones_Folder.Mod
                         string catchFlag = "top";
                         try
                         {
-                            bonesObject = bonesObject.DeepCopy(CopyEffects: true, CopyID: false);
+                            var crossGameObject = CrossGameObject.CreateFrom(bonesObject);
+
+                            bonesObject = crossGameObject.Clone;
 
                             // Anything you want to do to objects, do it AFTER here
                             // ####################################################
+
+                            if (ShallowRelationship.TryGetFrom(crossGameObject.Original, out var shallowRelationship))
+                                shallowRelationships.Add(shallowRelationship);
+
+                            TransmuteBrain(crossGameObject.Original, crossGameObject.Clone, BonesZone, Zone);
 
                             catchFlag = nameof(Extensions.ApplyRegistrar);
                             bonesObject.ApplyRegistrar();
@@ -141,9 +163,10 @@ namespace UD_Bones_Folder.Mod
                                 catchFlag = nameof(Description);
                                 if (LunarRegent.TryGetPart(out Description description))
                                 {
-                                    string whoItWas = OsseousAsh.DefaultOsseousAshHandle;
-                                    if (OsseousAsh.Config != null)
-                                        whoItWas = $"=OsseousAshHandle:{OsseousAsh.Config.ID}:Handle:{OsseousAsh.Config.Handle}=";
+                                    string whoItWas = OsseousAshHandle ?? OsseousAsh.DefaultOsseousAshHandle;
+                                    if (OsseousAsh.Config == null
+                                        || OsseousAsh.Config.ID == OsseousAshID)
+                                        whoItWas = $"you";
 
                                     description._Short = $"It was {whoItWas}.";
                                 }
@@ -190,14 +213,38 @@ namespace UD_Bones_Folder.Mod
 
             if (!lunarRegents.IsNullOrEmpty()
                 && !lunarRegentCompanions.IsNullOrEmpty())
-                foreach ((var regentID , var lunarRegent) in lunarRegents)
+            {
+                foreach ((var regentID, var lunarRegent) in lunarRegents)
+                {
+                    if (regentID != BonesID)
+                        continue;
+
                     if (lunarRegentCompanions.TryGetValue(regentID, out var lunarCompanions)
                         && !lunarCompanions.IsNullOrEmpty())
                         foreach (var lunarCompanion in lunarCompanions)
                             lunarCompanion.PerformAllyship(lunarRegent, Force: true, Initial: true);
+                }
+            }
+
+            foreach (var crossGameObject in crossGameObjects)
+            {
+                if (crossGameObject.Clone is not GameObject clone
+                    || crossGameObject.Original is not GameObject original)
+                    continue;
+
+                if (crossGameObject.Clone == LunarRegent)
+                    continue;
+
+                if (lunarRegentCompanions.TryGetValue(BonesID, out var courtiers)
+                    && courtiers.Any(courtier => courtier.ParentObject == crossGameObject.Clone))
+                    continue;
+
+                //Transmutation.TransmuteBrain(original, clone);
+            }
 
             lunarRegents?.Clear();
             lunarRegentCompanions?.Clear();
+            crossGameObjects?.Clear();
 
             AfterBonesZoneLoadedEvent.Send(Zone, BonesID, LunarRegent, BonesZone);
             return LunarRegent != null;
@@ -216,6 +263,57 @@ namespace UD_Bones_Folder.Mod
 
             if (Actor.TryGetEffect<Dominated>(out var Effect))
                 ApplyHostility(Effect.Dominator, Brain, Depth + 1);
+        }
+
+        public static void TransmuteBrain(
+            GameObject Original,
+            GameObject Clone,
+            Zone BonesZone,
+            Zone NewZone
+            )
+        {
+            if (Original.Brain is not Brain originalBrain
+                || Clone.Brain is not Brain cloneBrain)
+                return;
+
+            Clone.PartyLeader = Original.PartyLeader;
+            if (!originalBrain.PartyMembers.IsNullOrEmpty())
+                foreach ((int partyMemberID, PartyMember partyMember) in originalBrain.PartyMembers)
+                    cloneBrain.PartyMembers[partyMemberID] = partyMember;
+
+            if (!originalBrain.Allegiance.IsNullOrEmpty())
+                (originalBrain.Allegiance, cloneBrain.Allegiance) = (cloneBrain.Allegiance, originalBrain.Allegiance);
+
+            TransferPartyInZone(Original, Clone, BonesZone);
+            TransferPartyInZone(Original, Clone, NewZone);
+        }
+
+        public static void TransferPartyInZone(GameObject Original, GameObject Clone, Zone Zone)
+        {
+            foreach (GameObject gameObject in Zone.YieldObjects())
+            {
+                if (gameObject.PartyLeader != Original)
+                    continue;
+
+                if (gameObject.TryGetEffect<Proselytized>(out var proselytized))
+                {
+                    if (!Clone.HasPart<Persuasion_Proselytize>())
+                        continue;
+
+                    proselytized.Proselytizer = Clone;
+                }
+
+                if (gameObject.TryGetEffect<Beguiled>(out var beguiled))
+                {
+                    if (!Clone.HasPart<Beguiling>())
+                        continue;
+
+                    beguiled.Beguiler = Clone;
+                }
+
+                gameObject.PartyLeader = Clone;
+                gameObject.Brain.Goals.Clear();
+            }
         }
 
         public void Cremate()

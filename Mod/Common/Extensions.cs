@@ -34,7 +34,7 @@ namespace UD_Bones_Folder.Mod
             this XRLGame Game,
             IDeathEvent E,
             GameObject MoonKing,
-            DirectoryInfo.DirectoryType DirectoryType
+            FileLocationData.LocationType DirectoryType
             )
         {
             var localTimeNow = DateTime.Now;
@@ -211,10 +211,10 @@ namespace UD_Bones_Folder.Mod
                     {
                         locationBoxTextSkin.SetText(bonesInfo.DirectoryInfo.Type switch
                         {
-                            DirectoryInfo.DirectoryType.Synced => "synced".Colored("G"),
-                            DirectoryInfo.DirectoryType.Local => "local".Colored("W"),
-                            DirectoryInfo.DirectoryType.Mod => "modded".Colored("C"),
-                            DirectoryInfo.DirectoryType.Online => "online".Colored("Y"),
+                            FileLocationData.LocationType.Synced => "synced".Colored("G"),
+                            FileLocationData.LocationType.Local => "local".Colored("W"),
+                            FileLocationData.LocationType.Mod => "modded".Colored("C"),
+                            FileLocationData.LocationType.Online => "online".Colored("Y"),
                             _ => "!?".Colored("R"),
                         });
                         break;
@@ -771,6 +771,11 @@ namespace UD_Bones_Folder.Mod
 
         public static bool TryEnsureObject(this GameObjectReference GameObjectReference, out GameObject Object)
         {
+            if (GameObjectReference == null)
+            {
+                Object = null;
+                return false;
+            }
             if (!GameObject.Validate(ref GameObjectReference.Object))
             {
                 if (GameObject.FindByID(GameObjectReference.ID) is GameObject foundObject)
@@ -804,5 +809,62 @@ namespace UD_Bones_Folder.Mod
         public static byte[] ReadAllBytes(this System.IO.StreamReader StreamReader)
             => StreamReader.ReadAllBytesAsync().WaitResult()
             ;
+
+        public static void SplitOut(this string String, string Delimiter, out string Key, out string Value)
+        {
+            Key = null;
+            Value = null;
+
+            if (String.IsNullOrEmpty())
+                return;
+
+            if (Delimiter.IsNullOrEmpty())
+                return;
+
+            if (!String.Contains(Delimiter))
+                return;
+
+            var pieces = String.Split(Delimiter);
+
+            Key = pieces[0];
+
+            var latterPieces = pieces[1..];
+            Value = latterPieces.Aggregate("", (a, n) => Utils.DelimitedAggregator(a, n, Delimiter));
+        }
+
+        public static bool TrySplitOut(this string String, string Delimiter, out string Key, out string Value)
+        {
+            String.SplitOut(Delimiter, out Key, out Value);
+            return !Key.IsNullOrEmpty()
+                && !Value.IsNullOrEmpty()
+                ;
+        }
+
+        public static bool IsEmptyOrDefault(this Guid Guid)
+            => Guid == default
+            || Guid == Guid.Empty
+            ;
+
+        public static StringBuilder AppendPair(this StringBuilder SB, object Key, object Value)
+            => SB.Append(Key?.ToString()).Append(": ").Append(Value?.ToString())
+            ;
+
+        public static char GetNextHotKey(this IEnumerable<char> Source)
+        {
+            char lastHotkey = Source.LastOrDefault();
+            if (lastHotkey != ' ')
+            {
+                if (lastHotkey == '\0')
+                    lastHotkey = 'a';
+
+                while (Source.Contains(lastHotkey)
+                    && lastHotkey <= 'z')
+                    lastHotkey++;
+
+                if (lastHotkey > 'z')
+                    lastHotkey = ' ';
+            }
+            return lastHotkey;
+        }
     }
 }

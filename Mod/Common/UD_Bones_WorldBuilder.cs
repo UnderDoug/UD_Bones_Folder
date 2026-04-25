@@ -152,7 +152,7 @@ namespace XRL.World.WorldBuilders
                         ZoneZ: Stat.Random(15, 20));
                 }
 
-                SaveBonesInfo.SetPending(pickedBones, The.Game?.GameID);
+                // SaveBonesInfo.SetPending(pickedBones, The.Game?.GameID);
 
                 // The.ZoneManager.ClearZoneBuilders(BoneZoneID);
                 // The.ZoneManager.SetZoneProperty(BoneZoneID, "SkipTerrainBuilders", true);

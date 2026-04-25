@@ -75,7 +75,7 @@ namespace XRL.World.Parts
             if (baseReplacement.Contains("@@LunarRegent@@"))
             {
                 E.ReplacePrimaryBase(baseReplacement
-                    .Replace("@@LunarRegent@@", BakedLunarRegentName ?? MissingLunarRegent)
+                    .Replace("@@LunarRegent@@", Grammar.MakePossessive(BakedLunarRegentName ?? MissingLunarRegent))
                     .StartReplace()
                     .ToString());
             }

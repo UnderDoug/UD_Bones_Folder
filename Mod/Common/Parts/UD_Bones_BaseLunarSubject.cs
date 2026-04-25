@@ -20,7 +20,8 @@ namespace XRL.World.Parts
 
         public string BakedLunarRegentName;
 
-        protected GameObjectReference LunarRegentReference = new();
+        private GameObjectReference _LunarRegentReference;
+        protected GameObjectReference LunarRegentReference => _LunarRegentReference ??= new();
 
         public int LunarRegentBaseID => LunarRegent?.BaseID ?? -1;
         public GameObject LunarRegent
@@ -53,16 +54,20 @@ namespace XRL.World.Parts
         {
             var part = base.DeepCopy(Parent, MapInv) as UD_Bones_BaseLunarSubject;
             part.BakedLunarRegentName = null;
-            part.LunarRegentReference = null;
+            part._LunarRegentReference = null;
             return part;
         }
 
         public virtual void SetLunarRegentReference(GameObject LunarRegent)
         {
-            LunarRegentReference ??= new();
             LunarRegentReference.Set(LunarRegent);
             if (LunarRegent != null)
-                BakedLunarRegentName = $"=subject.RegalTitle= {LunarRegent.BaseDisplayName}";
+            {
+                BakedLunarRegentName = $"=subject.RegalTitle= {LunarRegent.BaseDisplayName}"
+                    .StartReplace()
+                    .AddObject(LunarRegent)
+                    .ToString();
+            }
         }
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)

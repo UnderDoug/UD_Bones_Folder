@@ -150,10 +150,6 @@ namespace UD_Bones_Folder.Mod
 
         public BonesSpec BonesSpec;
 
-        public string Pending => GetBonesJSON()?.Pending;
-
-        public bool IsPending => Pending?.EqualsNoCase($"{false}") is not true;
-
         public int Encountered => GetBonesJSON()?.Encountered ?? -1;
 
         public bool IsMad => GetBonesJSON().IsCharIconSwapped()
@@ -185,40 +181,51 @@ namespace UD_Bones_Folder.Mod
         public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
         public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
 
-        private DirectoryInfo _DirectoryInfo = DirectoryInfo.Empty;
-        public DirectoryInfo DirectoryInfo
+        private FileLocationData _DirectoryInfo;
+        public FileLocationData DirectoryInfo
         {
             get
             {
-                if (_DirectoryInfo == DirectoryInfo.Empty
+                if (_DirectoryInfo == null
                     && GetBonesJSON() is SaveBonesJSON bonesJSON
                     && Directory != null)
                 {
-                    DirectoryInfo.DirectoryType type = DirectoryInfo.NewAssumed(Directory).Type;
-                    if (bonesJSON.DirectoryType != DirectoryInfo.DirectoryType.None)
+                    using var assumedDir = FileLocationData.NewAssumed(Directory);
+                    FileLocationData.LocationType type = assumedDir.Type;
+                    if (bonesJSON.DirectoryType != FileLocationData.LocationType.None)
                         type = bonesJSON.DirectoryType;
 
-                    _DirectoryInfo = new(type, Directory);
+                    _DirectoryInfo = new(type, assumedDir.Path, assumedDir.Host);
                 }
                 return _DirectoryInfo;
             }
         }
 
-        public bool IsOnline => DirectoryInfo.Type == DirectoryInfo.DirectoryType.Online;
+        public OsseousAsh.Host Host;
 
-        public bool IsCrematable => DirectoryInfo.Type < DirectoryInfo.DirectoryType.Mod;
+        public bool IsOnline
+            => DirectoryInfo.Type == FileLocationData.LocationType.Online
+            || Host != null
+            ;
+
+        public bool IsCrematable
+            => DirectoryInfo.Type < FileLocationData.LocationType.Mod
+            && DirectoryInfo.Exists()
+            ;
 
         public SaveBonesInfo()
             : base()
         { }
 
         public string GetName()
-            => $"{(IsMad ? "Mad " : null)}{Name}".StartReplace().ToString();
-
+            => $"{(IsMad ? "Mad " : null)}{Name}"
+                .StartReplace()
+                .ToString()
+            ;
 
         private static async void SafeWriteSaveBonesJSON(string JSONFilePath, SaveBonesJSON bonesJSON, bool RequireExisting = true)
         {
-            if (bonesJSON.DirectoryType >= DirectoryInfo.DirectoryType.Mod)
+            if (bonesJSON.DirectoryType >= FileLocationData.LocationType.Mod)
             {
                 // put some PUT request here for "Online" once that's set up.
                 // put some config-like writing here for "Mod" once that's set up.
@@ -239,41 +246,45 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static void SetPending(SaveBonesInfo BonesInfo, string Pending)
+        private async void SafeWriteSaveBonesJSON(bool RequireExisting = true)
         {
-            if (Pending.IsNullOrEmpty())
-                Pending = $"{false}";
-
-            if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
             {
-                Utils.Warn($"Attempted to set {nameof(SaveBonesJSON)}.{nameof(Pending)} to {Pending ?? $"{false}"} for null {nameof(SaveBonesJSON)}.");
+                Utils.Warn($"Attempted to safe write null {nameof(SaveBonesJSON)}.");
                 return;
             }
 
-            if (bonesJSON.Pending.EqualsNoCase($"{false}") != Pending.EqualsNoCase($"{false}"))
+            if (bonesJSON.DirectoryType >= FileLocationData.LocationType.Mod)
             {
-                bonesJSON.Pending = Pending;
-                SafeWriteSaveBonesJSON(Path.Combine(BonesInfo.Directory, BonesInfo.JSONFilePath), bonesJSON);
+                // put some PUT request here for "Online" once that's set up.
+                // put some config-like writing here for "Mod" once that's set up.
+                return;
             }
-            else
+
+            if (!RequireExisting
+                || await File.ExistsAsync(JSONFilePath))
             {
-                string toValue = "a GameID when it already has one";
-                if (bonesJSON.Pending.EqualsNoCase($"{false}"))
-                    toValue = $"\"{false}\" when it already is";
-                Utils.Warn($"Attempted to set {BonesInfo.DisplayDirectory} {nameof(SaveBonesJSON)}.{nameof(Pending)} to {toValue}.");
+                bool swappedIcon = bonesJSON.IsCharIconSwapped();
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
+
+                File.WriteAllText(JSONFilePath, JsonConvert.SerializeObject(bonesJSON, Formatting.Indented));
+
+                if (swappedIcon)
+                    bonesJSON.HotSwapCharIcon();
             }
         }
 
-        public static void IncrementEncountered(SaveBonesInfo BonesInfo)
+        public void IncrementEncountered()
         {
-            if (BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
             {
                 Utils.Warn($"Attempted to increment {nameof(SaveBonesJSON)}.{nameof(SaveBonesJSON.Encountered)} for null {nameof(SaveBonesJSON)}.");
                 return;
             }
 
             bonesJSON.Encountered++;
-            SafeWriteSaveBonesJSON(Path.Combine(BonesInfo.Directory, BonesInfo.JSONFilePath), bonesJSON);
+            SafeWriteSaveBonesJSON(Path.Combine(Directory, JSONFilePath), bonesJSON);
         }
 
         public static void RepairBonesSpec(SaveBonesInfo BonesInfo, BonesSpec BonesSpec)
@@ -301,7 +312,7 @@ namespace UD_Bones_Folder.Mod
                     if (Path.Combine(Directory, infoFile) is string path
                         && File.Exists(path))
                     {
-                        return await SaveBonesJSON.ReadSaveBonesJson(Directory, path);
+                        return await SaveBonesJSON.ReadSaveBonesJson(Directory, infoFile);
                     }
                 }
                 if (!Platform.IO.Directory.EnumerateFiles(Directory).Any(f => !f.EndsWith(".json")))
@@ -331,8 +342,49 @@ namespace UD_Bones_Folder.Mod
         }
 
         public SaveBonesJSON GetBonesJSON()
-            => json as SaveBonesJSON;
+            => json as SaveBonesJSON
+            ;
 
+        public async Task<string> GetBonesFilePathAsync()
+        {
+            string bonesPath = FullBonesPathSavGz;
+
+            if (!IsOnline)
+            {
+                if (!await File.ExistsAsync(bonesPath))
+                {
+                    bonesPath = FullBonesPathSav;
+                    if (!await File.ExistsAsync(bonesPath))
+                    {
+                        Utils.Error($"No saved bones exist. ({DisplayDirectory})");
+                        return null;
+                    }
+                }
+                return bonesPath;
+            }
+            return null;
+        }
+
+        public string GetBonesFilePath()
+            => GetBonesFilePathAsync().WaitResult()
+            ;
+
+        public async Task<System.IO.Stream> GetSavGzStreamAsync()
+        {
+            if ((await GetBonesFilePathAsync()) is string bonesPath)
+                return File.OpenRead(bonesPath);
+
+            byte[] cloudBytes = Host.GetBonesSavGz(ID);
+
+            return !cloudBytes.IsNullOrEmpty()
+                ? new System.IO.MemoryStream(cloudBytes)
+                : null
+                ;
+        }
+
+        public System.IO.Stream GetSavGzStream()
+            => GetSavGzStreamAsync().WaitResult()
+            ;
 
         public IEnumerable<string> GetDebugLines()
         {
@@ -385,9 +437,6 @@ namespace UD_Bones_Folder.Mod
         public bool IsEligibleForCurrentSave(bool Strict = false)
         {
             if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
-                return false;
-
-            if (IsPending)
                 return false;
 
             if (ID == The.Game.GameID)

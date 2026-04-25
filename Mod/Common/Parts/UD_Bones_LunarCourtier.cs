@@ -14,6 +14,7 @@ using XRL.World.AI;
 using XRL.World.Parts.Mutation;
 using XRL.World.Parts.Skill;
 using XRL.Language;
+using XRL.Collections;
 
 namespace XRL.World.Parts
 {
@@ -229,7 +230,6 @@ namespace XRL.World.Parts
         {
             var part = base.DeepCopy(Parent, MapInv) as UD_Bones_LunarCourtier;
             part.DoneAllyship = false;
-            part.LunarRegentReference = null;
             part.AdjectiveCache = null;
             part._BakedLunarAppointment = null;
             return part;
@@ -262,12 +262,28 @@ namespace XRL.World.Parts
                 {
                     DoneAllyship = true;
 
+                    var courtierParty = brain.PartyMembers;
+
                     if (Initial)
                         brain.Allegiance?.Clear();
 
                     SetLunarRegentReference(LunarRegent);
                     brain.TakeAllegiance(LunarRegent, allyReason);
                     brain.SetPartyLeader(LunarRegent, Silent: true);
+
+                    if (!courtierParty.Values.IsNullOrEmpty())
+                    {
+                        using var partyMembers = ScopeDisposedList<PartyMember>.GetFromPoolFilledWith(courtierParty.Values);
+                        foreach (var partyMember in partyMembers)
+                        {
+                            if (partyMember.Reference?.Object is not GameObject partyMemberObject
+                                || partyMemberObject == LunarRegent
+                                || partyMemberObject.Brain is not Brain partyMemberBrain)
+                                continue;
+
+                            partyMemberBrain.SetPartyLeader(ParentObject, Silent: true);
+                        }
+                    }
 
                     string parentObjectName = ParentObject?.DebugName ?? "NO_COURTIER";
                     string lunarRegentName = LunarRegent?.DebugName ?? "NO_REGENT";
