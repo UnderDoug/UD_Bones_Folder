@@ -48,11 +48,6 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public HashSet<Host> Hosts = new()
-            {
-                Host.DefaultHost,
-            };
-
             public int CustomPermyriadChance = Options.DefaultPermyriadChance;
 
             [JsonIgnore]
@@ -75,42 +70,29 @@ namespace UD_Bones_Folder.Mod
 
             public static async Task<Configuration> Read()
             {
-                if (TryFindBestOsseousAshPath(out string filePath))
-                    return await ReadFromFile(filePath);
+                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
+                    return await fileLocationData.ReadFromFileAsync<Configuration>(fileName);
 
                 return null;
             }
 
             public static async Task<Configuration> ReadOrNew()
             {
-                if (TryFindBestOsseousAshPath(out string filePath))
+                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
                 {
-                    if (!(await File.ExistsAsync(filePath))
-                        || await ReadFromFile(filePath) is not Configuration configJSON)
+                    if (await fileLocationData.ReadFromFileAsync<Configuration>(fileName) is not Configuration configJSON)
                     {
                         configJSON = new Configuration
                         {
                             AskAtStartup = true,
                             Handle = DefaultOsseousAshHandle,
                             ID = Guid.NewGuid(),
-                            Hosts = new HashSet<Host>
-                            {
-                                Host.DefaultHost,
-                            },
                         };
                         Options.EnableOsseousAshStartupPopup = true;
-                        configJSON.WriteToFile(filePath);
+                        configJSON.WriteToFile(fileLocationData.WithFileName(fileName));
                         return configJSON;
                     }
                     Options.EnableOsseousAshStartupPopup = configJSON.AskAtStartup;
-                    if (configJSON.Hosts.IsNullOrEmpty())
-                    {
-                        configJSON.WriteHosts(
-                            Hosts: new HashSet<Host>
-                            {
-                                Host.DefaultHost,
-                            });
-                    }
                     return configJSON;
                 }
                 return null;
@@ -181,8 +163,8 @@ namespace UD_Bones_Folder.Mod
 
             public void Write()
             {
-                if (TryFindBestOsseousAshPath(out string filePath))
-                    WriteToFile(filePath);
+                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
+                    WriteToFile(fileLocationData.WithFileName(fileName));
             }
 
             public void WriteAskAtStartup(bool Value, bool Propagate = true)
@@ -236,52 +218,6 @@ namespace UD_Bones_Folder.Mod
                     this.ID = ID;
                     Write();
                 }
-            }
-
-            public void WriteHosts(HashSet<Host> Hosts)
-            {
-                this.Hosts ??= new();
-                Hosts ??= new();
-                if (!this.Hosts.SequenceEqual(Hosts))
-                {
-                    this.Hosts.Clear();
-                    this.Hosts.Union(Hosts);
-                    Write();
-                }
-            }
-
-            public void WriteAddHost(Host Host)
-            {
-                if (Hosts.Add(Host))
-                    Write();
-            }
-
-            public void WriteAddHosts(params Host[] Hosts)
-            {
-                bool any = false;
-                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
-                    if (this.Hosts.Add(host))
-                        any = true;
-
-                if (any)
-                    Write();
-            }
-
-            public void WriteRemoveHost(Host Host)
-            {
-                if (Hosts.Remove(Host))
-                    Write();
-            }
-
-            public void WriteRemoveHosts(params Host[] Hosts)
-            {
-                bool any = false;
-                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
-                    if (this.Hosts.Remove(host))
-                        any = true;
-
-                if (any)
-                    Write();
             }
 
             public void WriteCustomPermyriadChance(int CustomPermyriadChance)

@@ -209,14 +209,9 @@ namespace UD_Bones_Folder.Mod
                     if (locationBoxTextSkin.name == "tct"
                         || locationBoxTextSkin.gameObject.name == "tct")
                     {
-                        locationBoxTextSkin.SetText(bonesInfo.DirectoryInfo.Type switch
-                        {
-                            FileLocationData.LocationType.Synced => "synced".Colored("G"),
-                            FileLocationData.LocationType.Local => "local".Colored("W"),
-                            FileLocationData.LocationType.Mod => "modded".Colored("C"),
-                            FileLocationData.LocationType.Online => "online".Colored("Y"),
-                            _ => "!?".Colored("R"),
-                        });
+                        string typeColor = bonesInfo.DirectoryInfo.GetFileLocationDataTypeColor();
+                        string text = bonesInfo.DirectoryInfo.Type.ToString().ToLower().Colored(typeColor);
+                        locationBoxTextSkin.SetText(text);
                         break;
                     }
                 }
@@ -866,5 +861,9 @@ namespace UD_Bones_Folder.Mod
             }
             return lastHotkey;
         }
+
+        public static string GetColoredString(this FileLocationData.LocationType Type)
+            => Type.ToString().Colored(FileLocationData.GetFileLocationDataTypeColor(Type))
+            ;
     }
 }

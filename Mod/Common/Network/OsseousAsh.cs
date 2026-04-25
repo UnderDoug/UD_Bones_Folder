@@ -66,7 +66,7 @@ namespace UD_Bones_Folder.Mod
         public static FileLocationData LocalFileLocation => FileLocationData.NewLocal(LocalPath);
         public static FileLocationData SyncedFileLocation => FileLocationData.NewSync(SyncedPath);
 
-        public static HashSet<Host> Hosts = new HashSet<Host>
+        /*public static HashSet<Host> Hosts = new HashSet<Host>
         {
             new Host
             {
@@ -80,14 +80,15 @@ namespace UD_Bones_Folder.Mod
                 Port = null,
                 Encrypted = true
             }
-        };
+        };*/
 
         //public static string Host => "http://localhost:8000/";
         //public static string Host => "http://osseousash.cloud/";
 
         public static string OsseousAshDirectoryName => "OsseousAsh";
 
-        public static string OsseousAshFileName => $"{OsseousAshDirectoryName}.json";
+        public static string ConfigFileName => $"{nameof(Configuration)}.json";
+        public static string HostsFileName => $"{nameof(Hosts)}.json";
 
         public static string DefaultOsseousAshHandle => "{{K|A Mysterious Stranger}}";
 
@@ -97,6 +98,9 @@ namespace UD_Bones_Folder.Mod
 
         private static Configuration _Config;
         public static Configuration Config => _Config ??= Configuration.ReadOrNew()?.WaitResult();
+
+        private static Rack<HostCollection> _Hosts;
+        public static Rack<HostCollection> Hosts => _Hosts ??= FindHostCollections()?.WaitResult();
 
         public static bool WantToAsk
             => Options.EnableOsseousAshStartupPopup
@@ -114,39 +118,49 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static bool TryFindBestOsseousAshPath(out string FilePath)
+        [ModSensitiveCacheInit]
+        public static void EnsureHosts()
         {
-            string currentPath = null;
-            FilePath = null;
-            foreach (var osseousAshPath in GetOsseousAshPaths())
+            _ = Hosts;
+        }
+
+        public static bool TryFindBestOsseousAshPath(out FileLocationData FileLocationData, out string FileName)
+        {
+            FileLocationData currentData = null;
+            FileLocationData = null;
+            FileName = ConfigFileName;
+            foreach (var osseousAshFileData in GetOsseousAshFileLocationData())
             {
+                if (osseousAshFileData.Type >= FileLocationData.LocationType.Mod)
+                    continue;
+
                 try
                 {
-                    currentPath = osseousAshPath;
-                    if (!currentPath.DirectoryExistsSafe())
+                    currentData = osseousAshFileData;
+                    if (currentData?.Exists() is false)
                     {
-                        FilePath = Path.Combine(osseousAshPath, OsseousAshFileName);
+                        FileLocationData = osseousAshFileData;
 
-                        if (File.Exists(FilePath))
+                        if (File.Exists(FileLocationData.WithFileName(FileName)))
                             break;
 
-                        FilePath = null;
+                        FileLocationData = null;
                     }
                 }
                 catch (Exception x)
                 {
-                    Utils.Error(currentPath, x);
+                    Utils.Error(currentData, x);
                 }
             }
 
-            if (FilePath.IsNullOrEmpty())
-                currentPath = SyncedFileLocation;
+            if (FileLocationData != null)
+                currentData = SyncedFileLocation;
 
-            if (!currentPath.DirectoryExistsSafe())
+            if (currentData?.Exists() is false)
             {
                 try
                 {
-                    Directory.CreateDirectory(currentPath);
+                    Directory.CreateDirectory(currentData);
                 }
                 catch (Exception x)
                 {
@@ -154,29 +168,29 @@ namespace UD_Bones_Folder.Mod
                     return false;
                 }
             }
-            if (!currentPath.DirectoryExistsSafe())
+            if (currentData?.Exists() is false)
                 return false;
 
-            if (FilePath.IsNullOrEmpty())
-                FilePath = Path.Combine(currentPath, OsseousAshFileName);
+            if (FileLocationData == null)
+                FileLocationData = currentData;
 
             return true;
         }
 
-        public static IEnumerable<string> GetOsseousAshPaths(bool Ensure = false)
+        public static IEnumerable<FileLocationData> GetOsseousAshFileLocationData(bool Ensure = false)
         {
             if (Ensure)
             {
+                SyncedFileLocation.EnsureExists();
                 yield return SyncedFileLocation;
+
+                LocalFileLocation.EnsureExists();
                 yield return LocalFileLocation;
             }
             else
             {
-                if (SyncedFileLocation.Path is string syncPath)
-                    yield return syncPath;
-
-                if (LocalFileLocation.Path is string localPath)
-                    yield return localPath;
+                yield return SyncedFileLocation;
+                yield return LocalFileLocation;
             }
         }
 
@@ -300,6 +314,42 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static async Task<Rack<HostCollection>> FindHostCollections()
+        {
+            Rack<HostCollection> hosts = null;
+            foreach (var fileLocationData in GetOsseousAshFileLocationData())
+            {
+                if (fileLocationData.FileExists(HostsFileName))
+                {
+                    hosts ??= new();
+                    var hostCollection = await fileLocationData.ReadFromFileAsync<HostCollection>(HostsFileName);
+                    hostCollection.LocationData = fileLocationData;
+                    hosts.Add(hostCollection);
+                }
+            }
+            if (hosts.IsNullOrEmpty()
+                && await HostCollection.ReadOrNew() is HostCollection defaultHosts)
+            {
+                hosts ??= new();
+                hosts.Add(defaultHosts);
+            }
+            return hosts;
+        }
+
+        public static IEnumerable<Host> AllHosts()
+        {
+            foreach (var hostsCollection in Hosts ?? Enumerable.Empty<HostCollection>())
+                foreach (var host in hostsCollection ?? Enumerable.Empty<Host>())
+                    yield return host;
+        }
+
+        public static IEnumerable<KeyValuePair<FileLocationData, Host>> AllHostsWithLocation()
+        {
+            foreach (var hostCollection in Hosts ?? Enumerable.Empty<HostCollection>())
+                foreach (var host in hostCollection ?? Enumerable.Empty<Host>())
+                    yield return new (hostCollection.LocationData, host);
+        }
+
         public static async Task<bool> TryUploadBones(
             string BonesID,
             SaveBonesJSON SaveBonesJSON,
@@ -309,7 +359,7 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 bool any = false;
-                foreach (var host in Hosts)
+                foreach (var host in AllHosts())
                 {
                     try
                     {
@@ -336,7 +386,7 @@ namespace UD_Bones_Folder.Mod
         public static List<SaveBonesInfo> GetBonesInfos()
         {
             List<SaveBonesInfo> saveBonesInfos = null;
-            foreach (var host in Hosts)
+            foreach (var host in AllHosts())
             {
                 if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
                     || saveBonesInfosFromHost.IsNullOrEmpty())

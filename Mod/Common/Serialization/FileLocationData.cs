@@ -57,6 +57,20 @@ namespace UD_Bones_Folder.Mod
             : this(Source.Type, Source.Path, Source.Host)
         { }
 
+        public static string GetFileLocationDataTypeColor(LocationType Type)
+            => Type switch
+            {
+                LocationType.Synced => "G",
+                LocationType.Local => "W",
+                LocationType.Mod => "C",
+                LocationType.Online => "Y",
+                _ => "R",
+            };
+
+        public string GetFileLocationDataTypeColor()
+            => GetFileLocationDataTypeColor(Type)
+            ;
+
         public static FileLocationData Clone(FileLocationData DirectoryInfo)
             => new(DirectoryInfo)
             ;
@@ -121,6 +135,15 @@ namespace UD_Bones_Folder.Mod
             };
         }
 
+        public string SanitiseForDisplay(string FileName = null)
+        {
+            string output = Path;
+            if (FileName.IsNullOrEmpty())
+                output = WithFileName(FileName);
+
+            return DataManager.SanitizePathForDisplay(output);
+        }
+
         public async Task<bool> ExistsAsync()
             => !Path.IsNullOrEmpty()
             && await File.ExistsAsync(Path)
@@ -164,7 +187,35 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public string WithFileName(string FileName)
-            => Platform.IO.Path.Combine(this, FileName);
+            => Platform.IO.Path.Combine(this, FileName)
+            ;
+
+        public async Task<bool> FileExistsAsync(string FileName)
+            => !FileName.IsNullOrEmpty()
+            && await File.ExistsAsync(WithFileName(FileName))
+            ;
+
+        public bool FileExists(string FileName)
+            => FileExistsAsync(FileName).WaitResult()
+            ;
+
+        public async Task<T> ReadFromFileAsync<T>(string FileName)
+        {
+            T json = default;
+            if (await FileExistsAsync(FileName))
+            {
+                try
+                {
+                    json = await File.ReadAllJsonAsync<T>(WithFileName(FileName));
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Reading File {SanitiseForDisplay(FileName)}", x);
+                    json = default;
+                }
+            }
+            return json;
+        }
 
         public override string ToString()
             => this;

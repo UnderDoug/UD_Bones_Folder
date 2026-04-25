@@ -204,7 +204,7 @@ namespace UD_Bones_Folder.Mod
                 catch (Exception x)
                 {
                     MetricsManager.LogCallingModError(x);
-                    return FileLocationData.Empty;
+                    return null;
                 }
             }
             return BonesDirectory;
@@ -225,7 +225,7 @@ namespace UD_Bones_Folder.Mod
 
             if (!NonRemoteOnly
                 && Options.EnableOsseousAshDownloads)
-                foreach (var bonesPath in OsseousAsh.GetOsseousAshPaths())
+                foreach (var bonesPath in OsseousAsh.GetOsseousAshFileLocationData())
                     yield return bonesPath;
         }
 
