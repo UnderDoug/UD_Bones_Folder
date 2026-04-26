@@ -86,7 +86,7 @@ namespace UD_Bones_Folder.Mod
                 Path = Path,
             };
 
-        public static FileLocationData NewSync(string Path)
+        public static FileLocationData NewSynced(string Path)
             => new FileLocationData
             {
                 Type = LocationType.Synced,
@@ -120,7 +120,7 @@ namespace UD_Bones_Folder.Mod
                 return NewMod(Path);
 
             if (Path.Contains(XRLCore.SyncedPath))
-                return NewSync(Path);
+                return NewSynced(Path);
 
             if (Path.Contains(XRLCore.SavePath))
                 return NewLocal(Path);
@@ -138,27 +138,23 @@ namespace UD_Bones_Folder.Mod
         public string SanitiseForDisplay(string FileName = null)
         {
             string output = Path;
-            if (FileName.IsNullOrEmpty())
+            if (!FileName.IsNullOrEmpty())
                 output = WithFileName(FileName);
 
             return DataManager.SanitizePathForDisplay(output);
         }
 
-        public async Task<bool> ExistsAsync()
-            => !Path.IsNullOrEmpty()
-            && await File.ExistsAsync(Path)
-            ;
-
         public bool Exists()
-            => ExistsAsync().WaitResult() is true
+            => !Path.IsNullOrEmpty()
+            && Directory.Exists(Path)
             ;
 
-        public async Task<string> EnsureExistsAsync()
+        public string EnsureExists()
         {
             if (Type == LocationType.Online
                 && !Options.EnableOsseousAshDownloads)
             {
-
+                // consider adding code here to check "canUp" or "status"
                 return null;
             }
 
@@ -166,7 +162,7 @@ namespace UD_Bones_Folder.Mod
                 || Type == LocationType.None)
                 return null;
 
-            if (await ExistsAsync())
+            if (Exists())
                 return Path;
 
             try
@@ -182,17 +178,13 @@ namespace UD_Bones_Folder.Mod
             return Path;
         }
 
-        public string EnsureExists()
-            => EnsureExistsAsync().WaitResult()
-            ;
-
         public string WithFileName(string FileName)
             => Platform.IO.Path.Combine(this, FileName)
             ;
 
         public async Task<bool> FileExistsAsync(string FileName)
             => !FileName.IsNullOrEmpty()
-            && await File.ExistsAsync(WithFileName(FileName))
+            && (await File.ExistsAsync(WithFileName(FileName)))
             ;
 
         public bool FileExists(string FileName)
@@ -201,20 +193,35 @@ namespace UD_Bones_Folder.Mod
 
         public async Task<T> ReadFromFileAsync<T>(string FileName)
         {
-            T json = default;
             if (await FileExistsAsync(FileName))
             {
                 try
                 {
-                    json = await File.ReadAllJsonAsync<T>(WithFileName(FileName));
+                    if (JsonConvert.DeserializeObject<T>(await File.ReadAllTextAsync(WithFileName(FileName))) is T json)
+                        return json;
                 }
                 catch (Exception x)
                 {
                     Utils.Error($"Reading File {SanitiseForDisplay(FileName)}", x);
-                    json = default;
                 }
             }
-            return json;
+            return default;
+        }
+
+        public void Write<T>(string FileName, T Object, Formatting formatting)
+        {
+            if (Type <= LocationType.Synced)
+            {
+                if (Exists())
+                {
+                    File.WriteAllText(
+                        path: WithFileName(FileName),
+                        content: JsonConvert.SerializeObject(Object, formatting));
+                }
+            }
+            else
+                Utils.Warn($"Attempted to {nameof(Write)} {FileName} to non-writable location {SanitiseForDisplay()}: " +
+                    $"{new InvalidOperationException("write location must be writable")}");
         }
 
         public override string ToString()
@@ -261,13 +268,13 @@ namespace UD_Bones_Folder.Mod
             => !(X == Y)
             ;
 
-        public static implicit operator string(FileLocationData DirectoryInfo)
-            => DirectoryInfo.Type switch
+        public static implicit operator string(FileLocationData FileLocationData)
+            => FileLocationData.Type switch
             {
-                LocationType.Online => DirectoryInfo.Host,
-                LocationType.Mod => DirectoryInfo.Path,
-                _ => DirectoryInfo.EnsureExists()
-                    ?? DirectoryInfo.Path,
+                LocationType.Online => FileLocationData.Host,
+                LocationType.Mod => FileLocationData.Path,
+                _ => FileLocationData.EnsureExists()
+                    ?? FileLocationData.Path,
             };
     }
 }

@@ -55,7 +55,7 @@ namespace UD_Bones_Folder.Mod
 
         public static string BonesSavePath => DataManager.SavePath("Bones");
 
-        public static FileLocationData BonesSaveSyncInfo => FileLocationData.NewSync(BonesSyncPath);
+        public static FileLocationData BonesSaveSyncInfo => FileLocationData.NewSynced(BonesSyncPath);
 
         public static FileLocationData BonesSavePathInfo => FileLocationData.NewLocal(BonesSavePath);
 
@@ -186,7 +186,7 @@ namespace UD_Bones_Folder.Mod
         {
             if (BonesDirectory == null)
             {
-                BonesDirectory = FileLocationData.NewSync(Path.Combine(BonesSyncPath, GameID));
+                BonesDirectory = FileLocationData.NewSynced(Path.Combine(BonesSyncPath, GameID));
                 try
                 {
                     BonesDirectory.EnsureExists();
@@ -194,7 +194,7 @@ namespace UD_Bones_Folder.Mod
                 catch (Exception x)
                 {
                     MetricsManager.LogCallingModError(x);
-                    BonesDirectory = FileLocationData.NewSync(Path.Combine(BonesSavePath, GameID));
+                    BonesDirectory = FileLocationData.NewSynced(Path.Combine(BonesSavePath, GameID));
                 }
 
                 try

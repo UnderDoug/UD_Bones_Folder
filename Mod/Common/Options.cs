@@ -53,17 +53,11 @@ namespace UD_Bones_Folder.Mod
         private static int? LastNonCustomChosenPermyriadChance;
 
         public static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
-        private static int? _CustomPermyriadChance;
+
         [OptionFlag] public static int CustomPermyriadChance
         {
-            get => _CustomPermyriadChance ?? DefaultPermyriadChance;
-            set
-            {
-                if (value >= 0)
-                    _CustomPermyriadChance = value;
-                else
-                    _CustomPermyriadChance = null;
-            }
+            get => Config?.CustomPermyriadChance ?? DefaultPermyriadChance;
+            set => Config?.WriteCustomPermyriadChance(Math.Clamp(value, 0, 10000));
         }
 
         public static async Task ManageCustomPermyriadChance()
@@ -78,7 +72,8 @@ namespace UD_Bones_Folder.Mod
 
                 if (confirmed.GetValueOrDefault())
                 {
-                    CustomPermyriadChance = selected ?? CustomPermyriadChance;
+                    if (selected != CustomPermyriadChance)
+                        CustomPermyriadChance = selected.GetValueOrDefault();
                     break;
                 }
             }

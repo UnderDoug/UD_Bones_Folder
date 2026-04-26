@@ -53,46 +53,39 @@ namespace UD_Bones_Folder.Mod
             [JsonIgnore]
             private HashSet<string> LockedMembers = new();
 
-            public static async Task<Configuration> ReadFromFile(string FilePath)
-            {
-                Configuration configJSON;
-                try
-                {
-                    configJSON = await File.ReadAllJsonAsync<Configuration>(FilePath);
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Loading OsseousAsh {FilePath}", x);
-                    configJSON = null;
-                }
-                return configJSON;
-            }
+            [JsonIgnore]
+            public FileLocationData LocationData;
 
-            public static async Task<Configuration> Read()
+            public static async Task<Configuration> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
+                => await FileLocationData?.ReadFromFileAsync<Configuration>(FileName)
+                ;
+
+            public static async Task<Configuration> ReadAsync()
             {
-                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
-                    return await fileLocationData.ReadFromFileAsync<Configuration>(fileName);
+                if (TryFindBestOsseousAshPath(out var fileLocationData, ConfigFileName))
+                    return await fileLocationData.ReadFromFileAsync<Configuration>(ConfigFileName);
 
                 return null;
             }
 
-            public static async Task<Configuration> ReadOrNew()
+            public static async Task<Configuration> ReadOrNewAsync()
             {
-                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
+                if (TryFindBestOsseousAshPath(out var fileLocationData, ConfigFileName))
                 {
-                    if (await fileLocationData.ReadFromFileAsync<Configuration>(fileName) is not Configuration configJSON)
+                    if ((await ReadFromFileAsync(fileLocationData, ConfigFileName)) is not Configuration configJSON)
                     {
                         configJSON = new Configuration
                         {
                             AskAtStartup = true,
                             Handle = DefaultOsseousAshHandle,
                             ID = Guid.NewGuid(),
+                            LocationData = fileLocationData,
                         };
                         Options.EnableOsseousAshStartupPopup = true;
-                        configJSON.WriteToFile(fileLocationData.WithFileName(fileName));
-                        return configJSON;
                     }
-                    Options.EnableOsseousAshStartupPopup = configJSON.AskAtStartup;
+                    else
+                        Options.EnableOsseousAshStartupPopup = configJSON.AskAtStartup;
+
                     return configJSON;
                 }
                 return null;
@@ -156,15 +149,19 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public void WriteToFile(string FilePath)
-            {
-                File.WriteAllText(FilePath, JsonConvert.SerializeObject(this, Formatting.Indented));
-            }
+            public void WriteToFile(FileLocationData FileLocationData, string FileName)
+                => FileLocationData.Write(FileName, this, Formatting.Indented)
+                ;
 
             public void Write()
             {
-                if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, out string fileName))
-                    WriteToFile(fileLocationData.WithFileName(fileName));
+                if (LocationData != null
+                    || TryFindBestOsseousAshPath(out LocationData, HostsFileName))
+                    WriteToFile(LocationData, HostsFileName);
+                else
+                    Utils.Error(
+                        Context: $"Failed to {nameof(Write)} to {HostsFileName}",
+                        X: new NullReferenceException($"{nameof(LocationData)} must not be null"));
             }
 
             public void WriteAskAtStartup(bool Value, bool Propagate = true)

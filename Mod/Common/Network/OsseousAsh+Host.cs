@@ -78,16 +78,26 @@ namespace UD_Bones_Folder.Mod
             [JsonProperty]
             public string AuthToken;
 
-            public Host()
-            { }
+            /// <summary>
+            /// Indicates whether or not this host should be utilised.
+            /// </summary>
+            [JsonProperty]
+            public bool Enabled;
 
-            public Host(string Name, int? Port = null, bool Encrypted = false, string AuthToken = null)
+            public Host()
+            {
+                Enabled = true;
+            }
+
+            public Host(string Name, int? Port = null, bool Encrypted = false, string AuthToken = null, bool Enabled = true)
                 : this()
             {
                 this.Name = Name;
                 this.Port = Port;
                 this.Encrypted = Encrypted;
                 this.AuthToken = AuthToken;
+                this.AuthToken = AuthToken;
+                this.Enabled = Enabled;
             }
 
             public Host(string HostName, string AuthToken = null)
@@ -163,6 +173,7 @@ namespace UD_Bones_Folder.Mod
                         Port = Host.Port,
                         Encrypted = Host.Encrypted,
                         AuthToken = Host.AuthToken,
+                        Enabled = Host.Enabled,
                     }
                 : throw new ArgumentNullException(nameof(Host))
                 ;
@@ -170,6 +181,49 @@ namespace UD_Bones_Folder.Mod
             public Host Clone()
                 => Clone(this)
                 ;
+
+            public static void CopyTo(Host Source, ref Host Destination)
+            {
+                if (Source == null)
+                    return;
+
+                if (Destination == null)
+                {
+                    Destination = Source.Clone();
+                    return;
+                }
+
+                Destination.Name = Source.Name;
+                Destination.Port = Source.Port;
+                Destination.Encrypted = Source.Encrypted;
+                Destination.AuthToken = Source.AuthToken;
+                Destination.Enabled = Source.Enabled;
+            }
+
+            public void CopyTo(ref Host Destination)
+                => CopyTo(this, ref Destination)
+                ;
+
+            public string GetEnableDisableUIText()
+            {
+                string notColor = "K";
+                string color = "W";
+
+                string enabledText = "Enabled";
+                string disabledText = "Disabled";
+
+                if (Enabled)
+                {
+                    enabledText = enabledText.Colored(color);
+                    disabledText = disabledText.Colored(notColor);
+                }
+                else
+                {
+                    enabledText = enabledText.Colored(notColor);
+                    disabledText = disabledText.Colored(color);
+                }
+                return $"Toggle: {enabledText}/{disabledText}";
+            }
 
             public static string GetProtocol(
                 string HostName = null,
@@ -655,440 +709,7 @@ namespace UD_Bones_Folder.Mod
             }
 
             #endregion
-            #region Option Handling
-
-            public static async Task ManageHostsOptionButton()
-            {
-                int choice;
-                do
-                {
-                    using var hosts = ScopeDisposedList<KeyValuePair<FileLocationData, Host>>.GetFromPoolFilledWith(AllHostsWithLocation());
-                    var options = new PickOptionDataSet<KeyValuePair<FileLocationData, Host>>
-                    {
-                        new PickOptionData<KeyValuePair<FileLocationData, Host>>
-                        {
-                            Text = "new host",
-                            Icon = new Renderable(Tile: "UI/sw_newchar.bmp", ColorString: "&W", TileColor: "&W", DetailColor: 'y'),
-                            Hotkey = 'n',
-                            Callback = e => PerformNewHost(e).WaitResult(),
-                        }
-                    };
-                    int offset = options.Count;
-                    foreach (var host in hosts)
-                    {
-                        options.Add(
-                            Item: new PickOptionData<KeyValuePair<FileLocationData, Host>>
-                            {
-                                Element = host,
-                                Text = $"[{host.Key.Type.GetColoredString()}] {host.Value.DisplayName()}",
-                                Icon = new Renderable(Tile: "Mutations/gas_generation.bmp", ColorString: "&y", TileColor: "&y", DetailColor: 'K'),
-                                Hotkey = options.GetHotkeys().GetNextHotKey(),
-                                Callback = e => AskDoWhatWithHost(e.Value, Hosts.FirstOrDefault(h => h.LocationData == e.Key)).WaitResult()
-                            });
-                    }
-
-                    choice = await Popup.PickOptionAsync(
-                        Title: "{{yellow|Manage {{black|Osseous Ash}} Hosts}}",
-                        Intro: $"Use the options below to manage the hosts to/from which you'd like to upload/download bones files.",
-                        Options: options.GetOptions(),
-                        Hotkeys: options.GetHotkeys(),
-                        Icons: options.GetIcons(),
-                        IntroIcon: new Renderable(
-                            Tile: "Mutations/gas_generation.bmp",
-                            ColorString: "&y",
-                            TileColor: "&y",
-                            DetailColor: 'K'),
-                        DefaultSelected: 1,
-                        AllowEscape: true);
-
-                    if (!options.ElementAt(choice).Invoke())
-                        break;
-                }
-                while (choice >= 0);
-                
-/*
-                if ((await Popup.NewPopupMessageAsync(
-                        message: $"Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.",
-                        buttons: PopupMessage.YesNoButton,
-                        DefaultSelected: 1,
-                        title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
-                        afterRender: new Renderable(
-                            Tile: "Abilities/tile_supressive_fire.png",
-                            ColorString: "&y",
-                            TileColor: "&y",
-                            DetailColor: 'R'))
-                        ).command == "Yes")
-                {
-                    any = true;
-                    XRL.UI.Options.SetOption(
-                        ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshDownloads)}",
-                        Value: Options.EnableOsseousAshDownloads = true);
-                }
-
-                if ((await Popup.NewPopupMessageAsync(
-                    message: $"Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, " +
-                        "and, if you choose one, will associate a handle with the uploaded bones.",
-                    buttons: PopupMessage.YesNoButton,
-                    DefaultSelected: 1,
-                    title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_UPLOADS}?",
-                    afterRender: new FlippableRender(
-                        Source: new Renderable(
-                            Tile: "Abilities/tile_supressive_fire.png",
-                            ColorString: "&y",
-                            TileColor: "&y",
-                            DetailColor: 'W'),
-                        HFlip: false,
-                        VFlip: true))
-                    ).command == "Yes")
-                {
-                    any = true;
-
-                    XRL.UI.Options.SetOption(
-                        ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
-                        Value: Options.EnableOsseousAshUploads = true);
-                    await Options.ManageOsseousAshHandle();
-                }
-
-                if (any)
-                    return;
-
-                await Popup.ShowAsync("You haven't been opted in.\n\n" +
-                    "If you'd like to change your mind at any time, there are options available in the options menu.");*/
-            }
-
-            private static async Task<bool> PerformNewHost(KeyValuePair<FileLocationData, Host> Element)
-            {
-                while (true)
-                {
-                    if ((await AskHostLocation()) is not FileLocationData chosenLocation)
-                        break;
-
-                    string entered = await AskFullHostName(chosenLocation);
-
-                    string authToken = null;
-                    if (entered != null)
-                        authToken = await AskHostAuthToken(null);
-
-                    var newHost = !entered.IsNullOrEmpty()
-                        ? new Host(entered, authToken)
-                        : null
-                        ;
-
-                    bool? confirmed = await ConfirmParsedHost(newHost);
-
-                    if (!confirmed.HasValue)
-                        break;
-
-                    if (confirmed.GetValueOrDefault())
-                    {
-                        Hosts.FirstOrDefault(s => s.LocationData == chosenLocation).WriteAddHost(newHost);
-                        break;
-                    }
-                }
-                return true;
-            }
-
-            private static async Task<FileLocationData> AskHostLocation()
-            {
-                using var osseousAshFilePaths = ScopeDisposedList<FileLocationData>.GetFromPoolFilledWith(GetOsseousAshFileLocationData());
-                var options = new Rack<string>();
-                var hotkeys = new Rack<char>();
-
-                foreach (var filePath in osseousAshFilePaths)
-                {
-                    options.Add($"[{filePath.Type.GetColoredString()}] {filePath.SanitiseForDisplay()}");
-                    hotkeys.Add(filePath.Type.ToString().ToLower()[0]);
-                }
-
-                string localType = FileLocationData.LocationType.Local.GetColoredString();
-                string syncedType = FileLocationData.LocationType.Synced.GetColoredString();
-
-                return osseousAshFilePaths.ElementAtOrDefault(
-                    Index: await Popup.PickOptionAsync(
-                        Title: "{{yellow|New {{black|Osseous Ash}} Host}}",
-                        Intro: $"Which location would you like to record your new host?\n\n" +
-                            $"Locations marked [{localType}] only exist on this device, whereas ones marked [{syncedType}] will be synced by the platform managing the game's installation.",
-                        Options: options,
-                        Hotkeys: hotkeys,
-                        IntroIcon: new Renderable(
-                            Tile: "Mutations/gas_generation.bmp",
-                            ColorString: "&y",
-                            TileColor: "&y",
-                            DetailColor: 'K'),
-                        DefaultSelected: 1,
-                        AllowEscape: true));
-            }
-
-            private static async Task<string> AskFullHostName(FileLocationData ChosenLocation)
-            {
-                if (ChosenLocation == null)
-                    return null;
-
-                var sB = Event.NewStringBuilder();
-                sB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
-                    .AppendLine().AppendLine();
-
-                sB.Append("Adding to location:")
-                    .AppendLine().Append("[").Append(ChosenLocation.Type.GetColoredString()).Append("] ")
-                    .Append(ChosenLocation.SanitiseForDisplay())
-                    .AppendLine().AppendLine();
-
-                sB.Append($"Enter the full host name of the host you'd like to add, including the protocol and, if applicable, the port number.")
-                    .AppendLine().AppendLine();
-                sB.Append("Examples:")
-                    .AppendLine().Append("https://osseousash.cloud/")
-                    .AppendLine().Append("http://localhost:8000/")
-                    .AppendLine().AppendLine();
-                sB.Append("You'll be asked to confirm the parsed result.");
-
-                return await Popup.AskStringAsync(Event.FinalizeString(sB), Default: "", ReturnNullForEscape: true);
-            }
-
-            private static async Task<string> AskHostAuthToken(string PrependMessage)
-            {
-                var sB = Event.NewStringBuilder();
-                sB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
-                    .AppendLine().AppendLine();
-                if (!PrependMessage.IsNullOrEmpty())
-                    sB.Append(PrependMessage)
-                        .AppendLine().AppendLine();
-
-                sB.Append($"If the new host requires authentication of some kind, enter the required key below.")
-                    .AppendLine().AppendLine();
-                sB.Append("You can change/update this later if necessary.");
-
-                return await Popup.AskStringAsync(Event.FinalizeString(sB), Default: null, ReturnNullForEscape: true);
-            }
-
-            private static async Task<bool?> ConfirmParsedHost(Host NewHost)
-            {
-                if (NewHost == null)
-                {
-                    await ShowCancelledAddHost();
-                    return true;
-                }
-
-                var confirmResult = await Popup.ShowYesNoCancelAsync(
-                        Message: Event.FinalizeString(
-                            SB: Event.NewStringBuilder("The host you've entered was parsed in the following way:")
-                                .AppendLine().AppendPair(nameof(NewHost.Name), NewHost.Name)
-                                .AppendLine().AppendPair(nameof(NewHost.Port), (NewHost.Port)?.ToString() ?? "")
-                                .AppendLine().AppendPair(nameof(NewHost.Encrypted), NewHost.Encrypted)
-                                .AppendLine().AppendPair(nameof(NewHost.AuthToken), NewHost.AuthToken)
-                                .AppendLine().AppendLine()
-                                .AppendLine().Append(NewHost.GetHostNameWithProtocol())
-                                .AppendLine().AppendLine()
-                                .Append("Is this correct?"))
-                        );
-
-                switch (confirmResult)
-                {
-                    case DialogResult.Yes:
-                        return true;
-                    case DialogResult.No:
-                        return false;
-                    case DialogResult.Cancel:
-                    default:
-                        await ShowCancelledAddHost();
-                        return null;
-                }
-            }
-
-            private static async Task ShowCancelledAddHost()
-            {
-                await Popup.ShowAsync(
-                    Message: Event.FinalizeString(
-                        SB: Event.NewStringBuilder("Addition of new host cancelled."))
-                    );
-            }
-
-            private static async Task<bool> AskDoWhatWithHost(
-                Host Host,
-                HostCollection HostCollection
-                )
-            {
-                var locationData = HostCollection.LocationData;
-                var pair = (Host, HostCollection);
-                var options = new PickOptionDataSet<(Host Host, HostCollection Hosts)>
-                {
-                    new PickOptionData<(Host Host, HostCollection Hosts)>
-                    {
-                        Element = pair,
-                        Text = "Modify",
-                        Hotkey = 'm',
-                        Callback = p => PerformModifyHost(p.Host, p.Hosts).WaitResult()
-                    },
-                };
-
-                int choice;
-                do
-                {
-                    choice = await Popup.PickOptionAsync(
-                        Title: "{{yellow|Manage {{black|Osseous Ash}} Hosts}}",
-                        Intro: $"Use the options below to manage the hosts to/from which you'd like to upload/download bones files.",
-                        Options: options.GetOptions(),
-                        Hotkeys: options.GetHotkeys(),
-                        Icons: options.GetIcons(),
-                        IntroIcon: new Renderable(
-                            Tile: "Mutations/gas_generation.bmp",
-                            ColorString: "&y",
-                            TileColor: "&y",
-                            DetailColor: 'K'),
-                        DefaultSelected: 1,
-                        AllowEscape: true);
-                }
-                while (options.ElementAtOrDefault(choice).Invoke());
-
-                return true;
-            }
-
-            private static async Task<bool> PerformModifyHost(Host Host, HostCollection HostCollection)
-            {
-                var oldHost = Host.Clone();
-
-                PickOptionDataSet<Host> options = null;
-                int choice;
-                do
-                {
-                    options = new PickOptionDataSet<Host>
-                    {
-                        new PickOptionData<Host>
-                        {
-                            Element = Host,
-                            Text = "Name",
-                            Hotkey = 'n',
-                            Callback = delegate (Host h)
-                            {
-                                h.Name = Popup.AskStringAsync(
-                                    Message: "Enter a new Name",
-                                    Default: h.Name,
-                                    ReturnNullForEscape: true)
-                                .WaitResult();
-
-                                return !h.Name.IsNullOrEmpty();
-                            }
-                        },
-                        new PickOptionData<Host>
-                        {
-                            Element = Host,
-                            Text = "Port",
-                            Hotkey = 'p',
-                            Callback = delegate (Host h)
-                            {
-                                h.Port = Popup.AskNumberAsync(
-                                    Message: "Enter a new Port",
-                                    Start: h.Port ?? 0,
-                                    Min: 0)
-                                .WaitResult();
-
-                                return h.Port == null
-                                    || h.Port >= 0;
-                            }
-                        },
-                        new PickOptionData<Host>
-                        {
-                            Element = Host,
-                            Text = $"[{(Host.Encrypted ? "■" : " ")}] Encrypted",
-                            Hotkey = 'e',
-                            Callback = h => (h.Encrypted = !h.Encrypted) || true // always return true, but flip the bool first.
-                        },
-                        new PickOptionData<Host>
-                        {
-                            Element = Host,
-                            Text = "Auth Token",
-                            Hotkey = 'a',
-                            Callback = delegate (Host h)
-                            {
-                                h.AuthToken = Popup.AskStringAsync(
-                                    Message: "Enter a new Auth Token",
-                                    Default: h.AuthToken,
-                                    ReturnNullForEscape: true)
-                                .WaitResult();
-
-                                bool returnValue = h.AuthToken != null;
-
-                                if (h.AuthToken == "")
-                                    h.AuthToken = null;
-
-                                return returnValue;
-                            }
-                        },
-                    };
-
-                }
-                while (true);
-                bool? confirmed = ConfirmModifiedHost(oldHost, Host);
-
-                if (!confirmed.HasValue)
-                    return false;
-
-                if (name != Host.Name)
-                {
-                    Host.Name = name;
-                    HostCollection.Write();
-                }
-                return true;
-            }
-
-            private static async Task<bool?> ConfirmModifiedHost(Host OldHost, Host ModifiedHost)
-            {
-                if (ModifiedHost == null
-                    || OldHost == ModifiedHost)
-                {
-                    await ShowCancelledModifyHost();
-                    return true;
-                }
-                var sB = Event.NewStringBuilder("You've made the following changes to this host:");
-                if (OldHost.Name != ModifiedHost.Name)
-                    sB.AppendLine().AppendPair(
-                        Key: nameof(ModifiedHost.Name),
-                        Value: $"\"{OldHost.Name}\" -> \"{ModifiedHost.Name}\"");
-
-                if (OldHost.Port != ModifiedHost.Port)
-                    sB.AppendLine().AppendPair(
-                        Key: nameof(ModifiedHost.Port),
-                        Value: $"\"{(OldHost.Port)?.ToString() ?? ""}\" -> \"{(ModifiedHost.Port)?.ToString() ?? ""}\"");
-
-                if (OldHost.Encrypted != ModifiedHost.Encrypted)
-                    sB.AppendLine().AppendPair(
-                        Key: nameof(ModifiedHost.Encrypted),
-                        Value: $"\"{OldHost.Encrypted}\" -> \"{ModifiedHost.Encrypted}\"");
-
-                if (OldHost.AuthToken != ModifiedHost.AuthToken)
-                    sB.AppendLine().AppendPair(
-                        Key: nameof(ModifiedHost.AuthToken),
-                        Value: $"\"{OldHost.AuthToken}\" -> \"{ModifiedHost.AuthToken}\"");
-
-                sB.AppendLine().AppendLine();
-                sB.AppendLine().Append(ModifiedHost.GetHostNameWithProtocol())
-                    .AppendLine().AppendLine()
-                    .Append("Is this correct?");
-
-                var confirmResult = await Popup.ShowYesNoCancelAsync(Event.FinalizeString(sB));
-
-                switch (confirmResult)
-                {
-                    case DialogResult.Yes:
-                        return true;
-                    case DialogResult.No:
-                        return false;
-                    case DialogResult.Cancel:
-                    default:
-                        await ShowCancelledModifyHost();
-                        return null;
-                }
-            }
-
-            private static async Task ShowCancelledModifyHost()
-            {
-                await Popup.ShowAsync(
-                    Message: Event.FinalizeString(
-                        SB: Event.NewStringBuilder("Modification of host cancelled."))
-                    );
-            }
-
-            #endregion
-
+            
             public override string ToString()
             {
                 string completeHost = GetHostNameWithProtocol(TrailingSlash: false);

@@ -844,19 +844,29 @@ namespace UD_Bones_Folder.Mod
             => SB.Append(Key?.ToString()).Append(": ").Append(Value?.ToString())
             ;
 
-        public static char GetNextHotKey(this IEnumerable<char> Source)
+        public static char GetNextHotKey(
+            this IEnumerable<char> Source,
+            IEnumerable<char> Excluding = null,
+            char StartAt = 'a',
+            char FinishAt = 'z'
+            )
         {
-            char lastHotkey = Source.LastOrDefault();
+            char lastHotkey = Source.LastOrDefault(c => Excluding?.Contains(c) is not true);
+
+            if (lastHotkey == default)
+                return StartAt;
+
             if (lastHotkey != ' ')
             {
-                if (lastHotkey == '\0')
-                    lastHotkey = 'a';
+                if (lastHotkey == '\0'
+                    || lastHotkey == default)
+                    lastHotkey = StartAt;
 
                 while (Source.Contains(lastHotkey)
-                    && lastHotkey <= 'z')
+                    && lastHotkey <= FinishAt)
                     lastHotkey++;
 
-                if (lastHotkey > 'z')
+                if (lastHotkey > FinishAt)
                     lastHotkey = ' ';
             }
             return lastHotkey;
@@ -865,5 +875,21 @@ namespace UD_Bones_Folder.Mod
         public static string GetColoredString(this FileLocationData.LocationType Type)
             => Type.ToString().Colored(FileLocationData.GetFileLocationDataTypeColor(Type))
             ;
+
+        public static int FirstIndexOrDefault<T>(
+            this IEnumerable<T> Source,
+            Predicate<T> OnBasis = null,
+            int Default = 0
+            )
+        {
+            int index = -1;
+            foreach (T element in Source ?? Enumerable.Empty<T>())
+            {
+                index++;
+                if (OnBasis?.Invoke(element) is not false)
+                    return index;
+            }
+            return Default;
+        }
     }
 }

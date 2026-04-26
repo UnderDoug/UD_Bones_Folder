@@ -6,21 +6,25 @@ using ConsoleLib.Console;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    public struct PickOptionData<T>
+    public class PickOptionData<T, TResult>
     {
         public T Element;
         public string Text;
         public IRenderable Icon;
         public char Hotkey;
 
-        public Func<T, bool> Callback;
+        public Func<T, TResult> Callback;
+
+        public PickOptionData()
+        {
+        }
 
         public PickOptionData(
             T Element,
             string Text,
             IRenderable Icon = null,
             char Hotkey = ' ',
-            Func<T, bool> Callback = null
+            Func<T, TResult> Callback = null
             )
         {
             this.Element = Element;
@@ -30,17 +34,24 @@ namespace UD_Bones_Folder.Mod.UI
             this.Callback = Callback;
         }
 
-        public PickOptionData(PickOptionData<T> Source)
+        public PickOptionData(PickOptionData<T, TResult> Source)
             : this(Source.Element, Source.Text, Source.Icon, Source.Hotkey, Source.Callback)
         { }
 
-        public PickOptionData(PickOptionData<T> Source, Func<T, bool> Callback)
+        public PickOptionData(PickOptionData<T, TResult> Source, Func<T, TResult> Callback)
             : this(Source)
         {
             this.Callback = Callback;
         }
 
-        public readonly bool Invoke()
-            => Callback?.Invoke(Element) is true;
+        public virtual TResult Invoke()
+        {
+            if (Callback != null)
+            {
+                Utils.Log($"{Text.Strip()} -> {nameof(Invoke)}");
+                return Callback.Invoke(Element);
+            }
+            return default;
+        }
     }
 }

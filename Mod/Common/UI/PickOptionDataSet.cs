@@ -8,12 +8,12 @@ using XRL.Collections;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    public class PickOptionDataSet<T> : Rack<PickOptionData<T>>
+    public class PickOptionDataSet<T, TResult> : Rack<PickOptionData<T, TResult>>
     {
         public PickOptionDataSet()
             : base()
         { }
-        public PickOptionDataSet(PickOptionDataSet<T> Source)
+        public PickOptionDataSet(PickOptionDataSet<T, TResult> Source)
             : base(Source)
         { }
 
@@ -53,11 +53,11 @@ namespace UD_Bones_Folder.Mod.UI
             return hotkeys;
         }
 
-        public void InvokeAt(int Index)
+        public TResult InvokeAt(int Index)
             => this[Index].Invoke()
             ;
 
-        public void TryInvokeAt(int Index)
+        public TResult TryInvokeAt(int Index)
             => this.ElementAtOrDefault(Index).Invoke();
     }
 }
