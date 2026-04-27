@@ -134,12 +134,15 @@ namespace UD_Bones_Folder.Mod
                 {
                     if (port.IndexOf("/") is int slashIndex
                         && slashIndex >= 0)
-                        port = port[..^slashIndex];
+                        port = port[..slashIndex];
 
-                    if (int.TryParse(port, out int portInt))
-                        Port = portInt;
-                    else
-                        Utils.Warn($"Failed to parse {nameof(port)} {port} to {typeof(int).Name}");
+                    if (!port.IsNullOrEmpty())
+                    {
+                        if (int.TryParse(port, out int portInt))
+                            Port = portInt;
+                        else
+                            Utils.Warn($"Failed to parse {nameof(port)} {port} to {typeof(int).Name}");
+                    }
                 }
                 if (Name.EndsWith("/"))
                     Name = Name[..^1];
@@ -489,6 +492,8 @@ namespace UD_Bones_Folder.Mod
                                 await savGzStream.CopyToAsync(streamWriter.BaseStream);
                             }
                         });
+
+                    httpReq.Headers.Add(HttpRequestHeader.Authorization, Token.ToString());
                 }
                 catch
                 {
@@ -711,17 +716,8 @@ namespace UD_Bones_Folder.Mod
             #endregion
             
             public override string ToString()
-            {
-                string completeHost = GetHostNameWithProtocol(TrailingSlash: false);
-
-                if (completeHost.EndsWith("/"))
-                    completeHost = completeHost[..^1];
-
-                if (Port.HasValue)
-                    completeHost += $":{Port}";
-
-                return $"{completeHost}/";
-            }
+                => $"{GetHostNameWithProtocol(TrailingSlash: true)}"
+                ;
 
             public override bool Equals(object obj)
                 => obj is Host hostObj
@@ -732,13 +728,25 @@ namespace UD_Bones_Folder.Mod
             public override int GetHashCode()
                 => (Name?.GetHashCode() ?? 0)
                 ^ (Port?.GetHashCode() ?? 0)
-                ^ Encrypted.GetHashCode();
+                ^ Encrypted.GetHashCode()
+                ^ (AuthToken?.GetHashCode() ?? 0)
+                ^ Enabled.GetHashCode()
+                ;
 
             public bool Equals(Host Other)
                 => Other != null
                 && Name == Other.Name
                 && Port == Other.Port
                 && Encrypted == Other.Encrypted
+                && Enabled == Other.Enabled
+                ;
+
+            public static Task<bool?> FlipEncryptedAsync(Host Host)
+                => Task.Run<bool?>(() => (Host.Encrypted = !Host.Encrypted) || true)
+                ;
+
+            public static Task<bool?> FlipEnabledAsync(Host Host)
+                => Task.Run<bool?>(() => (Host.Enabled = !Host.Enabled) || true)
                 ;
 
             public void Dispose()
@@ -746,6 +754,8 @@ namespace UD_Bones_Folder.Mod
                 Name = null;
                 Port = null;
                 Encrypted = false;
+                AuthToken = null;
+                Enabled = false;
             }
 
             public static bool operator ==(Host X, Host Y)

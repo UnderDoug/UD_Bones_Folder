@@ -182,7 +182,7 @@ namespace UD_Bones_Folder.Mod
         public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
 
         private FileLocationData _DirectoryInfo;
-        public FileLocationData DirectoryInfo
+        public FileLocationData FileLocationData
         {
             get
             {
@@ -204,13 +204,13 @@ namespace UD_Bones_Folder.Mod
         public OsseousAsh.Host Host;
 
         public bool IsOnline
-            => DirectoryInfo.Type == FileLocationData.LocationType.Online
+            => FileLocationData.Type == FileLocationData.LocationType.Online
             || Host != null
             ;
 
         public bool IsCrematable
-            => DirectoryInfo.Type < FileLocationData.LocationType.Mod
-            && DirectoryInfo.Exists()
+            => FileLocationData.Type < FileLocationData.LocationType.Mod
+            && FileLocationData.Exists()
             ;
 
         public SaveBonesInfo()
@@ -674,7 +674,7 @@ namespace UD_Bones_Folder.Mod
             if (timeComp != 0)
                 return timeComp;
 
-            return DirectoryInfo.Type.CompareTo(Other.DirectoryInfo.Type);
+            return FileLocationData.Type.CompareTo(Other.FileLocationData.Type);
         }
 
         public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)

@@ -26,7 +26,7 @@ namespace UD_Bones_Folder.Mod.UI
         UICanvasHost = 1)]
     public class BonesManagement : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
     {
-        public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolderManagement";
+        public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolder_BonesManagement";
 
         public const string CMD_INSERT = "CmdInsert";
 
@@ -60,16 +60,16 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 KeyDescription = ControlManager.getCommandInputDescription("CmdDelete"),
                 Description = "cremate"
-            }
-        };
-
-        public static List<MenuOption> MenuBarOptions = new List<MenuOption>
-        {
+            },
             new MenuOption
             {
                 InputCommand = "CmdInsert",
                 Description = "cremate all"
             },
+        };
+
+        public static List<MenuOption> MenuBarOptions = new List<MenuOption>
+        {
         };
 
         public static bool WishContext;
@@ -274,7 +274,10 @@ namespace UD_Bones_Folder.Mod.UI
                     }
                 }
                 allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * GetConfigMenuYMulti(), 0);*/
-                allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * 0.5f, 0);
+                
+                
+                //only this one.
+                //allBonesRectTransform.Translate(0, allBonesRectTransform.rect.y * 0.5f, 0);
             }
 
             if (LegendBar.GetComponent<RectTransform>() is RectTransform legendBarRectTransform)
@@ -293,7 +296,10 @@ namespace UD_Bones_Folder.Mod.UI
                     }
                 }
                 legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * GetConfigLegendYMulti(), 0);*/
-                legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * 1.5f, 0);
+                
+                
+                //only this one.
+                //legendBarRectTransform.Translate(0, legendBarRectTransform.rect.y * 1.5f, 0);
             }
 
             SetParentTransform(AllBonesMenuBar, LegendBar.transform.parent);
@@ -321,13 +327,13 @@ namespace UD_Bones_Folder.Mod.UI
 
             MidHorizNav.SetAxis(InputAxisTypes.NavigationXAxis);
             MidHorizNav.contexts.Clear();
-            MidHorizNav.contexts.Add(AllBonesMenuBar.GetNavigationContext());
+            //MidHorizNav.contexts.Add(AllBonesMenuBar.GetNavigationContext());
             MidHorizNav.contexts.Add(BackButton.navigationContext);
             MidHorizNav.contexts.Add(BonesScroller.GetNavigationContext());
             MidHorizNav.Setup();
             MidHorizNav.parentContext = MainNavContext;
 
-            AllBonesMenuBar.GetNavigationContext().parentContext = MidHorizNav;
+            //AllBonesMenuBar.GetNavigationContext().parentContext = MidHorizNav;
             LegendBar.GetNavigationContext().parentContext = MidHorizNav;
         }
 
@@ -457,8 +463,14 @@ namespace UD_Bones_Folder.Mod.UI
                     && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
                 {
                     saveRow.setBonesData(bonesDataI);
-                    saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.ButtonHandlers;
+                    saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.ButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
+
+                    if (!bonesDataI.BonesInfo.IsCrematable)
+                    {
+                        saveRow.deleteButton.context.buttonHandlers.Remove(InputButtonTypes.AcceptButton);
+                        saveRow.context.context.commandHandlers.Remove("CmdDelete");
+                    }
                 }
                 
             }
@@ -489,13 +501,13 @@ namespace UD_Bones_Folder.Mod.UI
             BonesScroller.onHighlight.RemoveAllListeners();
             BonesScroller.onHighlight.AddListener(HighlightedBones);
 
-            AllBonesMenuBar.onSelected ??= new();
+            /*AllBonesMenuBar.onSelected ??= new();
             AllBonesMenuBar.onSelected.RemoveAllListeners();
             AllBonesMenuBar.onSelected.AddListener(SelectedAllBones);
 
             AllBonesMenuBar.onHighlight ??= new();
             AllBonesMenuBar.onHighlight.RemoveAllListeners();
-            AllBonesMenuBar.onHighlight.AddListener(HighlightedAllBones);
+            AllBonesMenuBar.onHighlight.AddListener(HighlightedAllBones);*/
 
             //MoveAllBonesMenuBar = true;
             //MoveLegendBar = true;
@@ -664,24 +676,22 @@ namespace UD_Bones_Folder.Mod.UI
             ControlManager.ResetInput();
         }
 
+        private async Task<IEnumerable<SaveBonesInfo>> BonesDeletionContext()
+            => await BonesManager.CremateAllMoonKings(() => DisableNavContext(false), EnableNavContext)
+            ;
+
         public async void HandleDeleteAll()
         {
-            if (await BonesManager.CremateAllMoonKings(DisableNavContext, EnableNavContext) is IEnumerable<SaveBonesInfo> currentBonesInfos)
+            if ((await NavigationController.instance.SuspendContextWhile(BonesDeletionContext)) is not IEnumerable<SaveBonesInfo> currentBonesInfos
+                || currentBonesInfos.IsNullOrEmpty()
+                || SaveBonesInfosToUIElements(currentBonesInfos) is not IEnumerable<BonesInfoData> bareBones
+                || !bareBones.IsNullOrEmpty()
+                || (Bones = new(bareBones)).IsNullOrEmpty())
             {
-                if (currentBonesInfos.IsNullOrEmpty()
-                    || SaveBonesInfosToUIElements(currentBonesInfos) is not IEnumerable<BonesInfoData> bareBones
-                    || !bareBones.IsNullOrEmpty())
-                {
-                    Exit();
-                }
-                else
-                {
-                    /*Bones ??= new();
-                    Bones.Clear();
-                    Bones.AddRange(bareBones);
-                    Show();*/
-                }
+                Exit();
+                return;
             }
+            Show();
         }
 
         public static Task HandleDeleteAllTask()
@@ -877,13 +887,16 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (MainNavContext.IsActive()
                 && IsInsideActiveContext(BonesScroller.GetNavigationContext()) != WasInScroller)
+            {
                 UpdateLegendBar();
+                //UpdateMenuBars();
+            }
         }
 
         public void ControllerChanged()
         {
             UpdateLegendBar();
-            UpdateMenuBars();
+            //UpdateMenuBars();
         }
 
         public static IEnumerable<BonesInfoData> SaveBonesInfosToUIElements(IEnumerable<SaveBonesInfo> SaveGameInfoList)

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 using UnityEngine;
@@ -445,6 +446,20 @@ namespace UD_Bones_Folder.Mod
                     Proc: e => e.ToString(),
                     Empty: "empty",
                     PostProc: s => $"{1.Indent()}{s}");
+        }
+
+        public static void ClearFrameworkControlNaughty(this FrameworkUnityScrollChild FrameworkUnityScrollChild)
+        {
+            foreach (var fieldInfo in FrameworkUnityScrollChild.GetType().GetFields())
+            {
+                if (fieldInfo.IsPrivate
+                    && fieldInfo.FieldType.InheritsFrom(typeof(IFrameworkControl))
+                    && fieldInfo.Name == "_FrameworkControl")
+                {
+                    fieldInfo.SetValue(FrameworkUnityScrollChild, null);
+                    break;
+                }
+            }
         }
     }
 }

@@ -5,30 +5,119 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Qud.UI;
+
 using XRL.UI;
+using XRL.UI.Framework;
 
 namespace UD_Bones_Folder.Mod.UI
 {
     public static class UIUtils
     {
+        public static List<QudMenuItem> _BackButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{y|Back}}",
+                // command = "No",
+                command = "option:-2",
+                hotkey = "N,V Negative"
+            },
+        };
+
+        public static List<QudMenuItem> BackButton
+        {
+            get
+            {
+                if (ControlManager.activeControllerType == ControlManager.InputDeviceType.Gamepad)
+                {
+                    return new List<QudMenuItem>
+                    {
+                        new QudMenuItem
+                        {
+                            text = ControlManager.getCommandInputFormatted("V Negative") + " {{y|Back}}",
+                            // command = "No",
+                            command = "option:-2",
+                            hotkey = "N,V Negative"
+                        },
+                    };
+                }
+                return _BackButton;
+            }
+        }
+
         public static async Task<TResult> PerformPickOptionAsync<T, TResult>(
             PickOptionDataSet<T, Task<TResult>> OptionDataSet,
             Predicate<TResult> BreakWhen,
             string Title = "",
             string Intro = null,
             IRenderable IntroIcon = null,
+            IReadOnlyList<QudMenuItem> Buttons = null,
             int DefaultSelected = 0,
             bool RespectOptionNewlines = false,
-            bool AllowEscape = false,
+            TResult ValueOnBack = default,
+            Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> BackCallback = null,
+            bool AllowEscape = true,
             TResult ValueOnEscape = default,
             Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> FinalSelectedCallback = null
             )
         {
+            Buttons ??= BackButton;
+            int choice = DefaultSelected;
+            PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[DefaultSelected];
             Task<TResult> optionCallBack;
-            int choice;
+            TResult result = default;
             do
             {
-                choice = await Popup.PickOptionAsync(
+                var navController = NavigationController.instance;
+                var oldContext = navController.activeContext;
+                navController.activeContext = NavigationController.instance.suspensionContext;
+                try
+                {
+                    var taskCompletionSource = new TaskCompletionSource<int>();
+                    Popup.PickOption(
+                        Title: Title,
+                        Intro: Intro,
+                        Options: OptionDataSet.GetOptions(),
+                        Hotkeys: OptionDataSet.GetHotkeys(),
+                        Icons: OptionDataSet.GetIcons(),
+                        IntroIcon: IntroIcon,
+                        Buttons: Buttons,
+                        DefaultSelected: DefaultSelected,
+                        RespectOptionNewlines: RespectOptionNewlines,
+                        AllowEscape: AllowEscape,
+                        OnResult: choice => taskCompletionSource.TrySetResult(choice),
+                        ForceNewPopup: true);
+
+                    choice = await taskCompletionSource.Task;
+
+                    if (choice < 0)
+                    {
+                        chosenOption = null;
+                        optionCallBack = Task<TResult>.Run(delegate ()
+                        {
+                            return choice != -2 
+                            ? ValueOnEscape
+                            : ValueOnBack
+                            ;
+                        });
+                        break;
+                    }
+
+                    chosenOption = OptionDataSet[choice];
+
+                    optionCallBack = chosenOption.Invoke();
+
+                    result = await optionCallBack;
+
+                    if (BreakWhen.Invoke(result))
+                        break;
+                }
+                finally
+                {
+                    navController.activeContext = oldContext;
+                }
+                /*choice = await Popup.PickOptionAsync(
                     Title: Title,
                     Intro: Intro,
                     Options: OptionDataSet.GetOptions(),
@@ -39,20 +128,24 @@ namespace UD_Bones_Folder.Mod.UI
                     RespectOptionNewlines: RespectOptionNewlines,
                     AllowEscape: AllowEscape);
 
-                if (choice <= 0)
-                    return ValueOnEscape;
+                if (choice < 0)
+                    return result;
 
-                optionCallBack = OptionDataSet.TryInvokeAt(choice);
+                chosenOption = OptionDataSet[choice];
 
-                if (BreakWhen.Invoke(await optionCallBack))
-                    break;
+                optionCallBack = chosenOption.Invoke();
+
+                result = await optionCallBack;
+
+                if (BreakWhen.Invoke(result))
+                break;*/
             }
             while (true);
 
             if (FinalSelectedCallback != null)
-                return await FinalSelectedCallback(OptionDataSet.ElementAtOrDefault(choice), optionCallBack);
+                return await FinalSelectedCallback(chosenOption, optionCallBack);
             else
-                return await optionCallBack;
+                return result;
         }
 
         public static async Task<TResult> ShowEscancellepedAsync<T, TResult>(
@@ -63,9 +156,9 @@ namespace UD_Bones_Folder.Mod.UI
             Func<T, Task<TResult>, Task<TResult>> PostProc = null
             )
         {
-            bool escaped = EscapedWhen(await Result);
+            bool escaped = EscapedWhen(await Result.AwaitResultIfNotIsCompletedSuccessfully());
             if (escaped
-                || CancelledWhen(await Result))
+                || CancelledWhen(await Result.AwaitResultIfNotIsCompletedSuccessfully()))
             {
                 string escancelleped = "cancelled";
                 if (escaped)

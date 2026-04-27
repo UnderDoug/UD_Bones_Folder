@@ -575,7 +575,7 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetCrematableSaveBonesInfoAsync(bool IncludeVersionIncompatible = false)
             => await GetSaveBonesInfoAsync(
-                Where: b => b.DirectoryInfo.Type <= FileLocationData.LocationType.Synced,
+                Where: b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced,
                 IncludeVersionIncompatible: IncludeVersionIncompatible)
             ;
 
@@ -973,17 +973,19 @@ namespace UD_Bones_Folder.Mod
             Action AfterDeletionLoop
             )
         {
-            var orderedBonesInfos = (await GetSaveBonesInfoAsync(
+            var crematableBonesInfos = (await GetSaveBonesInfoAsync(
                     Where: b => b.IsCrematable,
                     IncludeVersionIncompatible: true))
                 ?? Enumerable.Empty<SaveBonesInfo>();
 
-            if (orderedBonesInfos.IsNullOrEmpty())
+            if (crematableBonesInfos.IsNullOrEmpty())
             {
                 await Popup.NewPopupMessageAsync(
                     message: $"There aren't any local bones to cremate!",
                     title: "{{yellow|No Bones!}}");
-                return orderedBonesInfos;
+
+                return (await GetSaveBonesInfoAsync())
+                    ?? Enumerable.Empty<SaveBonesInfo>();
             }
 
             var buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
@@ -1008,7 +1010,7 @@ namespace UD_Bones_Folder.Mod
             {
                 BeforeDeletionLoop?.Invoke();
 
-                int countBefore = orderedBonesInfos.Count();
+                int countBefore = crematableBonesInfos.Count();
                 int paddingAmount = countBefore.ToString().Length;
                 int cremateCounter = 0;
                 int crematedCounter = 0;
@@ -1018,7 +1020,7 @@ namespace UD_Bones_Folder.Mod
 
                 string cremateString(string Color = null)
                     => $"{paddedCremateCounter().Colored(Color)}/{countBefore}";
-                foreach (var bonesInfo in orderedBonesInfos)
+                foreach (var bonesInfo in crematableBonesInfos)
                 {
                     cremateCounter++;
                     if (bonesInfo == null)
@@ -1032,20 +1034,22 @@ namespace UD_Bones_Folder.Mod
 
                 AfterDeletionLoop?.Invoke();
 
-                orderedBonesInfos = (await GetSaveBonesInfoAsync())
+                var bonesInfos = (await GetSaveBonesInfoAsync())
                     ?? Enumerable.Empty<SaveBonesInfo>();
 
                 string crematedString = crematedCounter.ToString();
                 if (crematedCounter != countBefore)
                     crematedString = crematedString.Colored("red");
 
-                bool isSomethingWrong = orderedBonesInfos.Any(b => b.DirectoryInfo.Type < FileLocationData.LocationType.Mod);
+                bool isSomethingWrong = bonesInfos.Any(b => b.FileLocationData.Type < FileLocationData.LocationType.Mod);
 
                 string somethingWrongString = isSomethingWrong ? "\n\n{{K|(something went wrong)}}" : null;
                 await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}");
                 Loading.SetLoadingStatus(null);
+                return bonesInfos;
             }
-            return orderedBonesInfos;
+            return (await GetSaveBonesInfoAsync())
+                ?? Enumerable.Empty<SaveBonesInfo>();
         }
 
         public static async Task<IEnumerable<SaveBonesInfo>> CremateAllMoonKings()
@@ -1325,7 +1329,7 @@ namespace UD_Bones_Folder.Mod
                 success = false;
             }
             return success
-                || task?.Result?.IsNullOrEmpty() is false;
+                || task?.Result?.Any(b => b.IsCrematable) is not true;
         }
 
         [WishCommand(Command = "go2bones")]

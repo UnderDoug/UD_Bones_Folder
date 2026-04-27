@@ -311,19 +311,23 @@ namespace UD_Bones_Folder.Mod
         public static async Task<Rack<HostCollection>> FindHostCollections()
         {
             Rack<HostCollection> hosts = null;
-            foreach (var fileLocationData in GetOsseousAshFileLocationData())
+            foreach (var fileLocationData in GetOsseousAshFileLocationData(Ensure: true))
             {
                 try
                 {
+                    hosts ??= new();
                     if (fileLocationData.FileExists(HostsFileName)
-                        && await HostCollection.ReadFromFileAsync(fileLocationData, HostsFileName) is HostCollection hostCollection)
+                        && await HostCollection.ReadFromFileAsync(fileLocationData, HostsFileName) is HostCollection loadedHostCollection)
                     {
-                        hostCollection.LocationData = fileLocationData;
-                        if (!hostCollection.IsNullOrEmpty())
-                        {
-                            hosts ??= new();
-                            hosts.Add(hostCollection);
-                        }
+                        loadedHostCollection.LocationData = fileLocationData;
+                        if (loadedHostCollection != null)
+                            hosts.Add(loadedHostCollection);
+                    }
+                    else
+                    {
+                        var newHostCollection = new HostCollection(fileLocationData);
+                        newHostCollection.Write();
+                        hosts.Add(newHostCollection);
                     }
                 }
                 catch (Exception x)
@@ -331,12 +335,16 @@ namespace UD_Bones_Folder.Mod
                     Utils.Error($"Finding {nameof(HostCollection).Pluralize()}", x);
                 }
             }
-            if (hosts.IsNullOrEmpty()
+            if (hosts.All(hc => hc.IsNullOrEmpty())
                 && await HostCollection.ReadOrNewAsync() is HostCollection defaultHosts)
             {
                 hosts ??= new();
                 hosts.Add(defaultHosts);
             }
+            if (hosts.IsNullOrEmpty()
+                || hosts.All(hc => hc.IsNullOrEmpty()))
+                return null;
+
             return hosts;
         }
 
@@ -401,7 +409,7 @@ namespace UD_Bones_Folder.Mod
                                 Tile: "Mutations/gas_generation.bmp",
                                 ColorString: "&K",
                                 TileColor: "&K",
-                                DetailColor: 'y'),
+                                DetailColor: FileLocationData.GetFileLocationDataTypeColor(hostInfo.Key.Type)[0]),
                             Hotkey = options.GetHotkeys().GetNextHotKey(Excluding: exludeHotkeys),
                             Callback = e => AskDoWhatWithHostAsync(e.Value, Hosts.FirstOrDefault(h => h.LocationData == e.Key))
                         });
@@ -448,7 +456,9 @@ namespace UD_Bones_Folder.Mod
 
                 if (confirmed.GetValueOrDefault())
                 {
-                    Hosts.FirstOrDefault(s => s.LocationData == chosenLocation).WriteAddHost(newHost);
+                    (Hosts.FirstOrDefault(s => s.LocationData == chosenLocation)
+                        ?? new HostCollection(chosenLocation))
+                    .WriteAddHost(newHost);
                     break;
                 }
             }
@@ -470,8 +480,7 @@ namespace UD_Bones_Folder.Mod
             string localType = FileLocationData.LocationType.Local.GetColoredString();
             string syncedType = FileLocationData.LocationType.Synced.GetColoredString();
 
-            return osseousAshFilePaths.ElementAtOrDefault(
-                Index: await Popup.PickOptionAsync(
+            int choice = await Popup.PickOptionAsync(
                     Title: "{{yellow|New {{black|Osseous Ash}} Host}}",
                     Intro: $"Which location would you like to record your new host?\n\n" +
                         $"Locations marked [{localType}] only exist on this device, whereas ones marked [{syncedType}] will be synced by the platform managing the game's installation.",
@@ -483,7 +492,9 @@ namespace UD_Bones_Folder.Mod
                         TileColor: "&K",
                         DetailColor: 'y'),
                     DefaultSelected: 1,
-                    AllowEscape: true));
+                    AllowEscape: true);
+
+            return osseousAshFilePaths.ElementAtOrDefault(choice);
         }
 
         private static async Task<string> AskFullHostName(FileLocationData ChosenLocation)
@@ -524,7 +535,7 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendLine();
             sB.Append("You can change/update this later if necessary.");
 
-            return await Popup.AskStringAsync(Event.FinalizeString(sB), Default: null, ReturnNullForEscape: true);
+            return await Popup.AskStringAsync(Event.FinalizeString(sB), Default: "", ReturnNullForEscape: true);
         }
 
         private static async Task<bool?> ConfirmParsedHost(Host NewHost)
@@ -538,14 +549,15 @@ namespace UD_Bones_Folder.Mod
             var confirmResult = await Popup.ShowYesNoCancelAsync(
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("The host you've entered was parsed in the following way:")
+                            .AppendLine()
                             .AppendLine().AppendPair(nameof(NewHost.Name), NewHost.Name)
                             .AppendLine().AppendPair(nameof(NewHost.Port), (NewHost.Port)?.ToString() ?? "")
                             .AppendLine().AppendPair(nameof(NewHost.Encrypted), NewHost.Encrypted)
                             .AppendLine().AppendPair(nameof(NewHost.AuthToken), NewHost.AuthToken)
-                            .AppendLine().AppendLine()
+                            .AppendLine()
                             .AppendLine().Append(NewHost.GetHostNameWithProtocol())
-                            .AppendLine().AppendLine()
-                            .Append("Is this correct?"))
+                            .AppendLine()
+                            .AppendLine().Append("Is this correct?"))
                     );
 
             switch (confirmResult)
@@ -610,27 +622,21 @@ namespace UD_Bones_Folder.Mod
                                 return true;
                             }
                         },
-                        new PickOptionDataAsync<(Host Host, HostCollection Hosts), bool?>
-                        {
-                            Element = pair,
-                            Text = "return",
-                            Hotkey = 'r',
-                            Callback = p => Task.Run<bool?>(() => false), // false breaks and returns, but doesn't exit.
-                        },
                     };
 
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
                     BreakWhen: v => v is not true,
                     Title: "{{yellow|Manage {{black|Osseous Ash}} Host}}",
-                    Intro: $"What would you like to do with host {Host.DisplayName()} which is in the below location:\n\n" +
-                        $"{HostCollection.DisplayName()}",
+                    Intro: $"What would you like to do with host {Host.DisplayName()} which is in the below location:\n" +
+                        $"{HostCollection.TaggedDisplayName()}\n\n",
                     IntroIcon: new Renderable(
                         Tile: "Mutations/gas_generation.bmp",
                         ColorString: $"&K",
                         TileColor: $"&K",
                         DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
-                    DefaultSelected: options.FirstIndexOrDefault(o => o.Text.EqualsNoCase("return")),
+                    Buttons: UIUtils.BackButton,
+                    ValueOnBack: false,
                     AllowEscape: true,
                     ValueOnEscape: null,
                     FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);
@@ -686,9 +692,9 @@ namespace UD_Bones_Folder.Mod
                     new PickOptionDataAsync<Host, bool?>
                     {
                         Element = Host,
-                        Text = $"[{(Host.Encrypted ? "■" : " ")}] Encrypted",
+                        Text = Host.Encrypted.GetCheckboxText(nameof(Host.Encrypted)),
                         Hotkey = 'e',
-                        Callback = h => Task.Run<bool?>(() => (h.Encrypted = !h.Encrypted) || true), // always return true, flip the bool first.
+                        Callback = Host.FlipEncryptedAsync,
                     },
                     new PickOptionDataAsync<Host, bool?>
                     {
@@ -699,7 +705,7 @@ namespace UD_Bones_Folder.Mod
                         {
                             h.AuthToken = await Popup.AskStringAsync(
                                 Message: "Enter a new Auth Token",
-                                Default: h.AuthToken,
+                                Default: h.AuthToken ?? "",
                                 ReturnNullForEscape: true);
 
                             bool returnValue = h.AuthToken != null;
@@ -713,20 +719,9 @@ namespace UD_Bones_Folder.Mod
                     new PickOptionDataAsync<Host, bool?>
                     {
                         Element = Host,
-                        Text = $"[{(Host.Enabled ? "■" : " ")}] Enabled",
+                        Text = Host.Enabled.GetCheckboxText(nameof(Host.Enabled)),
                         Hotkey = 't',
-                        Callback = h => Task.Run<bool?>(() => (h.Enabled = !h.Enabled) || true), // always return true, but flip the bool first.
-                    },
-                    new PickOptionDataAsync<Host, bool?>
-                    {
-                        Element = Host,
-                        Text = "undo changes",
-                        Hotkey = 'u',
-                        Callback = delegate (Host h)
-                        {
-                            oldHost.CopyTo(ref h);
-                            return Task.Run<bool?>(() => true);
-                        },
+                        Callback = Host.FlipEnabledAsync,
                     },
                     new PickOptionDataAsync<Host, bool?>
                     {
@@ -747,10 +742,24 @@ namespace UD_Bones_Folder.Mod
 
                 if (Host != oldHost)
                 {
+                    options.Insert(
+                        Index: options.FirstIndexOrDefault(o => o.Text.EqualsNoCase("return")),
+                        Item: new PickOptionDataAsync<Host, bool?>
+                        {
+                            Element = Host,
+                            Text = "undo changes",
+                            Hotkey = 'u',
+                            Callback = h => Task.Run<bool?>(delegate ()
+                            {
+                                oldHost.CopyTo(ref h);
+                                return true;
+                            }),
+                        });
+
                     options.Add(new PickOptionDataAsync<Host, bool?>
                     {
                         Element = Host,
-                        Text = "save & return",
+                        Text = "save && return",
                         Hotkey = 's',
                         Callback = async delegate (Host h)
                         {
@@ -769,32 +778,37 @@ namespace UD_Bones_Folder.Mod
                         }
                     });
                 }
+
+                int defaultIndex = options.FirstIndexOrDefault(o
+                    => (Host == oldHost
+                         && o.Text.EqualsNoCase("return"))
+                    || o.Text.EqualsNoCase("save & return"));
+
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
                     BreakWhen: v => v is not true,
                     Title: "{{yellow|Modify {{black|Osseous Ash}} Host}}",
                     Intro: $"Use the options below to modify host {Host.DisplayName()} which is in the below location:\n" +
-                        $"{HostCollection.DisplayName()}\n\n",
+                        $"{HostCollection.TaggedDisplayName()}\n\n",
                     IntroIcon: new Renderable(
                         Tile: "Mutations/gas_generation.bmp",
                         ColorString: $"&K",
                         TileColor: $"&K",
                         DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
-                    DefaultSelected: options.FirstIndexOrDefault(
-                        o => (Host == oldHost
-                                && o.Text.EqualsNoCase("return"))
-                            || o.Text.EqualsNoCase("save & return")
-                        ),
+                    DefaultSelected: defaultIndex,
                     AllowEscape: true,
                     ValueOnEscape: null,
                     FinalSelectedCallback: async delegate (PickOptionData<Host, Task<bool?>> o, Task<bool?> r)
                     {
-                        if ((await r) is not true
-                            && AskSureLoseUnsavedAsync(o.Element, oldHost).WaitResult())
+                        if ((await r.AwaitResultIfNotIsCompletedSuccessfully()) is not true
+                            && await AskSureLoseUnsavedAsync(o.Element, oldHost))
                             r = Task.Run<bool?>(() => true);
 
                         return await UIUtils.ShowEscancellepedAsync(o, r);
                     });
+
+                options?.Clear();
+                options = null;
             }
             while (result is true);
 
@@ -845,7 +859,7 @@ namespace UD_Bones_Folder.Mod
                                 HostCollection.WriteRemoveHost(Host);
                                 hostCollection.WriteAddHost(Host);
                             }
-                            return true;
+                            return false;
                         }
                     });
                 }
@@ -853,15 +867,15 @@ namespace UD_Bones_Folder.Mod
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
                     BreakWhen: v => v is not true,
-                    Title: "{{yellow|Modify {{black|Osseous Ash}} Host}}",
-                    Intro: $"Use the options below to modify host {Host.DisplayName()} which is in the below location:\n\n" +
-                        $"{HostCollection.DisplayName()}",
+                    Title: "{{yellow|Migrate {{black|Osseous Ash}} Host}}",
+                    Intro: $"Which location would you like to migrate host {Host.DisplayName()} to?\n\n",
                     IntroIcon: new Renderable(
                         Tile: "Mutations/gas_generation.bmp",
                         ColorString: $"&K",
                         TileColor: $"&K",
                         DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
-                    DefaultSelected: options.FirstIndexOrDefault(o => o.Text.EqualsNoCase("return")),
+                    Buttons: UIUtils.BackButton,
+                    ValueOnBack: false,
                     AllowEscape: true,
                     ValueOnEscape: null,
                     FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);
@@ -876,7 +890,7 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<bool> AskSureLoseUnsavedAsync(Host Host, Host OldHost)
             => Host == OldHost
-            || (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) != DialogResult.Yes;
+            || (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes;
 
         private static async Task<bool?> ConfirmModifiedHostAsync(Host OldHost, Host ModifiedHost)
         {
@@ -981,9 +995,10 @@ namespace UD_Bones_Folder.Mod
 
                 foreach (var hostedSaveBonesInfo in saveBonesInfosFromHost)
                 {
-                    if (saveBonesInfos.Any(info => info.ID == hostedSaveBonesInfo.ID))
+                    if ((saveBonesInfos?.Any(info => info.ID == hostedSaveBonesInfo.ID)) is true)
                         continue;
 
+                    saveBonesInfos ??= new();
                     saveBonesInfos.Add(hostedSaveBonesInfo);
                 }
             }

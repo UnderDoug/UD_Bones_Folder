@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ using Kobold;
 using Platform.IO;
 
 using UD_Bones_Folder.Mod.UI;
+
+using UnityEngine.UI;
 
 using XRL;
 using XRL.Collections;
@@ -126,7 +129,7 @@ namespace UD_Bones_Folder.Mod
             SaveRow.SetBonesIcon(BonesData);
             SaveRow.SetBonesText(BonesData);
             SaveRow.SetBonesModsDiffer(BonesData);
-            SaveRow.SetBonesDeleteButton();
+            SaveRow.SetBonesDeleteButton(BonesData);
 
             BonesManagement.instance.SelectionChoiceSyncButtons ??= new();
             SaveRow.SetLocationBox(BonesData);
@@ -209,8 +212,8 @@ namespace UD_Bones_Folder.Mod
                     if (locationBoxTextSkin.name == "tct"
                         || locationBoxTextSkin.gameObject.name == "tct")
                     {
-                        string typeColor = bonesInfo.DirectoryInfo.GetFileLocationDataTypeColor();
-                        string text = bonesInfo.DirectoryInfo.Type.ToString().ToLower().Colored(typeColor);
+                        string typeColor = bonesInfo.FileLocationData.GetFileLocationDataTypeColor();
+                        string text = bonesInfo.FileLocationData.Type.ToString().ToLower().Colored(typeColor);
                         locationBoxTextSkin.SetText(text);
                         break;
                     }
@@ -238,10 +241,12 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static void SetBonesDeleteButton(this SaveManagementRow SaveRow)
+        public static void SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
+            var bonesInfo = BonesData.BonesInfo;
             SaveRow.deleteButton ??= new();
             SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
+            
             if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
             {
                 foreach (var deleteButtonTextSkin in deleteButtonTextSkins)
@@ -253,6 +258,29 @@ namespace UD_Bones_Folder.Mod
                         break;
                     }
                 }
+            }
+            if (!bonesInfo.IsCrematable)
+            {
+                if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkinsToHide)
+                {
+                    foreach (var deleteButtonTextSkin in deleteButtonTextSkinsToHide)
+                    {
+                        if (deleteButtonTextSkin.name == "tct"
+                            || deleteButtonTextSkin.gameObject.name == "tct")
+                        {
+                            deleteButtonTextSkin.color = UnityEngine.Color.clear;
+                            break;
+                        }
+                    }
+                }
+
+                if (SaveRow.deleteButton.GetComponentsInChildren<Image>() is Image[] deleteButtonImagesToHide)
+                    foreach (var deleteButtonImage in deleteButtonImagesToHide)
+                        deleteButtonImage.color = UnityEngine.Color.clear;
+
+                SaveRow.deleteButton.context.disabled = true;
+                SaveRow.deleteButton.enabled = false;
+                SaveRow.deleteButton.gameObject.SetActive(value: false);
             }
         }
 
@@ -891,5 +919,14 @@ namespace UD_Bones_Folder.Mod
             }
             return Default;
         }
+
+        public static async Task<TResult> AwaitResultIfNotIsCompletedSuccessfully<TResult>(this Task<TResult> ResultTask)
+            => (ResultTask?.IsCompletedSuccessfully) is true
+            ? ResultTask.Result
+            : await ResultTask
+            ;
+
+        public static string GetCheckboxText(this bool Value, string Label)
+            => $"[{(Value ? "■" : " ")}] {Label}";
     }
 }
