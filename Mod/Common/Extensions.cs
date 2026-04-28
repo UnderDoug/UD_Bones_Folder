@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -835,7 +836,7 @@ namespace UD_Bones_Folder.Mod
 
         public static void SplitOut(this string String, string Delimiter, out string Key, out string Value)
         {
-            Key = null;
+            Key = String;
             Value = null;
 
             if (String.IsNullOrEmpty())
@@ -928,5 +929,50 @@ namespace UD_Bones_Folder.Mod
 
         public static string GetCheckboxText(this bool Value, string Label)
             => $"[{(Value ? "■" : " ")}] {Label}";
+
+        public static bool IsTwixt(this int Value, int LowerInclusive, int UpperExclusive)
+            => Value >= LowerInclusive
+            && Value < UpperExclusive
+            ;
+
+        public static ulong ToUInt64<T>(this T Value)
+            where T : Enum
+            => Convert.GetTypeCode(Value) switch
+            {
+                TypeCode.SByte or
+                TypeCode.Int16 or
+                TypeCode.Int32 or
+                TypeCode.Int64 => (ulong)Convert.ToInt64(Value, CultureInfo.InvariantCulture),
+
+                TypeCode.Boolean or
+                TypeCode.Char or
+                TypeCode.Byte or
+                TypeCode.UInt16 or
+                TypeCode.UInt32 or
+                TypeCode.UInt64 => Convert.ToUInt64(Value, CultureInfo.InvariantCulture),
+
+                _ => throw new InvalidOperationException("Unknown enum type."),
+            };
+
+        public static bool IsTwixt<T>(this T Value, T LowerInclusive, T UpperExclusive)
+            where T : Enum
+            => Value.ToUInt64() >= LowerInclusive.ToUInt64()
+            && Value.ToUInt64() < UpperExclusive.ToUInt64()
+            ;
+
+        public static bool? ToNullableBool(this UIUtils.CascadableResult Value)
+        {
+            if (Value <= UIUtils.CascadableResult.Continue)
+                return true;
+
+            if (Value <= UIUtils.CascadableResult.Back)
+                return false;
+
+            return null;
+        }
+
+        public static bool ToBool(this UIUtils.CascadableResult Value)
+            => Value <= UIUtils.CascadableResult.Continue
+            ;
     }
 }

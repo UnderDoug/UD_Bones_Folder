@@ -154,17 +154,15 @@
         DisplayText="{{Y|[}}Manage {{black|Osseous Ash}} hosts{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.OsseousAsh.ManageHostsOptionButton">
+        OnClick="UD_Bones_Folder.Mod.OsseousAsh.ManageHostsOptionButtonAsync">
     <helptext>
-      Enter a custom permyriad chance for a given zone to have bones. Permyriad is like percent, but for 10,000 instead of 100. This allows for percentages with 2 significant digits.
+      Use this menu to manage your {{black|Osseous Ash}} hosts. You can add new ones, modify them (including disabling them), migrate where the host details are stored, and delete hosts.
 
-      If you want {{W|2.0%}}, enter {{C|200}}.
-      If you want {{W|50.0%}}, enter {{C|5000}}.
-      If you want {{W|0.01%}}, enter {{C|1}}.
+      Hosts are only ever sent requests if you're opted-in to the {{black|Osseous Ash}} community project, and only for the direction(s) you've opted-in to.
 
-      Note: if you would like to disable encountering bones altogether, there is a debug option (in the {{c|Debug}} category) to pause bones encounters.
+      Please note: in the absence of any hosts, this mod will recreate the default one below. If you would like to effectively remove it, you can use this button to modify the default host to be disabled.
 
-      The default is {{W|2.0%}} ({{C|200}}).
+      The default is {{W|https://osseousash.cloud/}}, saved to [{{G|Synced}}] &lt;...&gt;/CavesOfQud/Synced/OsseousAsh/Hosts.json.
     </helptext>
   </option>
   <option

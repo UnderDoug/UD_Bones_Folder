@@ -14,6 +14,14 @@ namespace UD_Bones_Folder.Mod.UI
 {
     public static class UIUtils
     {
+        public enum CascadableResult : int
+        {
+            Continue,
+            Back,
+            BackSilent,
+            Cancel,
+            CancelSilent,
+        }
         public static List<QudMenuItem> _BackButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -22,6 +30,17 @@ namespace UD_Bones_Folder.Mod.UI
                 // command = "No",
                 command = "option:-2",
                 hotkey = "N,V Negative"
+            },
+        };
+
+        public static List<QudMenuItem> _SaveButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{y|Save}}",
+                // command = "No",
+                command = "option:-3",
+                hotkey = "Accept"
             },
         };
 
@@ -35,7 +54,7 @@ namespace UD_Bones_Folder.Mod.UI
                     {
                         new QudMenuItem
                         {
-                            text = ControlManager.getCommandInputFormatted("V Negative") + " {{y|Back}}",
+                            text = ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + " {{y|Back}}",
                             // command = "No",
                             command = "option:-2",
                             hotkey = "N,V Negative"
@@ -46,35 +65,65 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        public static List<QudMenuItem> SaveButton
+        {
+            get
+            {
+                if (ControlManager.activeControllerType == ControlManager.InputDeviceType.Gamepad)
+                {
+                    return new List<QudMenuItem>
+                    {
+                        new QudMenuItem
+                        {
+                            text = ControlManager.getCommandInputDescription("Accept", XRL.UI.Options.ModernUI) + " {{W|Save}}",
+                            command = "option:-3",
+                            hotkey = "Accept"
+                        },
+                    };
+                }
+                return _SaveButton;
+            }
+        }
+
         public static async Task<TResult> PerformPickOptionAsync<T, TResult>(
             PickOptionDataSet<T, Task<TResult>> OptionDataSet,
-            Predicate<TResult> BreakWhen,
             string Title = "",
             string Intro = null,
             IRenderable IntroIcon = null,
-            IReadOnlyList<QudMenuItem> Buttons = null,
+            IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             int DefaultSelected = 0,
             bool RespectOptionNewlines = false,
-            TResult ValueOnBack = default,
-            Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> BackCallback = null,
-            bool AllowEscape = true,
-            TResult ValueOnEscape = default,
+            Func<Task<TResult>> OnBackCallback = null,
+            Func<Task<TResult>> OnEscapeCallback = null,
+            Dictionary<int, Func<Task<TResult>>> ButtonCallbacks = null,
             Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> FinalSelectedCallback = null
             )
         {
-            Buttons ??= BackButton;
+            DefaultSelected = Math.Clamp(DefaultSelected, 0, OptionDataSet.Count - 1);
+            ButtonCallbacks ??= new();
+
+            ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => Task.Run(() => (TResult)default)));
+            ButtonCallbacks.Add(-2, OnBackCallback ?? (() => Task.Run(() => (TResult)default)));
+
+            var buttons = new List<QudMenuItem>();
+
+            if (!AdditionalButtons.IsNullOrEmpty())
+                buttons.AddRange(AdditionalButtons);
+
+            buttons.AddRange(BackButton);
+
             int choice = DefaultSelected;
             PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[DefaultSelected];
             Task<TResult> optionCallBack;
             TResult result = default;
-            do
+            
+            try
             {
-                var navController = NavigationController.instance;
-                var oldContext = navController.activeContext;
-                navController.activeContext = NavigationController.instance.suspensionContext;
-                try
+                return await NavigationController.instance.SuspendContextWhile(async delegate ()
                 {
                     var taskCompletionSource = new TaskCompletionSource<int>();
+
+                    Utils.Log($"PickOption");
                     Popup.PickOption(
                         Title: Title,
                         Intro: Intro,
@@ -82,70 +131,51 @@ namespace UD_Bones_Folder.Mod.UI
                         Hotkeys: OptionDataSet.GetHotkeys(),
                         Icons: OptionDataSet.GetIcons(),
                         IntroIcon: IntroIcon,
-                        Buttons: Buttons,
+                        Buttons: buttons,
                         DefaultSelected: DefaultSelected,
                         RespectOptionNewlines: RespectOptionNewlines,
-                        AllowEscape: AllowEscape,
-                        OnResult: choice => taskCompletionSource.TrySetResult(choice),
-                        ForceNewPopup: true);
+                        AllowEscape: true,
+                        OnResult: delegate (int choice)
+                        {
+                            /*Utils.Log($"{nameof(choice)} is {choice}");
+                            if (choice >= 0)
+                                Utils.Log($"{1.Indent()}: {OptionDataSet[choice].Text ?? "NO_CHOICE_TEXT"}");
+                            else
+                            {
+                                if (choice == -1)
+                                    Utils.Log($"{1.Indent()}: back");
+                                else
+                                    Utils.Log($"{1.Indent()}: cancel");
+                            }*/
+                            taskCompletionSource.TrySetResult(choice);
+                        });
 
                     choice = await taskCompletionSource.Task;
 
                     if (choice < 0)
                     {
                         chosenOption = null;
-                        optionCallBack = Task<TResult>.Run(delegate ()
-                        {
-                            return choice != -2 
-                            ? ValueOnEscape
-                            : ValueOnBack
-                            ;
-                        });
-                        break;
+                        optionCallBack = ButtonCallbacks?.GetValueOrDefault(choice)?.Invoke();
                     }
-
-                    chosenOption = OptionDataSet[choice];
-
-                    optionCallBack = chosenOption.Invoke();
+                    else
+                    {
+                        chosenOption = OptionDataSet[choice];
+                        optionCallBack = chosenOption.Invoke();
+                    }
 
                     result = await optionCallBack;
 
-                    if (BreakWhen.Invoke(result))
-                        break;
-                }
-                finally
-                {
-                    navController.activeContext = oldContext;
-                }
-                /*choice = await Popup.PickOptionAsync(
-                    Title: Title,
-                    Intro: Intro,
-                    Options: OptionDataSet.GetOptions(),
-                    Hotkeys: OptionDataSet.GetHotkeys(),
-                    Icons: OptionDataSet.GetIcons(),
-                    IntroIcon: IntroIcon,
-                    DefaultSelected: DefaultSelected,
-                    RespectOptionNewlines: RespectOptionNewlines,
-                    AllowEscape: AllowEscape);
+                    if (FinalSelectedCallback != null)
+                        result = await FinalSelectedCallback(chosenOption, optionCallBack);
 
-                if (choice < 0)
                     return result;
-
-                chosenOption = OptionDataSet[choice];
-
-                optionCallBack = chosenOption.Invoke();
-
-                result = await optionCallBack;
-
-                if (BreakWhen.Invoke(result))
-                break;*/
+                });
             }
-            while (true);
-
-            if (FinalSelectedCallback != null)
-                return await FinalSelectedCallback(chosenOption, optionCallBack);
-            else
-                return result;
+            catch (Exception x)
+            {
+                Utils.Error(Utils.CallChain(nameof(NavigationController), nameof(NavigationController.SuspendContextWhile)), x);
+            }
+            return result;
         }
 
         public static async Task<TResult> ShowEscancellepedAsync<T, TResult>(
@@ -164,10 +194,15 @@ namespace UD_Bones_Folder.Mod.UI
                 if (escaped)
                     escancelleped = "escaped";
 
-                await Popup.ShowAsync($"\"{Option.Text}\" operation {escancelleped}.");
+                await Popup.ShowAsync($"\"{Option?.Text ?? "NO_LABEL"}\" operation {escancelleped}.");
             }
+
+            T element = default;
+            if (Option != null)
+                element = Option.Element;
+
             return PostProc != null
-                ? await PostProc.Invoke(Option.Element, Result)
+                ? await PostProc.Invoke(element, Result)
                 : await Result
                 ;
         }
@@ -188,10 +223,15 @@ namespace UD_Bones_Folder.Mod.UI
                 if (escaped)
                     escancelleped = "escaped";
 
-                Popup.ShowAsync($"\"{Option.Text}\" operation {escancelleped}.").Wait();
+                Popup.ShowAsync($"\"{Option?.Text ?? "NO_LABEL"}\" operation {escancelleped}.").Wait();
             }
+
+            T element = default;
+            if (Option != null)
+                element = Option.Element;
+
             return PostProc != null
-                ? PostProc.Invoke(Option.Element, Result)
+                ? PostProc.Invoke(element, Result)
                 : Result
                 ;
         }
@@ -217,5 +257,31 @@ namespace UD_Bones_Folder.Mod.UI
                 CancelledWhen: r => r is false,
                 EscapedWhen: r => r is null)
             ;
+
+        public static async Task<CascadableResult> ShowEscancellepedAsync<T>(
+            PickOptionData<T, Task<CascadableResult>> Option,
+            Task<CascadableResult> Result
+            )
+        {
+            var result = await Result.AwaitResultIfNotIsCompletedSuccessfully();
+
+            if (result == CascadableResult.BackSilent
+                || result == CascadableResult.CancelSilent)
+                return result;
+
+            return await ShowEscancellepedAsync(
+                Option: Option,
+                Result: Result,
+                CancelledWhen: r => r.IsTwixt(CascadableResult.Back, CascadableResult.Cancel),
+                EscapedWhen: r => r >= CascadableResult.Cancel,
+                PostProc: async delegate (T o, Task<CascadableResult> r)
+                {
+                    var result = await r.AwaitResultIfNotIsCompletedSuccessfully();
+                    if (result == CascadableResult.Back
+                        || result == CascadableResult.Cancel)
+                        return ++result;
+                    return result;
+                });
+        }
     }
 }

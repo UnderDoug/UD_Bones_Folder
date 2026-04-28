@@ -465,12 +465,6 @@ namespace UD_Bones_Folder.Mod.UI
                     saveRow.setBonesData(bonesDataI);
                     saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.ButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
-
-                    if (!bonesDataI.BonesInfo.IsCrematable)
-                    {
-                        saveRow.deleteButton.context.buttonHandlers.Remove(InputButtonTypes.AcceptButton);
-                        saveRow.context.context.commandHandlers.Remove("CmdDelete");
-                    }
                 }
                 
             }
@@ -707,7 +701,8 @@ namespace UD_Bones_Folder.Mod.UI
                 return;
 
             if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
-                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
+                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo
+                || !bonesInfo.IsCrematable)
                 return;
 
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;

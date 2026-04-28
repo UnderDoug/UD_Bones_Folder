@@ -548,6 +548,12 @@ namespace UD_Bones_Folder.Mod
             => UnityEngine.Debug.Log(Message)
             ;
 
+        public static T LogReturn<T>(object Message, T Return)
+        {
+            Log(Message);
+            return Return;
+        }
+
         [VariableObjectReplacer(Keys = new string[] { "RegalTitle", "UD_RegalTitle" })]
         public static string RegalTitle(DelegateContext Context)
             => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{(Context.Target?.BaseID)?.ToString() ?? "*"}="

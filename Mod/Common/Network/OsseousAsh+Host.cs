@@ -120,7 +120,7 @@ namespace UD_Bones_Folder.Mod
                 if (Name.StartsWith("http"))
                 {
                     Name = Name[4..];
-                    Encrypted = HostName[0] == 's';
+                    Encrypted = Name[0] == 's';
                     if (Encrypted)
                         Name = Name[1..];
                 }
@@ -253,6 +253,12 @@ namespace UD_Bones_Folder.Mod
 
             public string GetHostNameWithProtocol(bool TrailingSlash = true)
                 => GetHostNameWithProtocol(Encrypted, TrailingSlash)
+                ;
+
+            public string FullDisplayName(bool IncludeAuth = false)
+                => $"[{Enabled.GetCheckboxText(nameof(Enabled))}] "
+                + GetHostNameWithProtocol()
+                + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
                 ;
 
             public static string TrimSlashes(string Path)
@@ -714,7 +720,16 @@ namespace UD_Bones_Folder.Mod
             }
 
             #endregion
-            
+
+            public bool SameAs(Host Other)
+                => Other is not null
+                && Name == Other.Name
+                && Port == Other.Port
+                && Encrypted == Other.Encrypted
+                && AuthToken == Other.AuthToken
+                && Enabled == Other.Enabled
+                ;
+
             public override string ToString()
                 => $"{GetHostNameWithProtocol(TrailingSlash: true)}"
                 ;
@@ -726,27 +741,23 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public override int GetHashCode()
-                => (Name?.GetHashCode() ?? 0)
+                => Name.GetHashCode()
                 ^ (Port?.GetHashCode() ?? 0)
                 ^ Encrypted.GetHashCode()
                 ^ (AuthToken?.GetHashCode() ?? 0)
                 ^ Enabled.GetHashCode()
                 ;
 
-            public bool Equals(Host Other)
-                => Other != null
-                && Name == Other.Name
-                && Port == Other.Port
-                && Encrypted == Other.Encrypted
-                && Enabled == Other.Enabled
+            public bool Equals(Host other)
+                => SameAs(other)
                 ;
 
-            public static Task<bool?> FlipEncryptedAsync(Host Host)
-                => Task.Run<bool?>(() => (Host.Encrypted = !Host.Encrypted) || true)
+            public static Task<bool> FlipEncryptedAsync(Host Host)
+                => Task.Run(() => (Host.Encrypted = !Host.Encrypted) || true) // always true, but flip it first.
                 ;
 
-            public static Task<bool?> FlipEnabledAsync(Host Host)
-                => Task.Run<bool?>(() => (Host.Enabled = !Host.Enabled) || true)
+            public static Task<bool> FlipEnabledAsync(Host Host)
+                => Task.Run(() => (Host.Enabled = !Host.Enabled) || true) // always true, but flip it first.
                 ;
 
             public void Dispose()
@@ -757,19 +768,6 @@ namespace UD_Bones_Folder.Mod
                 AuthToken = null;
                 Enabled = false;
             }
-
-            public static bool operator ==(Host X, Host Y)
-            {
-                if (X is null
-                    || Y is null)
-                    return (X is null) == (Y is null);
-
-                return X.Equals(Y);
-            }
-
-            public static bool operator !=(Host X, Host Y)
-                => !(X == Y)
-                ;
 
             public static implicit operator string(Host Host)
                 => Host.ToString()

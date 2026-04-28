@@ -430,8 +430,11 @@ namespace UD_Bones_Folder.Mod
 
         public void Cremate()
         {
-            BonesManager.DeleteBonesInfoDirectory(Directory);
-            WasCremated = true;
+            if (IsCrematable)
+            {
+                BonesManager.DeleteBonesInfoDirectory(Directory);
+                WasCremated = true;
+            }
         }
 
         public bool IsEligibleForCurrentSave(bool Strict = false)

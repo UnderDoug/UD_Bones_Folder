@@ -144,6 +144,9 @@ namespace UD_Bones_Folder.Mod
             return DataManager.SanitizePathForDisplay(output);
         }
 
+        public string TaggedDisplayName(string FileName = null)
+            => $"[{Type.GetColoredString()}] {SanitiseForDisplay(FileName)}";
+
         public bool Exists()
             => !Path.IsNullOrEmpty()
             && Directory.Exists(Path)

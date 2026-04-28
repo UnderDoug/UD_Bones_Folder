@@ -32,6 +32,12 @@ namespace UD_Bones_Folder.Mod.UI
 
         protected static TRippedWindow OriginalInstance => SingletonWindowBase<TRippedWindow>.instance;
 
+        public static TWindow Instance
+            => CheckInit()
+            ? instance as TWindow
+            : null
+            ;
+
         public Image Background;
 
         public FrameworkScroller LegendBar;
@@ -56,14 +62,13 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 try
                 {
-                    var osseousAshManagementWindow = UIManager
+                    var newRippedWindow = UIManager
                         .createWindow(
                             name: WindowTypeName,
                             scriptType: typeof(BaseRippedSingletonWindowBase<TWindow, TRippedWindow>)
                         ) as BaseRippedSingletonWindowBase<TWindow, TRippedWindow>;
 
-                    osseousAshManagementWindow.Init();
-                    osseousAshManagementWindow.name = osseousAshManagementWindow.GetInstanceName();
+                    newRippedWindow.Init();
                 }
                 catch (Exception x)
                 {
@@ -77,6 +82,8 @@ namespace UD_Bones_Folder.Mod.UI
         public override void Init()
         {
             base.Init();
+
+            name = GetInstanceName();
 
             if (OriginalInstance is null)
                 throw new NullReferenceException($"{RippedWindowTypeName}.{nameof(SingletonWindowBase<TRippedWindow>.instance)} must not be null");

@@ -40,8 +40,13 @@ namespace UD_Bones_Folder.Mod
                 public static HostEqualityComparer Default => new();
 
                 public bool Equals(Host x, Host y)
-                    => x == y
-                    ;
+                {
+                    if (x == null
+                        || y == null)
+                        return (x == null) == (y == null);
+
+                    return x.SameAs(y);
+                }
 
                 public int GetHashCode(Host obj)
                     => obj?.GetHashCode() ?? 0
@@ -61,6 +66,7 @@ namespace UD_Bones_Folder.Mod
                 public HostCollectionJSON(HostCollection Source)
                     : this()
                 {
+                    Source.RemoveWhere(h => h == null);
                     Hosts = Source.ToArray();
                 }
 
