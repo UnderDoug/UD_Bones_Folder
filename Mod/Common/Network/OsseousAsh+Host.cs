@@ -44,6 +44,7 @@ namespace UD_Bones_Folder.Mod
                 Encrypted = true,
             };
 
+            public static string status => nameof(status);
             public static string canUp => nameof(canUp);
             public static string Bones => nameof(Bones);
             public static string ID => CombineRoute(Bones, nameof(ID));
@@ -83,6 +84,9 @@ namespace UD_Bones_Folder.Mod
             /// </summary>
             [JsonProperty]
             public bool Enabled;
+
+            [JsonIgnore]
+            public bool IsRunning => GetServerStatus();
 
             public Host()
             {
@@ -256,7 +260,8 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public string FullDisplayName(bool IncludeAuth = false)
-                => $"[{Enabled.GetCheckboxText(nameof(Enabled))}] "
+                => $"{Enabled.GetCheckbox()} "
+                + $"{"\u000f".Colored(IsRunning ? "c" : "K")} " // \u000f ☼ | \u0017 ↨
                 + GetHostNameWithProtocol()
                 + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
                 ;
@@ -294,6 +299,10 @@ namespace UD_Bones_Folder.Mod
 
             private string CombineHostRoute(params string[] Route)
                 => CombineRoute(GetHostNameWithProtocol(), CombineRoute(Route))
+                ;
+
+            public string statusGetRoute(string BonesID = null)
+                => CombineHostRoute(status, BonesID)
                 ;
 
             public string canUpGetRoute(string BonesID = null)
@@ -403,6 +412,52 @@ namespace UD_Bones_Folder.Mod
                 Proc: Proc)
             ;
 
+            #region Get Server Status
+
+            public bool GetServerStatus()
+            {
+                if (!Enabled)
+                    return false;
+
+                string uRI = statusGetRoute();
+                HttpWebRequest httpReq = null;
+                int timeout = TimeSpan.FromSeconds(4).Milliseconds;
+                try
+                {
+                    httpReq = CreateGetJSON(uRI);
+                }
+                catch (TaskCanceledException)
+                {
+                    Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    return false;
+                }
+
+                try
+                {
+                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = streamReader.ReadToEnd();
+                        if (httpRes.StatusCode == HttpStatusCode.OK
+                            && JObject.Parse(result) is JObject jObject
+                            && jObject["status"].ToObject<string>() is string statusString
+                            && statusString == "Running")
+                        {
+                            return true;
+                        }
+                        else
+                            Utils.Warn($"{nameof(GetBonesInfos)} got no status from {ToString()}" +
+                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed receiving GET response for {uRI}", x);
+                }
+                return false;
+            }
+
+            #endregion
             #region Upload Saves
 
             public async Task<Guid> PostBonesInfo(
@@ -411,7 +466,8 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
-                if (BonesID.IsNullOrEmpty()
+                if (!Enabled
+                    || BonesID.IsNullOrEmpty()
                     || SaveBonesJSON == null
                     || SavGz.IsNullOrEmpty())
                     return Guid.Empty;
@@ -479,7 +535,8 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
-                if (BonesID.IsNullOrEmpty()
+                if (!Enabled
+                    || BonesID.IsNullOrEmpty()
                     || Token.IsEmptyOrDefault()
                     || SavGz.IsNullOrEmpty())
                     return false;
@@ -546,6 +603,9 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
+                if (!Enabled)
+                    return false;
+
                 try
                 {
                     Guid token = Guid.Empty;
@@ -589,6 +649,9 @@ namespace UD_Bones_Folder.Mod
 
             private SaveBonesJSON[] GetSaveBonesJSONs()
             {
+                if (!Enabled)
+                    return null;
+
                 string uRI = BonesInfosGetRoute();
                 HttpWebRequest httpReq = null;
                 int timeout = TimeSpan.FromSeconds(4).Milliseconds;
@@ -672,6 +735,9 @@ namespace UD_Bones_Folder.Mod
 
             public byte[] GetBonesSavGz(string BonesID)
             {
+                if (!Enabled)
+                    return null;
+
                 if (BonesID.IsNullOrEmpty())
                     return null;
 

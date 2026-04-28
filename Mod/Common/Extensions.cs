@@ -927,8 +927,11 @@ namespace UD_Bones_Folder.Mod
             : await ResultTask
             ;
 
+        public static string GetCheckbox(this bool Value)
+            => $"[{(Value ? "■" : " ")}]";
+
         public static string GetCheckboxText(this bool Value, string Label)
-            => $"[{(Value ? "■" : " ")}] {Label}";
+            => $"{Value.GetCheckbox()} {Label}";
 
         public static bool IsTwixt(this int Value, int LowerInclusive, int UpperExclusive)
             => Value >= LowerInclusive
@@ -954,10 +957,10 @@ namespace UD_Bones_Folder.Mod
                 _ => throw new InvalidOperationException("Unknown enum type."),
             };
 
-        public static bool IsTwixt<T>(this T Value, T LowerInclusive, T UpperExclusive)
+        public static bool IsTwixtInclusive<T>(this T Value, T Lower, T Upper)
             where T : Enum
-            => Value.ToUInt64() >= LowerInclusive.ToUInt64()
-            && Value.ToUInt64() < UpperExclusive.ToUInt64()
+            => Value.ToUInt64() >= Lower.ToUInt64()
+            && Value.ToUInt64() <= Upper.ToUInt64()
             ;
 
         public static bool? ToNullableBool(this UIUtils.CascadableResult Value)
@@ -974,5 +977,33 @@ namespace UD_Bones_Folder.Mod
         public static bool ToBool(this UIUtils.CascadableResult Value)
             => Value <= UIUtils.CascadableResult.Continue
             ;
+
+        public static bool IsContinue(this UIUtils.CascadableResult Value)
+            => Value.IsTwixtInclusive(UIUtils.CascadableResult.Continue, UIUtils.CascadableResult.Continue)
+            ;
+
+        public static bool IsBack(this UIUtils.CascadableResult Value)
+            => Value.IsTwixtInclusive(UIUtils.CascadableResult.Back, UIUtils.CascadableResult.BackSilent)
+            ;
+
+        public static bool IsCancel(this UIUtils.CascadableResult Value)
+            => Value >= UIUtils.CascadableResult.Cancel
+            ;
+
+        public static UIUtils.CascadableResult ToCascadableResult(this bool? Value, bool Silent)
+        {
+            if (Value.GetValueOrDefault())
+                return UIUtils.CascadableResult.Continue;
+
+            var result = Value.HasValue
+                ? UIUtils.CascadableResult.Back
+                : UIUtils.CascadableResult.Cancel
+                ;
+
+            if (Silent)
+                result++;
+
+            return result;
+        }
     }
 }

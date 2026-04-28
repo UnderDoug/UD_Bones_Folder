@@ -27,7 +27,6 @@ namespace UD_Bones_Folder.Mod.UI
             new QudMenuItem
             {
                 text = "{{y|Back}}",
-                // command = "No",
                 command = "option:-2",
                 hotkey = "N,V Negative"
             },
@@ -38,7 +37,6 @@ namespace UD_Bones_Folder.Mod.UI
             new QudMenuItem
             {
                 text = "{{y|Save}}",
-                // command = "No",
                 command = "option:-3",
                 hotkey = "Accept"
             },
@@ -48,20 +46,18 @@ namespace UD_Bones_Folder.Mod.UI
         {
             get
             {
-                if (ControlManager.activeControllerType == ControlManager.InputDeviceType.Gamepad)
+                if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Gamepad)
+                    return _BackButton;
+
+                return new List<QudMenuItem>
                 {
-                    return new List<QudMenuItem>
+                    new QudMenuItem
                     {
-                        new QudMenuItem
-                        {
-                            text = ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + " {{y|Back}}",
-                            // command = "No",
-                            command = "option:-2",
-                            hotkey = "N,V Negative"
-                        },
-                    };
-                }
-                return _BackButton;
+                        text = ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + " {{y|Back}}",
+                        command = "option:-2",
+                        hotkey = "N,V Negative"
+                    },
+                };
             }
         }
 
@@ -69,19 +65,18 @@ namespace UD_Bones_Folder.Mod.UI
         {
             get
             {
-                if (ControlManager.activeControllerType == ControlManager.InputDeviceType.Gamepad)
+                if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Gamepad)
+                    return _SaveButton;
+
+                return new List<QudMenuItem>
                 {
-                    return new List<QudMenuItem>
+                    new QudMenuItem
                     {
-                        new QudMenuItem
-                        {
-                            text = ControlManager.getCommandInputDescription("Accept", XRL.UI.Options.ModernUI) + " {{W|Save}}",
-                            command = "option:-3",
-                            hotkey = "Accept"
-                        },
-                    };
-                }
-                return _SaveButton;
+                        text = ControlManager.getCommandInputDescription("Accept", XRL.UI.Options.ModernUI) + " {{W|Save}}",
+                        command = "option:-3",
+                        hotkey = "Accept"
+                    },
+                };
             }
         }
 
@@ -194,7 +189,8 @@ namespace UD_Bones_Folder.Mod.UI
                 if (escaped)
                     escancelleped = "escaped";
 
-                await Popup.ShowAsync($"\"{Option?.Text ?? "NO_LABEL"}\" operation {escancelleped}.");
+                if (!(Option?.Text).IsNullOrEmpty())
+                    await Popup.ShowAsync($"\"{Option.Text}\" operation {escancelleped}.");
             }
 
             T element = default;
@@ -223,7 +219,8 @@ namespace UD_Bones_Folder.Mod.UI
                 if (escaped)
                     escancelleped = "escaped";
 
-                Popup.ShowAsync($"\"{Option?.Text ?? "NO_LABEL"}\" operation {escancelleped}.").Wait();
+                if (!(Option?.Text).IsNullOrEmpty())
+                    Popup.ShowAsync($"\"{Option.Text}\" operation {escancelleped}.").Wait();
             }
 
             T element = default;
@@ -272,8 +269,8 @@ namespace UD_Bones_Folder.Mod.UI
             return await ShowEscancellepedAsync(
                 Option: Option,
                 Result: Result,
-                CancelledWhen: r => r.IsTwixt(CascadableResult.Back, CascadableResult.Cancel),
-                EscapedWhen: r => r >= CascadableResult.Cancel,
+                CancelledWhen: r => r.IsTwixtInclusive(CascadableResult.Back, CascadableResult.BackSilent),
+                EscapedWhen: r => r.IsTwixtInclusive(CascadableResult.Cancel, CascadableResult.CancelSilent),
                 PostProc: async delegate (T o, Task<CascadableResult> r)
                 {
                     var result = await r.AwaitResultIfNotIsCompletedSuccessfully();

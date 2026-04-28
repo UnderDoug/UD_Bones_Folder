@@ -162,7 +162,8 @@
 
       Please note: in the absence of any hosts, this mod will recreate the default one below. If you would like to effectively remove it, you can use this button to modify the default host to be disabled.
 
-      The default is {{W|https://osseousash.cloud/}}, saved to [{{G|Synced}}] &lt;...&gt;/CavesOfQud/Synced/OsseousAsh/Hosts.json.
+      The default is {{W|https://osseousash.cloud/}},
+      saved to [{{G|Synced}}] &lt;...&gt;/CavesOfQud/Synced/OsseousAsh/Hosts.json.
     </helptext>
   </option>
   <option
