@@ -152,8 +152,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         string percentEncountered = GetPercentageString(GetPercentOfEncountered(oAID));
                         sB.AppendLine().Append("You've personally encountered them in ").AppendRule(playerEncounters.Things("different run")).Append(", ")
-                            .Append("which is ").AppendRule(percentEncountered).Append(" of the times they've ever been encountered.")
-                            .AppendLine();
+                            .Append("which is ").AppendRule(percentEncountered).Append(" of the times they've ever been encountered.");
                     }
                     else
                         sB.AppendLine().Append("You are yet to encounter them.");
@@ -161,7 +160,8 @@ namespace UD_Bones_Folder.Mod
 
                 if (totalDefeats > 0)
                 {
-                    sB.AppendLine().Append("They have been made to relive their demise in ").AppendRule(totalDefeats.Things("run")).Append(" since their first.");
+                    sB.AppendLine()
+                        .AppendLine().Append("They have been made to relive their demise in ").AppendRule(totalDefeats.Things("run")).Append(" since their first.");
 
                     if (haveID)
                     {
@@ -180,8 +180,7 @@ namespace UD_Bones_Folder.Mod
                                     .Append(RegentName).Append(" was defeated in an attempt to reclaim your run, ");
                             }
                             string percentTriumphed = GetPercentageString(GetPercentOftDefeated(oAID));
-                            sB.Append("accounting for ").AppendRule(percentTriumphed).Append(" of their total defeats.")
-                                .AppendLine();
+                            sB.Append("accounting for ").AppendRule(percentTriumphed).Append(" of their total defeats.");
                         }
                         else
                             sB.AppendLine().Append("They have never faced defeat at your hand.");
@@ -193,7 +192,8 @@ namespace UD_Bones_Folder.Mod
 
                 if (totalReclamations > 0)
                 {
-                    sB.AppendLine().AppendRule(totalReclamations.Things("time")).Append(", ").Append(RegentName).Append(" has reclaimed a run in which they've found themselves.");
+                    sB.AppendLine()
+                        .AppendLine().AppendRule(totalReclamations.Things("time")).Append(", ").Append(RegentName).Append(" has reclaimed a run in which they've found themselves.");
 
                     if (haveID)
                     {
@@ -212,8 +212,7 @@ namespace UD_Bones_Folder.Mod
                                     .AppendRule(playerDefeats.ToString()).Append(" of your runs, ");
                             }
                             string percentDefeats = GetPercentageString(GetPercentOfEncountered(oAID));
-                            sB.Append("representing ").AppendRule(percentDefeats).Append(" of the total runs they've reclaimed.")
-                                .AppendLine();
+                            sB.Append("representing ").AppendRule(percentDefeats).Append(" of the total runs they've reclaimed.");
                         }
                         else
                             sB.AppendLine().Append("They have never reclaimed a run of yours.");

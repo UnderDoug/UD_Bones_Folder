@@ -474,7 +474,8 @@ namespace UD_Bones_Folder.Mod
                 .AppendRule(SaveTimeValue.TimeAgo()).Append(" ago.")
                 .AppendLine();
 
-            sB.AppendLine().AppendBonesStatsBlurb(Stats, Name);
+            sB.AppendLine().AppendBonesStatsBlurb(Stats, Name)
+                .AppendLine();
 
             sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
                 .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
