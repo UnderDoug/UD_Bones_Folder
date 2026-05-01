@@ -48,7 +48,14 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public int CustomPermyriadChance = Options.DefaultPermyriadChance;
+            [JsonProperty(nameof(CustomPermyriadChance))]
+            protected int? _CustomPermyriadChance;
+            [JsonIgnore]
+            public int CustomPermyriadChance
+            {
+                get => _CustomPermyriadChance ??= Options.DefaultPermyriadChance;
+                set => _CustomPermyriadChance = value;
+            }
 
             [JsonIgnore]
             private HashSet<string> LockedMembers = new();
@@ -79,9 +86,10 @@ namespace UD_Bones_Folder.Mod
                     {
                         configJSON = new Configuration
                         {
-                            AskAtStartup = true,
-                            Handle = DefaultOsseousAshHandle,
                             ID = Guid.NewGuid(),
+                            Handle = DefaultOsseousAshHandle,
+                            AskAtStartup = true,
+                            CustomPermyriadChance = Options.DefaultPermyriadChance,
                             LocationData = fileLocationData,
                         };
                         Options.EnableOsseousAshStartupPopup = true;
