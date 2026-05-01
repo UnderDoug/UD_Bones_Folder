@@ -48,14 +48,7 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            [JsonProperty(nameof(CustomPermyriadChance))]
-            protected int? _CustomPermyriadChance;
-            [JsonIgnore]
-            public int CustomPermyriadChance
-            {
-                get => _CustomPermyriadChance ??= Options.DefaultPermyriadChance;
-                set => _CustomPermyriadChance = value;
-            }
+            public int? CustomPermyriadChance;
 
             [JsonIgnore]
             private HashSet<string> LockedMembers = new();

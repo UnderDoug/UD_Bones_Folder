@@ -209,4 +209,19 @@ namespace UD_Bones_Folder.Mod
             }
         }
     }
+    public static class OsseousAshHostCollectionExtensions
+    {
+        public static int TotalCount(this Rack<OsseousAsh.HostCollection> Hosts)
+            => Hosts?.Aggregate(0, (a, n) => a + n.Count)
+            ?? 0
+            ;
+
+        public static Renderable GetAshCloudIcon(this OsseousAsh.HostCollection HostCollection)
+            => new Renderable(
+                Tile: "Mutations/gas_generation.bmp",
+                ColorString: $"&K",
+                TileColor: $"&K",
+                DetailColor: HostCollection?.LocationData?.GetFileLocationDataTypeColor()?[0] ?? 'y')
+            ;
+    }
 }

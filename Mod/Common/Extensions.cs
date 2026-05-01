@@ -1045,6 +1045,20 @@ namespace UD_Bones_Folder.Mod
             => SB.Append("\"").Append(Value).Append("\"")
             ;
 
+        public static StringBuilder AppendBullet(
+            this StringBuilder SB,
+            string Color = null,
+            string Bullet = "\u0007"
+            )
+        {
+            if (Color.IsNullOrEmpty())
+                SB.Append(Bullet);
+            else
+                SB.AppendColored(Color, Bullet);
+
+            return SB.Append(" ");
+        }
+
         public static StringBuilder AppendBonesReportedObject(this StringBuilder SB, ObjectReportDetails ReportedObject, int Indent = 0)
             => SB.AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.Blueprint), ReportedObject.Blueprint)
                 .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.SerializedBaseID), ReportedObject.SerializedBaseID)

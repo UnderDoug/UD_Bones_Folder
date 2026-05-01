@@ -147,6 +147,12 @@ namespace UD_Bones_Folder.Mod
         private static Rack<HostCollection> _Hosts;
         public static Rack<HostCollection> Hosts => _Hosts ??= FindHostCollections()?.WaitResult();
 
+        public static Renderable BlackAshCloudIcon = new(
+            Tile: "Mutations/gas_generation.bmp",
+            ColorString: "&K",
+            TileColor: "&K",
+            DetailColor: 'y');
+
         public static bool WantToAsk
             => Options.EnableOsseousAshStartupPopup
             && (Config?.AskAtStartup is true)
@@ -270,16 +276,32 @@ namespace UD_Bones_Folder.Mod
                 if (WantToAsk)
                 {
                     Options.EnableOsseousAshStartupPopup = false;
+                    var sB = Event.NewStringBuilder();
                     try
                     {
+                        sB.Append("Welcome to the ").Append(Utils.ThisMod?.DisplayTitle ?? "Bones(alpha)").Append(" mod!")
+                            .AppendLine()
+                            .AppendLine().Append("We've detected that this is the first time you've launched the game with this mod ")
+                            .Append("installed and wanted to let you know about the ").Append(OSSEOUS_ASH).Append(" community bones cloud.")
+                            .AppendLine()
+                            .AppendLine().Append("Participation in the project is entirely optional but could greatly ")
+                            .Append("enhance your experience with the Bones Folder mod:")
+                            .AppendLine()
+                            .AppendLine().AppendBullet("red").Append("Opting in to ").AppendQuote(OSSEOUS_ASH_DOWNLOADS)
+                            .Append(" will include bones files from the ").Append(OSSEOUS_ASH).Append(" when looking for bones files to load.")
+                            .AppendLine().AppendBullet("yellow").Append("Opting in to ").AppendQuote(OSSEOUS_ASH_UPLOADS)
+                            .Append(" will upload to the ").Append(OSSEOUS_ASH).Append(", any bones files saved while the option is enabled, ")
+                            .Append("and, if you choose one, will associate a handle with the uploaded bones.")
+                            .AppendLine()
+                            .AppendLine().Append("Irrespective of your choice, you won't be asked again, ")
+                            .Append("and you can always change your decision later in the options menu.")
+                            .AppendLine()
+                            .AppendLine().Append("Please note: the ").Append(OSSEOUS_ASH).Append(" community bones cloud ")
+                            .Append("requires an internet connection to function.")
+                            .AppendLine();
+
                         var choice = await Popup.NewPopupMessageAsync(
-                            message: $"Welcome to the {Utils.ThisMod?.DisplayTitle ?? "Bones(alpha)"} mod!\n\n" +
-                                $"We've detected that this is the first time you've launched the game with this mod installed and wanted to let you know about the {OSSEOUS_ASH} community bones cloud.\n\n" +
-                                $"Participation in the project is entirely optional but could greatly enhance your experience with the Bones Folder mod:\n" +
-                                $"{"\u0007".Colored("red")} Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.\n" +
-                                $"{"\u0007".Colored("yellow")} Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, and, if you choose one, will associate a handle with the uploaded bones.\n\n" +
-                                $"Irrespective of your choice, you won't be asked again, and you can always change your decision later in the options menu.\n\n" +
-                                $"Please note: the {OSSEOUS_ASH} community bones cloud requires an internet connection to function.",
+                            message: sB.ToString(),
                             buttons: OptInOptOut,
                             DefaultSelected: 1,
                             title: "{{yellow|New Bones Folder Mod Installation Detected!}}",
@@ -291,9 +313,12 @@ namespace UD_Bones_Folder.Mod
 
                         if (choice.command == "accept")
                         {
+                            sB.Clear();
+                            sB.Append("Opting in to ").AppendQuote(OSSEOUS_ASH_DOWNLOADS)
+                                .Append(" will include bones files from the ").Append(OSSEOUS_ASH).Append(" when looking for bones files to load.");
                             bool any = false;
                             if ((await Popup.NewPopupMessageAsync(
-                                message: $"Opting in to \"{OSSEOUS_ASH_DOWNLOADS}\" will include bones files from the {OSSEOUS_ASH} when looking for bones files to load.",
+                                message: sB.ToString(),
                                 buttons: PopupMessage.YesNoButton,
                                 DefaultSelected: 1,
                                 title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}?",
@@ -310,9 +335,13 @@ namespace UD_Bones_Folder.Mod
                                     Value: Options.EnableOsseousAshDownloads = true);
                             }
 
+                            sB.Clear();
+                            sB.Append("Opting in to ").AppendQuote(OSSEOUS_ASH_UPLOADS)
+                                .Append(" will upload to the ").Append(OSSEOUS_ASH).Append(", any bones files saved while the option is enabled, ")
+                                .Append("and, if you choose one, will associate a handle with the uploaded bones.");
+
                             if ((await Popup.NewPopupMessageAsync(
-                                message: $"Opting in to \"{OSSEOUS_ASH_UPLOADS}\" will upload any bones files saved while the option is enabled to the {OSSEOUS_ASH}, " +
-                                    "and, if you choose one, will associate a handle with the uploaded bones.",
+                                message: sB.ToString(),
                                 buttons: PopupMessage.YesNoButton,
                                 DefaultSelected: 1,
                                 title: $"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_UPLOADS}?",
@@ -335,24 +364,70 @@ namespace UD_Bones_Folder.Mod
                             }
 
                             if (any)
-                                return;
+                            {
+                                if (Hosts.FirstHostMatching(h => h.Enabled) is null)
+                                {
+                                    sB.Clear();
+                                    sB.Append("It appears that none of your hosts are currently enabled.")
+                                        .AppendLine()
+                                        .AppendLine().Append("You have ").Append(Hosts.TotalCount().Things("host")).Append(" currently saved.")
+                                        .AppendLine()
+                                        .AppendLine().Append("There is a button in the options menu to configure them.")
+                                        .AppendLine()
+                                        .AppendLine().Append("Alternatively, would you like to configure them now?");
 
-                            await Popup.ShowAsync("You haven't been opted in.\n\n" +
-                                "If you'd like to change your mind at any time, there are options available in the options menu.");
+                                    if ((await Popup.NewPopupMessageAsync(
+                                        message: sB.ToString(),
+                                        buttons: PopupMessage.YesNoButton,
+                                        DefaultSelected: 1,
+                                        title: $"Configure {OSSEOUS_ASH} Hosts?",
+                                        afterRender: new FlippableRender(
+                                            Source: new Renderable(
+                                                Tile: "Abilities/tile_supressive_fire.png",
+                                                ColorString: "&y",
+                                                TileColor: "&y",
+                                                DetailColor: 'W'),
+                                            HFlip: false,
+                                            VFlip: true))
+                                        ).command == "Yes")
+                                    {
+                                        await ManageHostsOptionButtonAsync();
+                                    }
+                                }
+                                return;
+                            }
+                            sB.Clear();
+                            sB.Append("You haven't been opted in.")
+                                .AppendLine()
+                                .AppendLine().Append("If you'd like to change your mind at any time, ")
+                                .Append("there are options available in the options menu.");
+
+                            await Popup.ShowAsync(sB.ToString());
                         }
 
                         XRL.UI.Options.SetOption(
-                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
-                            Value: Options.EnableOsseousAshDownloads = true);
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshDownloads)}",
+                            Value: Options.EnableOsseousAshDownloads = false);
 
                         XRL.UI.Options.SetOption(
                             ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
                             Value: Options.EnableOsseousAshUploads = false);
+
+                        if (Hosts.FirstWithHostMatching(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is HostCollection defaultHostCollection
+                            && defaultHostCollection.FirstOrDefault(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is Host defaultHost)
+                        {
+                            defaultHost.Enabled = false;
+                            defaultHostCollection.Write();
+                        }
                     }
                     catch (Exception x)
                     {
                         Utils.Error($"Failed to ask player about Osseous Ash", x);
                         Options.EnableOsseousAshStartupPopup = true;
+                    }
+                    finally
+                    {
+                        Event.ResetTo(sB);
                     }
                 }
             }
@@ -472,13 +547,9 @@ namespace UD_Bones_Folder.Mod
             }
             while ((await UIUtils.PerformPickOptionAsync(
                 OptionDataSet: options,
-                Title: "{{yellow|Manage {{black|Osseous Ash}} Hosts}}",
+                Title: $"Manage {OSSEOUS_ASH} Host".Colored("yellow"),
                 Intro: $"Use the options below to manage the hosts to/from which you'd like to upload/download bones files.",
-                IntroIcon: new Renderable(
-                    Tile: "Mutations/gas_generation.bmp",
-                    ColorString: "&K",
-                    TileColor: "&K",
-                    DetailColor: 'y'),
+                IntroIcon: BlackAshCloudIcon,
                 DefaultSelected: 0,
                 OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                 OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
@@ -560,15 +631,11 @@ namespace UD_Bones_Folder.Mod
 
             return await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
-                    Title: "{{yellow|New {{black|Osseous Ash}} Host}}",
+                    Title: $"New {OSSEOUS_ASH} Host".Colored("yellow"),
                     Intro: $"Which location would you like to record your new host?\n\n" +
                         $"\u0007 [{localType}] only exists on this device.\n" +
                         $"\u0007 [{syncedType}] will be synced by the platform managing the game's installation (if there is one).\n\n",
-                    IntroIcon: new Renderable(
-                        Tile: "Mutations/gas_generation.bmp",
-                        ColorString: "&K",
-                        TileColor: "&K",
-                        DetailColor: 'y'));
+                    IntroIcon: BlackAshCloudIcon);
         }
 
         private static async Task<string> AskFullHostName(FileLocationData ChosenLocation)
@@ -680,8 +747,18 @@ namespace UD_Bones_Folder.Mod
 
             PickOptionDataSetAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult> options;
             UIUtils.CascadableResult result;
+            var sB = Event.NewStringBuilder();
             do
             {
+                sB.Clear();
+                sB.Append($"What would you like to do with host ").Append(Host.GetHostNameWithProtocol()).Append(", ")
+                    .Append("which is in the below location:")
+                    .AppendLine()
+                    .AppendLine().Append(HostCollection.TaggedDisplayName())
+                    .AppendLine()
+                    .AppendLine().AppendPair("Server Status:", Host.ServerStatusString)
+                    .AppendLine();
+
                 options = new PickOptionDataSetAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
                     {
                         new PickOptionDataAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
@@ -715,19 +792,16 @@ namespace UD_Bones_Folder.Mod
 
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
-                    Title: "{{yellow|Manage {{black|Osseous Ash}} Host}}",
-                    Intro: $"What would you like to do with host {Host.GetHostNameWithProtocol()}, which is in the below location:\n\n" +
-                        $"{HostCollection.TaggedDisplayName()}\n\n",
-                    IntroIcon: new Renderable(
-                        Tile: "Mutations/gas_generation.bmp",
-                        ColorString: $"&K",
-                        TileColor: $"&K",
-                        DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
+                    Title: $"Manage {OSSEOUS_ASH} Host".Colored("yellow"),
+                    Intro: sB.ToString(),
+                    IntroIcon: HostCollection.GetAshCloudIcon(),
                     OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.Back),
                     OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.Cancel),
                     FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);
             }
             while (result.IsContinue());
+
+            Event.ResetTo(sB);
 
             if (result.IsCancel())
                 return result;
@@ -740,13 +814,23 @@ namespace UD_Bones_Folder.Mod
             var oldHost = Host.Clone();
             PickOptionDataSetAsync<Host, UIUtils.CascadableResult> options = new();
             UIUtils.CascadableResult result;
+            var sB = Event.NewStringBuilder();
             do
             {
+                sB.Clear();
+                sB.Append($"Use the options below to modify host ").Append(Host.GetHostNameWithProtocol()).Append(", ")
+                    .Append("which is in the below location:")
+                    .AppendLine()
+                    .AppendLine().Append(HostCollection.TaggedDisplayName())
+                    .AppendLine()
+                    .AppendLine().AppendPair("Server Status:", Host.ServerStatusString)
+                    .AppendLine();
+
                 options.Clear();
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change {nameof(Host.Name)}",
+                    Text = $"Change {nameof(Host.Name)}: {nameof(Host.Name)}",
                     Hotkey = 'n',
                     Callback = async delegate (Host h)
                     {
@@ -765,12 +849,12 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change {nameof(Host.Port)}",
+                    Text = $"Change {nameof(Host.Port)}: {Host.Port?.ToString() ?? "none"}",
                     Hotkey = 'p',
                     Callback = async delegate (Host h)
                     {
                         h.Port = await Popup.AskNumberAsync(
-                            Message: $"Enter a new {nameof(Host.Port)}",
+                            Message: $"Enter a new {nameof(Host.Port)}:",
                             Start: h.Port ?? 0,
                             Min: 0);
 
@@ -797,12 +881,12 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change Timeout (ms)",
+                    Text = $"Change Timeout (ms): {Host.GetTimeoutString()}",
                     Hotkey = 'e',
                     Callback = async delegate (Host h)
                     {
                         var number = await Popup.AskNumberAsync(
-                            Message: $"Enter a new Timeout (ms), or -1 for no/unlimited timeout.",
+                            Message: $"Enter a new Timeout (ms), or -1 for no/unlimited timeout:",
                             Start: h.TimeoutMS,
                             Min: -1);
 
@@ -817,12 +901,12 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = "Change Auth Token",
+                    Text = $"Change Auth Token: {(Host.AuthToken.IsNullOrEmpty() ? "none" : "********")}",
                     Hotkey = 'a',
                     Callback = async delegate (Host h)
                     {
                         h.AuthToken = await Popup.AskStringAsync(
-                            Message: "Enter a new Auth Token",
+                            Message: "Enter a new Auth Token:",
                             Default: h.AuthToken ?? "",
                             ReturnNullForEscape: true,
                             AllowColorize: false);
@@ -877,14 +961,9 @@ namespace UD_Bones_Folder.Mod
 
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
-                    Title: "{{yellow|Modify {{black|Osseous Ash}} Host}}",
-                    Intro: $"Use the options below to modify host {Host.GetHostNameWithProtocol()}, which is in the below location:\n\n" +
-                        $"{HostCollection.TaggedDisplayName()}\n\n",
-                    IntroIcon: new Renderable(
-                        Tile: "Mutations/gas_generation.bmp",
-                        ColorString: $"&K",
-                        TileColor: $"&K",
-                        DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
+                    Title: $"Modify {OSSEOUS_ASH} Host".Colored("yellow"),
+                    Intro: sB.ToString(),
+                    IntroIcon: HostCollection.GetAshCloudIcon(),
                     AdditionalButtons: buttons,
                     ButtonCallbacks: buttonCallbacks,
                     OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.Back),
@@ -904,6 +983,8 @@ namespace UD_Bones_Folder.Mod
                     });
             }
             while (result.ToBool());
+
+            Event.ResetTo(sB);
 
             if (result.IsCancel())
                 return result;
@@ -975,13 +1056,9 @@ namespace UD_Bones_Folder.Mod
 
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
-                    Title: "{{yellow|Migrate {{black|Osseous Ash}} Host}}",
+                    Title: $"Migrate {OSSEOUS_ASH} Host".Colored("yellow"),
                     Intro: $"Which location would you like to migrate host {Host.GetHostNameWithProtocol()} to?\n\n",
-                    IntroIcon: new Renderable(
-                        Tile: "Mutations/gas_generation.bmp",
-                        ColorString: $"&K",
-                        TileColor: $"&K",
-                        DetailColor: HostCollection.LocationData.GetFileLocationDataTypeColor()[0]),
+                    IntroIcon: HostCollection.GetAshCloudIcon(),
                     OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.Back),
                     OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.Cancel),
                     FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);

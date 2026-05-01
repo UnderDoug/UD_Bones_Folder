@@ -6,6 +6,7 @@ using System.Text;
 using Newtonsoft.Json;
 
 using XRL;
+using XRL.Language;
 using XRL.World;
 using XRL.World.Parts;
 
@@ -150,9 +151,18 @@ namespace UD_Bones_Folder.Mod
 
                     if (playerEncounters > 0)
                     {
-                        string percentEncountered = GetPercentageString(GetPercentOfEncountered(oAID));
-                        sB.AppendLine().Append("You've personally encountered them in ").AppendRule(playerEncounters.Things("different run")).Append(", ")
-                            .Append("which is ").AppendRule(percentEncountered).Append(" of the times they've ever been encountered.");
+                        if (playerEncounters == totalEncounters)
+                        {
+                            sB.AppendLine().Append("As the focus of ").Append(Grammar.MakePossessive(RegentName)).Append(" obsession, ")
+                                .AppendRule("every time").Append(" they have attempted to reclaim a run, it has been one of yours.");
+                        }
+                        else
+                        {
+                            string percentEncountered = GetPercentageString(GetPercentOfEncountered(oAID));
+                            sB.AppendLine().Append("You've personally encountered them in ")
+                                .AppendRule(playerEncounters.Things("different run")).Append(", ")
+                                .Append("which is ").AppendRule(percentEncountered).Append(" of the times they've ever been encountered.");
+                        }
                     }
                     else
                         sB.AppendLine().Append("You are yet to encounter them.");

@@ -199,8 +199,7 @@
         DisplayText="{{Y|[}}Manage {{W|custom permyriad}} chance{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.Options.ManageCustomPermyriadChance"
-        Default="200">
+        OnClick="UD_Bones_Folder.Mod.Options.ManageCustomPermyriadChance">
     <helptext>
       Enter a custom permyriad chance for a given zone to have bones. Permyriad is like percent, but for 10,000 instead of 100. This allows for percentages with 2 significant digits.
 

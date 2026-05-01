@@ -43,6 +43,7 @@ namespace UD_Bones_Folder.Mod
                 Port = null,
                 Encrypted = true,
                 TimeoutMS = 1500,
+                Enabled = false,
             };
 
             public static string status => nameof(status);
