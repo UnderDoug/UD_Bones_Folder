@@ -48,11 +48,11 @@ namespace XRL.World.ZoneBuilders
                 return true;
             }
 
-            if (saveBonesInfo.Encountered > 0)
+            /*if (saveBonesInfo.Encountered > 0)
             {
                 Utils.Warn($"Loading bones previously encountered {saveBonesInfo.Encountered.Things("time")}. " +
                     $"Bones may have been loaded into a rebuilt Zone, or game may have crashed without saving.");
-            }
+            }*/
 
             BonesData bonesData = null;
             try
@@ -121,14 +121,14 @@ namespace XRL.World.ZoneBuilders
                 Z.GetCell(0, 0).AddObject(Const.ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_MoonKingAnnouncer.BonesID)}::{bonesData.BonesID}");
 
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
-                try
+                /*try
                 {
                     // SaveBonesInfo.IncrementEncountered(saveBonesInfo);
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Encountered)}", x);
-                }
+                    // Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Encountered)}", x);
+                }*/
                 return true;
             }
             return false;

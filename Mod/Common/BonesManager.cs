@@ -249,6 +249,7 @@ namespace UD_Bones_Folder.Mod
                             var courtierPart = zoneGO.RequirePart<UD_Bones_LunarCourtier>();
                             courtierPart.OverrideBonesID<UD_Bones_LunarCourtier>(GameID);
                             courtierPart.AllyReasonType = reasonType;
+                            courtierPart.Persists = true;
                             Utils.Log($"{zoneGO.DebugName} is PlayerLed: {reasonType.Name ?? "NO_TYPE"}");
                             /*try
                             {
@@ -861,9 +862,9 @@ namespace UD_Bones_Folder.Mod
         public BonesData ExhumeMoonKing(string ZoneID, SaveBonesInfo SaveBonesInfo)
             => ExhumeLunarRegentAsync(ZoneID, SaveBonesInfo).WaitResult();
 
-        public async Task<SaveBonesInfo> GetSavedBonesByIDAsync(string BonesID)
+        public async Task<SaveBonesInfo> GetSavedBonesByIDAsync(string BonesID, Predicate<SaveBonesInfo> Where = null)
         {
-            foreach (var savedBones in await GetSaveBonesInfoAsync())
+            foreach (var savedBones in await GetSaveBonesInfoAsync(Where))
             {
                 if (savedBones.ID == BonesID)
                     return savedBones;
@@ -871,8 +872,8 @@ namespace UD_Bones_Folder.Mod
             return null;
         }
 
-        public SaveBonesInfo GetSavedBonesByID(string BonesID)
-            => GetSavedBonesByIDAsync(BonesID)?.Result
+        public SaveBonesInfo GetSavedBonesByID(string BonesID, Predicate<SaveBonesInfo> Where = null)
+            => GetSavedBonesByIDAsync(BonesID, Where).WaitResult()
             ;
 
         public static void DeleteBonesInfoDirectory(string Directory)
@@ -901,8 +902,8 @@ namespace UD_Bones_Folder.Mod
             // DataManager.CloseCacheConnection();
         }
 
-        public bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SaveBonesInfo)
-            => (SaveBonesInfo = GetSavedBonesByID(BonesID)) != null
+        public bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SaveBonesInfo, Predicate<SaveBonesInfo> Where = null)
+            => (SaveBonesInfo = GetSavedBonesByID(BonesID, Where)) != null
             ;
 
         public bool HasBlueprintReplacement(string Blueprint)
@@ -1136,6 +1137,10 @@ namespace UD_Bones_Folder.Mod
             {
                 Z.GetCell(0, 0).AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_MoonKingAnnouncer.BonesID)}::{bonesData.BonesID}");
                 Encountered.Add(bonesData.BonesID);
+
+                if (lunarRegent.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                    lunarRegentPart.LocationData = PickedBones.FileLocationData;
+
                 Z.SetZoneProperty(nameof(bonesData.BonesID), bonesData.BonesID);
                 try
                 {
@@ -1143,7 +1148,7 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Encountered)}", x);
+                    Utils.Error($"Failed to increment {nameof(SaveBonesInfo)}.{nameof(SaveBonesInfo.Stats)}.{nameof(SaveBonesInfo.Stats.Encountered)}", x);
                 }
                 return true;
             }

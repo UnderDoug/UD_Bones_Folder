@@ -139,10 +139,7 @@ namespace UD_Bones_Folder.Mod
             {
                 if (LocationData != null
                     || TryFindBestOsseousAshPath(out LocationData, HostsFileName))
-                {
                     WriteToFile(LocationData, HostsFileName);
-                    // _Hosts = null;
-                }
                 else
                     Utils.Error(
                         Context: $"Failed to {nameof(Write)} to {HostsFileName}",

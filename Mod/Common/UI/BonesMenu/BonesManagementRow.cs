@@ -23,9 +23,14 @@ namespace UD_Bones_Folder.Mod.UI
         public static ImageTinyFrame _imageTinyFrame;
         public static ImageTinyFrame imageTinyFrame => _imageTinyFrame ??= Instantiate(SaveManagement.instance?.savesScroller?.selectionPrefab?.GetComponent<SaveManagementRow>()?.imageTinyFrame);
 
-        public static Dictionary<InputButtonTypes, Action> ButtonHandler => new()
+        public static Dictionary<InputButtonTypes, Action> DeleteButtonHandler => new()
         {
             { InputButtonTypes.AcceptButton, Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
+        };
+
+        public static Dictionary<InputButtonTypes, Action> ModsButtonHandler => new()
+        {
+            { InputButtonTypes.AcceptButton, Event.Helpers.Handle(BonesManagement.instance.HandleModsButton) },
         };
         public static Dictionary<string, Action> CommandHandlers => new()
         {

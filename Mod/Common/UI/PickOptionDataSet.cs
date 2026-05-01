@@ -53,6 +53,22 @@ namespace UD_Bones_Folder.Mod.UI
             return hotkeys;
         }
 
+        public bool HasHotkey(char Hotkey)
+            => GetHotkeys().Contains(Hotkey)
+            ;
+
+        public char GetFirstAvailableHotkey(params char[] Hotkeys)
+        {
+            if (Hotkeys.IsNullOrEmpty())
+                return ' ';
+
+            foreach (var hotkey in Hotkeys)
+                if (!HasHotkey(hotkey))
+                    return hotkey;
+
+            return ' ';
+        }
+
         public TResult InvokeAt(int Index)
             => this[Index].Invoke()
             ;

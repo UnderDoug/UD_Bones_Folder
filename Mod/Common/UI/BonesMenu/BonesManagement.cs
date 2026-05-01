@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using Qud.UI;
 
 using UnityEngine;
@@ -463,7 +465,7 @@ namespace UD_Bones_Folder.Mod.UI
                     && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
                 {
                     saveRow.setBonesData(bonesDataI);
-                    saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.ButtonHandler;
+                    saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
                 }
                 
@@ -557,7 +559,16 @@ namespace UD_Bones_Folder.Mod.UI
         public void SelectedBones(FrameworkDataElement data)
         {
             if (data is BonesInfoData bonesData)
-                CompletionSource?.TrySetResult(bonesData.BonesInfo);
+            {
+                var bonesInfo = bonesData.BonesInfo;
+                SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
+                Popup.WaitNewPopupMessage(
+                    message: bonesInfo.OutputBlurb(), //Markup.Transform(bonesInfo.OutputBlurb()),
+                    contextTitle: $"Bones File Stats".Colored("yellow"),
+                    afterRender: bonesInfo.FlippedRender,
+                    PopupID: $"{nameof(BonesManagement)}.{nameof(SelectedBones)}::{bonesInfo.ID}");
+            }
+            // CompletionSource?.TrySetResult(bonesData.BonesInfo);
         }
 
         public void HighlightedBones(FrameworkDataElement data)
@@ -694,6 +705,18 @@ namespace UD_Bones_Folder.Mod.UI
                 if (CheckInit())
                     instance?.HandleDeleteAll();
             });
+
+        public void HandleModsButton()
+        {
+            if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
+                return;
+
+            if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
+                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
+                return;
+
+            CompletionSource?.TrySetResult(bonesInfo);
+        }
 
         public async void HandleDelete()
         {

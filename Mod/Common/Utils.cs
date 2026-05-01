@@ -554,6 +554,19 @@ namespace UD_Bones_Folder.Mod
             return Return;
         }
 
+
+        [VariableReplacer]
+        public static string ud_nbsp(DelegateContext Context)
+        {
+            string nbsp = "\xFF";
+            string output = nbsp;
+            if (!Context.Parameters.IsNullOrEmpty()
+                && int.TryParse(Context.Parameters[0], out int count))
+                output = nbsp.ThisManyTimes(count);
+
+            return output;
+        }
+
         [VariableObjectReplacer(Keys = new string[] { "RegalTitle", "UD_RegalTitle" })]
         public static string RegalTitle(DelegateContext Context)
             => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{(Context.Target?.BaseID)?.ToString() ?? "*"}="

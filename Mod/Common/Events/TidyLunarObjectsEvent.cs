@@ -7,7 +7,6 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod.Events
 {
-    [GameEvent(Cascade = CASCADE_ALL, Cache = Cache.Pool)]
     public class TidyLunarObjectsEvent : ModPooledEvent<TidyLunarObjectsEvent>
     {
         public new static readonly int CascadeLevel = CASCADE_ALL;

@@ -29,7 +29,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public override string GetText(GameObject Actor)
-            => $"Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {UD_Bones_MoonKingFever.REGAL_TITLE} but =subject.subjective= not me!"
+            => $"Thinks =subject.subjective==subject.verb:'re:afterpronoun= the {UD_Bones_MoonKingFever.REGAL_TITLE} but =subject.subjective==subject.verb:'re:afterpronoun= not me!"
                 .StartReplace()
                 .AddObject(Actor)
                 .ToString()

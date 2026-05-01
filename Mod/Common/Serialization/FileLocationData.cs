@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -28,6 +29,13 @@ namespace UD_Bones_Folder.Mod
             Online,
         }
 
+        private static readonly char[] PathSeparatorChars = new char[3]
+        {
+            '/',
+            '\\',
+            System.IO.Path.DirectorySeparatorChar,
+        };
+
         public LocationType Type;
         public string Path;
         public OsseousAsh.Host Host;
@@ -44,11 +52,7 @@ namespace UD_Bones_Folder.Mod
         {
             this.Type = Type;
 
-            if (!Path.IsNullOrEmpty()
-                && Platform.IO.Path.GetFileName(Path) is string fileName
-                && !fileName.IsNullOrEmpty())
-                Path = Path[..^fileName.Length];
-            this.Path = Path;
+            this.Path = PathWithoutFileName(Path);
 
             this.Host = Host?.Clone();
         }
@@ -56,6 +60,29 @@ namespace UD_Bones_Folder.Mod
         public FileLocationData(FileLocationData Source)
             : this(Source.Type, Source.Path, Source.Host)
         { }
+
+        private static int FindExtension(string path)
+        {
+            if (!path.IsNullOrEmpty())
+            {
+                int extSep = path.LastIndexOf('.');
+                int lastPathSep = path.LastIndexOfAny(PathSeparatorChars);
+                if (extSep > lastPathSep)
+                    return extSep;
+            }
+            return -1;
+        }
+
+        private static string PathWithoutFileName(string Path)
+        {
+            if (!Path.IsNullOrEmpty()
+                && FindExtension(Path) >= 0
+                && Platform.IO.Path.GetFileName(Path) is string fileName
+                && !fileName.IsNullOrEmpty())
+                Path = Path[..^fileName.Length];
+
+            return Path;
+        }
 
         public static string GetFileLocationDataTypeColor(LocationType Type)
             => Type switch
@@ -126,7 +153,11 @@ namespace UD_Bones_Folder.Mod
                 return NewLocal(Path);
 
             if (OsseousAsh.Host.TryParse(Path, out OsseousAsh.Host host))
+            {
+                if (OsseousAsh.Hosts.FirstHostMatching(h => h.SameAs(host, IgnoreDisabled: true)) is OsseousAsh.Host existingHost)
+                    return NewOnline(existingHost, existingHost.AuthToken);
                 return NewOnline(host);
+            }
 
             return new FileLocationData
             {
@@ -144,8 +175,15 @@ namespace UD_Bones_Folder.Mod
             return DataManager.SanitizePathForDisplay(output);
         }
 
-        public string TaggedDisplayName(string FileName = null)
-            => $"[{Type.GetColoredString()}] {SanitiseForDisplay(FileName)}";
+        public string DisplayName()
+            => Type <= LocationType.Mod
+            ? SanitiseForDisplay()
+            : Host?.GetHostNameWithProtocol()
+            ;
+
+        public string TaggedDisplayName()
+            => $"[{Type.GetColoredString()}] {DisplayName()}"
+            ;
 
         public bool Exists()
             => !Path.IsNullOrEmpty()
@@ -181,6 +219,10 @@ namespace UD_Bones_Folder.Mod
             return Path;
         }
 
+        public bool TryEnsureExists()
+            => !EnsureExists().IsNullOrEmpty()
+            ;
+
         public string WithFileName(string FileName)
             => Platform.IO.Path.Combine(this, FileName)
             ;
@@ -211,15 +253,18 @@ namespace UD_Bones_Folder.Mod
             return default;
         }
 
-        public void Write<T>(string FileName, T Object, Formatting formatting)
+        public async Task WriteAsync<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
         {
             if (Type <= LocationType.Synced)
             {
-                if (Exists())
+                if ((Ensure
+                        && TryEnsureExists())
+                    || Exists())
                 {
-                    File.WriteAllText(
+                    // Utils.Log($"{nameof(WriteAsync)} {SanitiseForDisplay(FileName)}, {nameof(Formatting)}: {Formatting}");
+                    await File.WriteAllTextAsync(
                         path: WithFileName(FileName),
-                        content: JsonConvert.SerializeObject(Object, formatting));
+                        content: JsonConvert.SerializeObject(Object, Formatting));
                 }
             }
             else
@@ -227,13 +272,17 @@ namespace UD_Bones_Folder.Mod
                     $"{new InvalidOperationException("write location must be writable")}");
         }
 
+        public void Write<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
+            => WriteAsync(FileName, Object, Formatting, Ensure).Wait()
+            ;
+
         public override string ToString()
             => this;
 
         public override bool Equals(object obj)
         {
-            if (obj is FileLocationData directoryInfoObj)
-                return this == directoryInfoObj;
+            if (obj is FileLocationData fileLocationDataObj)
+                return this == fileLocationDataObj;
 
             return base.Equals(obj);
         }
@@ -248,7 +297,7 @@ namespace UD_Bones_Folder.Mod
             => Other != null
             && Type == Other.Type
             && Path == Other.Path
-            && Host == Other.Host
+            && (Host?.SameAs(Other.Host) is not false)
             ;
 
         public void Dispose()
@@ -279,5 +328,104 @@ namespace UD_Bones_Folder.Mod
                 _ => FileLocationData.EnsureExists()
                     ?? FileLocationData.Path,
             };
+    }
+
+    public static class FileLocationDataExtensions
+    {
+        public static async Task PerformBasedOnTypeAsync(
+            this FileLocationData LocationData,
+            Func<Task> OnlineCallback = null,
+            Func<Task> ModCallback = null,
+            Func<Task> FileCallback = null,
+            Func<Task> DefaultCallback = null
+            )
+        {
+            switch (LocationData?.Type)
+            {
+                case FileLocationData.LocationType.Online:
+                    await OnlineCallback?.Invoke();
+                    return;
+                case FileLocationData.LocationType.Mod:
+                    await ModCallback?.Invoke();
+                    return;
+                case FileLocationData.LocationType.Synced:
+                case FileLocationData.LocationType.Local:
+                    await FileCallback?.Invoke();
+                    return;
+                case FileLocationData.LocationType.None:
+                default:
+                    await DefaultCallback?.Invoke();
+                    return;
+            }
+        }
+
+        public static async Task PerformBasedOnTypeAsync<T>(
+            this FileLocationData LocationData,
+            T Value,
+            Func<T, Task> OnlineCallback = null,
+            Func<T, Task> ModCallback = null,
+            Func<T, Task> FileCallback = null,
+            Func<T, Task> DefaultCallback = null
+            )
+        {
+            switch (LocationData?.Type)
+            {
+                case FileLocationData.LocationType.Online:
+                    await OnlineCallback?.Invoke(Value);
+                    return;
+                case FileLocationData.LocationType.Mod:
+                    await ModCallback?.Invoke(Value);
+                    return;
+                case FileLocationData.LocationType.Synced:
+                case FileLocationData.LocationType.Local:
+                    await FileCallback?.Invoke(Value);
+                    return;
+                case FileLocationData.LocationType.None:
+                default:
+                    await DefaultCallback?.Invoke(Value);
+                    return;
+            }
+        }
+
+        public static async Task<T> ReturnBasedOnTypeAsync<T>(
+            this FileLocationData LocationData,
+            Func<Task<T>> OnlineCallback = null,
+            Func<Task<T>> ModCallback = null,
+            Func<Task<T>> FileCallback = null,
+            Func<Task<T>> DefaultCallback = null
+            )
+            => LocationData?.Type switch
+            {
+                FileLocationData.LocationType.Online => await OnlineCallback?.Invoke(),
+
+                FileLocationData.LocationType.Mod => await ModCallback?.Invoke(),
+
+                FileLocationData.LocationType.Synced or
+                FileLocationData.LocationType.Local => await FileCallback?.Invoke(),
+
+                _ => await DefaultCallback?.Invoke(),
+            }
+            ;
+
+        public static async Task<T> ReturnBasedOnTypeAsync<T>(
+            this FileLocationData LocationData,
+            T Value,
+            Func<T, Task<T>> OnlineCallback = null,
+            Func<T, Task<T>> ModCallback = null,
+            Func<T, Task<T>> FileCallback = null,
+            Func<T, Task<T>> DefaultCallback = null
+            )
+            => LocationData?.Type switch
+            {
+                FileLocationData.LocationType.Online => await OnlineCallback?.Invoke(Value),
+
+                FileLocationData.LocationType.Mod => await ModCallback?.Invoke(Value),
+
+                FileLocationData.LocationType.Synced or
+                FileLocationData.LocationType.Local => await FileCallback?.Invoke(Value),
+
+                _ => await DefaultCallback?.Invoke(Value),
+            }
+            ;
     }
 }

@@ -174,6 +174,10 @@ namespace XRL.World.Parts
 
         public bool HandleDeathEvent(IDeathEvent E)
         {
+            if (E.Killer != null
+                && E.Killer.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                lunarRegentPart.IncrementReclaimed();
+
             if (!Options.DebugEnableNoHoarding
                 || WishContext)
             {
@@ -279,7 +283,7 @@ namespace XRL.World.Parts
                 {
                     var now = DateTime.Now;
                     var timeAgo = now - saveBonesInfo.SaveTimeValue;
-                    if (Popup.ShowYesNo($"This game already has a bones file which is {timeAgo.ValueUnits():0.##} old.\n\n" +
+                    if (Popup.ShowYesNo($"This game already has a bones file which is {timeAgo.ValueUnits()} old.\n\n" +
                         $"Would you like to proceed, overwriting that file?") != DialogResult.Yes)
                         return true;
                 }
@@ -319,21 +323,13 @@ namespace XRL.World.Parts
                     The.Core.IDKFA = false;
                 }
 
-                string extraDamageType = Stat.RandomCosmetic(0, 8) switch
-                {
-                    0 => " Fire",
-                    1 => " Cold",
-                    2 => " Electric",
-                    3 => " Acid",
-                    4 => " Bludgeoning",
-                    _ => null,
-                };
+                string extraDamageType = The.Player.GetNotResistedDamageTypes().GetRandomElementCosmetic();
 
                 if (!willDie
                     || !The.Player.TakeDamage(
                         Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(110, 150) / 100f)),
                         Message: "from %t desire it be so.",
-                        Attributes: $"Unavoidable Cosmic Umbral Vorpal{extraDamageType}",
+                        Attributes: $"Unavoidable IgnoreResist Cosmic Umbral Vorpal{extraDamageType}",
                         Owner: killer,
                         Attacker: killer,
                         Source: projectile ?? weapon,
@@ -350,11 +346,11 @@ namespace XRL.World.Parts
                 if (originalIDKFA.HasValue)
                     The.Core.IDKFA = originalIDKFA.GetValueOrDefault();
 
-                if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
+                if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo, b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced))
                 {
                     if (!willDie)
                     {
-                        if (currentZone.TryFindLunarRegent(saveBonesInfo.ID, out GameObject lunarRegent))
+                        /*if (currentZone.TryFindLunarRegent(saveBonesInfo.ID, out GameObject lunarRegent))
                         {
                             foreach (var zoneGO in currentZone.GetObjects())
                             {
@@ -362,7 +358,7 @@ namespace XRL.World.Parts
                                     && brain.PartyLeader == lunarRegent)
                                     brain.SetPartyLeader(The.Player, Silent: true);
                             }
-                        }
+                        }*/
                         TidyLunarObjectsEvent.SendGameID(Context: "Wish");
                     }
 

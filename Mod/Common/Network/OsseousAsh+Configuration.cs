@@ -56,6 +56,9 @@ namespace UD_Bones_Folder.Mod
             [JsonIgnore]
             public FileLocationData LocationData;
 
+            public Configuration()
+            { }
+
             public static async Task<Configuration> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
                 => await FileLocationData?.ReadFromFileAsync<Configuration>(FileName)
                 ;
@@ -156,11 +159,11 @@ namespace UD_Bones_Folder.Mod
             public void Write()
             {
                 if (LocationData != null
-                    || TryFindBestOsseousAshPath(out LocationData, HostsFileName))
-                    WriteToFile(LocationData, HostsFileName);
+                    || TryFindBestOsseousAshPath(out LocationData, ConfigFileName))
+                    WriteToFile(LocationData, ConfigFileName);
                 else
                     Utils.Error(
-                        Context: $"Failed to {nameof(Write)} to {HostsFileName}",
+                        Context: $"Failed to {nameof(Write)} to {ConfigFileName}",
                         X: new NullReferenceException($"{nameof(LocationData)} must not be null"));
             }
 
@@ -174,27 +177,6 @@ namespace UD_Bones_Folder.Mod
                         => XRL.UI.Options.SetOption(
                             ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshStartupPopup)}",
                             Value: Options.EnableOsseousAshStartupPopup = v));
-                
-                /*LockedMembers ??= new();
-                if (!LockedMembers.Contains(nameof(AskAtStartup))
-                    && _AskAtStartup != Value)
-                {
-                    LockedMembers.Add(nameof(AskAtStartup));
-                    try
-                    {
-                        _AskAtStartup = Value;
-
-                        Write();
-
-                        XRL.UI.Options.SetOption(
-                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshStartupPopup)}",
-                            Value: Options.EnableOsseousAshStartupPopup = Value);
-                    }
-                    finally
-                    {
-                        LockedMembers.Remove(nameof(AskAtStartup));
-                    }
-                }*/
             }
 
             public void WriteHandle(string Handle)

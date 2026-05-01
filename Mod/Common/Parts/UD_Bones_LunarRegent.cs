@@ -11,12 +11,15 @@ using UD_Bones_Folder.Mod.Events;
 using SerializeField = UnityEngine.SerializeField;
 using XRL.World.Parts.Mutation;
 using XRL.World.Parts.Skill;
+using System.Linq;
 
 namespace XRL.World.Parts
 {
     [Serializable]
     public class UD_Bones_LunarRegent : UD_Bones_BaseLunarPart
     {
+        public FileLocationData LocationData;
+
         public bool Cremated;
 
         public string RegalTitle => GetRegalTitle();
@@ -46,6 +49,9 @@ namespace XRL.World.Parts
             get => _DoneDescription;
             protected set => _DoneDescription = value;
         }
+
+        [SerializeField]
+        private List<string> Reclaimed;
 
         public override NoInfluenceSet NoInfluence => new NoInfluenceSet
         {
@@ -94,6 +100,34 @@ namespace XRL.World.Parts
             return $"Moon {regalTerm}";
         }
 
+        public SaveBonesInfo GetSourceSaveBonesInfo()
+        {
+            if (LocationData is not null)
+            {
+                if (LocationData.Host is OsseousAsh.Host storedHost)
+                {
+                    if (OsseousAsh.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is OsseousAsh.HostCollection hostCollection
+                        && hostCollection.FirstOrDefault(h => h.SameAs(storedHost, true)) is OsseousAsh.Host actualHost)
+                    {
+                        if (actualHost.Enabled)
+                            return actualHost.GetSaveBonesInfo(BonesID);
+                        
+                        Utils.Warn($"{actualHost} is disabled and can't have bones retreived from it.");
+                        return null;
+                    }
+                    else
+                        Utils.Warn($"{storedHost} no longer exists and can't have bones retreived from it.");
+                }
+
+                if (BonesManager.System is BonesManager system
+                    && system.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => bonesInfo.FileLocationData == LocationData))
+                    return saveBonesInfo;
+            }
+
+            Utils.Warn($"Couldn't find bones info in {LocationData?.ToString() ?? "MISSING_LOCATION_DATA"}");
+            return null;
+        }
+
         public string GetRegalTitle()
             => GetRegalTitle(ParentObject)
             ;
@@ -132,14 +166,47 @@ namespace XRL.World.Parts
                 OriginalShortDesc = "It was you.";
         }
 
+        public void IncrementReclaimed()
+        {
+            Reclaimed ??= new();
+            if (!Reclaimed.Contains(The.Game.GameID)
+                && GetSourceSaveBonesInfo() is SaveBonesInfo saveBonesInfo)
+            {
+                saveBonesInfo.IncrementReclaimed();
+                Reclaimed.Add(The.Game.GameID);
+            }
+        }
+
+        public void IncrementDefeated()
+        {
+            if (GetSourceSaveBonesInfo() is SaveBonesInfo saveBonesInfo)
+                saveBonesInfo.IncrementDefeated();
+        }
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
+            || ID == KilledPlayerEvent.ID
+            || ID == AfterDieEvent.ID
             || ID == GetDisplayNameEvent.ID
             || ID == GetShortDescriptionEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public override bool HandleEvent(KilledPlayerEvent E)
+        {
+            if (E.Killer == ParentObject)
+                IncrementReclaimed();
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(AfterDieEvent E)
+        {
+            if (E.Dying == ParentObject)
+                IncrementDefeated();
+            return base.HandleEvent(E);
+        }
 
         public override bool HandleEvent(GetDisplayNameEvent E)
         {

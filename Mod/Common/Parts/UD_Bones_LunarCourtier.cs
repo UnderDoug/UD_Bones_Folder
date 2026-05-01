@@ -221,8 +221,8 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            ParentObject.RequirePart<UD_Bones_LunarColors>();
-
+            var colorsPart = ParentObject.RequirePart<UD_Bones_LunarColors>();
+            colorsPart.Persists = true;
             PerformAllyship();
         }
 
@@ -311,7 +311,6 @@ namespace XRL.World.Parts
 
         public string GetDescription()
         {
-
             string lunarRegents = !BakedLunarRegentName.IsNullOrEmpty() 
                 ? Grammar.MakePossessive(BakedLunarRegentName)
                 : Grammar.MakePossessive(MissingLunarRegent)
@@ -336,6 +335,12 @@ namespace XRL.World.Parts
                 rB.AddObject(LunarRegent);
 
             return rB.ToString();
+        }
+
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(TidyLunarObjectsEvent.ID, EventOrder.EXTREMELY_EARLY, true);
+            base.Register(Object, Registrar);
         }
 
         public override bool WantEvent(int ID, int Cascade)
@@ -392,6 +397,37 @@ namespace XRL.World.Parts
             }
             TileColor = E.TileColor;
             DetailColor = E.DetailColor;
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(TidyLunarObjectsEvent E)
+        {
+            if (E.Context == "Wish")
+            {
+                bool bonesIDMatches = BonesID == E.BonesID
+                    || E.BonesID == null;
+
+                bool bonesMatchAndPersists = bonesIDMatches
+                    && Persists;
+
+                if (bonesMatchAndPersists)
+                {
+                    PerformAllyship(The.Player, Force: true, Initial: true);
+                    foreach (var lunarPart in ParentObject.GetPartsDescendedFrom<UD_Bones_BaseLunarPart>())
+                    {
+                        if (lunarPart != this)
+                        {
+                            if (lunarPart.BonesID == E.BonesID
+                                || E.BonesID == null)
+                            {
+                                ParentObject.RemovePart(lunarPart);
+                            }
+                        }
+                    }
+                    ParentObject.RemovePart(this);
+                    return true;
+                }
+            }
             return base.HandleEvent(E);
         }
 

@@ -103,6 +103,12 @@ namespace UD_Bones_Folder.Mod
                             // Anything you want to do to objects, do it AFTER here
                             // ####################################################
 
+                            bonesObject.AddPart(new UD_Bones_ReportBones
+                            {
+                                LoadedBonesID = BonesID,
+                                SerializedBaseID = crossGameObject.Original.BaseID,
+                            });
+
                             if (ShallowRelationship.TryGetFrom(crossGameObject.Original, out var shallowRelationship))
                                 shallowRelationships.Add(shallowRelationship);
 

@@ -26,6 +26,8 @@ using XRL.UI.Framework;
 using XRL.World;
 using XRL.World.Parts;
 
+using static UD_Bones_Folder.Mod.OsseousAsh;
+using static UD_Bones_Folder.Mod.OsseousAsh.Report;
 using static XRL.World.Cell;
 
 using Range = XRL.Range;
@@ -89,8 +91,8 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
-                OsseousAshID = OsseousAsh.Config?.ID ?? Guid.Empty,
-                OsseousAshHandle = OsseousAsh.Config?.Handle ?? OsseousAsh.DefaultOsseousAshHandle,
+                OsseousAshID = Config?.ID ?? Guid.Empty,
+                OsseousAshHandle = Config?.Handle ?? DefaultOsseousAshHandle,
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
@@ -115,8 +117,9 @@ namespace UD_Bones_Folder.Mod
                 ZoneID = zoneID,
 
                 BonesSpec = new BonesSpec(MoonKing, zone),
+                Stats = new(),
 
-                DirectoryType = DirectoryType,
+                FileLocationType = DirectoryType,
 
                 DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
                 GenotypeName = MoonKing.GetGenotype(),
@@ -240,6 +243,8 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
+            if (SaveRow.modsDiffer.GetComponent<FrameworkContext>() is FrameworkContext modsDiffer)
+                modsDiffer.context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
         }
 
         public static void SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -368,10 +373,22 @@ namespace UD_Bones_Folder.Mod
             => Type.Name.CallChain(Calls)
             ;
 
-        public static string Indent(this int Amount, int Factor = 4, int MaxIndent = 4)
-            => Amount > 0
-            ? " ".ThisManyTimes(Math.Min(Amount * Math.Max(1, Factor), MaxIndent * Factor))
-            : null
+        public static string Indent(this int Amount, int Factor = 4, int MaxIndent = 4, bool NBSP = false)
+        {
+            if (!NBSP)
+                return Amount > 0
+                    ? " ".ThisManyTimes(Math.Min(Amount * Math.Max(1, Factor), MaxIndent * Factor))
+                    : null
+                    ;
+            else
+                return Amount > 0
+                    ? $"=ud_nbsp:{Math.Min(Amount * Math.Max(1, Factor), MaxIndent * Factor)}=".StartReplace().ToString()
+                    : null
+                    ;
+        }
+
+        public static StringBuilder AppendIndent(this StringBuilder SB, int Amount = 0, int Factor = 4, int MaxIndent = 4, bool AsNBSP = false)
+            => SB.Append(Amount.Indent(Factor, MaxIndent, AsNBSP))
             ;
 
         public static void PrintComponents(this UnityEngine.GameObject GameObject, string MessageBefore = null, int CurrentDepth = 0)
@@ -990,6 +1007,10 @@ namespace UD_Bones_Folder.Mod
             => Value >= UIUtils.CascadableResult.Cancel
             ;
 
+        public static bool IsSilent(this UIUtils.CascadableResult Value)
+            => ((int)Value % 2) == ((int)UIUtils.CascadableResult.BackSilent % 2)
+            ;
+
         public static UIUtils.CascadableResult ToCascadableResult(this bool? Value, bool Silent)
         {
             if (Value.GetValueOrDefault())
@@ -1005,5 +1026,95 @@ namespace UD_Bones_Folder.Mod
 
             return result;
         }
+
+        public static StringBuilder AppendQuote(this StringBuilder SB, object Value)
+            => SB.Append("\"").Append(Value).Append("\"")
+            ;
+
+        public static StringBuilder AppendBonesReportedObject(this StringBuilder SB, ObjectReportDetails ReportedObject, int Indent = 0)
+            => SB.AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.Blueprint), ReportedObject.Blueprint)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.SerializedBaseID), ReportedObject.SerializedBaseID)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.DisplayName), "[redacted as a precaution]")
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.IsTheLunarRegent), ReportedObject.IsLunarRegent)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.IsLunarRegent), ReportedObject.IsLunarRegent)
+            ;
+
+        public static StringBuilder AppendBonesReport(this StringBuilder SB, Report Report, string Heading = null)
+        {
+            if (!Heading.IsNullOrEmpty())
+                SB.Append(Heading)
+                    .AppendLine();
+
+            if (Report == null)
+                SB.Append("Report is null...");
+            else
+            {
+                SB.AppendPair(nameof(Report.BonesID), Report.BonesID)
+                    .AppendLine().AppendPair(nameof(Report.Type), Report.Type);
+
+                SB.AppendLine();
+                if (Report.IsSpecificObject)
+                {
+                    SB.Append(nameof(Report.ObjectDetails)).Append(":")
+                        .AppendLine().AppendBonesReportedObject(Report.ObjectDetails, Indent: 1);
+                }
+                else
+                    SB.AppendPair("For Specific Object", Report.IsSpecificObject);
+
+                SB.AppendLine().Append(nameof(Report.Description)).Append(":")
+                    .AppendLine();
+
+                if (Report.Description.IsNullOrEmpty())
+                    SB.AppendIndent(1, AsNBSP: true).Append("none");
+                else
+                    SB.AppendQuote(Report.Description);
+            }
+            return SB;
+        }
+
+        public static IEnumerable<string> GetNotResistedDamageTypes(this GameObject Object)
+        {
+            foreach ((var statName, var stat) in Object?.Statistics ?? Enumerable.Empty<KeyValuePair<string, Statistic>>())
+            {
+                if (statName.Contains("Resistance")
+                    && stat.Value < 25)
+                {
+                    yield return statName[..^("Resistance".Length)];
+                }
+            }
+
+            if ((Object?.FireEvent("ApplyPoison") is true)
+                && (Object?.FireEvent("CanApplyPoison") is true))
+                yield return "Poison";
+
+            yield return "Bludgeoning";
+
+            yield return "Plasma";
+            yield return "Light";
+            yield return "Laser";
+            yield return "Bleeding";
+            yield return "Asphyxiation";
+            yield return "Metabolic";
+            yield return "Drain";
+            yield return "Psionic";
+            yield return "Mental";
+            yield return "Thorns";
+            yield return "Collision";
+            yield return "Bite";
+            yield return "Illusion";
+            yield return "reflected";
+        }
+
+        public static HostCollection FirstWithHostMatching(this Rack<HostCollection> Hosts, Predicate<Host> Condition)
+            => Hosts?.FirstOrDefault(hc => hc.Any(Condition.Invoke))
+            ;
+
+        public static Host FirstHostMatching(this Rack<HostCollection> Hosts, Predicate<Host> Condition)
+            => Hosts?.FirstWithHostMatching(Condition.Invoke)?.FirstOrDefault(Condition.Invoke)
+            ;
+
+        public static string TimeAgo(this DateTime DateTime, string PostFix = null)
+            => $"{(DateTime.Now - DateTime).ValueUnits()}{(!PostFix.IsNullOrEmpty() ? $" {PostFix}" : null)}"
+            ;
     }
 }

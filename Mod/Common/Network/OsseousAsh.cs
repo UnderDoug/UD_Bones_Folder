@@ -29,6 +29,7 @@ using static UD_Bones_Folder.Mod.Const;
 using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
 
 using Event = XRL.World.Event;
+using GameObject = XRL.World.GameObject;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -149,6 +150,27 @@ namespace UD_Bones_Folder.Mod
         public static bool WantToAsk
             => Options.EnableOsseousAshStartupPopup
             && (Config?.AskAtStartup is true)
+            ;
+
+        public static InventoryAction ReportBonesInventoryAction => new InventoryAction
+        {
+            Name = nameof(XRL.World.Parts.UD_Bones_ReportBones),
+            Key = '.',
+            Display = "report loaded bones",
+            Command = REPORT_LOADED_BONES_COMMAND,
+            Default = 30,
+            Priority = 30,
+            WorksAtDistance = true,
+            AsMinEvent = true,
+        };
+
+        public static string ReportBonesTitle => "{{yellow|Report Loaded Bones}}";
+        public static IRenderable ReportBonesIcon
+            => new Renderable()
+                .setTile("Items/sw_unfurled_scroll1.bmp")
+                .setColorString("&K")
+                .setTileColor("&K")
+                .setDetailColor('y')
             ;
 
         [ModSensitiveCacheInit]
@@ -461,6 +483,9 @@ namespace UD_Bones_Folder.Mod
                 OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                 OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                 FinalSelectedCallback: UIUtils.ShowEscancellepedAsync)).IsContinue());
+
+            foreach (var hostCollection in Hosts)
+                hostCollection.Write();
         }
 
         private static async Task<UIUtils.CascadableResult> PerformNewHostAsync(KeyValuePair<FileLocationData, Host> Element)
@@ -477,9 +502,15 @@ namespace UD_Bones_Folder.Mod
                 if (entered != null)
                     authToken = await AskHostAuthToken(null);
 
+                int? timeout = null;
+                if (entered != null
+                    && authToken != null)
+                    timeout = await AskHostTimeout(null);
+
                 var newHost = !entered.IsNullOrEmpty()
                         && authToken != null
-                    ? new Host(entered, authToken)
+                        && timeout.HasValue
+                    ? new Host(entered, authToken, timeout.GetValueOrDefault())
                     : null
                     ;
 
@@ -581,6 +612,22 @@ namespace UD_Bones_Folder.Mod
             return await Popup.AskStringAsync(Event.FinalizeString(sB), Default: "", ReturnNullForEscape: true, AllowColorize: false);
         }
 
+        private static async Task<int?> AskHostTimeout(string PrependMessage)
+        {
+            var sB = Event.NewStringBuilder();
+            sB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
+                .AppendLine().AppendLine();
+            if (!PrependMessage.IsNullOrEmpty())
+                sB.Append(PrependMessage)
+                    .AppendLine().AppendLine();
+
+            sB.Append($"Enter the amount of time in milliseconds (-1 for unlimited) to wait before cancelling most requests to this host.")
+                .AppendLine().AppendLine();
+            sB.Append("You can change/update this later if necessary.");
+
+            return await Popup.AskNumberAsync(Event.FinalizeString(sB), Start: Host.DefaultHost.TimeoutMS, Min: -1);
+        }
+
         private static async Task<bool?> ConfirmParsedHost(Host NewHost)
         {
             if (NewHost == null)
@@ -594,9 +641,11 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendPair(nameof(NewHost.Name), NewHost.Name)
                 .AppendLine().AppendPair(nameof(NewHost.Port), (NewHost.Port)?.ToString() ?? "")
                 .AppendLine().AppendPair(nameof(NewHost.Encrypted), NewHost.Encrypted)
+                .AppendLine().AppendPair(nameof(NewHost.TimeoutMS), NewHost.GetTimeoutString())
                 .AppendLine().AppendPair(nameof(NewHost.AuthToken), NewHost.AuthToken)
                 .AppendLine()
                 .AppendLine().Append(NewHost.GetHostNameWithProtocol())
+                .AppendLine().AppendPair("Server Status:", NewHost.ServerStatusString)
                 .AppendLine()
                 .AppendLine().Append("Is this correct?");
 
@@ -697,12 +746,12 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = "Change Name",
+                    Text = $"Change {nameof(Host.Name)}",
                     Hotkey = 'n',
                     Callback = async delegate (Host h)
                     {
                         h.Name = await Popup.AskStringAsync(
-                            Message: "Enter a new Name",
+                            Message: $"Enter a new {nameof(Host.Name)}",
                             Default: h.Name,
                             ReturnNullForEscape: true,
                             AllowColorize: false);
@@ -716,12 +765,12 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = "Change Port",
+                    Text = $"Change {nameof(Host.Port)}",
                     Hotkey = 'p',
                     Callback = async delegate (Host h)
                     {
                         h.Port = await Popup.AskNumberAsync(
-                            Message: "Enter a new Port",
+                            Message: $"Enter a new {nameof(Host.Port)}",
                             Start: h.Port ?? 0,
                             Min: 0);
 
@@ -743,6 +792,26 @@ namespace UD_Bones_Folder.Mod
                             ? UIUtils.CascadableResult.Continue
                             : UIUtils.CascadableResult.Back
                             ;
+                    },
+                });
+                options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
+                {
+                    Element = Host,
+                    Text = $"Change Timeout (ms)",
+                    Hotkey = 'e',
+                    Callback = async delegate (Host h)
+                    {
+                        var number = await Popup.AskNumberAsync(
+                            Message: $"Enter a new Timeout (ms), or -1 for no/unlimited timeout.",
+                            Start: h.TimeoutMS,
+                            Min: -1);
+
+                        if (!number.HasValue)
+                            return UIUtils.CascadableResult.Back;
+
+                        h.TimeoutMS = number.GetValueOrDefault();
+
+                        return UIUtils.CascadableResult.Continue;
                     },
                 });
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
@@ -967,6 +1036,14 @@ namespace UD_Bones_Folder.Mod
                     Value: $"\"{OldHost.Encrypted}\" \u001a \"{ModifiedHost.Encrypted}\"");
             }
 
+            if (OldHost.TimeoutMS != ModifiedHost.TimeoutMS)
+            {
+                any = true;
+                sB.AppendLine().AppendPair(
+                    Key: nameof(ModifiedHost.TimeoutMS),
+                    Value: $"\"{OldHost.GetTimeoutString()}\" \u001a \"{ModifiedHost.GetTimeoutString()}\"");
+            }
+
             if (OldHost.AuthToken != ModifiedHost.AuthToken)
             {
                 any = true;
@@ -984,9 +1061,8 @@ namespace UD_Bones_Folder.Mod
             }
 
             if (!any)
-            {
                 sB.AppendLine().Append("No changes, this is an errored state to be in.");
-            }
+
             sB.AppendLine();
             sB.AppendLine().Append("New host:");
             sB.AppendLine().Append(ModifiedHost.GetHostNameWithProtocol())
@@ -1056,7 +1132,8 @@ namespace UD_Bones_Folder.Mod
             List<SaveBonesInfo> saveBonesInfos = null;
             foreach (var host in AllHosts(h => h.Enabled))
             {
-                if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
+                if (!host.GetServerStatus()
+                    || host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
                     || saveBonesInfosFromHost.IsNullOrEmpty())
                     continue;
 
@@ -1070,6 +1147,241 @@ namespace UD_Bones_Folder.Mod
                 }
             }
             return saveBonesInfos;
+        }
+
+        public static async Task<bool> TryReportBones(
+            string BonesID,
+            GameObject ReportedObject
+            )
+        {
+            using var report = await AskForBonesReport(BonesID, ReportedObject);
+
+            if (report == null)
+                return false;
+
+            try
+            {
+                bool any = false;
+                foreach (var host in AllHosts(h => h.Enabled))
+                {
+                    try
+                    {
+                        if (await host.PostBonesReport(report))
+                            any = true;
+                        else
+                            Utils.Warn($"Failed to upload bones report to {host}");
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Failed to upload bones report to {host}", x);
+                        continue;
+                    }
+                }
+                if (any)
+                    await Popup.ShowAsync("Thank you! Your report was successfully submitted to at least one host.");
+                else
+                    await Popup.ShowAsync("Unfortunately, none of your currently enabled hosts were able to receive your report.");
+
+                return any;
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(TryUploadBones)} failed to upload Bones with BonesID {BonesID}", x);
+                return false;
+            }
+        }
+
+        private static async Task<Report> AskForBonesReport(
+            string BonesID,
+            GameObject ReportedObject
+            )
+        {
+            if (Report.ObjectReportDetails.FromGameObject(ReportedObject) is not Report.ObjectReportDetails reportObjectDetails)
+            {
+                await Popup.ShowAsync($"Something about {ReportedObject?.DebugName ?? "MISSING_OBJECT"} is making reporting from it unavailable.\n\n" +
+                    $"Please consider making your report from another object loaded by the offending bones file.");
+                return null;
+            }
+
+            PickOptionDataSetAsync<Report, UIUtils.CascadableResult> options = new();
+            var report = new Report
+            {
+                OsseousAshID = Config.ID,
+                BonesID = BonesID,
+                ObjectDetails = reportObjectDetails,
+                Description = "",
+            };
+            List<QudMenuItem> buttons = null;
+            Dictionary<int, Func<Task<UIUtils.CascadableResult>>> buttonCallbacks = null;
+            UIUtils.CascadableResult result;
+
+            var sB = Event.NewStringBuilder();
+
+            do
+            {
+                sB.Append("Please use the provided options to fill out your report about the bones that loaded the below object:")
+                    .AppendLine()
+                    .AppendLine().AppendBonesReportedObject(reportObjectDetails)
+                    .AppendLine()
+                    ;
+
+                /*sB.AppendLine().Append("Once all the necessary information is present (missing highlighted ")
+                    .AppendColored("red", "red")
+                    .Append("), a submit button will appear.")
+                    .AppendLine()
+                    ;*/
+
+                sB.AppendLine().Append("Below is what your current report contains:")
+                    .AppendLine()
+                    .AppendLine().AppendBonesReport(report, "{{W|Report}}")
+                    //.AppendLine()
+                    ;
+
+                if (!report.IsValid)
+                    sB.AppendLine().Append("Report is missing ")
+                        .AppendColored("red", "necessary information")
+                        .Append(", please add this info in order to proceed.")
+                        ;
+
+                string reportTypeString = report.Type.ToString();
+                if (report.Type == Report.ReportTypes.None)
+                    reportTypeString = reportTypeString.Colored("red");
+
+                string enterDescriptionText = "Enter a Description";
+                if (!report.Description.IsNullOrEmpty())
+                    enterDescriptionText = "Modify Description";
+
+                options.Add(new()
+                {
+                    Element = report,
+                    Text = $"Report Type: {reportTypeString}",
+                    Hotkey = 't',
+                    Callback = element => Task.Run(async delegate ()
+                    {
+                        element.Type = await AskBonesReportType();
+                        return UIUtils.CascadableResult.Continue;
+                    }),
+                });
+                options.Add(new()
+                {
+                    Element = report,
+                    Text = $"{report.IsSpecificObject.GetCheckboxText("For Specific Object")}",
+                    Hotkey = 's',
+                    Callback = element => Task.Run(delegate ()
+                    {
+                        if (element.IsSpecificObject)
+                            element.ObjectDetails = null;
+                        else
+                            element.ObjectDetails = reportObjectDetails;
+                        return UIUtils.CascadableResult.Continue;
+                    }),
+                });
+                options.Add(new()
+                {
+                    Element = report,
+                    Text = enterDescriptionText,
+                    Hotkey = 'd',
+                    Callback = element => Task.Run(async delegate ()
+                    {
+                        element.Description = (await Popup.AskStringAsync(
+                                Message: "Please enter any additional details for your report that might assist in the review process:",
+                                Default: element.Description ?? "",
+                                ReturnNullForEscape: true,
+                                AllowColorize: false))
+                            ?? element.Description;
+
+                        return UIUtils.CascadableResult.Continue;
+                    }),
+                });
+
+                if (report.IsValid)
+                {
+                    buttons = new()
+                    {
+                        new QudMenuItem
+                        {
+                            text = PopupMessage.SubmitCancelButton[0].text,
+                            command = "option:-3",
+                            hotkey = PopupMessage.SubmitCancelButton[0].hotkey,
+                        },
+                    };
+                    buttonCallbacks = new()
+                    {
+                        { -3, () => Task.Run(() => UIUtils.CascadableResult.BackSilent) }
+                    };
+                }
+
+                result = await UIUtils.PerformPickOptionAsync(
+                    OptionDataSet: options,
+                    Title: ReportBonesTitle,
+                    Intro: sB.AppendLine().AppendLine().ToString(),
+                    IntroIcon: ReportBonesIcon,
+                    AdditionalButtons: buttons,
+                    ButtonCallbacks: buttonCallbacks,
+                    OnBackCallback: () => Task.Run(delegate ()
+                    {
+                        report.Dispose();
+                        report = null;
+                        return UIUtils.CascadableResult.Back;
+                    }),
+                    OnEscapeCallback: () => Task.Run(delegate ()
+                    {
+                        report.Dispose();
+                        report = null;
+                        return UIUtils.CascadableResult.Cancel;
+                    }));
+
+                sB.Clear();
+                options.Clear();
+            }
+            while (result.IsContinue());
+
+            Event.ResetTo(sB);
+
+            if (report?.IsValid is not true)
+            {
+                if (!result.IsSilent())
+                    await Popup.ShowAsync($"Report cancelled.");
+
+                return null;
+            }
+
+            return report;
+        }
+
+        private static async Task<Report.ReportTypes> AskBonesReportType()
+        {
+            PickOptionDataSetAsync<Report.ReportTypes, Report.ReportTypes> options = new();
+
+            var reportType = Report.ReportTypes.None;
+            while (Enum.IsDefined(typeof(Report.ReportTypes), ++reportType))
+            {
+                string reportTypeText = reportType.ToString();
+                if (reportType != Report.ReportTypes.Other)
+                    reportTypeText = $"They are {reportType.ToString().ToLower()}";
+
+                options.Add(new PickOptionDataAsync<Report.ReportTypes, Report.ReportTypes>
+                {
+                    Element = reportType,
+                    Text = reportTypeText,
+                    Hotkey = options.GetFirstAvailableHotkey(
+                        new char[]
+                        {
+                            reportType.ToString().ToLower()[0],
+                            reportType.ToString().ToUpper()[0],
+                            'x',
+                            'X'
+                        }),
+                    Callback = v => Task.Run(() => v),
+                });
+            }
+            return await UIUtils.PerformPickOptionAsync(
+                OptionDataSet: options,
+                Title: ReportBonesTitle,
+                Intro: $"What is it about these bones that you'd like to report?\n\n",
+                IntroIcon: ReportBonesIcon,
+                OnBackCallback: () => Task.Run(() => Report.ReportTypes.None),
+                OnEscapeCallback: () => Task.Run(() => Report.ReportTypes.None));
         }
     }
 }

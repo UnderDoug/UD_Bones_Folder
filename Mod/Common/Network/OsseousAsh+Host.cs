@@ -42,6 +42,7 @@ namespace UD_Bones_Folder.Mod
                 Name = "osseousash.cloud",
                 Port = null,
                 Encrypted = true,
+                TimeoutMS = 1500,
             };
 
             public static string status => nameof(status);
@@ -54,6 +55,8 @@ namespace UD_Bones_Folder.Mod
             public static string Spec => CombineRoute(Bones, nameof(Spec));
             public static string Specs => CombineRoute(Bones, nameof(Specs));
             public static string SavGz => CombineRoute(Bones, nameof(SavGz));
+            public static string Stats => CombineRoute(Bones, nameof(Stats));
+            public static string Report => nameof(Report);
 
             /// <summary>
             /// Name of the host, excluding protocol and any port number.
@@ -74,6 +77,12 @@ namespace UD_Bones_Folder.Mod
             public bool Encrypted;
 
             /// <summary>
+            /// The number of milliseconds to wait for a response.
+            /// </summary>
+            [JsonProperty]
+            public int TimeoutMS = 1500;
+
+            /// <summary>
             /// Current unused but will allow for effectively (optionally) password protecting a sever which will requiring this be assigned and sent along with the request.
             /// </summary>
             [JsonProperty]
@@ -88,12 +97,48 @@ namespace UD_Bones_Folder.Mod
             [JsonIgnore]
             public bool IsRunning => GetServerStatus();
 
+            [JsonIgnore]
+            public bool CanUp => GetCanUp();
+
+            [JsonIgnore]
+            public int ConnectionLevel
+            {
+                get
+                {
+                    if (Enabled)
+                    {
+                        if (IsRunning)
+                        {
+                            if (CanUp)
+                                return 3;
+                            return 2;
+                        }
+                        return 1;
+                    }
+                    return 0;
+                }
+            }
+
+            [JsonIgnore]
+            public string ConnectionColor => GetConnectionColor(ConnectionLevel);
+
+            [JsonIgnore]
+            public string ServerStatusString
+            {
+                get
+                {
+                    int connectionLevel = ConnectionLevel;
+                    return GetConnectionString(connectionLevel).Colored(GetConnectionColor(connectionLevel));
+                }
+            }
+
+
             public Host()
             {
                 Enabled = true;
             }
 
-            public Host(string Name, int? Port = null, bool Encrypted = false, string AuthToken = null, bool Enabled = true)
+            public Host(string Name, int? Port = null, bool Encrypted = false, string AuthToken = null, bool Enabled = true, int TimeoutMS = 2000)
                 : this()
             {
                 this.Name = Name;
@@ -102,14 +147,17 @@ namespace UD_Bones_Folder.Mod
                 this.AuthToken = AuthToken;
                 this.AuthToken = AuthToken;
                 this.Enabled = Enabled;
+                this.TimeoutMS = TimeoutMS;
             }
 
-            public Host(string HostName, string AuthToken = null)
+            public Host(string HostName, string AuthToken = null, int TimeoutMS = 2000)
                 : this()
             {
                 Parse(HostName, out Name, out Port, out Encrypted);
                 if (!AuthToken.IsNullOrEmpty())
                     this.AuthToken = AuthToken;
+
+                this.TimeoutMS = TimeoutMS;
             }
 
             public static void Parse(string HostName, out string Name, out int? Port, out bool Encrypted)
@@ -179,6 +227,7 @@ namespace UD_Bones_Folder.Mod
                         Name = Host.Name,
                         Port = Host.Port,
                         Encrypted = Host.Encrypted,
+                        TimeoutMS = Host.TimeoutMS,
                         AuthToken = Host.AuthToken,
                         Enabled = Host.Enabled,
                     }
@@ -203,12 +252,47 @@ namespace UD_Bones_Folder.Mod
                 Destination.Name = Source.Name;
                 Destination.Port = Source.Port;
                 Destination.Encrypted = Source.Encrypted;
+                Destination.TimeoutMS = Source.TimeoutMS;
                 Destination.AuthToken = Source.AuthToken;
                 Destination.Enabled = Source.Enabled;
             }
 
             public void CopyTo(ref Host Destination)
                 => CopyTo(this, ref Destination)
+                ;
+
+            public int? GetTimeout()
+                => TimeoutMS >= 0
+                ? TimeoutMS
+                : null
+                ;
+
+            public string GetTimeoutString()
+                => GetTimeout() is int timeout
+                ? $"{timeout} ms"
+                : $"\u00ec ms"
+                ;
+
+            public static string GetConnectionColor(int ConnectionLevel)
+                => ConnectionLevel switch
+                {
+                    3 => "green",
+                    2 => "yellow",
+                    1 => "red",
+                    0 => "black",
+                    _ => "M",
+                }
+                ;
+
+            public static string GetConnectionString(int ConnectionLevel)
+                => ConnectionLevel switch
+                {
+                    3 => "Running",
+                    2 => "Download Only",
+                    1 => "Not Responding",
+                    0 => "Disabled",
+                    _ => "Error",
+                }
                 ;
 
             public string GetEnableDisableUIText()
@@ -261,7 +345,7 @@ namespace UD_Bones_Folder.Mod
 
             public string FullDisplayName(bool IncludeAuth = false)
                 => $"{Enabled.GetCheckbox()} "
-                + $"{"\u000f".Colored(IsRunning ? "c" : "K")} " // \u000f ☼ | \u0017 ↨
+                + $"{"\u000f".Colored(ConnectionColor)} " // \u000f ☼ | \u0017 ↨
                 + GetHostNameWithProtocol()
                 + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
                 ;
@@ -305,8 +389,8 @@ namespace UD_Bones_Folder.Mod
                 => CombineHostRoute(status, BonesID)
                 ;
 
-            public string canUpGetRoute(string BonesID = null)
-                => CombineHostRoute(canUp, BonesID)
+            public string canUpGetRoute(Guid OsseousAshID)
+                => CombineHostRoute(canUp, OsseousAshID.ToString())
                 ;
 
             public string BonesIDGetRoute(string BonesID = null)
@@ -331,6 +415,14 @@ namespace UD_Bones_Folder.Mod
 
             public string BonesSavGzPutRoute(string BonesID = null)
                 => CombineHostRoute(SavGz, BonesID)
+                ;
+
+            public string BonesReportPostRoute()
+                => CombineHostRoute(Report)
+                ;
+
+            public string BonesStatsPutRoute(string BonesID, Guid OsseousAshID)
+                => CombineHostRoute(Stats, BonesID, OsseousAshID.ToString())
                 ;
 
             public string DisplayName()
@@ -369,6 +461,19 @@ namespace UD_Bones_Folder.Mod
                 URI: URI,
                 ContentType: "json", 
                 Method: WebMethods.POST,
+                Timeout: Timeout,
+                Proc: Proc)
+            ;
+
+            private static HttpWebRequest CreatePutJSON(
+                string URI,
+                int? Timeout = null,
+                Action<System.IO.StreamWriter> Proc = null
+                )
+            => CreateWebRequest(
+                URI: URI,
+                ContentType: "json", 
+                Method: WebMethods.PUT,
                 Timeout: Timeout,
                 Proc: Proc)
             ;
@@ -421,15 +526,19 @@ namespace UD_Bones_Folder.Mod
 
                 string uRI = statusGetRoute();
                 HttpWebRequest httpReq = null;
-                int timeout = TimeSpan.FromSeconds(4).Milliseconds;
+                int? timeout = GetTimeout();
                 try
                 {
                     httpReq = CreateGetJSON(uRI);
                 }
-                catch (TaskCanceledException)
+                catch (WebException x)
                 {
-                    Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                    return false;
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
                 }
 
                 try
@@ -449,6 +558,89 @@ namespace UD_Bones_Folder.Mod
                             Utils.Warn($"{nameof(GetBonesInfos)} got no status from {ToString()}" +
                                 $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                     }
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed receiving GET response for {uRI}", x);
+                }
+                return false;
+            }
+
+            public bool GetCanUp()
+            {
+                if (!Enabled)
+                    return false;
+
+                if (Config?.ID is not Guid osseousAshID
+                    || osseousAshID == Guid.Empty)
+                    return false;
+
+                string uRI = canUpGetRoute(osseousAshID);
+                HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
+                try
+                {
+                    httpReq = CreateGetJSON(uRI, timeout);
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
+                }
+
+                try
+                {
+
+                    HttpWebResponse httpRes = null;
+                    try
+                    {
+                        httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    }
+                    catch (WebException x)
+                    {
+                        if (x.Status == WebExceptionStatus.Timeout)
+                        {
+                            Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                            return false;
+                        }
+                        throw x;
+                    }
+
+                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = streamReader.ReadToEnd();
+                        if (httpRes.StatusCode == HttpStatusCode.OK
+                            && JsonConvert.DeserializeObject<bool>(result) is bool parsedResult
+                            && parsedResult)
+                        {
+                            return true;
+                        }
+                        else
+                            Utils.Warn($"{nameof(GetBonesInfos)} got no status from {ToString()}" +
+                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                    }
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
                 }
                 catch (Exception x)
                 {
@@ -472,7 +664,7 @@ namespace UD_Bones_Folder.Mod
                     || SavGz.IsNullOrEmpty())
                     return Guid.Empty;
 
-                SaveBonesJSON.DirectoryType = FileLocationData.LocationType.Online;
+                SaveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
 
                 string uRI = BonesPostRoute();
 
@@ -556,7 +748,11 @@ namespace UD_Bones_Folder.Mod
                             }
                         });
 
-                    httpReq.Headers.Add(HttpRequestHeader.Authorization, Token.ToString());
+                    string authHeader = null;
+                    if (httpReq.Headers.Get(HttpRequestHeader.Authorization.ToString()) is string existingAuthHeader)
+                        authHeader = existingAuthHeader + ";";
+
+                    httpReq.Headers.Add(HttpRequestHeader.Authorization, $"basic {Token}");
                 }
                 catch
                 {
@@ -574,9 +770,7 @@ namespace UD_Bones_Folder.Mod
                             if (JObject.Parse(result) is JObject jObject
                                 && jObject["success"].ToObject<bool>())
                             {
-                                var bonesIDString = jObject[nameof(BonesID)].ToObject<string>();
-                                var savGzString = jObject[nameof(BonesID)].ToObject<string>();
-                                Utils.Info($"Successfully added \".sav.gz\" blob to BonesRecord on server at \"{ToString()}\"" +
+                                Utils.Info($"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"" +
                                     $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
                                 return true;
                             }
@@ -645,7 +839,66 @@ namespace UD_Bones_Folder.Mod
                 => TryUploadBonesAsync(BonesID, SaveBonesJSON, SavGz).WaitResult();
 
             #endregion
-            #region Get Bones Infos
+            #region Post Bones Report
+
+            public async Task<bool> PostBonesReport(Report Report)
+            {
+                if (!Enabled
+                    || Report == null
+                    || Report.BonesID.IsNullOrEmpty())
+                    return false;
+
+                string uRI = BonesReportPostRoute();
+
+                HttpWebRequest httpReq = null;
+                try
+                {
+                    httpReq = CreatePostJSON(
+                        URI: uRI,
+                        Proc: async delegate (System.IO.StreamWriter streamWriter)
+                        {
+                            await streamWriter.WriteAsync(JsonConvert.SerializeObject(Report));
+                        });
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed to create POST request for {uRI}", x);
+                }
+
+                try
+                {
+                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = await streamReader.ReadToEndAsync();
+                        if (httpRes.StatusCode == HttpStatusCode.Created)
+                        {
+                            if (JObject.Parse(result) is JObject jObject
+                                && jObject["success"].ToObject<bool>() is bool success)
+                            {
+                                Utils.Info($"Successfully reported {Report.BonesID} on server at \"{ToString()}\"" +
+                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+
+                                return success;
+                            }
+                        }
+                        else
+                        {
+                            Utils.Warn($"{nameof(PostBonesReport)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
+                                $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
+                        }
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed receiving POST response for {uRI}", x);
+                    return false;
+                }
+                return false;
+            }
+
+            #endregion
+            #region Get Bones Info(s)
 
             private SaveBonesJSON[] GetSaveBonesJSONs()
             {
@@ -654,15 +907,19 @@ namespace UD_Bones_Folder.Mod
 
                 string uRI = BonesInfosGetRoute();
                 HttpWebRequest httpReq = null;
-                int timeout = TimeSpan.FromSeconds(4).Milliseconds;
+                int? timeout = GetTimeout();
                 try
                 {
-                    httpReq = CreateGetJSON(uRI);
+                    httpReq = CreateGetJSON(uRI, timeout);
                 }
-                catch (TaskCanceledException)
+                catch (WebException x)
                 {
-                    Utils.Info($"Timed out getting Bones Info from {uRI} ({timeout} ms).");
-                    return null;
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
                 }
 
                 try
@@ -698,6 +955,15 @@ namespace UD_Bones_Folder.Mod
                         }
                     }
                 }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
+                }
                 catch (Exception x)
                 {
                     Utils.Error($"Failed receiving GET response for {uRI}", x);
@@ -718,7 +984,7 @@ namespace UD_Bones_Folder.Mod
 
                     var saveBonesInfo = SaveBonesJSON.InfoFromJson(
                         SaveBonesJSON: saveBonesJSON,
-                        SaveLocation: ToString(),
+                        SaveLocation: GetHostNameWithProtocol(TrailingSlash: true),
                         FileName: CombineRoute(SavGz, saveBonesJSON.ID),
                         SaveSize: 0);
 
@@ -729,6 +995,84 @@ namespace UD_Bones_Folder.Mod
 
                 //Utils.Log($"{nameof(GetBonesInfos)} got {saveBonesInfos.Count} Bones Info from {ToString()}");
             }
+
+            private SaveBonesJSON GetSaveBonesJSON(string BonesID)
+            {
+                if (!Enabled)
+                    return null;
+
+                string uRI = BonesInfoGetRoute(BonesID);
+                HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
+                try
+                {
+                    httpReq = CreateGetJSON(uRI, timeout);
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
+                }
+
+                try
+                {
+                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = streamReader.ReadToEnd();
+                        if (httpRes.StatusCode == HttpStatusCode.OK
+                            && JObject.Parse(result) is JObject jObject
+                            && jObject["success"].ToObject<bool>())
+                        {
+                            try
+                            {
+                                return JsonConvert.DeserializeObject<SaveBonesJSON>(jObject["BonesInfo"].ToString());
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"{nameof(GetBonesInfos)} failed to deserialize {nameof(jObject)}[\"BonesInfo\"] to {typeof(SaveBonesJSON).Name}", x);
+                                return null;
+                            }
+                        }
+                        else
+                        if (httpRes.StatusCode == HttpStatusCode.NoContent)
+                        {
+                            //Utils.Log($"{nameof(GetBonesInfo)} got no SaveBonesInfo from {ToString()}" +
+                            //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        }
+                        else
+                        {
+                            Utils.Warn($"{nameof(GetBonesInfos)} got no SaveBonesInfo from {ToString()}" +
+                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        }
+                    }
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed receiving GET response for {uRI}", x);
+                }
+                return null;
+            }
+
+            public SaveBonesInfo GetSaveBonesInfo(string BonesID)
+                => GetSaveBonesJSON(BonesID)?.InfoFromJson(
+                    SaveLocation: ToString(),
+                    FileName: CombineRoute(SavGz, BonesID),
+                    SaveSize: 0)
+                ;
 
             #endregion
             #region Get Bones SavGz
@@ -743,15 +1087,19 @@ namespace UD_Bones_Folder.Mod
 
                 string uRI = BonesSavGzGetRoute(BonesID);
                 HttpWebRequest httpReq = null;
-                int timeout = TimeSpan.FromSeconds(4).Milliseconds;
+                int? timeout = GetTimeout();
                 try
                 {
-                    httpReq = CreateGetGz(uRI);
+                    httpReq = CreateGetGz(uRI, timeout);
                 }
-                catch (TaskCanceledException)
+                catch (WebException x)
                 {
-                    Utils.Info($"Timed out getting Bones SavGz from {uRI} ({timeout} ms).");
-                    return null;
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
                 }
 
                 try
@@ -778,6 +1126,15 @@ namespace UD_Bones_Folder.Mod
                     Utils.Warn($"{nameof(GetBonesSavGz)} failed to get a Bones SavGz from {ToString()}" +
                         $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                 }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return null;
+                    }
+                    throw x;
+                }
                 catch (Exception x)
                 {
                     Utils.Error($"{nameof(GetBonesSavGz)} failed to get a Bones SavGz from {ToString()}", x);
@@ -786,14 +1143,98 @@ namespace UD_Bones_Folder.Mod
             }
 
             #endregion
+            #region Put Bones Stats
 
-            public bool SameAs(Host Other)
+            public async Task<bool> PutBonesStats(
+                string BonesID,
+                SaveBonesJSON SaveBonesJSON
+                )
+            {
+                if (!Enabled
+                    || BonesID.IsNullOrEmpty()
+                    || SaveBonesJSON == null)
+                    return false;
+
+                string uRI = BonesStatsPutRoute(BonesID, Config.ID);
+
+                HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
+                try
+                {
+                    httpReq = CreatePutJSON(
+                        URI: uRI,
+                        Timeout: timeout,
+                        Proc: async delegate (System.IO.StreamWriter streamWriter)
+                        {
+                            await streamWriter.WriteAsync(JsonConvert.SerializeObject(SaveBonesJSON));
+                        });
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed creating PUT response for {uRI}", x);
+                    return false;
+                }
+
+                try
+                {
+                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = await streamReader.ReadToEndAsync();
+                        if (httpRes.StatusCode == HttpStatusCode.OK)
+                        {
+                            if (JObject.Parse(result) is JObject jObject
+                                && jObject["success"].ToObject<bool>())
+                            {
+                                Utils.Info($"Successfully updated stats to BonesRecord on server at \"{ToString()}\"" +
+                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
+                                return true;
+                            }
+                        }
+                        else
+                        {
+                            Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
+                                $"instead of expected {HttpStatusCode.OK} ({(int)HttpStatusCode.OK})");
+                        }
+                    }
+                }
+                catch (WebException x)
+                {
+                    if (x.Status == WebExceptionStatus.Timeout)
+                    {
+                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                        return false;
+                    }
+                    throw x;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Failed receiving PUT response for {uRI}", x);
+                    return false;
+                }
+
+                return false;
+            }
+
+            #endregion
+
+            public bool SameAs(Host Other, bool IgnoreDisabled = false)
                 => Other is not null
                 && Name == Other.Name
                 && Port == Other.Port
                 && Encrypted == Other.Encrypted
                 && AuthToken == Other.AuthToken
-                && Enabled == Other.Enabled
+                && (IgnoreDisabled
+                    || Enabled == Other.Enabled)
                 ;
 
             public override string ToString()

@@ -23,8 +23,8 @@ Alternatively, if you have the game on steam, there's an [unlisted workshop page
 ### Using the "Test Bones"
 
 If one doesn't already exist, create a directory called "Bones" in either of the following directories, but preferable the first:
-- "[path to game]\Freehold Games\CavesOfQud\Synced"
-- "[path to game]\Freehold Games\CavesOfQud"
+- "<...>\Freehold Games\CavesOfQud\Synced"
+- "<...>\Freehold Games\CavesOfQud"
 
 "Configuration files" on the linked page refers to the second list item above.
 
@@ -44,11 +44,14 @@ Assuming no other bones and in descending date order, your Sync folder will look
 
 `make bones` - does what's on the tin. Makes a bones out of your current character.
 
-`make bones die` - also does what's on the tin. Makes you die to make a bones (outside of thrown exceptions, this *will* kill your character, only the "sure you want to die?" debug option will prevent it)
+`make bones die [-f]` - also does what's on the tin. Makes you die to make a bones (outside of thrown exceptions, this *will* kill your character, only the "sure you want to die?" debug option will prevent it)
+- `-f` flag to skip the popup warning you of the imminent end of your run. 
+
+`make bones eligible` - another tin wish. Makes your character eligible for saving bones (and loading them), without killing them.
 
 `cremate bones` - does the same thing as the bones menu "cremate all" option. Hold tab or type "CREMATE" to delete *all* bones.
 
-`go2bones` - takes you to the current run's pending bones, or tells there aren't any if there aren't any.
+~~`go2bones` - takes you to the current run's pending bones, or tells you there aren't any if there aren't any.~~ - wish is defunct, now.
 
 ## Notes
 
@@ -58,4 +61,4 @@ Once you load up the game, and go into the options and give the debug options fo
 ### Disparate Mod Configurations
 Clicking on a bones file in the Bones menu will list the mods that are different between the current configuration and that of the bones file, and gives the option of reloading the game with either the bones file's mods added to the curent configuration or the current configuration replaced with that of the bones file.
 
-If a mod is outright unavailable (because it's not even install), that will be mentioned.
+If a mod is outright unavailable (because it's not even installed), that will be mentioned.
