@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,11 +10,9 @@ using ConsoleLib.Console;
 
 using Kobold;
 
-using Platform.IO;
-
-using UD_Bones_Folder.Mod.UI;
-
 using UnityEngine.UI;
+
+using Platform.IO;
 
 using XRL;
 using XRL.Collections;
@@ -26,9 +22,12 @@ using XRL.UI.Framework;
 using XRL.World;
 using XRL.World.Parts;
 
+using UD_Bones_Folder.Mod.UI;
+
+using static XRL.World.Cell;
+
 using static UD_Bones_Folder.Mod.OsseousAsh;
 using static UD_Bones_Folder.Mod.OsseousAsh.Report;
-using static XRL.World.Cell;
 
 using Range = XRL.Range;
 
@@ -132,11 +131,11 @@ namespace UD_Bones_Folder.Mod
         {
             SaveRow.SetBonesIcon(BonesData);
             SaveRow.SetBonesText(BonesData);
-            SaveRow.SetBonesModsDiffer(BonesData);
-            SaveRow.SetBonesDeleteButton(BonesData);
 
-            BonesManagement.instance.SelectionChoiceSyncButtons ??= new();
-            SaveRow.SetLocationBox(BonesData);
+            SaveRow.SetLocationBox(BonesData).SetAsLastSibling();
+            BonesManagement.instance.SelectionChoiceModsButtons ??= new();
+            SaveRow.SetBonesModsDiffer(BonesData).SetAsLastSibling();
+            SaveRow.SetBonesDeleteButton(BonesData).SetAsLastSibling();
 
             SaveRow.Update();
         }
@@ -198,18 +197,12 @@ namespace UD_Bones_Folder.Mod
             SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
         }
 
-        public static void SetLocationBox(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        public static UnityEngine.Transform SetLocationBox(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
             var bonesInfo = BonesData.BonesInfo;
-            if (!BonesManagement.instance.SelectionChoiceSyncButtons.TryGetValue(SaveRow, out var locationBox))
-            {
-                locationBox = UnityEngine.GameObject.Instantiate(SaveRow.modsDiffer);
-                BonesManagement.instance.SetParentTransform(locationBox.transform, SaveRow.modsDiffer.transform.parent);
-                locationBox.SetActive(value: true);
-                locationBox.transform.SetAsFirstSibling();
-                BonesManagement.instance.SelectionChoiceSyncButtons[SaveRow] = locationBox;
-            }
-            if (locationBox.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
+
+            SaveRow.modsDiffer.SetActive(value: true);
+            if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
             {
                 foreach (var locationBoxTextSkin in locationBoxTextSkins)
                 {
@@ -223,31 +216,39 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
-            BonesManagement.instance.SelectionChoiceSyncButtons[SaveRow] = locationBox;
+            return SaveRow.modsDiffer.transform;
         }
 
-        public static void SetBonesModsDiffer(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        public static UnityEngine.Transform SetBonesModsDiffer(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
             var bonesInfo = BonesData.BonesInfo;
 
-            SaveRow.modsDiffer.SetActive(value: true);
-            if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsDifferTextSkins)
+            if (!BonesManagement.instance.SelectionChoiceModsButtons.TryGetValue(SaveRow, out var modsButton))
             {
-                foreach (var modsDifferTextSkin in modsDifferTextSkins)
+                SaveRow.deleteButton ??= new();
+                modsButton = UnityEngine.GameObject.Instantiate(SaveRow.deleteButton);
+                modsButton.context = null;
+                modsButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
+                BonesManagement.instance.SetParentTransform(modsButton.transform, SaveRow.deleteButton.gameObject.transform.parent);
+                BonesManagement.instance.SelectionChoiceModsButtons[SaveRow] = modsButton;
+            }
+            modsButton.gameObject.SetActive(value: true);
+            if (modsButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsButtonTextSkins)
+            {
+                foreach (var modsButtonTextSkin in modsButtonTextSkins)
                 {
-                    if (modsDifferTextSkin.name == "tct"
-                        || modsDifferTextSkin.gameObject.name == "tct")
+                    if (modsButtonTextSkin.name == "tct"
+                        || modsButtonTextSkin.gameObject.name == "tct")
                     {
-                        modsDifferTextSkin.SetText(bonesInfo.ModsDiffer.ToString());
+                        modsButtonTextSkin.SetText(bonesInfo.ModsDiffer.ToString());
                         break;
                     }
                 }
             }
-            if (SaveRow.modsDiffer.GetComponent<FrameworkContext>() is FrameworkContext modsDiffer)
-                modsDiffer.context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
+            return modsButton.transform;
         }
 
-        public static void SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        public static UnityEngine.Transform SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
             var bonesInfo = BonesData.BonesInfo;
             SaveRow.deleteButton ??= new();
@@ -288,6 +289,7 @@ namespace UD_Bones_Folder.Mod
                 SaveRow.deleteButton.enabled = false;
                 SaveRow.deleteButton.gameObject.SetActive(value: false);
             }
+            return SaveRow.deleteButton.transform;
         }
 
         public static string Colored(this string Text, string Color)
@@ -311,8 +313,18 @@ namespace UD_Bones_Folder.Mod
 
         public static string ValueUnits(this TimeSpan Duration, int Digits = 2)
         {
-            string durationUnit = "week";
-            double durationValue = Duration.TotalDays / 7;
+            string durationUnit = "year";
+            double durationValue = Duration.TotalDays / 364.25;
+            if (Duration.TotalDays < Math.Floor(364.25))
+            {
+                durationUnit = "month";
+                durationValue = Duration.TotalDays / (364.25 / 12);
+            }
+            if (Duration.TotalDays < Math.Floor(364.25 / 12))
+            {
+                durationUnit = "week";
+                durationValue = Duration.TotalDays / 7;
+            }
             if (Duration.TotalDays < 7)
             {
                 durationUnit = "day";
@@ -918,10 +930,6 @@ namespace UD_Bones_Folder.Mod
             return lastHotkey;
         }
 
-        public static string GetColoredString(this FileLocationData.LocationType Type)
-            => Type.ToString().Colored(FileLocationData.GetFileLocationDataTypeColor(Type))
-            ;
-
         public static int FirstIndexOrDefault<T>(
             this IEnumerable<T> Source,
             Predicate<T> OnBasis = null,
@@ -1026,6 +1034,12 @@ namespace UD_Bones_Folder.Mod
 
             return result;
         }
+
+        public static StringBuilder AppendRule(this StringBuilder SB, object Value)
+            => Value != null
+            ? SB.AppendColored("rules", Value.ToString())
+            : SB
+            ;
 
         public static StringBuilder AppendQuote(this StringBuilder SB, object Value)
             => SB.Append("\"").Append(Value).Append("\"")

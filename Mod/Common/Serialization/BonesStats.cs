@@ -17,6 +17,12 @@ namespace UD_Bones_Folder.Mod
     {
         public static string MissingLunarRegent => "this =LunarShader:Moon Sovran:*=, lost to time,";
 
+        [JsonProperty(nameof(LastEncountered))]
+        protected long _LastEncountered;
+
+        [JsonIgnore]
+        public DateTime LastEncountered => new(_LastEncountered);
+
         [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
         public BonesStatSet Encountered;
         [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
@@ -123,27 +129,101 @@ namespace UD_Bones_Folder.Mod
 
             RegentName = (RegentName ?? MissingLunarRegent).StartReplace().ToString();
 
-            sB.Append(RegentName.Capitalize()).Append(" has been encountered ").AppendRules(GetEncounteredTotal().Things("time")).Append(".");
-            
-            if (haveID)
-                sB.AppendLine().Append("You've personally encountered their bones ").AppendRules(GetEncounteredValue(oAID).Things("time")).Append(", ")
-                    .Append("which is ").AppendRules(GetPercentageString(GetPercentOfEncountered(oAID))).Append(" of the times they've been encountered.")
-                    .AppendLine();
-            
-            sB.AppendLine().Append("They have been made to relive their demise in ").AppendRules(GetDefeatedTotal().Things("run")).Append(" since their first.");
-            
-            if (haveID)
-                sB.AppendLine().Append("On ").AppendRules(GetDefeatedValue(oAID).Things("separate occasion")).Append(", ")
-                    .Append(RegentName).Append(" has attempted to reclaim your run and been defeated, ")
-                    .Append("accounting for ").AppendRules(GetPercentageString(GetPercentOftDefeated(oAID))).Append(" of their total defeats.")
-                    .AppendLine();
-            
-            sB.AppendLine().AppendRules(GetReclaimedTotal().Things("time")).Append(", ").Append(RegentName).Append(" has reclaimed a run they've found themselves in.");
-            
-            if (haveID)
-                sB.AppendLine().Append(RegentName.Capitalize()).Append(" has successfully reclaimed ").AppendRules(GetReclaimedValue(oAID).ToString()).Append(" of your runs, ")
-                    .Append("representing ").AppendRules(GetPercentageString(GetPercentOfEncountered(oAID))).Append(" of the total runs they've reclaimed.")
-                    .AppendLine();
+            int totalEncounters = GetEncounteredTotal();
+
+            if (totalEncounters > 0)
+            {
+                sB.Append(RegentName.Capitalize()).Append(" has been encountered ").AppendRule(totalEncounters.Things("time"));
+
+                if (_LastEncountered > 0)
+                    sB.Append(", and was last encountered").AppendRule(LastEncountered.TimeAgo()).Append(" ago.");
+                else
+                    sB.Append(".");
+
+                int totalDefeats = GetDefeatedTotal();
+                int totalReclamations = GetReclaimedTotal();
+                int playerEncounters = 0;
+
+                if (haveID)
+                {
+                    playerEncounters = GetEncounteredValue(oAID);
+
+                    if (playerEncounters > 0)
+                    {
+                        string percentEncountered = GetPercentageString(GetPercentOfEncountered(oAID));
+                        sB.AppendLine().Append("You've personally encountered them in ").AppendRule(playerEncounters.Things("different run")).Append(", ")
+                            .Append("which is ").AppendRule(percentEncountered).Append(" of the times they've ever been encountered.")
+                            .AppendLine();
+                    }
+                    else
+                        sB.AppendLine().Append("You are yet to encounter them.");
+                }
+
+                if (totalDefeats > 0)
+                {
+                    sB.AppendLine().Append("They have been made to relive their demise in ").AppendRule(totalDefeats.Things("run")).Append(" since their first.");
+
+                    if (haveID)
+                    {
+                        int playerTriumphs = GetDefeatedValue(oAID);
+                        if (playerTriumphs > 0)
+                        {
+                            if (playerTriumphs > 3
+                                && playerTriumphs == playerEncounters)
+                            {
+                                sB.AppendLine().Append("Bane of ").Append(RegentName).Append(" that you are, you have defeated them ").AppendRule("every time")
+                                    .Append(" they have attempted to reclaim a run of yours; ").Append(playerTriumphs.Things("total time")).Append(", ");
+                            }
+                            else
+                            {
+                                sB.AppendLine().Append("On ").AppendRule(playerTriumphs.Things("separate occasion")).Append(", ")
+                                    .Append(RegentName).Append(" was defeated in an attempt to reclaim your run, ");
+                            }
+                            string percentTriumphed = GetPercentageString(GetPercentOftDefeated(oAID));
+                            sB.Append("accounting for ").AppendRule(percentTriumphed).Append(" of their total defeats.")
+                                .AppendLine();
+                        }
+                        else
+                            sB.AppendLine().Append("They have never faced defeat at your hand.");
+                    }
+                }
+                else
+                    sB.AppendLine().Append("They have ").AppendRule("never").Append(" been defeated.");
+                
+
+                if (totalReclamations > 0)
+                {
+                    sB.AppendLine().AppendRule(totalReclamations.Things("time")).Append(", ").Append(RegentName).Append(" has reclaimed a run in which they've found themselves.");
+
+                    if (haveID)
+                    {
+                        int playerDefeats = GetReclaimedValue(oAID);
+                        if (playerDefeats > 0)
+                        {
+                            if (playerDefeats > 3
+                                && playerDefeats == playerEncounters)
+                            {
+                                sB.AppendLine().Append("Woe is the name ").Append(RegentName).Append("! They have reclaimed ").AppendRule("every run")
+                                    .Append(" you've encountered them within; A total of ").Append(playerDefeats.Things("time")).Append(", ");
+                            }
+                            else
+                            {
+                                sB.AppendLine().Append(RegentName.Capitalize()).Append(" has successfully reclaimed ")
+                                    .AppendRule(playerDefeats.ToString()).Append(" of your runs, ");
+                            }
+                            string percentDefeats = GetPercentageString(GetPercentOfEncountered(oAID));
+                            sB.Append("representing ").AppendRule(percentDefeats).Append(" of the total runs they've reclaimed.")
+                                .AppendLine();
+                        }
+                        else
+                            sB.AppendLine().Append("They have never reclaimed a run of yours.");
+                    }
+                }
+                else
+                    sB.AppendLine().Append("They have ").AppendRule("never").Append(" reclaimed a run as their own.");
+            }
+            else
+                sB.Append(RegentName.Capitalize()).Append(" has ").AppendRule("never").Append(" been encountered").Append(".");
 
             return Event.FinalizeString(sB);
         }

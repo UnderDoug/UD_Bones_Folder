@@ -36,6 +36,8 @@ namespace UD_Bones_Folder.Mod
             System.IO.Path.DirectorySeparatorChar,
         };
 
+        public static string MissingLocaitonShortDisplayName => $"a {"strange location".Colored(LocationType.None.TypeColor())}";
+
         public LocationType Type;
         public string Path;
         public OsseousAsh.Host Host;
@@ -175,14 +177,29 @@ namespace UD_Bones_Folder.Mod
             return DataManager.SanitizePathForDisplay(output);
         }
 
+        public string ShortDisplayName()
+            => Type switch
+            {
+                LocationType.Synced or
+                LocationType.Local => $"a {Tag(false)} folder",
+                LocationType.Mod => $"a {Tag(false)}", // eventually display the actual mod name.
+                LocationType.Online => $"{Host.DisplayName().Colored(LocationType.Online.TypeColor())}",
+                _ => MissingLocaitonShortDisplayName,
+            }
+            ;
+
         public string DisplayName()
             => Type <= LocationType.Mod
             ? SanitiseForDisplay()
             : Host?.GetHostNameWithProtocol()
             ;
 
+        public string Tag(bool Braces = true)
+            => $"{(Braces ? "[" : null)}{Type.GetColoredString()}{(Braces ? "]" : null)}"
+            ;
+
         public string TaggedDisplayName()
-            => $"[{Type.GetColoredString()}] {DisplayName()}"
+            => $"{Tag()} {DisplayName()}"
             ;
 
         public bool Exists()
@@ -332,6 +349,14 @@ namespace UD_Bones_Folder.Mod
 
     public static class FileLocationDataExtensions
     {
+        public static string TypeColor(this FileLocationData.LocationType Type)
+            => FileLocationData.GetFileLocationDataTypeColor(Type)
+            ;
+
+        public static string GetColoredString(this FileLocationData.LocationType Type)
+            => Type.ToString().Colored(Type.TypeColor())
+            ;
+
         public static async Task PerformBasedOnTypeAsync(
             this FileLocationData LocationData,
             Func<Task> OnlineCallback = null,

@@ -30,7 +30,10 @@ namespace UD_Bones_Folder.Mod.UI
     {
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolder_BonesManagement";
 
+        public const string CMD_ACCEPT = "Accept";
+        public const string CMD_DELETE = "CmdDelete";
         public const string CMD_INSERT = "CmdInsert";
+        public const string CMD_OPTION = "CmdOptions";
 
         public static MenuOption BACK_BUTTON => EmbarkBuilderOverlayWindow.BackMenuOption;
 
@@ -55,17 +58,22 @@ namespace UD_Bones_Folder.Mod.UI
             },
             new MenuOption
             {
-                KeyDescription = ControlManager.getCommandInputDescription("Accept"),
+                InputCommand = CMD_ACCEPT,
                 Description = "select"
             },
             new MenuOption
             {
-                KeyDescription = ControlManager.getCommandInputDescription("CmdDelete"),
+                InputCommand = CMD_OPTION,
+                Description = "mods"
+            },
+            new MenuOption
+            {
+                InputCommand = CMD_DELETE,
                 Description = "cremate"
             },
             new MenuOption
             {
-                InputCommand = "CmdInsert",
+                InputCommand = CMD_INSERT,
                 Description = "cremate all"
             },
         };
@@ -105,7 +113,7 @@ namespace UD_Bones_Folder.Mod.UI
         protected bool MoveAllBonesMenuBar;
         protected bool MoveLegendBar;
 
-        public Dictionary<SaveManagementRow, GameObject> SelectionChoiceSyncButtons = new();
+        public Dictionary<SaveManagementRow, FrameworkContext> SelectionChoiceModsButtons = new();
 
         protected static void InitializeWithUIManager()
         {
@@ -447,6 +455,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             MainNavContext.commandHandlers ??= new();
             MainNavContext.commandHandlers.Set(CMD_INSERT, Event.Helpers.Handle(HandleDeleteAll));
+            MainNavContext.commandHandlers.Set(CMD_OPTION, Event.Helpers.Handle(HandleModsButton));
 
             BackButton.gameObject.SetActive(value: true);
             if (BackButton.navigationContext == null)
@@ -467,8 +476,8 @@ namespace UD_Bones_Folder.Mod.UI
                     saveRow.setBonesData(bonesDataI);
                     saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
+                    SelectionChoiceModsButtons[saveRow].context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
                 }
-                
             }
 
             if (Preselected != null
@@ -536,6 +545,9 @@ namespace UD_Bones_Folder.Mod.UI
 
         public bool IsInsideActiveContext(NavigationContext NavigationContext)
         {
+            if (NavigationContext is null)
+                return false;
+
             if (NavigationController.instance is not NavigationController navController)
                 return false;
 
@@ -715,6 +727,7 @@ namespace UD_Bones_Folder.Mod.UI
                 || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
                 return;
 
+            Utils.Log("I got pressed, for sure.");
             CompletionSource?.TrySetResult(bonesInfo);
         }
 

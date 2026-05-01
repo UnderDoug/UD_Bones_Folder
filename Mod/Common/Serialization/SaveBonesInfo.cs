@@ -128,6 +128,8 @@ namespace UD_Bones_Folder.Mod
 
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
 
+        public static int BaseBonesWeight = 50;
+
         public Guid OsseousAshID
             => GetBonesJSON()?.OsseousAshID
             ?? Guid.Empty;
@@ -169,7 +171,7 @@ namespace UD_Bones_Folder.Mod
 
         private BonesRender _Render;
         public BonesRender Render => _Render ??= new(GetBonesJSON());
-        public BonesRender FlippedRender => new(Render, HFlip: true);
+        public BonesRender FlippedRender => new(Render, HFlip: !Render.GetHFlip());
 
         public string FullBonesPathSav => Path.Combine(Directory, Sav);
         public string FullBonesPathSavGz => Path.Combine(Directory, SavGz);
@@ -422,7 +424,7 @@ namespace UD_Bones_Folder.Mod
             if (ModsEnabled.IsNullOrEmpty())
                 return null;
 
-            int saveWeight = 50;
+            int saveWeight = BaseBonesWeight;
 
             saveWeight += ModsDiffer.EnabledWhereBonesDisabled * -1;
             saveWeight += ModsDiffer.DisabledWhereBonesEnabled * -2;
@@ -431,7 +433,7 @@ namespace UD_Bones_Folder.Mod
                 if (ModsEnabled.Contains(runningMod))
                     saveWeight += 1;
 
-            saveWeight = +ModsDiffer.UnavailableWhereBonesEnabled * -4;
+            saveWeight += ModsDiffer.UnavailableWhereBonesEnabled * -4;
 
             return Math.Max(1, saveWeight);
         }
@@ -467,16 +469,16 @@ namespace UD_Bones_Folder.Mod
                     break;
             }
 
-            sB.AppendQuote(FileLocationData?.DisplayName() ?? "a strange location")
+            sB.Append(FileLocationData?.ShortDisplayName() ?? FileLocationData.MissingLocaitonShortDisplayName)
                 .Append(" on ").Append(SaveTime).Append(", ")
-                .AppendRules(SaveTimeValue.TimeAgo()).Append(" ago.")
-                .AppendLine();
-
-            sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
-                .AppendRules((GetBonesWeight() ?? 0).ToString()).Append(".")
+                .AppendRule(SaveTimeValue.TimeAgo()).Append(" ago.")
                 .AppendLine();
 
             sB.AppendLine().AppendBonesStatsBlurb(Stats, Name);
+
+            sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
+                .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
+                .AppendLine();
 
             return Event.FinalizeString(sB);
         }
