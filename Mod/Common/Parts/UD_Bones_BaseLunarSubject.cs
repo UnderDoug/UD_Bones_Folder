@@ -78,6 +78,7 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == TidyLunarObjectsEvent.ID
+            || ID == AfterBonesZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 

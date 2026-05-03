@@ -23,20 +23,20 @@ namespace XRL.World.WorldBuilders
     {
         public static BonesManager BonesManager => BonesManager.System;
 
-        public JoppaWorldBuilder Builder;
+        public static JoppaWorldBuilder Builder;
 
         [GameBasedStaticCache(CreateInstance = false)]
         public static string BoneZoneID = null;
 
         public override void OnAfterBuild(JoppaWorldBuilder Builder)
         {
-            MetricsManager.rngCheckpoint("UD_FleshGolems_MadMonger_Lair_Start");
-            this.Builder = Builder;
-            Builder.BuildStep("Exhuming Moon Kings", ExhumeMoonKing);
-            MetricsManager.rngCheckpoint("UD_FleshGolems_MadMonger_Lair_Finish");
+            //MetricsManager.rngCheckpoint("UD_Bones_WorldBuilder_Start");
+            UD_Bones_WorldBuilder.Builder = Builder;
+            Builder.BuildStep("Exhuming Lunar Regents", ExhumeLunarRegent);
+            //MetricsManager.rngCheckpoint("UD_Bones_WorldBuilder_Finish");
         }
 
-        public void ExhumeMoonKing(string WorldID)
+        public void ExhumeLunarRegent(string WorldID)
         {
             if (WorldID != "JoppaWorld")
                 return;
@@ -52,7 +52,7 @@ namespace XRL.World.WorldBuilders
                 || !Options.DebugEnableNoExhuming)
                 return;
 
-            WorldCreationProgress.StepProgress("Exhuming Moon King...");
+            WorldCreationProgress.StepProgress("Exhuming Lunar Regents...");
 
             if (BonesManager == null)
                 return;

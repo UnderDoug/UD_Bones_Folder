@@ -48,7 +48,7 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (Callback != null)
             {
-                Utils.Log($"{Text.Strip()} -> {nameof(Invoke)}");
+                // Utils.Log($"{Text.Strip()} -> {nameof(Invoke)}");
                 return Callback.Invoke(Element);
             }
             return default;

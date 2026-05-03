@@ -10,6 +10,8 @@ using Platform.IO;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.UI;
+
 using UnityEngine;
 
 using XRL;
@@ -54,11 +56,8 @@ namespace UD_Bones_Folder.Mod
 
         public static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
 
-        [OptionFlag] public static int CustomPermyriadChance
-        {
-            get => Config?.CustomPermyriadChance ?? DefaultPermyriadChance;
-            set => Config?.WriteCustomPermyriadChance(Math.Clamp(value, 0, 10000));
-        }
+        private static int? _CustomPermyriadChance;
+        [OptionFlag] public static int CustomPermyriadChance => (_CustomPermyriadChance ??= Config?.CustomPermyriadChance) ?? DefaultPermyriadChance;
 
         public static async Task ManageCustomPermyriadChance()
         {
@@ -73,7 +72,10 @@ namespace UD_Bones_Folder.Mod
                 if (confirmed.GetValueOrDefault())
                 {
                     if (selected != CustomPermyriadChance)
-                        CustomPermyriadChance = selected.GetValueOrDefault();
+                    {
+                        _CustomPermyriadChance = Math.Clamp(selected.GetValueOrDefault(), 0, 10000);
+                        Config?.WriteCustomPermyriadChance(_CustomPermyriadChance.GetValueOrDefault());
+                    }
                     break;
                 }
             }
@@ -251,6 +253,143 @@ namespace UD_Bones_Folder.Mod
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("Your existing handle, ")
                             .Append(OsseousAshHandle)
+                            .Append(", remains unchanged."))
+                    );
+        }
+
+        public static async Task ManageOsseousAshID()
+        {
+            PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult> options = new();
+            var sB = Event.NewStringBuilder();
+            do
+            {
+                sB.Clear();
+                sB.Append("Use the options below to manage your ").Append(OSSEOUS_ASH).Append(" ID.")
+                    .AppendLine()
+                    .AppendLine().Append("Your current ").Append(OSSEOUS_ASH).Append(" ID is:")
+                    .AppendLine().AppendColored("W", Config.ID.ToString())
+                    .AppendLine()
+                    .AppendLine().Append("If you've been asked for your ").Append(OSSEOUS_ASH).Append(" ID by a server owner, ")
+                    .Append("you can use the option below to copy it to your clipboard.")
+                    .AppendLine()
+                    .AppendLine().Append("Be careful sharing it, because it's one of the ways an ").Append(OSSEOUS_ASH).Append(" remote host ")
+                    .Append("is able to restrict access.")
+                    .AppendLineEnd();
+
+                options.Clear();
+                options.Add(new()
+                {
+                    Element = Config,
+                    Text = "copy to clipboard",
+                    Icon = new Renderable(
+                            Tile: "Items/sw_unfurled_scroll1.bmp",
+                            ColorString: "&w",
+                            TileColor: "&w",
+                            DetailColor: 'Y'),
+                    Hotkey = 'c',
+                    Callback = PerformCopyOsseousAshIDToClipboardAsync,
+                });
+                options.Add(new()
+                {
+                    Element = Config,
+                    Text = "generate new ID",
+                    Icon = new Renderable(
+                            Tile: "UI/sw_newchar.bmp",
+                            ColorString: "&W",
+                            TileColor: "&W",
+                            DetailColor: 'y'),
+                    Hotkey = 'n',
+                    Callback = PerformNewOsseousAshIDAsync,
+                });
+            }
+            while ((await UIUtils.PerformPickOptionAsync(
+                OptionDataSet: options,
+                Title: $"Manage {OSSEOUS_ASH} ID".Colored("yellow"),
+                Intro: sB.ToString(),
+                IntroIcon: new Renderable(
+                    Tile: "Items/sw_credit_wedge.bmp",
+                    ColorString: "&y",
+                    TileColor: "&y",
+                    DetailColor: 'K'),
+                DefaultSelected: 0,
+                OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
+                OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
+                FinalSelectedCallback: UIUtils.ShowEscancellepedAsync)).IsContinue());
+
+            Event.ResetTo(sB);
+        }
+
+        private static async Task<UIUtils.CascadableResult> PerformCopyOsseousAshIDToClipboardAsync(Configuration Config)
+        {
+            ClipboardHelper.SetClipboardData(Config.ID.ToString());
+            await Popup.NewPopupMessageAsync($"{OSSEOUS_ASH} ID copied to clipboard.");
+
+            return UIUtils.CascadableResult.Continue;
+        }
+
+        private static async Task<UIUtils.CascadableResult> PerformNewOsseousAshIDAsync(Configuration Config)
+        {
+            var newOAID = Guid.NewGuid();
+
+            switch (await ConfirmOsseousAshID(newOAID))
+            {
+                case UIUtils.CascadableResult.Continue:
+                    Config.WriteID(newOAID);
+                    return UIUtils.CascadableResult.Continue;
+
+                case UIUtils.CascadableResult.Back:
+                case UIUtils.CascadableResult.BackSilent:
+                    return UIUtils.CascadableResult.BackSilent;
+
+                case UIUtils.CascadableResult.Cancel:
+                case UIUtils.CascadableResult.CancelSilent:
+                default:
+                    return UIUtils.CascadableResult.CancelSilent;
+            };
+        }
+
+        private static async Task<UIUtils.CascadableResult> ConfirmOsseousAshID(Guid OAID)
+        {
+            if (OAID == Guid.Empty)
+            {
+                await ShowNoChangeInOsseousAshID();
+                return UIUtils.CascadableResult.BackSilent;
+            }
+
+            var sB = Event.NewStringBuilder("Your new ").Append(OSSEOUS_ASH).Append(" ID will be:")
+                .AppendLine().Append(OAID)
+                .AppendLine()
+                .AppendLine().AppendColored("r", "Warning").Append(": Changing your ").Append(OSSEOUS_ASH)
+                .Append(" ID has a few implications:")
+                .AppendBulletLine("r").Append("It will unaffiliate you from any bones you've already had saved/uploaded.")
+                .AppendBulletLine("r").Append("It will effectively reset any bones stats, such as the frequency with which you've ")
+                .Append("encountered, defeated, or been defeated by a given set of bones.")
+                .AppendBulletLine("r").Append("Remote hosts which have your ").Append(OSSEOUS_ASH).Append(" ID whitelisted will no longer ")
+                .Append("recognise you unless you pass on your new one to whomever manages a given server.")
+                .AppendLine()
+                .AppendLine().Append("Keep this new ID?");
+
+            var confirmResult = await Popup.ShowYesNoCancelAsync(Event.FinalizeString(sB));
+
+            switch (confirmResult)
+            {
+                case DialogResult.Yes:
+                    return UIUtils.CascadableResult.Continue;
+                case DialogResult.No:
+                    return UIUtils.CascadableResult.BackSilent;
+                case DialogResult.Cancel:
+                default:
+                    await ShowNoChangeInOsseousAshID();
+                    return UIUtils.CascadableResult.CancelSilent;
+            }
+        }
+
+        private static async Task ShowNoChangeInOsseousAshID()
+        {
+            await Popup.ShowAsync(
+                    Message: Event.FinalizeString(
+                        SB: Event.NewStringBuilder("Your existing ").Append(OSSEOUS_ASH).Append(" ID, ")
+                            .AppendColored("W", Config.ID.ToString())
                             .Append(", remains unchanged."))
                     );
         }

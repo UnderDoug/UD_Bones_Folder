@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using ConsoleLib.Console;
@@ -42,9 +43,13 @@ namespace UD_Bones_Folder.Mod
                 Name = "osseousash.cloud",
                 Port = null,
                 Encrypted = true,
-                TimeoutMS = 1500,
+                TimeoutMS = 2200,
                 Enabled = false,
             };
+
+            private static long SeverStatusCheckInterval => 300000;
+
+            private static int CurrentHostID = 0;
 
             public static string status => nameof(status);
             public static string canUp => nameof(canUp);
@@ -58,6 +63,11 @@ namespace UD_Bones_Folder.Mod
             public static string SavGz => CombineRoute(Bones, nameof(SavGz));
             public static string Stats => CombineRoute(Bones, nameof(Stats));
             public static string Report => nameof(Report);
+
+            [JsonIgnore]
+            private int? _HostID;
+            [JsonIgnore]
+            private int HostID => _HostID ??= CurrentHostID++;
 
             /// <summary>
             /// Name of the host, excluding protocol and any port number.
@@ -94,6 +104,18 @@ namespace UD_Bones_Folder.Mod
             /// </summary>
             [JsonProperty]
             public bool Enabled;
+
+            [JsonIgnore]
+            private bool IsBuilt;
+
+            [JsonIgnore]
+            private string BuiltString => !IsBuilt
+                ? " Unbuilt"
+                : null
+                ;
+
+            [JsonIgnore]
+            private bool? WrittenEnabled;
 
             [JsonIgnore]
             public bool IsRunning => GetServerStatus();
@@ -133,6 +155,51 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
+            [JsonIgnore]
+            private Timer StatusCheckTimer;
+            [JsonIgnore]
+            private TimerCallback StatusCheckCallback => delegate (object state)
+            {
+                if (!IsBuilt)
+                    return;
+
+                if (!WrittenEnabled.HasValue)
+                {
+                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                        $"{GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
+                    ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                    return;
+                }
+
+                if (!Enabled
+                    && WrittenEnabled.GetValueOrDefault())
+                {
+                    Enabled = true;
+                    try
+                    {
+                        if (IsRunning)
+                        {
+                            WrittenEnabled = null;
+                            Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                                $"Connection re-established to {GetHostNameWithProtocol()} - Re-enabled");
+                            ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                        }
+                        else
+                            Enabled = false;
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
+                        Enabled = false;  
+                    }
+                }
+                else
+                {
+                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                        $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
+                    ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                }
+            };
 
             public Host()
             {
@@ -159,6 +226,63 @@ namespace UD_Bones_Folder.Mod
                     this.AuthToken = AuthToken;
 
                 this.TimeoutMS = TimeoutMS;
+            }
+
+            private static void ClearStatusCheckTimer(ref Timer StatusCheckTimer, int Indent = 0)
+            {
+                if (StatusCheckTimer is not null)
+                {
+                    if (Indent == 0)
+                        Utils.Info($"Cleared {nameof(StatusCheckTimer)}");
+                    else
+                        Utils.Log($"{Indent.Indent()}Cleared {nameof(StatusCheckTimer)}");
+                }
+
+                StatusCheckTimer?.Dispose();
+                StatusCheckTimer = null;
+            }
+
+            private static void SetupStatusCheckTimer(ref Timer StatusCheckTimer, Host Host, int Indent = 0)
+            {
+                if (!Host.IsBuilt)
+                {
+                    ClearStatusCheckTimer(ref StatusCheckTimer, Indent);
+                    return;
+                }
+
+                if (StatusCheckTimer is null)
+                {
+                    Host.WrittenEnabled = Host.Enabled;
+                    Host.Enabled = false;
+                    StatusCheckTimer = new Timer(Host.StatusCheckCallback, null, SeverStatusCheckInterval, SeverStatusCheckInterval);
+
+                    string successMessage = $"Timer for {Host.GetHostNameWithProtocol()} set up successfully.";
+                    if (Indent == 0)
+                        Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {successMessage}");
+                    else
+                        Utils.Log($"{Indent.Indent()}{successMessage}");
+                }
+                else
+                {
+                    string failureMessage = $"Timer for {Host.GetHostNameWithProtocol()} already exists.";
+                    if (Indent == 0)
+                        Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {failureMessage}");
+                    /*else
+                        Utils.Log($"{Indent.Indent()}{failureMessage}");*/
+                }
+            }
+
+            private bool HandleTimeoutWebException(WebException X, string URI, int? Timeout)
+            {
+                if (X.Status == WebExceptionStatus.Timeout)
+                {
+                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}{BuiltString}] Timed out getting status from {URI} ({GetTimeoutString(Timeout)}).");
+                    if (IsBuilt)
+                        SetupStatusCheckTimer(ref StatusCheckTimer, this, Indent: 1);
+
+                    return true;
+                }
+                return false;
             }
 
             public static void Parse(string HostName, out string Name, out int? Port, out bool Encrypted)
@@ -221,25 +345,78 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public static Host Clone(Host Host)
-                => Host != null
-                ? new Host
-                    {
-                        Name = Host.Name,
-                        Port = Host.Port,
-                        Encrypted = Host.Encrypted,
-                        TimeoutMS = Host.TimeoutMS,
-                        AuthToken = Host.AuthToken,
-                        Enabled = Host.Enabled,
-                    }
-                : throw new ArgumentNullException(nameof(Host))
+            public void HotSwapEnabledWhile(Action Action)
+            {
+                bool enabled = Enabled;
+                if (WrittenEnabled.HasValue)
+                    Enabled = WrittenEnabled.GetValueOrDefault();
+
+                Action?.Invoke();
+
+                Enabled = enabled;
+            }
+
+            public async Task HotSwapEnabledWhileAsync(Task Task)
+            {
+                bool enabled = Enabled;
+                if (WrittenEnabled.HasValue)
+                    Enabled = WrittenEnabled.GetValueOrDefault();
+
+                await Task;
+
+                Enabled = enabled;
+            }
+
+            public void HotSwapEnabled(ref Dictionary<Host, bool?> Enableds)
+            {
+                Enableds ??= new();
+                if (!Enableds.TryGetValue(this, out bool? enabled))
+                    enabled = (Enableds[this] = null);
+
+                if (enabled.HasValue)
+                {
+                    Enabled = enabled.GetValueOrDefault();
+                    Enableds[this] = null;
+                    return;
+                }
+
+                Enableds[this] = Enabled;
+                if (WrittenEnabled.HasValue)
+                    Enabled = WrittenEnabled.GetValueOrDefault();
+            }
+
+            public string GetEnabledCheckbox()
+                => WrittenEnabled.HasValue
+                ? WrittenEnabled.GetValueOrDefault().GetCheckboxText(nameof(Enabled))
+                : Enabled.GetCheckboxText(nameof(Enabled))
                 ;
 
-            public Host Clone()
-                => Clone(this)
+            public bool GetEnabledValueForMenu()
+                => WrittenEnabled
+                ?? Enabled
                 ;
 
-            public static void CopyTo(Host Source, ref Host Destination)
+            public static Host Clone(Host Host, bool? SetBuiltTo = null)
+            {
+                if (Host == null)
+                    throw new ArgumentNullException(nameof(Host));
+
+                var newHost = new Host();
+
+                Host.CopyTo(ref newHost, SetBuiltTo);
+                return newHost;
+            }
+
+            public Host Clone(bool? SetBuiltTo = null)
+                => Clone(this, SetBuiltTo)
+                ;
+
+            public static void CopyTo(
+                Host Source,
+                ref Host Destination,
+                bool? SetBuiltTo = null,
+                bool DisposeSource = false
+                )
             {
                 if (Source == null)
                     return;
@@ -256,11 +433,58 @@ namespace UD_Bones_Folder.Mod
                 Destination.TimeoutMS = Source.TimeoutMS;
                 Destination.AuthToken = Source.AuthToken;
                 Destination.Enabled = Source.Enabled;
+                Destination.IsBuilt = Source.IsBuilt;
+
+                if (SetBuiltTo.HasValue)
+                {
+                    if (SetBuiltTo.GetValueOrDefault())
+                        Destination.Build(Ping: false);
+                    else
+                        Destination.Unbuild();
+                }
+
+                if (Destination.WrittenEnabled.HasValue)
+                    Destination.WrittenEnabled = Source.Enabled;
+
+                if (Source.StatusCheckTimer is not null)
+                {
+                    Destination.Enabled = Source.WrittenEnabled.GetValueOrDefault();
+                    ClearStatusCheckTimer(ref Destination.StatusCheckTimer);
+                    SetupStatusCheckTimer(ref Destination.StatusCheckTimer, Destination);
+                }
+
+                if (DisposeSource)
+                    Source.Dispose();
             }
 
-            public void CopyTo(ref Host Destination)
-                => CopyTo(this, ref Destination)
+            public void CopyTo(
+                ref Host Destination,
+                bool? SetBuiltTo = null,
+                bool ThenDispose = false
+                )
+                => CopyTo(this, ref Destination, SetBuiltTo, ThenDispose)
                 ;
+
+            public void CopyTo(
+                Host Destination,
+                bool? SetBuiltTo = null,
+                bool ThenDispose = false
+                )
+                => CopyTo(this, ref Destination, SetBuiltTo, ThenDispose)
+                ;
+
+            public void Unbuild()
+            {
+                IsBuilt = false;
+                ClearStatusCheckTimer(ref StatusCheckTimer);
+            }
+
+            public void Build(bool Ping = false)
+            {
+                IsBuilt = true;
+                if (Ping)
+                    _ = IsRunning;
+            }
 
             public int? GetTimeout()
                 => TimeoutMS >= 0
@@ -268,10 +492,14 @@ namespace UD_Bones_Folder.Mod
                 : null
                 ;
 
-            public string GetTimeoutString()
-                => GetTimeout() is int timeout
+            public static string GetTimeoutString(int? Timeout)
+                => Timeout is int timeout
                 ? $"{timeout} ms"
                 : $"\u00ec ms"
+                ;
+
+            public string GetTimeoutString()
+                => GetTimeoutString(GetTimeout())
                 ;
 
             public static string GetConnectionColor(int ConnectionLevel)
@@ -294,6 +522,10 @@ namespace UD_Bones_Folder.Mod
                     0 => "Disabled",
                     _ => "Error",
                 }
+                ;
+
+            public static string GetConnectionSymbol(int ConnectionLevel)
+                => "\u000f".Colored(GetConnectionColor(ConnectionLevel)) // \u000f ☼ | \u0017 ↨
                 ;
 
             public string GetEnableDisableUIText()
@@ -346,7 +578,7 @@ namespace UD_Bones_Folder.Mod
 
             public string FullDisplayName(bool IncludeAuth = false)
                 => $"{Enabled.GetCheckbox()} "
-                + $"{"\u000f".Colored(ConnectionColor)} " // \u000f ☼ | \u0017 ↨
+                + $"{GetConnectionSymbol(ConnectionLevel)} " // \u000f ☼ | \u0017 ↨
                 + GetHostNameWithProtocol()
                 + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
                 ;
@@ -460,7 +692,7 @@ namespace UD_Bones_Folder.Mod
                 )
             => CreateWebRequest(
                 URI: URI,
-                ContentType: "json", 
+                ContentType: "json",
                 Method: WebMethods.POST,
                 Timeout: Timeout,
                 Proc: Proc)
@@ -473,7 +705,7 @@ namespace UD_Bones_Folder.Mod
                 )
             => CreateWebRequest(
                 URI: URI,
-                ContentType: "json", 
+                ContentType: "json",
                 Method: WebMethods.PUT,
                 Timeout: Timeout,
                 Proc: Proc)
@@ -486,7 +718,7 @@ namespace UD_Bones_Folder.Mod
                 )
             => CreateWebRequest(
                 URI: URI,
-                ContentType: "gz", 
+                ContentType: "gz",
                 Method: WebMethods.PUT,
                 Timeout: Timeout,
                 Proc: Proc)
@@ -499,7 +731,7 @@ namespace UD_Bones_Folder.Mod
                 )
             => CreateWebRequest(
                 URI: URI,
-                ContentType: "json", 
+                ContentType: "json",
                 Method: WebMethods.GET,
                 Timeout: Timeout,
                 Proc: Proc)
@@ -512,7 +744,7 @@ namespace UD_Bones_Folder.Mod
                 )
             => CreateWebRequest(
                 URI: URI,
-                ContentType: "gz", 
+                ContentType: "gz",
                 Method: WebMethods.GET,
                 Timeout: Timeout,
                 Proc: Proc)
@@ -528,18 +760,17 @@ namespace UD_Bones_Folder.Mod
                 string uRI = statusGetRoute();
                 HttpWebRequest httpReq = null;
                 int? timeout = GetTimeout();
+                if (timeout.HasValue)
+                    timeout = (int)(timeout.GetValueOrDefault() * 0.5);
+
                 try
                 {
-                    httpReq = CreateGetJSON(uRI);
+                    httpReq = CreateGetJSON(uRI, timeout);
                 }
-                catch (WebException x)
+                catch (Exception x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return false;
-                    }
-                    throw x;
+                    Utils.Error($"Creating Server Status HttpWebRequest for {uRI}", x);
+                    return false;
                 }
 
                 try
@@ -562,11 +793,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return false;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -581,6 +809,9 @@ namespace UD_Bones_Folder.Mod
                 if (!Enabled)
                     return false;
 
+                if (!IsRunning)
+                    return false;
+
                 if (Config?.ID is not Guid osseousAshID
                     || osseousAshID == Guid.Empty)
                     return false;
@@ -592,34 +823,15 @@ namespace UD_Bones_Folder.Mod
                 {
                     httpReq = CreateGetJSON(uRI, timeout);
                 }
-                catch (WebException x)
+                catch (Exception x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return false;
-                    }
-                    throw x;
+                    Utils.Error($"Creating GET canUp HttpWebRequest for {uRI}", x);
+                    return false;
                 }
 
                 try
                 {
-
-                    HttpWebResponse httpRes = null;
-                    try
-                    {
-                        httpRes = (HttpWebResponse)httpReq.GetResponse();
-                    }
-                    catch (WebException x)
-                    {
-                        if (x.Status == WebExceptionStatus.Timeout)
-                        {
-                            Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                            return false;
-                        }
-                        throw x;
-                    }
-
+                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = streamReader.ReadToEnd();
@@ -636,11 +848,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return false;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -670,10 +879,12 @@ namespace UD_Bones_Folder.Mod
                 string uRI = BonesPostRoute();
 
                 HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
                 try
                 {
                     httpReq = CreatePostJSON(
                         URI: uRI,
+                        Timeout: timeout,
                         Proc: async delegate (System.IO.StreamWriter streamWriter)
                         {
                             using var record = new OsseousAsh.Record(
@@ -686,7 +897,7 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed to create POST request for {uRI}", x);
+                    Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
                 }
 
                 try
@@ -714,6 +925,12 @@ namespace UD_Bones_Folder.Mod
                         }
                     }
                 }
+                catch (WebException x)
+                {
+                    if (HandleTimeoutWebException(x, uRI, timeout))
+                        return Guid.Empty;
+                    throw x;
+                }
                 catch (Exception x)
                 {
                     Utils.Error($"Failed receiving POST response for {uRI}", x);
@@ -729,6 +946,7 @@ namespace UD_Bones_Folder.Mod
                 )
             {
                 if (!Enabled
+                    || !IsRunning
                     || BonesID.IsNullOrEmpty()
                     || Token.IsEmptyOrDefault()
                     || SavGz.IsNullOrEmpty())
@@ -737,10 +955,12 @@ namespace UD_Bones_Folder.Mod
                 string uRI = BonesSavGzPutRoute(BonesID);
 
                 HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
                 try
                 {
                     httpReq = CreatePutGz(
                         URI: uRI,
+                        Timeout: timeout,
                         Proc: async delegate (System.IO.StreamWriter streamWriter)
                         {
                             using (var savGzStream = new System.IO.MemoryStream(SavGz))
@@ -755,8 +975,9 @@ namespace UD_Bones_Folder.Mod
 
                     httpReq.Headers.Add(HttpRequestHeader.Authorization, $"basic {Token}");
                 }
-                catch
+                catch (Exception x)
                 {
+                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
                     return false;
                 }
 
@@ -782,6 +1003,12 @@ namespace UD_Bones_Folder.Mod
                                 $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
                         }
                     }
+                }
+                catch (WebException x)
+                {
+                    if (HandleTimeoutWebException(x, uRI, timeout))
+                        return false;
+                    throw x;
                 }
                 catch (Exception x)
                 {
@@ -845,6 +1072,7 @@ namespace UD_Bones_Folder.Mod
             public async Task<bool> PostBonesReport(Report Report)
             {
                 if (!Enabled
+                    || !IsRunning
                     || Report == null
                     || Report.BonesID.IsNullOrEmpty())
                     return false;
@@ -852,10 +1080,12 @@ namespace UD_Bones_Folder.Mod
                 string uRI = BonesReportPostRoute();
 
                 HttpWebRequest httpReq = null;
+                int? timeout = GetTimeout();
                 try
                 {
                     httpReq = CreatePostJSON(
                         URI: uRI,
+                        Timeout: timeout,
                         Proc: async delegate (System.IO.StreamWriter streamWriter)
                         {
                             await streamWriter.WriteAsync(JsonConvert.SerializeObject(Report));
@@ -863,7 +1093,7 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed to create POST request for {uRI}", x);
+                    Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
                 }
 
                 try
@@ -890,6 +1120,12 @@ namespace UD_Bones_Folder.Mod
                         }
                     }
                 }
+                catch (WebException x)
+                {
+                    if (HandleTimeoutWebException(x, uRI, timeout))
+                        return false;
+                    throw x;
+                }
                 catch (Exception x)
                 {
                     Utils.Error($"Failed receiving POST response for {uRI}", x);
@@ -903,7 +1139,8 @@ namespace UD_Bones_Folder.Mod
 
             private SaveBonesJSON[] GetSaveBonesJSONs()
             {
-                if (!Enabled)
+                if (!Enabled
+                    || !IsRunning)
                     return null;
 
                 string uRI = BonesInfosGetRoute();
@@ -913,14 +1150,10 @@ namespace UD_Bones_Folder.Mod
                 {
                     httpReq = CreateGetJSON(uRI, timeout);
                 }
-                catch (WebException x)
+                catch (Exception x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return null;
-                    }
-                    throw x;
+                    Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
+                    return null;
                 }
 
                 try
@@ -958,11 +1191,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return null;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -999,7 +1229,8 @@ namespace UD_Bones_Folder.Mod
 
             private SaveBonesJSON GetSaveBonesJSON(string BonesID)
             {
-                if (!Enabled)
+                if (!Enabled
+                    || !IsRunning)
                     return null;
 
                 string uRI = BonesInfoGetRoute(BonesID);
@@ -1009,14 +1240,10 @@ namespace UD_Bones_Folder.Mod
                 {
                     httpReq = CreateGetJSON(uRI, timeout);
                 }
-                catch (WebException x)
+                catch (Exception x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return null;
-                    }
-                    throw x;
+                    Utils.Error($"Creating GET HttpWebRequest for {uRI} ({timeout} ms).", x);
+                    return null;
                 }
 
                 try
@@ -1054,11 +1281,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return null;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -1080,7 +1304,8 @@ namespace UD_Bones_Folder.Mod
 
             public byte[] GetBonesSavGz(string BonesID)
             {
-                if (!Enabled)
+                if (!Enabled
+                    || !IsRunning)
                     return null;
 
                 if (BonesID.IsNullOrEmpty())
@@ -1093,14 +1318,10 @@ namespace UD_Bones_Folder.Mod
                 {
                     httpReq = CreateGetGz(uRI, timeout);
                 }
-                catch (WebException x)
+                catch (Exception x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return null;
-                    }
-                    throw x;
+                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
+                    return null;
                 }
 
                 try
@@ -1129,11 +1350,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return null;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -1152,6 +1370,7 @@ namespace UD_Bones_Folder.Mod
                 )
             {
                 if (!Enabled
+                    || !IsRunning
                     || BonesID.IsNullOrEmpty()
                     || SaveBonesJSON == null)
                     return false;
@@ -1170,18 +1389,9 @@ namespace UD_Bones_Folder.Mod
                             await streamWriter.WriteAsync(JsonConvert.SerializeObject(SaveBonesJSON));
                         });
                 }
-                catch (WebException x)
-                {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
-                        return false;
-                    }
-                    throw x;
-                }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed creating PUT response for {uRI}", x);
+                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
                     return false;
                 }
 
@@ -1210,11 +1420,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (WebException x)
                 {
-                    if (x.Status == WebExceptionStatus.Timeout)
-                    {
-                        Utils.Info($"Timed out getting status from {uRI} ({timeout} ms).");
+                    if (HandleTimeoutWebException(x, uRI, timeout))
                         return false;
-                    }
                     throw x;
                 }
                 catch (Exception x)
@@ -1235,7 +1442,7 @@ namespace UD_Bones_Folder.Mod
                 && Encrypted == Other.Encrypted
                 && AuthToken == Other.AuthToken
                 && (IgnoreDisabled
-                    || Enabled == Other.Enabled)
+                    || GetEnabledValueForMenu() == Other.GetEnabledValueForMenu())
                 ;
 
             public override string ToString()
@@ -1265,7 +1472,14 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public static Task<bool> FlipEnabledAsync(Host Host)
-                => Task.Run(() => (Host.Enabled = !Host.Enabled) || true) // always true, but flip it first.
+                => Task.Run(delegate ()
+                {
+                    if (Host.WrittenEnabled.HasValue)
+                        return (Host.WrittenEnabled = !Host.WrittenEnabled.GetValueOrDefault()).GetValueOrDefault()
+                            || true; // always true, but flip it first.
+
+                    return (Host.Enabled = !Host.Enabled) || true; // always true, but flip it first.
+                })
                 ;
 
             public void Dispose()
@@ -1275,6 +1489,8 @@ namespace UD_Bones_Folder.Mod
                 Encrypted = false;
                 AuthToken = null;
                 Enabled = false;
+                WrittenEnabled = false;
+                ClearStatusCheckTimer(ref StatusCheckTimer);
             }
 
             public static implicit operator string(Host Host)

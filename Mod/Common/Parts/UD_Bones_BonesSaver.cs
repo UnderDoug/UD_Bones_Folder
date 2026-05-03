@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -13,6 +14,7 @@ using XRL.UI;
 using XRL.Wish;
 using XRL.World.AI;
 using XRL.World.Effects;
+using XRL.World.WorldBuilders;
 
 using Options = UD_Bones_Folder.Mod.Options;
 
@@ -26,6 +28,17 @@ namespace XRL.World.Parts
         : IPlayerPart
         , IPlayerMutator
     {
+        public static List<string> DamageTexts = new()
+        {
+            "from %t desire it be so.",
+            "from immense cringe.",
+            "from getting damagemogged by %t attackmaxxing.",
+            "from remembering something embarassing you did years ago.",
+            "from remembering something embarassing you did just recently.",
+            "from the strain of getting to Qud.",
+            "from %t disapproving stare.",
+        };
+
         private static bool WishContext;
 
         public static int MinimumLevelForBones => 5;
@@ -34,6 +47,7 @@ namespace XRL.World.Parts
 
         public static string BonesName => "LunarRegent";
 
+        public bool BonesMode = false;
 
         [CallAfterGameLoaded]
         public static void PreparePlayer()
@@ -209,11 +223,31 @@ namespace XRL.World.Parts
             return false;
         }
 
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(BeforeTakeActionEvent.ID, EventOrder.EXTREMELY_LATE);
+            base.Register(Object, Registrar);
+        }
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == AfterDieEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
+
+        public override bool HandleEvent(BeforeTakeActionEvent E)
+        {
+            if (BonesMode)
+            {
+                BonesMode = false;
+                if (ParentObject.CurrentZone?.ZoneID != JoppaWorldBuilder.ID_JOPPA)
+                    MakeBones_WishHandler("die -f");
+            }
+            else
+                ParentObject.UnregisterEvent(this, BeforeTakeActionEvent.ID);
+
+            return base.HandleEvent(E);
+        }
 
         public override bool HandleEvent(AfterDieEvent E)
         {
@@ -324,22 +358,25 @@ namespace XRL.World.Parts
                 }
 
                 string extraDamageType = The.Player.GetNotResistedDamageTypes().GetRandomElementCosmetic();
+                if (!extraDamageType.IsNullOrEmpty())
+                    extraDamageType = $" {extraDamageType}";
 
                 if (!willDie
                     || !The.Player.TakeDamage(
-                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(110, 150) / 100f)),
-                        Message: "from %t desire it be so.",
-                        Attributes: $"Unavoidable IgnoreResist Cosmic Umbral Vorpal{extraDamageType}",
+                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(135, 225) / 100f)),
+                        Message: DamageTexts.GetRandomElementCosmetic(),
+                        Attributes: $"IgnoreResist Expected Unavoidable Cosmic Umbral Vorpal{extraDamageType}",
                         Owner: killer,
                         Attacker: killer,
                         Source: projectile ?? weapon,
-                        Accidental: 25.in100()))
+                        Accidental: 2500.in10000())
+                    || !The.Player.IsDying)
                     AfterDieEvent.Send(
                         Dying: The.Player,
                         Killer: killer,
                         Weapon: weapon,
                         Projectile: projectile,
-                        Accidental: 25.in100(),
+                        Accidental: 2500.in10000(),
                         Reason: The.Player.Physics?.LastDeathReason,
                         ThirdPersonReason: The.Player.Physics?.LastThirdPersonDeathReason);
 

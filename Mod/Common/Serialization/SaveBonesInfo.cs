@@ -213,6 +213,8 @@ namespace UD_Bones_Folder.Mod
             && FileLocationData.Exists()
             ;
 
+        public bool IsBlocked => OsseousAsh.Config?.BlockedBonesIDs?.Contains(ID) is true;
+
         public SaveBonesInfo()
             : base()
         { }
@@ -446,7 +448,7 @@ namespace UD_Bones_Folder.Mod
             if (OsseousAshID == OsseousAsh.Config?.ID)
                 sB.Append("are yours");
             else
-                sB.Append("come from").Append(OsseousAshHandle);
+                sB.Append("come from ").Append(OsseousAshHandle);
             sB.Append(".");
 
             sB.AppendLine()
@@ -499,6 +501,9 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             if (ID == The.Game.GameID)
+                return false;
+
+            if (OsseousAsh.Config?.BlockedBonesIDs?.Contains(ID) is true)
                 return false;
 
             if (bonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)

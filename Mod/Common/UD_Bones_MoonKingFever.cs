@@ -210,7 +210,7 @@ namespace XRL.World.Effects
                 if (Object?.Brain != null)
                 {
                     if (Object.Brain.FindGoal(nameof(Kill)) is not Kill killGoal
-                        || !killGoal.Target.IsPlayer())
+                        || killGoal?.Target?.IsPlayer() is false)
                     {
                         if (FocusOnUsurper(The.Player))
                             return true;

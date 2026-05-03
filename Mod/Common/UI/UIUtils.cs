@@ -118,7 +118,7 @@ namespace UD_Bones_Folder.Mod.UI
                 {
                     var taskCompletionSource = new TaskCompletionSource<int>();
 
-                    Utils.Log($"PickOption");
+                    //Utils.Log($"PickOption");
                     Popup.PickOption(
                         Title: Title,
                         Intro: Intro,

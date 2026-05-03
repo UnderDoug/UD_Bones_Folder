@@ -145,7 +145,7 @@ namespace UD_Bones_Folder.Mod
         public static Configuration Config => _Config ??= Configuration.ReadOrNewAsync()?.WaitResult();
 
         private static Rack<HostCollection> _Hosts;
-        public static Rack<HostCollection> Hosts => _Hosts ??= FindHostCollections()?.WaitResult();
+        public static Rack<HostCollection> Hosts => _Hosts ??= ReadHostCollections()?.WaitResult();
 
         public static Renderable BlackAshCloudIcon = new(
             Tile: "Mutations/gas_generation.bmp",
@@ -194,6 +194,7 @@ namespace UD_Bones_Folder.Mod
         public static void EnsureHosts()
         {
             _ = Hosts;
+            Hosts?.BuildHosts(Ping: true);
         }
 
         public static bool TryFindBestOsseousAshPath(out FileLocationData FileLocationData, string FileName)
@@ -433,7 +434,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static async Task<Rack<HostCollection>> FindHostCollections()
+        public static async Task<Rack<HostCollection>> ReadHostCollections()
         {
             Rack<HostCollection> hosts = null;
             foreach (var fileLocationData in GetOsseousAshFileLocationData(Ensure: true))
@@ -471,6 +472,67 @@ namespace UD_Bones_Folder.Mod
                 return null;
 
             return hosts;
+        }
+
+        public static void ReadHostsTo(ref Rack<HostCollection> Hosts)
+        {
+            Hosts ??= new();
+            if (ReadHostCollections().WaitResult() is not Rack<HostCollection> readHosts)
+                return;
+
+            using var hostsToRemove = ScopeDisposedList<Host>.GetFromPool();
+            using var alreadyCopiedHosts = ScopeDisposedList<Host>.GetFromPool();
+            foreach (var readHostCollection in readHosts)
+            {
+                // if the read host doesn't have an existing equivalent, add it.
+                if (Hosts.FirstOrDefault(hc => hc.LocationData == readHostCollection.LocationData) is not HostCollection existingHostCollection)
+                    Hosts.Add(readHostCollection);
+                else
+                {
+                    // reset the lists.
+                    hostsToRemove.Clear();
+                    alreadyCopiedHosts.Clear();
+
+                    // check each existing host for an equivalent read one.
+                    //  - if read, copy the read one to the existing one, flag it as read.
+                    //  - else, flag existing for removal.
+                    foreach (var existingHost in existingHostCollection)
+                    {
+                        bool isEqualHost(Host h)
+                            => h.SameAs(existingHost, IgnoreDisabled: true)
+                            && !alreadyCopiedHosts.Contains(h)
+                            ;
+
+                        if (readHostCollection.FirstOrDefault(isEqualHost) is not Host readHost)
+                            hostsToRemove.Add(existingHost);
+                        else
+                        {
+                            readHost.CopyTo(existingHost);
+                            alreadyCopiedHosts.Add(readHost);
+                        }
+                    }
+
+                    // remove flagged existing.
+                    foreach (var hostToRemove in hostsToRemove)
+                    {
+                        existingHostCollection.Remove(hostToRemove);
+                        hostToRemove?.Dispose();
+                    }
+
+                    // add read that haven't been copied.
+                    foreach (var readHost in readHostCollection)
+                    {
+                        if (alreadyCopiedHosts.Contains(readHost))
+                            continue;
+
+                        existingHostCollection.Add(readHost);
+                    }
+
+                    // dispose all the already copied hosts
+                    existingHostCollection.DisposeClear(h => alreadyCopiedHosts.Contains(h));
+                }
+            }
+            readHosts.Clear();
         }
 
         public static IEnumerable<Host> AllHosts(Predicate<Host> Where)
@@ -526,7 +588,7 @@ namespace UD_Bones_Folder.Mod
                 int offset = options.Count;
                 using var exludeHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
 
-                _Hosts = null;
+                // ReadHostsTo(ref _Hosts);
                 using var hostInfos = ScopeDisposedList<KeyValuePair<FileLocationData, Host>>.GetFromPoolFilledWith(AllHostsWithLocation());
                 foreach (var hostInfo in hostInfos)
                 {
@@ -712,7 +774,7 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendPair(nameof(NewHost.AuthToken), NewHost.AuthToken)
                 .AppendLine()
                 .AppendLine().Append(NewHost.GetHostNameWithProtocol())
-                .AppendLine().AppendPair("Server Status:", NewHost.ServerStatusString)
+                .AppendLine().AppendPair("Server Status", NewHost.ServerStatusString)
                 .AppendLine()
                 .AppendLine().Append("Is this correct?");
 
@@ -756,8 +818,8 @@ namespace UD_Bones_Folder.Mod
                     .AppendLine()
                     .AppendLine().Append(HostCollection.TaggedDisplayName())
                     .AppendLine()
-                    .AppendLine().AppendPair("Server Status:", Host.ServerStatusString)
-                    .AppendLine();
+                    .AppendLine().AppendPair("Server Status", Host.ServerStatusString)
+                    .AppendLineEnd();
 
                 options = new PickOptionDataSetAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
                     {
@@ -784,7 +846,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 string message = $"Are you sure you want to delete {p.Host.GetHostNameWithProtocol()} from {p.Hosts.DisplayName()}?";
                                 if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
-                                    p.Hosts.WriteRemoveHost(p.Host);
+                                    p.Hosts.WriteRemoveHost(p.Host, Dispose: true);
                                 return UIUtils.CascadableResult.BackSilent;
                             }
                         },
@@ -811,7 +873,8 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<UIUtils.CascadableResult> PerformModifyHostAsync(Host Host, HostCollection HostCollection)
         {
-            var oldHost = Host.Clone();
+            using var oldHost = Host.Clone();
+            Host.Unbuild();
             PickOptionDataSetAsync<Host, UIUtils.CascadableResult> options = new();
             UIUtils.CascadableResult result;
             var sB = Event.NewStringBuilder();
@@ -823,19 +886,19 @@ namespace UD_Bones_Folder.Mod
                     .AppendLine()
                     .AppendLine().Append(HostCollection.TaggedDisplayName())
                     .AppendLine()
-                    .AppendLine().AppendPair("Server Status:", Host.ServerStatusString)
-                    .AppendLine();
+                    .AppendLine().AppendPair("Server Status", Host.ServerStatusString)
+                    .AppendLineEnd();
 
                 options.Clear();
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change {nameof(Host.Name)}: {nameof(Host.Name)}",
+                    Text = $"Change {nameof(Host.Name)}: {Host.Name?.Colored("rules")}",
                     Hotkey = 'n',
                     Callback = async delegate (Host h)
                     {
                         h.Name = await Popup.AskStringAsync(
-                            Message: $"Enter a new {nameof(Host.Name)}",
+                            Message: $"Enter a new {nameof(Host.Name)}:",
                             Default: h.Name,
                             ReturnNullForEscape: true,
                             AllowColorize: false);
@@ -849,7 +912,7 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change {nameof(Host.Port)}: {Host.Port?.ToString() ?? "none"}",
+                    Text = $"Change {nameof(Host.Port)}: {(Host.Port?.ToString() ?? "none")?.Colored("rules")}",
                     Hotkey = 'p',
                     Callback = async delegate (Host h)
                     {
@@ -881,7 +944,7 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change Timeout (ms): {Host.GetTimeoutString()}",
+                    Text = $"Change Timeout (ms): {Host.GetTimeoutString()?.Colored("rules")}",
                     Hotkey = 'e',
                     Callback = async delegate (Host h)
                     {
@@ -901,7 +964,7 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = $"Change Auth Token: {(Host.AuthToken.IsNullOrEmpty() ? "none" : "********")}",
+                    Text = $"Change Auth Token: {(Host.AuthToken.IsNullOrEmpty() ? "none" : "********")?.Colored("rules")}",
                     Hotkey = 'a',
                     Callback = async delegate (Host h)
                     {
@@ -925,7 +988,7 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
-                    Text = Host.Enabled.GetCheckboxText(nameof(Host.Enabled)),
+                    Text = Host.GetEnabledCheckbox(),
                     Hotkey = 't',
                     Callback = async delegate (Host h)
                     {
@@ -943,11 +1006,11 @@ namespace UD_Bones_Folder.Mod
                     options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                     {
                         Element = Host,
-                        Text = "revert changes",
+                        Text = "revert changes"?.Colored("w"),
                         Hotkey = 'u',
                         Callback = h => Task.Run(delegate ()
                         {
-                            oldHost.CopyTo(ref h);
+                            oldHost.CopyTo(ref h, SetBuiltTo: true);
                             return UIUtils.CascadableResult.Continue;
                         }),
                     });
@@ -977,12 +1040,14 @@ namespace UD_Bones_Folder.Mod
                         else
                         if (result is not UIUtils.CascadableResult.Continue
                             && o?.Element == null)
-                            oldHost.CopyTo(ref Host);
+                            oldHost.CopyTo(ref Host, SetBuiltTo: true, ThenDispose: true);
 
                         return await UIUtils.ShowEscancellepedAsync(o, r);
                     });
             }
             while (result.ToBool());
+
+            Host.Build(Ping: true);
 
             Event.ResetTo(sB);
 
@@ -1002,7 +1067,7 @@ namespace UD_Bones_Folder.Mod
             if (result.IsContinue())
             {
                 HostCollection.Write();
-                Host.CopyTo(ref OldHost);
+                Host.CopyTo(ref OldHost, SetBuiltTo: true);
                 return UIUtils.CascadableResult.BackSilent;
             }
             return UIUtils.CascadableResult.Continue;
@@ -1046,7 +1111,7 @@ namespace UD_Bones_Folder.Mod
                                     $"{hostCollection.TaggedDisplayName()}"
                                 )) == DialogResult.Yes)
                             {
-                                HostCollection.WriteRemoveHost(Host);
+                                HostCollection.WriteRemoveHost(Host, Dispose: false);
                                 hostCollection.WriteAddHost(Host);
                             }
                             return UIUtils.CascadableResult.BackSilent;
@@ -1072,9 +1137,10 @@ namespace UD_Bones_Folder.Mod
         }
 
         private static async Task<bool> AskSureLoseUnsavedAsync(Host Host, Host OldHost)
-            => Utils.LogReturn($"Host is null", Host is null)
-            || Utils.LogReturn($"Host.SameAs(OldHost)", Host.SameAs(OldHost))
-            || Utils.LogReturn($"Are you sure? DialogResult.Yes", (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes)
+            => Host is null // Utils.LogReturn($"Host is null", Host is null)
+            || Host.SameAs(OldHost) // Utils.LogReturn($"Host.SameAs(OldHost)", Host.SameAs(OldHost))
+            || (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes
+            //|| Utils.LogReturn($"Are you sure? DialogResult.Yes", (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes)
             ;
 
         private static async Task<UIUtils.CascadableResult> ConfirmModifiedHostAsync(Host OldHost, Host ModifiedHost)
@@ -1129,12 +1195,12 @@ namespace UD_Bones_Folder.Mod
                     Value: $"\"{OldHost.AuthToken}\" \u001a \"{ModifiedHost.AuthToken}\"");
             }
 
-            if (OldHost.Enabled != ModifiedHost.Enabled)
+            if (OldHost.GetEnabledValueForMenu() != ModifiedHost.GetEnabledValueForMenu())
             {
                 any = true;
                 sB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Enabled),
-                    Value: $"\"{OldHost.Enabled}\" \u001a \"{ModifiedHost.Enabled}\"");
+                    Value: $"\"{OldHost.GetEnabledValueForMenu()}\" \u001a \"{ModifiedHost.GetEnabledValueForMenu()}\"");
             }
 
             if (!any)
@@ -1143,8 +1209,10 @@ namespace UD_Bones_Folder.Mod
             sB.AppendLine();
             sB.AppendLine().Append("New host:");
             sB.AppendLine().Append(ModifiedHost.GetHostNameWithProtocol())
-                .AppendLine().AppendLine()
-                .Append("Is this correct?");
+                .AppendLine()
+                .AppendLine().AppendPair("Server Status", ModifiedHost.ServerStatusString)
+                .AppendLine()
+                .AppendLine().Append("Is this correct?");
 
             var confirmResult = await Popup.ShowYesNoCancelAsync(Event.FinalizeString(sB));
 
@@ -1209,8 +1277,7 @@ namespace UD_Bones_Folder.Mod
             List<SaveBonesInfo> saveBonesInfos = null;
             foreach (var host in AllHosts(h => h.Enabled))
             {
-                if (!host.GetServerStatus()
-                    || host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
+                if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
                     || saveBonesInfosFromHost.IsNullOrEmpty())
                     continue;
 
@@ -1318,6 +1385,7 @@ namespace UD_Bones_Folder.Mod
                     sB.AppendLine().Append("Report is missing ")
                         .AppendColored("red", "necessary information")
                         .Append(", please add this info in order to proceed.")
+                        .AppendLineEnd()
                         ;
 
                 string reportTypeString = report.Type.ToString();

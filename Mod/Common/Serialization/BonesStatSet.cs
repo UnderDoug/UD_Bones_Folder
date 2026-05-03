@@ -46,27 +46,6 @@ namespace UD_Bones_Folder.Mod
                 ;
         }
 
-        [JsonObject(MemberSerialization.OptOut)]
-        [Serializable]
-        protected class BonesStatSetJSON
-        {
-            public BonesStat[] Stats;
-
-            public BonesStatSetJSON()
-            { }
-
-            public BonesStatSetJSON(BonesStatSet Source)
-                : this()
-            {
-                Source.RemoveWhere(h => h == null);
-                Stats = Source.ToArray();
-            }
-
-            public BonesStatSet FromJSON()
-                => new(Stats)
-                ;
-        }
-
         public BonesStatSet()
             : base(BonesStatEqualityComparer.Default)
         { }

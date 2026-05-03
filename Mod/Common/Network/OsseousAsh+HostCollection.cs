@@ -132,18 +132,24 @@ namespace UD_Bones_Folder.Mod
             }
 
             public void WriteToFile(FileLocationData FileLocationData, string FileName)
-                => FileLocationData.Write(FileName, new HostCollectionJSON(this), Formatting.Indented)
-                ;
+            {
+                var enableds = new Dictionary<Host, bool?>();
+                foreach (var host in this)
+                    host.HotSwapEnabled(ref enableds);
+
+                FileLocationData.Write(FileName, new HostCollectionJSON(this), Formatting.Indented);
+
+                foreach (var host in this)
+                    host.HotSwapEnabled(ref enableds);
+            }
 
             public void Write()
             {
-                if (LocationData != null
+                if (LocationData is not null
                     || TryFindBestOsseousAshPath(out LocationData, HostsFileName))
                     WriteToFile(LocationData, HostsFileName);
                 else
-                    Utils.Error(
-                        Context: $"Failed to {nameof(Write)} to {HostsFileName}",
-                        X: new NullReferenceException($"{nameof(LocationData)} must not be null"));
+                    Utils.Error($"{nameof(Write)} to {HostsFileName}", new NullReferenceException($"{nameof(LocationData)} must not be null"));
             }
 
             public void WriteHosts(IEnumerable<Host> Hosts)
@@ -151,7 +157,7 @@ namespace UD_Bones_Folder.Mod
                 if (!Hosts.IsNullOrEmpty()
                     && !this.SequenceEqual(Hosts))
                 {
-                    Clear();
+                    DisposeClear();
                     this.Union(Hosts);
                     Write();
                 }
@@ -174,9 +180,27 @@ namespace UD_Bones_Folder.Mod
                     Write();
             }
 
-            public void WriteRemoveHost(Host Host)
+            public void WriteRemoveHost(Host Host, bool Dispose = true)
             {
                 if (Remove(Host))
+                {
+                    Write();
+                    if (Dispose)
+                        Host.Dispose();
+                }
+            }
+
+            public void WriteRemoveHostsDispose(params Host[] Hosts)
+            {
+                bool any = false;
+                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
+                    if (Remove(host))
+                    {
+                        host.Dispose();
+                        any = true;
+                    }
+
+                if (any)
                     Write();
             }
 
@@ -200,12 +224,37 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public override string ToString()
-                => this.Aggregate(LocationData.SanitiseForDisplay(), Utils.NewLineDelimitedAggregator);
+                => this.Aggregate(LocationData.SanitiseForDisplay(), Utils.NewLineDelimitedAggregator)
+                ;
+
+            public void BuildHosts(bool Ping = false)
+            {
+                foreach (var host in this)
+                    host.Build(Ping: Ping);
+            }
+
+            public IEnumerable<int> PingHosts()
+            {
+                foreach (var host in this)
+                    yield return host.ConnectionLevel;
+            }
+
+            public void DisposeClear(Predicate<Host> Where)
+            {
+                foreach (var host in this)
+                    if (Where?.Invoke(host) is not false)
+                        host.Dispose();
+                Clear();
+            }
+
+            public void DisposeClear()
+                => DisposeClear(null)
+                ;
 
             public void Dispose()
             {
                 LocationData = null;
-                Clear();
+                DisposeClear();
             }
         }
     }
@@ -214,6 +263,16 @@ namespace UD_Bones_Folder.Mod
         public static int TotalCount(this Rack<OsseousAsh.HostCollection> Hosts)
             => Hosts?.Aggregate(0, (a, n) => a + n.Count)
             ?? 0
+            ;
+
+        public static void BuildHosts(this Rack<OsseousAsh.HostCollection> Hosts, bool Ping = false)
+        {
+            foreach (var hostCollection in Hosts ?? Enumerable.Empty<OsseousAsh.HostCollection>())
+                hostCollection.BuildHosts(Ping);
+        }
+
+        public static void PingHosts(this Rack<OsseousAsh.HostCollection> Hosts)
+            => Hosts?.Aggregate((IEnumerable<int>)null, (a, n) => n.PingHosts())
             ;
 
         public static Renderable GetAshCloudIcon(this OsseousAsh.HostCollection HostCollection)

@@ -190,7 +190,7 @@ namespace XRL.World.Parts
             || ID == GetDisplayNameEvent.ID
             || ID == GetShortDescriptionEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
-            || ID == LunarObjectColorChangedEvent.ID
+            || ID == AfterBonesZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
@@ -247,6 +247,16 @@ namespace XRL.World.Parts
             if (ParentObject.Render is Render lunarRender
                 && !lunarRender.Visible)
                 lunarRender.Visible = true;
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        {
+            if (ParentObject.CurrentCell is Cell currentCell
+                // && currentCell.GetObjectCountWithPart(nameof(Gas)) > 0
+                )
+                StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: 4, Distance: 1, Stun: false, Damage: false);
 
             return base.HandleEvent(E);
         }

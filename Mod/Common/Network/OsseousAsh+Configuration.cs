@@ -33,6 +33,22 @@ namespace UD_Bones_Folder.Mod
         [Serializable]
         public class Configuration
         {
+            public class SetArrayConverter<T> : JsonConverter<HashSet<T>>
+            {
+                public override HashSet<T> ReadJson(JsonReader reader, Type objectType, HashSet<T> existingValue, bool hasExistingValue, JsonSerializer serializer)
+                {
+                    if (reader.TokenType == JsonToken.StartArray)
+                        return new(serializer.Deserialize<T[]>(reader));
+
+                    return new();
+                }
+
+                public override void WriteJson(JsonWriter writer, HashSet<T> value, JsonSerializer serializer)
+                {
+                    serializer.Serialize(writer, (value ?? new()).ToArray());
+                }
+            }
+
             public Guid ID;
             public string Handle;
 
@@ -49,6 +65,9 @@ namespace UD_Bones_Folder.Mod
             }
 
             public int? CustomPermyriadChance;
+
+            [JsonConverter(typeof(SetArrayConverter<string>))]
+            public HashSet<string> BlockedBonesIDs = new();
 
             [JsonIgnore]
             private HashSet<string> LockedMembers = new();
@@ -204,7 +223,9 @@ namespace UD_Bones_Folder.Mod
             {
                 if (this.CustomPermyriadChance != CustomPermyriadChance)
                 {
-                    this.CustomPermyriadChance = CustomPermyriadChance;
+                    XRL.UI.Options.SetOption(
+                        ID: $"{MOD_PREFIX}{nameof(Options.CustomPermyriadChance)}",
+                        Value: (this.CustomPermyriadChance = CustomPermyriadChance).ToString());
                     Write();
                 }
             }

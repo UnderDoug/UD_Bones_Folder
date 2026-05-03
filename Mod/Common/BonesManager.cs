@@ -184,7 +184,7 @@ namespace UD_Bones_Folder.Mod
 
         public FileLocationData GetBonesDirectory()
         {
-            if (BonesDirectory == null)
+            if (BonesDirectory is null)
             {
                 BonesDirectory = FileLocationData.NewSynced(Path.Combine(BonesSyncPath, GameID));
                 try
@@ -239,6 +239,9 @@ namespace UD_Bones_Folder.Mod
         {
             foreach (var zoneGO in Z.GetObjects())
             {
+                if (zoneGO.TryGetPart(out Examiner examiner))
+                    examiner.EpistemicStatus = Examiner.EPISTEMIC_STATUS_UNINITIALIZED;
+
                 if (zoneGO.Brain is Brain brain)
                 {
                     if (zoneGO.IsPlayerLed())
@@ -465,8 +468,8 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(
             Predicate<SaveBonesInfo> Where,
-            bool TidyPending = false,
-            bool IncludeVersionIncompatible = false
+            bool IncludeVersionIncompatible = false,
+            bool IncludeBlocked = false
             )
         {
             var saveBonesInfos = new List<SaveBonesInfo>();
@@ -518,7 +521,7 @@ namespace UD_Bones_Folder.Mod
                 foreach (var saveBones in cremateSaveBones)
                     saveBones.Cremate();
 
-            if (Options.EnableOsseousAshUploads)
+            if (Options.EnableOsseousAshDownloads)
             {
                 try
                 {
@@ -526,6 +529,10 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
+                            if (!IncludeBlocked
+                                && osseousAshBonesInfo.IsBlocked)
+                                continue;
+
                             if (!IncludeVersionIncompatible
                                 && !IsVersionCompatible(osseousAshBonesInfo))
                                 continue;
@@ -591,10 +598,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetAvailableSaveBonesInfoAsync()
-            => await GetSaveBonesInfoAsync(
-                Where: bones
-                    => bones.IsLooselyEligible,
-                TidyPending: true)
+            => await GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible)
             ;
 
         public static IEnumerable<SaveBonesInfo> GetAvailableSaveBonesInfo()

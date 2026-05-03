@@ -1,9 +1,23 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <embarkmodules>
-  <!--module Class="UD_Bones_Folder.Mod.UI.BonesManagementModule">
-    <window ID="Menu/UD_BonesFolderManagement" Prefab="VertScroll" Class="UD_Bones_Folder.Mod.UI.BonesManagementWindow">
-      <name>Bones Management</name>
-      <title>:manage bones:</title>
+  
+  <module Class="XRL.CharacterBuilds.Qud.QudGamemodeModule">
+    <modes>
+      <mode ID="UD_Bones_Bones" Title="Bones">
+        <icon Tile="Items/sw_bones_1.bmp" Foreground="y" Detail="K"></icon>
+        <description>
+          Land somewhere interesting, then immediately die.
+        </description>
+        <stringgamestate Name="GameMode" Value="UD_Bones_Bones"></stringgamestate>
+      </mode>
+    </modes>
+  </module>
+  
+  <module Class="UD_Bones_Folder.Mod.UI.BonesModeModule">
+    <window ID="Chargen/UD_Bones_BonesModeModule" Prefab="VertScroll" Class="UD_Bones_Folder.Mod.UI.BonesModeModuleWindow">
+      <name>Bones Mode</name>
+      <title>:bones mode:</title>
     </window>
-  </module-->
+  </module>
+  
 </embarkmodules>

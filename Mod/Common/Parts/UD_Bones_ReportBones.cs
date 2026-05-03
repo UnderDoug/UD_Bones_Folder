@@ -48,6 +48,11 @@ namespace XRL.World.Parts
             {
                 if (TryReportBones(LoadedBonesID, ParentObject).WaitResult())
                 {
+                    if (Config != null)
+                    {
+                        Config.BlockedBonesIDs ??= new();
+                        Config.BlockedBonesIDs.Add(LoadedBonesID);
+                    }
                     E.RequestInterfaceExit();
                     return true;
                 }

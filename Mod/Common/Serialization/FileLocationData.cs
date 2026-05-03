@@ -56,7 +56,7 @@ namespace UD_Bones_Folder.Mod
 
             this.Path = PathWithoutFileName(Path);
 
-            this.Host = Host?.Clone();
+            this.Host = Host;
         }
 
         public FileLocationData(FileLocationData Source)
@@ -311,7 +311,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public bool Equals(FileLocationData Other)
-            => Other != null
+            => Other is not null
             && Type == Other.Type
             && Path == Other.Path
             && (Host?.SameAs(Other.Host) is not false)

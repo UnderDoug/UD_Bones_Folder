@@ -82,7 +82,7 @@ namespace UD_Bones_Folder.Mod
         {
             using var status = Loading.StartTask("Converting Lunar Regents");
 
-            foreach (var blueprint in GameObjectFactory.Factory.GetBlueprintsInheritingFrom("PhysicalObject"))
+            foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom("PhysicalObject"))
             {
                 if (!blueprint.GetRenderable().Tile.IsTile())
                     continue;
@@ -614,6 +614,49 @@ namespace UD_Bones_Folder.Mod
             Max = Math.Max(Operand1, Operand2);
         }
 
+        public static void GetMinMax(int Operand1, int Operand2, out int Min, out int Max)
+        {
+            Min = Math.Min(Operand1, Operand2);
+            Max = Math.Max(Operand1, Operand2);
+        }
+
+        public static void GetMinMax(out int Min, out int Max, params int[] Values)
+        {
+            if (Values.IsNullOrEmpty())
+                throw new ArgumentNullException(nameof(Values), $"must have at least 1 Value to get min/max");
+            Min = Values[0];
+            Max = Values[0];
+            foreach (int value in Values)
+            {
+                Max = Math.Max(value, Max);
+                Min = Math.Min(Min, value);
+            }
+        }
+
+        public static int GetDisadvantage(params int[] Values)
+        {
+            if (Values.IsNullOrEmpty())
+                throw new ArgumentNullException(nameof(Values), $"must have at least 1 Value to get lowest");
+
+            int min = Values[0];
+            foreach (int value in Values)
+                min = Math.Min(min, value);
+
+            return min;
+        }
+
+        public static int GetAdvantage(params int[] Values)
+        {
+            if (Values.IsNullOrEmpty())
+                throw new ArgumentNullException(nameof(Values), $"must have at least 1 Value to get highest");
+
+            int max = Values[0];
+            foreach (int value in Values)
+                max = Math.Max(value, max);
+
+            return max;
+        }
+
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
             => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
             ;
@@ -724,5 +767,16 @@ namespace UD_Bones_Folder.Mod
             && SpriteManager.GetTextureInfo(Tile) != GetSpriteManagerInvalidInfoNaughty(Tile)
             ;
 
-    }
+        public static bool CellIsNInFromEdge(Cell Cell, Zone Zone, int N)
+        {
+            if (!Cell.X.IsTwixt(N, Zone.Width - N))
+                return false;
+
+            if (!Cell.Y.IsTwixt(N, Zone.Height - N))
+                return false;
+
+            return true;
+        }
+
+}
 }

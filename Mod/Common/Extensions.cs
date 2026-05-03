@@ -30,6 +30,7 @@ using static UD_Bones_Folder.Mod.OsseousAsh;
 using static UD_Bones_Folder.Mod.OsseousAsh.Report;
 
 using Range = XRL.Range;
+using System.Collections.Concurrent;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -88,6 +89,28 @@ namespace UD_Bones_Folder.Mod
                 deathReason = $"=subject.subjective= {deathReason}";
             }
 
+            string genotype = MoonKing.genotypeEntry?.DisplayName;
+            string subtype = MoonKing.subtypeEntry?.DisplayName;
+            string role = MoonKing.GetTagOrStringProperty("Role");
+
+            string genoSubType;
+            if (subtype.IsNullOrEmpty()
+                && genotype.IsNullOrEmpty())
+                genoSubType = $"{MoonKing?.GetSpecies()}{(role.IsNullOrEmpty() ? null : $" {role}")}";
+            else
+            {
+                genoSubType = null;
+                if (!genotype.IsNullOrEmpty())
+                    genoSubType += genotype;
+
+                if (!subtype.IsNullOrEmpty())
+                {
+                    if (!genoSubType.IsNullOrEmpty())
+                        genoSubType += " ";
+                    genoSubType += subtype;
+                }
+            }
+
             return new SaveBonesJSON
             {
                 OsseousAshID = Config?.ID ?? Guid.Empty,
@@ -97,7 +120,7 @@ namespace UD_Bones_Folder.Mod
                 ID = Game.GameID,
                 Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(MoonKing)}:*= {MoonKing.GetDisplayName(BaseOnly: true)}",
                 Level = MoonKing.Statistics["Level"].Value,
-                GenoSubType = $"{MoonKing.genotypeEntry.DisplayName} {MoonKing.subtypeEntry.DisplayName}",
+                GenoSubType = genoSubType,
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
                 CharIcon = render.GetTile(),
                 FColor = tileColor,
@@ -314,13 +337,13 @@ namespace UD_Bones_Folder.Mod
         public static string ValueUnits(this TimeSpan Duration, int Digits = 2)
         {
             string durationUnit = "year";
-            double durationValue = Duration.TotalDays / 364.25;
-            if (Duration.TotalDays < Math.Floor(364.25))
+            double durationValue = Duration.TotalDays / 365.25;
+            if (Duration.TotalDays < Math.Floor(365.25))
             {
                 durationUnit = "month";
-                durationValue = Duration.TotalDays / (364.25 / 12);
+                durationValue = Duration.TotalDays / (365.25 / 12);
             }
-            if (Duration.TotalDays < Math.Floor(364.25 / 12))
+            if (Duration.TotalDays < Math.Floor(365.25 / 12))
             {
                 durationUnit = "week";
                 durationValue = Duration.TotalDays / 7;
@@ -1035,6 +1058,10 @@ namespace UD_Bones_Folder.Mod
             return result;
         }
 
+        public static StringBuilder AppendLineEnd(this StringBuilder SB)
+            => SB.AppendLine().Append("=ud_nbsp=".StartReplace().ToString())
+            ;
+
         public static StringBuilder AppendRule(this StringBuilder SB, object Value)
             => Value != null
             ? SB.AppendColored("rules", Value.ToString())
@@ -1058,6 +1085,13 @@ namespace UD_Bones_Folder.Mod
 
             return SB.Append(" ");
         }
+
+        public static StringBuilder AppendBulletLine(
+            this StringBuilder SB,
+            string Color = null,
+            string Bullet = "\u0007"
+            )
+            => SB.AppendLine().AppendBullet(Color, Bullet);
 
         public static StringBuilder AppendBonesReportedObject(this StringBuilder SB, ObjectReportDetails ReportedObject, int Indent = 0)
             => SB.AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.Blueprint), ReportedObject.Blueprint)
@@ -1144,5 +1178,144 @@ namespace UD_Bones_Folder.Mod
         public static string TimeAgo(this DateTime DateTime, string PostFix = null)
             => $"{(DateTime.Now - DateTime).ValueUnits()}{(!PostFix.IsNullOrEmpty() ? $" {PostFix}" : null)}"
             ;
+
+        public static string DateTimeString(this DateTime Time, bool LongDate, bool LongTime)
+            => $"{(LongDate ? Time.ToLongDateString() : Time.ToShortDateString())} {(LongTime ? Time.ToLongTimeString() : Time.ToShortTimeString())}"
+            ;
+
+        public static string ShortDateTimeString(this DateTime Time)
+            => Time.DateTimeString(false, false)
+            ;
+
+        public static string LongDateTimeString(this DateTime Time)
+            => Time.DateTimeString(true, true)
+            ;
+
+        public static string Timestamp(this DateTime Time)
+            => Time.ToUniversalTime().ToString("u")
+            ;
+
+        public static List<Cell> GetEmptyCellsNInFromEdge(this Zone Z, int N)
+            => Z.GetEmptyCells(c => Utils.CellIsNInFromEdge(c, Z, N))
+            ;
+
+        public static List<GameObjectBlueprint> SafelyGetBlueprintsInheritingFrom(
+            this GameObjectFactory Factory,
+            string Name,
+            bool ExcludeBase = true,
+            bool IncludeSelf = false
+            )
+        {
+            List<GameObjectBlueprint> outputList = new();
+            foreach (GameObjectBlueprint blueprint in Factory.BlueprintList)
+                if (blueprint.InheritsFromSafe(Name, IncludeSelf)
+                    && (!ExcludeBase
+                        || !blueprint.IsBaseBlueprint()))
+                    outputList.Add(blueprint);
+
+            return outputList;
+        }
+        public static List<string> InheritanceRoots => new()
+        {
+            nameof(Object),
+            "SultanMuralController",
+        };
+        public static bool InheritsFromSafe(
+            this GameObjectBlueprint GameObjectBlueprint,
+            string what,
+            bool IncludeSelf = true
+            )
+        {
+            if (IncludeSelf
+                && GameObjectBlueprint?.Name == what)
+                return true;
+
+            string parentBlueprint = GameObjectBlueprint.Inherits;
+            while (!parentBlueprint.IsNullOrEmpty())
+            {
+                if (parentBlueprint == what)
+                    return true;
+
+                string inherits = parentBlueprint;
+                parentBlueprint = GameObjectFactory.Factory?.GetBlueprintIfExists(parentBlueprint)?.Inherits;
+                if (parentBlueprint.IsNullOrEmpty()
+                    && !InheritanceRoots.Contains(inherits))
+                {
+                    Utils.Warn($"{nameof(Extensions)}.{nameof(InheritsFromSafe)}(\"{what}\"):" +
+                        $" bluprint ancestor \"{inherits}\" does not exist in blueprint list." +
+                        $" The first mention of this blueprint in this log should reveal the mod with this inheritance issue.");
+                }
+            }
+            return false;
+        }
+
+        public static bool AdjustCyberneticsLicensePoints(this GameObject Creature, int Amount)
+        {
+            if (Creature?.IsTrueKin() is not true)
+                return false;
+
+            Creature.ModIntProperty("CyberneticsLicenses", Amount);
+            return true;
+        }
+
+        public static int GetCyberneticsLicensePoints(this GameObject Creature)
+            => Creature.GetIntProperty("CyberneticsLicenses")
+            ;
+
+        public static int GetFreeCyberneticsLicensePoints(this GameObject Creature)
+            => Creature.GetIntProperty("FreeCyberneticsLicenses")
+            ;
+
+        public static int GetNonFreeCyberneticsLicensePoints(this GameObject Creature)
+            => Creature.GetCyberneticsLicensePoints() - Creature.GetFreeCyberneticsLicensePoints()
+            ;
+
+        public static int GetUsedCyberneticsLicensePoints(this GameObject Creature)
+        {
+            int usedPoints = 0;
+            Creature?.Body?.SafeForeachInstalledCybernetics(delegate (GameObject implant)
+            {
+                if (implant.TryGetPart(out CyberneticsBaseItem implantPart))
+                    usedPoints += implantPart.Cost;
+            });
+            return usedPoints;
+        }
+
+        public static int GetCyberneticsLicensePointUpgradeCost(this GameObject Creature)
+            => Creature.GetNonFreeCyberneticsLicensePoints() switch
+            {
+                >= 24 => 4,
+                >= 16 => 3,
+                >= 8 => 2,
+                _ => 1,
+            }
+            ;
+
+        public static void AdjustCyberneticsLicensePointsFromWedges(this GameObject Creature, int Amount, out int Remaining)
+        {
+            if (Creature?.IsTrueKin() is true)
+            {
+                int upgradeCost = Creature.GetCyberneticsLicensePointUpgradeCost();
+                while (Amount >= upgradeCost)
+                {
+                    if (!Creature.AdjustCyberneticsLicensePoints(1))
+                        break;
+
+                    Amount -= upgradeCost;
+                    upgradeCost = Creature.GetCyberneticsLicensePointUpgradeCost();
+                }
+            }
+            Remaining = Amount;
+        }
+
+        public static void AdjustCyberneticsLicensePointsFromWedges(this GameObject Creature, int Amount)
+            => Creature.AdjustCyberneticsLicensePointsFromWedges(Amount, out _)
+            ;
+
+        public static void RemoveAll<T>(this ScopeDisposedList<T> Source, Predicate<T> Where)
+        {
+            while (Source.FirstOrDefault(t => Where?.Invoke(t) is not false) is T element)
+                Source.Remove(element);
+        }
     }
 }

@@ -28,6 +28,20 @@ namespace UD_Bones_Folder.Mod.UI
         UICanvasHost = 1)]
     public class BonesManagement : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
     {
+        public enum VisibilityModes
+        {
+            Allowed,
+            Blocked,
+            All,
+        }
+        public enum SourceModes
+        {
+            File,
+            Mod,
+            Online,
+            All,
+        }
+
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolder_BonesManagement";
 
         public const string CMD_ACCEPT = "Accept";
@@ -107,6 +121,9 @@ namespace UD_Bones_Folder.Mod.UI
         private bool SelectFirst = true;
 
         public bool WasInScroller;
+
+        public VisibilityModes VisibilityMode = VisibilityModes.Allowed;
+        public SourceModes SourceMode = SourceModes.All;
 
         public static bool Printed = false;
 
@@ -429,17 +446,33 @@ namespace UD_Bones_Folder.Mod.UI
             }
 
             //Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
-            if (BonesManager.GetSaveBonesInfoAsync() is not Task<IEnumerable<SaveBonesInfo>> savedBonesInfoTask)
+
+            bool isBonesToShow(SaveBonesInfo SaveBonesInfo)
             {
-                Utils.Error($"{nameof(BonesManagement)}.{nameof(Show)}: failed to get bonesInfo task");
-                CompletionSource?.TrySetResult(null);
-                Exit();
-                return;
+                if (VisibilityMode == VisibilityModes.Allowed
+                    && SaveBonesInfo.IsBlocked)
+                    return false;
+
+                if (VisibilityMode == VisibilityModes.Blocked
+                    && !SaveBonesInfo.IsBlocked)
+                    return false;
+
+                if (SourceMode == SourceModes.File
+                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced))
+                    return false;
+
+                if (SourceMode == SourceModes.Mod
+                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Mod, FileLocationData.LocationType.Mod))
+                    return false;
+
+                if (SourceMode == SourceModes.Online
+                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Online, FileLocationData.LocationType.Online))
+                    return false;
+
+                return true;
             }
-
-            Task.WaitAll(savedBonesInfoTask);
-
-            if (savedBonesInfoTask.Result is not IEnumerable<SaveBonesInfo> bonesInfos
+            bool includeBlocked = VisibilityMode > VisibilityModes.Allowed;
+            if (BonesManager.GetSaveBonesInfoAsync(isBonesToShow, IncludeBlocked: includeBlocked).WaitResult() is not IEnumerable<SaveBonesInfo> bonesInfos
                 || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
                 || SaveBonesInfosToUIElements(orderedBonesInfos) is not List<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
@@ -575,7 +608,7 @@ namespace UD_Bones_Folder.Mod.UI
                 var bonesInfo = bonesData.BonesInfo;
                 SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
                 Popup.WaitNewPopupMessage(
-                    message: bonesInfo.OutputBlurb(), //Markup.Transform(bonesInfo.OutputBlurb()),
+                    message: Markup.Transform(bonesInfo.OutputBlurb()),
                     contextTitle: $"Bones File Stats".Colored("yellow"),
                     afterRender: bonesInfo.FlippedRender,
                     PopupID: $"{nameof(BonesManagement)}.{nameof(SelectedBones)}::{bonesInfo.ID}");
@@ -585,23 +618,19 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void HighlightedBones(FrameworkDataElement data)
         {
-            if (data is BonesInfoData bonesData)
+            if (data is BonesInfoData bonesData
+                && BonesScroller.selectionClones[BonesScroller.selectedPosition] is FrameworkUnityScrollChild selectionClone
+                && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
             {
-                for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
-                {
-                    if (Bones[i] != bonesData)
-                        continue;
+                // this *was* working, but seemingly doesn't, now...
+                BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, BonesScroller.selectedPosition);
 
-                    if (BonesScroller.selectionClones[i] is FrameworkUnityScrollChild selectionCloneI
-                        && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
-                    {
-                        // this *was* working, but seemingly doesn't, now...
-                        saveRow.setBonesData(bonesData);
-                        saveRow.Update();
-                        BonesScroller.PostSetup.Invoke(selectionCloneI, selectionCloneI.scrollContext, bonesData, i);
-                        break;
-                    }
-                }
+                saveRow.setBonesData(bonesData);
+                saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
+                saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
+                SelectionChoiceModsButtons[saveRow].context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
+
+                saveRow.Update();
             }
         }
 
@@ -727,7 +756,6 @@ namespace UD_Bones_Folder.Mod.UI
                 || bonesData.BonesInfo is not SaveBonesInfo bonesInfo)
                 return;
 
-            Utils.Log("I got pressed, for sure.");
             CompletionSource?.TrySetResult(bonesInfo);
         }
 
