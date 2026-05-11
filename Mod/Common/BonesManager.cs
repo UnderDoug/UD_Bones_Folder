@@ -464,11 +464,8 @@ namespace UD_Bones_Folder.Mod
             {
                 bool isMisMatch = false;
 
-                if ((currentVersion.Build >= 3) != (bonesVersion.Build >= 3))
+                if (currentVersion.Build != bonesVersion.Build)
                     isMisMatch = true;
-
-                /*if ((currentVersion.Build >= 4) != (bonesVersion.Build >= 4))
-                    isMisMatch = true;*/
 
                 if (isMisMatch)
                 {
