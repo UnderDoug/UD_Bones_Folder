@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text;
+
+using HarmonyLib;
 
 using XRL;
 using XRL.Collections;
@@ -14,9 +18,11 @@ using XRL.World.Parts;
 using XRL.World.ZoneParts;
 
 using static XRL.World.Cell;
+using static XRL.World.GameObject;
 
 namespace UD_Bones_Folder.Mod
 {
+    [HarmonyPatch]
     public static class SerializationExtensions
     {
         public const string SERIALIZED_PROPERTY = Const.MOD_PREFIX + "Serialized_";
@@ -67,7 +73,6 @@ namespace UD_Bones_Folder.Mod
                         writeObjectsCount++;
                 }
             }
-
             Writer.Write(writeObjectsCount);
             for (int i = 0; i < cellObjects.Count; i++)
                 if (Cell.IsEligibleForWrite(cellObjects, i, out var gameObject))

@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<worlds>
+  <world Name="BonesWorld" ZoneFactory="BonesWorldZoneFactory" Map="QudWorldMap.rpm" AmbientBed="amb_worldMap_sky" DisplayName="Qud?" Plane="Inherit" Protocol="Inherit">
+    <!--builder Class="JoppaWorldBuilder"></builder-->
+  </world>
+</worlds>

@@ -29,6 +29,7 @@ namespace UD_Bones_Folder.Mod
         [Serializable]
         public class Record : IDisposable
         {
+            public Guid UserID;
             public string BonesID;
             public SaveBonesJSON SaveBonesJSON;
             public int Size;
@@ -40,11 +41,13 @@ namespace UD_Bones_Folder.Mod
             public double SizeInMb => Size / 1000000;
 
             public Record(
+                Guid UserID,
                 string BonesID,
                 SaveBonesJSON SaveBonesJSON,
                 byte[] SavGz
                 )
             {
+                this.UserID = UserID;
                 this.BonesID = BonesID;
                 this.SaveBonesJSON = SaveBonesJSON;
                 Size = Buffer.ByteLength(SavGz);

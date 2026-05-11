@@ -296,25 +296,27 @@ namespace UD_Bones_Folder.Mod
         public override string ToString()
             => this;
 
-        public override bool Equals(object obj)
-        {
-            if (obj is FileLocationData fileLocationDataObj)
-                return this == fileLocationDataObj;
+        public virtual bool SameAs(FileLocationData Other)
+            => Other is not null
+            && Type == Other.Type
+            && Path == Other.Path
+            && (Host?.SameAs(Other.Host) is not false)
+            ;
 
-            return base.Equals(obj);
-        }
+        public bool Equals(FileLocationData Other)
+            => SameAs(Other)
+            ;
+
+        public override bool Equals(object obj)
+            => obj is FileLocationData fileLocationDataObj
+            ? Equals(fileLocationDataObj)
+            : Equals(this, obj)
+            ;
 
         public override int GetHashCode()
             => (Path?.GetHashCode() ?? 0)
             ^ Type.GetHashCode()
             ^ (Host?.GetHashCode() ?? 0)
-            ;
-
-        public bool Equals(FileLocationData Other)
-            => Other is not null
-            && Type == Other.Type
-            && Path == Other.Path
-            && (Host?.SameAs(Other.Host) is not false)
             ;
 
         public void Dispose()
@@ -323,19 +325,6 @@ namespace UD_Bones_Folder.Mod
             Path = null;
             Host = null;
         }
-
-        public static bool operator ==(FileLocationData X, FileLocationData Y)
-        {
-            if (X is null
-                || Y is null)
-                return (X is null) == (Y is null);
-
-            return X.Equals(Y);
-        }
-
-        public static bool operator !=(FileLocationData X, FileLocationData Y)
-            => !(X == Y)
-            ;
 
         public static implicit operator string(FileLocationData FileLocationData)
             => FileLocationData.Type switch

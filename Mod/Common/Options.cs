@@ -181,7 +181,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool EnableOsseousAshUploads;
         [OptionFlag] public static string OsseousAshHandle => Config?.Handle ?? DefaultOsseousAshHandle;
 
-        public static async Task ManageOsseousAshHandle()
+        public static async Task ManageOsseousAshHandleAsync()
         {
             while (true)
             {
@@ -257,7 +257,7 @@ namespace UD_Bones_Folder.Mod
                     );
         }
 
-        public static async Task ManageOsseousAshID()
+        public static async Task ManageOsseousAshIDAsync()
         {
             PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult> options = new();
             var sB = Event.NewStringBuilder();
@@ -409,7 +409,7 @@ namespace UD_Bones_Folder.Mod
         [ModSensitiveCacheInit]
         public static void PerformSetup()
         {
-            AskOnStartup().Wait();
+            // AskOnStartup().Wait();
             UpdateOsseousAshHandleDisplay();
         }
     }

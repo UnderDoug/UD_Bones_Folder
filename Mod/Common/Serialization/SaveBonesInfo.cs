@@ -150,16 +150,21 @@ namespace UD_Bones_Folder.Mod
 
         public BonesStats Stats => GetBonesJSON()?.Stats;
 
-        public bool IsMad => GetBonesJSON().IsCharIconSwapped()
+        public bool IsMad => (GetBonesJSON()?.IsCharIconSwapped() is true)
+            || (GenotypeName?.IsNullOrEmpty() is not false)
+            || (SubtypeName?.IsNullOrEmpty() is not false)
             || !GenotypeFactory.GenotypesByName.ContainsKey(GenotypeName)
             || !SubtypeFactory.SubtypesByName.ContainsKey(SubtypeName)
-            || !GameObjectFactory.Factory.BlueprintList.Any(bp => bp.Name == GetBonesJSON()?.Blueprint)
+            || !GameObjectFactory.Factory.HasBlueprint(GetBonesJSON()?.Blueprint ?? "MISSING_BLUEPRINT")
             ;
 
         private ModsDifferInfo _ModsDiffer;
         public ModsDifferInfo ModsDiffer => _ModsDiffer ??= GetModsDifferInfo();
 
-        public ZoneRequest ZoneRequest => new(BonesSpec.ZoneID);
+        public ZoneRequest ZoneRequest => BonesSpec != null
+            ? new(BonesSpec.ZoneID)
+            : default
+            ;
 
         public bool WasCremated;
 
@@ -180,12 +185,11 @@ namespace UD_Bones_Folder.Mod
         public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
         public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
 
-        private FileLocationData _FileLocationData;
         public FileLocationData FileLocationData
         {
             get
             {
-                if (_FileLocationData is null
+                if (FileLocationDataSet.IsNullOrEmpty()
                     && GetBonesJSON() is SaveBonesJSON bonesJSON
                     && !Directory.IsNullOrEmpty())
                 {
@@ -194,12 +198,15 @@ namespace UD_Bones_Folder.Mod
                     if (bonesJSON.FileLocationType != FileLocationData.LocationType.None)
                         type = bonesJSON.FileLocationType;
 
-                    _FileLocationData = new(type, assumedLocationData.Path, assumedLocationData.Host);
+                    FileLocationDataSet.Add(new FileLocationData(type, assumedLocationData.Path, assumedLocationData.Host));
                     // Utils.Log($"New {nameof(_FileLocationData)}: {_FileLocationData?.SanitiseForDisplay() ?? "NO_DATA"}");
                 }
-                return _FileLocationData;
+                return FileLocationDataSet.OrderBy(data => data.Type).FirstOrDefault();
             }
         }
+
+        private HashSet<FileLocationData> _FileLocationDataSet;
+        public HashSet<FileLocationData> FileLocationDataSet => _FileLocationDataSet ??= new();
 
         public OsseousAsh.Host Host => FileLocationData?.Host;
 
@@ -213,7 +220,9 @@ namespace UD_Bones_Folder.Mod
             && FileLocationData.Exists()
             ;
 
-        public bool IsBlocked => OsseousAsh.Config?.BlockedBonesIDs?.Contains(ID) is true;
+        public bool IsBlocked => OsseousAsh.IsBonesBlocked(ID); //OsseousAsh.IsBonesReported(ID)?.WaitResult() is true;
+
+        public bool IsGenerated => GetBonesJSON()?.GameMode == BonesModeModule.BONES_MODE;
 
         public SaveBonesInfo()
             : base()
@@ -381,12 +390,16 @@ namespace UD_Bones_Folder.Mod
             => GetBonesFilePathAsync().WaitResult()
             ;
 
+        public byte[] GetSavGzBytes()
+            => Host.GetBonesSavGz(ID)
+            ;
+
         public async Task<System.IO.Stream> GetSavGzStreamAsync()
         {
             if ((await GetBonesFilePathAsync()) is string bonesPath)
                 return File.OpenRead(bonesPath);
 
-            byte[] cloudBytes = Host.GetBonesSavGz(ID);
+            byte[] cloudBytes = GetSavGzBytes();
 
             return !cloudBytes.IsNullOrEmpty()
                 ? new System.IO.MemoryStream(cloudBytes)
@@ -503,7 +516,7 @@ namespace UD_Bones_Folder.Mod
             if (ID == The.Game.GameID)
                 return false;
 
-            if (OsseousAsh.Config?.BlockedBonesIDs?.Contains(ID) is true)
+            if (IsBlocked)
                 return false;
 
             if (bonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
@@ -532,6 +545,33 @@ namespace UD_Bones_Folder.Mod
 
             return true;
         }
+
+
+        private string GetLevelPair()
+            => $"{nameof(SaveBonesJSON.Level)}: {GetBonesJSON().Level}"
+            ;
+
+        private string GetZoneTierPair()
+            => $"{nameof(BonesSpec.ZoneTier)}: {BonesSpec.ZoneTier}"
+            ;
+
+        private string GetZoneTerrainTypePair()
+            => $"{nameof(BonesSpec.ZoneTerrainType)}: {(BonesSpec.ZoneTerrainType.IsNullOrEmpty() ? "none" : BonesSpec.ZoneTerrainType)}"
+            ;
+
+        private string GetZoneIDPair()
+            => $"{nameof(SaveBonesJSON.ZoneID)}: {GetBonesJSON().ZoneID}"
+            ;
+
+        public string GetBonesPickerLine()
+            => GetBonesJSON() != null
+            ? $"{GetName()}, {GetLevelPair()}, {GetZoneTierPair()},\n{GetZoneTerrainTypePair()}, {GetZoneIDPair()}"
+            : GetName()
+            ;
+
+        public bool AttemptLoad(Zone Z)
+            => BonesManager.System.AttemptLoadBones(Z, this)
+            ;
 
         public async Task<bool> TryRestoreModsAsync()
         {
@@ -574,83 +614,182 @@ namespace UD_Bones_Folder.Mod
                     .Except(bonesHasButNotAvailable)
                     .Except(loadedButBonesMissing));
 
+            UIUtils.CascadableResult result = UIUtils.CascadableResult.Continue;
             var sB = Event.NewStringBuilder();
-            if (bonesHasButNotAvailable.Count > 0)
-            {
-                sB.Append("One or more mods enabled in this save are ")
-                    .AppendColored("red", "not available")
-                    .Append(": ");
-
-                bonesHasButNotAvailable
-                    .Select(ModManager.GetModTitle)
-                    .Aggregate(
-                        seed: sB,
-                        func: (a, n) =>
-                            a.AppendLine()
-                                .AppendColored("y", ":").Append(" ")
-                                .AppendColored("red", n)
-                            )
-                    .AppendLine()
-                    .AppendLine()
-                    .Append("Do you still wish to try to load this save?");
-
-                if ((await Popup.NewPopupMessageAsync(
-                    message: sB.ToString(),
-                    buttons: PopupMessage.YesNoButton,
-                    title: "Incomplete Mod Configuration")).command != PopupMessage.YesNoButton[0].command)
-                {
-                    Event.ResetTo(sB);
-                    return false;
-                }
-                sB.Clear();
-            }
-            if (!bothHaveLoaded.IsNullOrEmpty()
+            string title = "Mod Configuration Comparison".Colored("yellow");
+            if (!bonesHasButNotAvailable.IsNullOrEmpty()
+                || !bothHaveLoaded.IsNullOrEmpty()
                 || !loadedButBonesMissing.IsNullOrEmpty()
                 || !bonesHasButNotLoaded.IsNullOrEmpty())
             {
-                if (!loadedButBonesMissing.IsNullOrEmpty())
+                var options = new PickOptionDataSetAsync<IEnumerable<string>, UIUtils.CascadableResult>();
+                do
                 {
-                    loadedButBonesMissing
-                        .Select(ModManager.GetModTitle)
-                        .Aggregate(
-                            seed: sB.Compound("These enabled mods are {{yellow|disabled}} in this bones file:", '\n'),
-                            func: (a, n) =>
-                                a.AppendLine()
-                                    .AppendColored("y", ":").Append(" ")
-                                    .AppendColored("yellow", n)
-                                )
-                        .AppendLine();
+                    if (!bonesHasButNotAvailable.IsNullOrEmpty())
+                    {
+                        sB.AppendColored("red", "Attention").Append(": one or more mods enabled in this bones file are ")
+                            .AppendColored("red", "not available");
+
+                        if (bonesHasButNotAvailable.Count > 9)
+                            sB.Append(".").AppendLine().Append("Use the menu option below to view the entire list.");
+                        else
+                            sB.Append("; they'll be listed at the bottom.");
+                        
+                        sB.AppendLineEnd();
+                    }
+                    if (!loadedButBonesMissing.IsNullOrEmpty())
+                    {
+                        loadedButBonesMissing
+                            .Select(ModManager.GetModTitle)
+                            .Aggregate(
+                                seed: sB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
+                                    .AppendColored("yellow", "disabled").Append(" in this bones file:"),
+                                func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("yellow", n))
+                            .AppendLineEnd();
+                    }
+                    if (!bonesHasButNotLoaded.IsNullOrEmpty())
+                    {
+                        bonesHasButNotLoaded
+                            .Select(ModManager.GetModTitle)
+                            .Aggregate(
+                                seed: sB.AppendLine().Append("These ").AppendColored("black", "disabled").Append(" mods are ").AppendColored("red", "enabled").Append(" in this bones file:"),
+                                func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
+                            .AppendLineEnd();
+                    }
+                    if (!bothHaveLoaded.IsNullOrEmpty())
+                    {
+                        bothHaveLoaded
+                            .Select(ModManager.GetModTitle)
+                            .Aggregate(
+                                seed: sB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
+                                    .AppendColored("green", "enabled").Append(" in this bones file:"),
+                                func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("green", n))
+                            .AppendLineEnd();
+                    }
+                    if (!bonesHasButNotAvailable.IsNullOrEmpty()
+                        && bonesHasButNotAvailable.Count < 10)
+                    {
+                        sB.AppendUnavailableMods(bonesHasButNotAvailable)
+                            .AppendLineEnd();
+                    }
+
+                    options.Clear();
+                    if (!bonesHasButNotLoaded.IsNullOrEmpty())
+                    {
+                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        {
+                            Element = bonesHasButNotLoaded,
+                            Text = "Restart {{yellow|adding enabled}} mods from bones file's mod configuration",
+                            Hotkey = 'a',
+                            Icon = new Renderable(
+                                Tile: "UI/sw_newchar.bmp",
+                                ColorString: "&w",
+                                TileColor: "&w",
+                                DetailColor: 'W'),
+                            Callback = (e) => Task.Run(() => EnableMods(e)),
+                        });
+                    }
+                    if (!loadedButBonesMissing.IsNullOrEmpty())
+                    {
+                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        {
+                            Element = loadedButBonesMissing,
+                            Text = "Restart {{red|using}} bones file's {{red|entire}} (available) mod configuration",
+                            Hotkey = 'u',
+                            Icon = new Renderable(
+                                Tile: "UI/sw_lastchar.bmp",
+                                ColorString: $"&W",
+                                TileColor: $"&W",
+                                DetailColor: 'R'),
+                            Callback = (e) => Task.Run(() 
+                                => (UIUtils.CascadableResult)Math.Min(
+                                    val1: (int)DisableMods(e),
+                                    val2: (int)EnableMods(bonesHasButNotLoaded))
+                                ),
+                        });
+                    }
+                    if (!bonesHasButNotAvailable.IsNullOrEmpty()
+                        && bonesHasButNotAvailable.Count > 9)
+                    {
+                        int unavailableCount = bonesHasButNotAvailable.Count;
+                        var sB2 = Event.NewStringBuilder()
+                            .Append("Show ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
+                            .AppendThings(unavailableCount, " mod").Append(" ").AppendColored("red", "enabled").Append(" in this bones file");
+                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        {
+                            Element = bonesHasButNotAvailable,
+                            Text = Event.FinalizeString(sB2),
+                            Hotkey = 'x',
+                            Icon = new Renderable(
+                                Tile: "Abilities/abil_berate.bmp",
+                                ColorString: $"&K",
+                                TileColor: $"&K",
+                                DetailColor: 'R'),
+                            Callback = async delegate (IEnumerable<string> element)
+                            {
+                                string message = Event.FinalizeString(Event.NewStringBuilder().AppendUnavailableMods(element));
+
+                                await Popup.NewPopupMessageAsync(
+                                    message: message,
+                                    title: unavailableCount.Things("unavailable mod").Colored("red"),
+                                    afterRender: new Renderable(
+                                        Tile: "Abilities/abil_berate.bmp",
+                                        ColorString: $"&K",
+                                        TileColor: $"&K",
+                                        DetailColor: 'R'));
+
+                                return UIUtils.CascadableResult.BackSilent;
+                            },
+                        });
+                    }
+                    if (!options.IsNullOrEmpty())
+                    {
+                        result = await UIUtils.PerformPickOptionAsync(
+                            OptionDataSet: options,
+                            Title: title,
+                            Intro: sB.ToString(),
+                            IntroIcon: new Renderable(
+                                Tile: "Items/sw_toolbox_large.bmp",
+                                ColorString: $"&c",
+                                TileColor: $"&c",
+                                DetailColor: 'C'),
+                            DefaultSelected: !options.IsNullOrEmpty() ? 0 : -1,
+                            OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
+                            OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
+                            FinalSelectedCallback: async delegate (PickOptionData<IEnumerable<string>, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
+                            {
+                                var result = await r?.AwaitResultIfNotIsCompletedSuccessfully();
+                                if (result is UIUtils.CascadableResult.Continue)
+                                {
+                                    ModManager.WriteModSettings();
+                                    GameManager.Restart();
+                                    return UIUtils.CascadableResult.CancelSilent;
+                                }
+                                return result;
+                            });
+                    }
+                    else
+                    {
+                        result = UIUtils.CascadableResult.CancelSilent;
+                        await Popup.NewPopupMessageAsync(
+                            message: sB.ToString(),
+                            title: title,
+                            afterRender: new Renderable(
+                                Tile: "Items/sw_toolbox_large.bmp",
+                                ColorString: $"&c",
+                                TileColor: $"&c",
+                                DetailColor: 'C'));
+                    }
+
                 }
-                if (!bonesHasButNotLoaded.IsNullOrEmpty())
-                {
-                    bonesHasButNotLoaded
-                        .Select(ModManager.GetModTitle)
-                        .Aggregate(
-                            seed: sB.Compound("These disabled mods are {{red|enabled}} in this bones file:", '\n'),
-                            func: (a, n) =>
-                                a.AppendLine()
-                                    .AppendColored("y", ":").Append(" ")
-                                    .AppendColored("red", n)
-                                )
-                        .AppendLine();
-                }
-                if (!bothHaveLoaded.IsNullOrEmpty())
-                {
-                    bothHaveLoaded
-                        .Select(ModManager.GetModTitle)
-                        .Aggregate(
-                            seed: sB.Compound("These enabled mods are {{green|enabled}} in this bones file:", '\n'),
-                            func: (a, n) =>
-                                a.AppendLine()
-                                    .AppendColored("y", ":").Append(" ")
-                                    .AppendColored("green", n)
-                                )
-                        .AppendLine();
-                }
+                while (!result.IsCancel());
+
+                Event.ResetTo(sB);
+
                 if (!loadedButBonesMissing.IsNullOrEmpty()
                     || !bonesHasButNotLoaded.IsNullOrEmpty())
                 {
-                    sB.AppendLine();
+                    /*
                     var options = new Dictionary<string, string>
                     {
                         { "Restart {{yellow|adding enabled}} mods from bones file's mod configuration", "Add" },
@@ -686,16 +825,63 @@ namespace UD_Bones_Folder.Mod
 
                     ModManager.WriteModSettings();
                     GameManager.Restart();
+                    */
                 }
                 else
                 {
+                    /*
                     await Popup.NewPopupMessageAsync(
                         message: Event.FinalizeString(sB),
                         title: "Mod Configuration");
+                    */
                 }
             }
             Event.ResetTo(sB);
             return false;
+        }
+
+        public static UIUtils.CascadableResult EnableMods(IEnumerable<string> ModsToEnable)
+        {
+            if (ModsToEnable.IsNullOrEmpty())
+                return UIUtils.CascadableResult.BackSilent
+                    ;
+
+            bool any = false;
+            foreach (string modToEnable in ModsToEnable)
+            {
+                if (ModManager.GetMod(modToEnable) is ModInfo modInfo
+                    && modInfo.IsEnabled != true)
+                {
+                    modInfo.IsEnabled = true;
+                    any = true;
+                }
+            }
+            return any
+                ? UIUtils.CascadableResult.Continue
+                : UIUtils.CascadableResult.BackSilent
+                ;
+        }
+
+        public static UIUtils.CascadableResult DisableMods(IEnumerable<string> ModsToDisable)
+        {
+            if (ModsToDisable.IsNullOrEmpty())
+                return UIUtils.CascadableResult.BackSilent
+                    ;
+
+            bool any = false;
+            foreach (string modToDisable in ModsToDisable)
+            {
+                if (ModManager.GetMod(modToDisable) is ModInfo modInfo
+                    && modInfo.IsEnabled != false)
+                {
+                    modInfo.IsEnabled = false;
+                    any = true;
+                }
+            }
+            return any
+                ? UIUtils.CascadableResult.Continue
+                : UIUtils.CascadableResult.BackSilent
+                ;
         }
 
         public ModsDifferInfo GetModsDifferInfo()

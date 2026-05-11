@@ -151,17 +151,31 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(TidyLunarObjectsEvent E)
         {
-            bool bonesIDMatches = BonesID == E.BonesID
-                || E.BonesID == null;
-
-            bool bonesMatchAndNotPersist = bonesIDMatches
-                && !Persists;
-
-            if (bonesMatchAndNotPersist
-                || E.Force)
+            var parentObject = ParentObject;
+            if (GameObject.Validate(ref parentObject))
             {
-                ParentObject?.Obliterate();
-                return true;
+                //Utils.Log($"{0.Indent()}{nameof(UD_Bones_BaseLunarPart)} as {GetType().Name} - {nameof(TidyLunarObjectsEvent)}({nameof(GameObject)}: {parentObject?.DebugName ?? "NO_OBJECT"}, {nameof(E.Context)}: {E.Context})");
+                bool bonesIDMatches = BonesID == E.BonesID
+                    || E.BonesID == null;
+
+                bool bonesMatchAndNotPersist = bonesIDMatches
+                    && !Persists;
+
+                if (bonesMatchAndNotPersist
+                    || E.Force)
+                {
+                    // Utils.Log($"{1.Indent()}: {nameof(bonesMatchAndNotPersist)}: {bonesMatchAndNotPersist}, {nameof(E.Force)}: {E.Force}");
+                    try
+                    {
+                        parentObject.RemovePart(this);
+                        parentObject.Obliterate();
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{GetType().Name}, during {nameof(TidyLunarObjectsEvent)}", x);
+                    }
+                    return true;
+                }
             }
             return base.HandleEvent(E);
         }

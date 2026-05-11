@@ -31,6 +31,7 @@ using static UD_Bones_Folder.Mod.OsseousAsh.Report;
 
 using Range = XRL.Range;
 using System.Collections.Concurrent;
+using Event = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -39,18 +40,18 @@ namespace UD_Bones_Folder.Mod
         public static SaveBonesJSON CreateSaveBonesJSON(
             this XRLGame Game,
             IDeathEvent E,
-            GameObject MoonKing,
+            GameObject LunarRegent,
             FileLocationData.LocationType DirectoryType
             )
         {
             var localTimeNow = DateTime.Now;
             long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
 
-            bool visible = MoonKing.Render.Visible;
-            MoonKing.Render.Visible = true;
-            MoonKing.RestorePristineHealth();
-            var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true), HFlip: true);
-            MoonKing.Render.Visible = visible;
+            bool visible = LunarRegent.Render.Visible;
+            LunarRegent.Render.Visible = true;
+            LunarRegent.RestorePristineHealth();
+            var render = new BonesRender(LunarRegent.RenderForUI("SaveBonesInfo", true), HFlip: true);
+            LunarRegent.Render.Visible = visible;
 
             var colorChars = render.GetColorChars();
             var tileColor = colorChars.foreground;
@@ -58,7 +59,7 @@ namespace UD_Bones_Folder.Mod
 
             var timeSpan = TimeSpan.FromTicks(Game._walltime);
 
-            var zone = MoonKing.CurrentZone;
+            var zone = LunarRegent.CurrentZone;
             string zoneID = zone.ZoneID;
             var terrainObject = zone.GetTerrainObject();
             string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
@@ -73,7 +74,17 @@ namespace UD_Bones_Folder.Mod
                 || deathReason.EndsWith("!"))
                 deathReason = deathReason[..^1];
 
-            if (deathReason.StartsWith("You"))
+            if (deathReason.StartsWith("Your "))
+            {
+                deathReason = $"=subject.Possessive= {deathReason[5..]}";
+            }
+            else
+            if (deathReason.StartsWith("your "))
+            {
+                deathReason = $"=subject.possessive= {deathReason[5..]}";
+            }
+            else
+            if (deathReason.StartsWith("You "))
             {
                 deathReason = deathReason[4..];
                 if (deathReason.StartsWith("were"))
@@ -81,7 +92,7 @@ namespace UD_Bones_Folder.Mod
                 deathReason = $"=subject.Subjective= {deathReason}";
             }
             else
-            if (deathReason.StartsWith("you"))
+            if (deathReason.StartsWith("you "))
             {
                 deathReason = deathReason[4..];
                 if (deathReason.StartsWith("were"))
@@ -89,14 +100,64 @@ namespace UD_Bones_Folder.Mod
                 deathReason = $"=subject.subjective= {deathReason}";
             }
 
-            string genotype = MoonKing.genotypeEntry?.DisplayName;
-            string subtype = MoonKing.subtypeEntry?.DisplayName;
-            string role = MoonKing.GetTagOrStringProperty("Role");
+            if (deathReason.Contains(" Were "))
+                deathReason = deathReason.Replace(" Were ", " =subject.Verb:were:afterpronoun= ");
+
+            if (deathReason.Contains(" were "))
+                deathReason = deathReason.Replace(" were ", " =subject.verb:were:afterpronoun= ");
+
+            if (deathReason.Contains("Yourself"))
+                deathReason = deathReason.Replace("Yourself", "=subject.Reflexive=");
+
+            if (deathReason.Contains("yourself"))
+                deathReason = deathReason.Replace("yourself", "=subject.reflexive=");
+
+            if (deathReason.Contains(" Your"))
+                deathReason = deathReason.Replace(" Your", " =subject.Possessive=");
+
+            if (deathReason.Contains(" your"))
+                deathReason = deathReason.Replace(" your", " =subject.possessive=");
+
+            if (deathReason.Contains(" Yours"))
+                deathReason = deathReason.Replace(" Yours", " =subject.SubstantivePossessive=");
+
+            if (deathReason.Contains(" yours"))
+                deathReason = deathReason.Replace(" yours", " =subject.substantivePossessive=");
+
+            if (deathReason.Contains(" You're"))
+                deathReason = deathReason.Replace(" You're", " =subject.Subjective==subject.verb:'re:afterpronoun=");
+
+            if (deathReason.Contains(" you're"))
+                deathReason = deathReason.Replace(" you're", " =subject.subjective==subject.verb:'re:afterpronoun=");
+
+            if (deathReason.Contains(" You are"))
+                deathReason = deathReason.Replace(" You are", " =subject.Subjective= =subject.verb:are:afterpronoun=");
+
+            if (deathReason.Contains(" you are"))
+                deathReason = deathReason.Replace(" you are", " =subject.subjective= =subject.verb:are:afterpronoun=");
+
+            if (deathReason.Contains(" You."))
+                deathReason = deathReason.Replace(" You.", " =subject.Objective=");
+
+            if (deathReason.Contains(" you."))
+                deathReason = deathReason.Replace(" you.", " =subject.objective=");
+
+            if (deathReason.Contains(" You"))
+                deathReason = deathReason.Replace(" You", " =subject.Subjective=");
+
+            if (deathReason.Contains(" you"))
+                deathReason = deathReason.Replace(" you", " =subject.subjective=");
+
+            string genotype = LunarRegent.genotypeEntry?.DisplayName;
+            string subtype = LunarRegent.subtypeEntry?.DisplayName;
+
+            string species = LunarRegent?.GetSpecies()?.Capitalize();
+            string role = LunarRegent.GetTagOrStringProperty("Role")?.Capitalize();
 
             string genoSubType;
             if (subtype.IsNullOrEmpty()
                 && genotype.IsNullOrEmpty())
-                genoSubType = $"{MoonKing?.GetSpecies()}{(role.IsNullOrEmpty() ? null : $" {role}")}";
+                genoSubType = $"{species}{(role.IsNullOrEmpty() ? null : $" {role}")}";
             else
             {
                 genoSubType = null;
@@ -118,8 +179,8 @@ namespace UD_Bones_Folder.Mod
                 SaveVersion = 400,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
-                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(MoonKing)}:*= {MoonKing.GetDisplayName(BaseOnly: true)}",
-                Level = MoonKing.Statistics["Level"].Value,
+                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(LunarRegent)}:*= {LunarRegent.GetDisplayName(BaseOnly: true)}",
+                Level = LunarRegent.Statistics["Level"].Value,
                 GenoSubType = genoSubType,
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
                 CharIcon = render.GetTile(),
@@ -138,15 +199,15 @@ namespace UD_Bones_Folder.Mod
 
                 ZoneID = zoneID,
 
-                BonesSpec = new BonesSpec(MoonKing, zone),
+                BonesSpec = new BonesSpec(LunarRegent, zone),
                 Stats = new(),
 
                 FileLocationType = DirectoryType,
 
-                DeathReason = deathReason.StartReplace().AddObject(MoonKing).ToString(),
-                GenotypeName = MoonKing.GetGenotype(),
-                SubtypeName = MoonKing.GetSubtype(),
-                Blueprint = MoonKing.Blueprint,
+                DeathReason = deathReason.StartReplace().AddObject(LunarRegent).ToString(),
+                GenotypeName = genotype ?? species,
+                SubtypeName = subtype ?? role,
+                Blueprint = LunarRegent.Blueprint,
             };
         }
 
@@ -155,10 +216,10 @@ namespace UD_Bones_Folder.Mod
             SaveRow.SetBonesIcon(BonesData);
             SaveRow.SetBonesText(BonesData);
 
-            SaveRow.SetLocationBox(BonesData).SetAsLastSibling();
-            BonesManagement.instance.SelectionChoiceModsButtons ??= new();
-            SaveRow.SetBonesModsDiffer(BonesData).SetAsLastSibling();
-            SaveRow.SetBonesDeleteButton(BonesData).SetAsLastSibling();
+            BonesManagement.instance.SelectionChoiceLocationBox ??= new();
+            SaveRow.SetLocationBox(BonesData)?.SetAsLastSibling();
+            SaveRow.SetBonesModsDiffer(BonesData)?.SetAsLastSibling();
+            SaveRow.SetBonesDeleteButton(BonesData)?.SetAsLastSibling();
 
             SaveRow.Update();
         }
@@ -224,8 +285,16 @@ namespace UD_Bones_Folder.Mod
         {
             var bonesInfo = BonesData.BonesInfo;
 
-            SaveRow.modsDiffer.SetActive(value: true);
-            if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
+            if (!BonesManagement.instance.SelectionChoiceLocationBox.TryGetValue(SaveRow, out var locationBox))
+            {
+                locationBox = UnityEngine.GameObject.Instantiate(SaveRow.modsDiffer);
+                BonesManagement.instance.SetParentTransform(locationBox.transform, SaveRow.modsDiffer.transform.parent);
+                locationBox.SetActive(value: true);
+                locationBox.transform.SetAsFirstSibling();
+                BonesManagement.instance.SelectionChoiceLocationBox[SaveRow] = locationBox;
+            }
+            locationBox?.SetActive(value: true);
+            if (locationBox?.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
             {
                 foreach (var locationBoxTextSkin in locationBoxTextSkins)
                 {
@@ -239,36 +308,28 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
             }
-            return SaveRow.modsDiffer.transform;
+            BonesManagement.instance.SelectionChoiceLocationBox[SaveRow] = locationBox;
+            return locationBox?.transform;
         }
 
         public static UnityEngine.Transform SetBonesModsDiffer(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
             var bonesInfo = BonesData.BonesInfo;
 
-            if (!BonesManagement.instance.SelectionChoiceModsButtons.TryGetValue(SaveRow, out var modsButton))
+            SaveRow.modsDiffer.SetActive(value: true);
+            if (SaveRow.modsDiffer.GetComponentsInChildren<UITextSkin>() is UITextSkin[] locationBoxTextSkins)
             {
-                SaveRow.deleteButton ??= new();
-                modsButton = UnityEngine.GameObject.Instantiate(SaveRow.deleteButton);
-                modsButton.context = null;
-                modsButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
-                BonesManagement.instance.SetParentTransform(modsButton.transform, SaveRow.deleteButton.gameObject.transform.parent);
-                BonesManagement.instance.SelectionChoiceModsButtons[SaveRow] = modsButton;
-            }
-            modsButton.gameObject.SetActive(value: true);
-            if (modsButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] modsButtonTextSkins)
-            {
-                foreach (var modsButtonTextSkin in modsButtonTextSkins)
+                foreach (var locationBoxTextSkin in locationBoxTextSkins)
                 {
-                    if (modsButtonTextSkin.name == "tct"
-                        || modsButtonTextSkin.gameObject.name == "tct")
+                    if (locationBoxTextSkin.name == "tct"
+                        || locationBoxTextSkin.gameObject.name == "tct")
                     {
-                        modsButtonTextSkin.SetText(bonesInfo.ModsDiffer.ToString());
+                        locationBoxTextSkin.SetText(bonesInfo.ModsDiffer.ToString());
                         break;
                     }
                 }
             }
-            return modsButton.transform;
+            return SaveRow.modsDiffer.transform;
         }
 
         public static UnityEngine.Transform SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -276,41 +337,46 @@ namespace UD_Bones_Folder.Mod
             var bonesInfo = BonesData.BonesInfo;
             SaveRow.deleteButton ??= new();
             SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
-            
+
+            UITextSkin deleteButtonTextSkin = null;
+            var deleteButtonImages = SaveRow.deleteButton.GetComponentsInChildren<Image>();
             if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
             {
-                foreach (var deleteButtonTextSkin in deleteButtonTextSkins)
+                foreach (var textSkin in deleteButtonTextSkins)
                 {
-                    if (deleteButtonTextSkin.name == "tct"
-                        || deleteButtonTextSkin.gameObject.name == "tct")
+                    if (textSkin.name == "tct"
+                        || textSkin.gameObject.name == "tct")
                     {
-                        deleteButtonTextSkin.SetText("{{y|cremate}}");
+                        deleteButtonTextSkin = textSkin;
                         break;
                     }
                 }
             }
+            deleteButtonTextSkin?.SetText("{{y|cremate}}");
+
             if (!bonesInfo.IsCrematable)
             {
-                if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkinsToHide)
-                {
-                    foreach (var deleteButtonTextSkin in deleteButtonTextSkinsToHide)
-                    {
-                        if (deleteButtonTextSkin.name == "tct"
-                            || deleteButtonTextSkin.gameObject.name == "tct")
-                        {
-                            deleteButtonTextSkin.color = UnityEngine.Color.clear;
-                            break;
-                        }
-                    }
-                }
+                if (deleteButtonTextSkin is not null)
+                    deleteButtonTextSkin.color = UnityEngine.Color.clear;
 
-                if (SaveRow.deleteButton.GetComponentsInChildren<Image>() is Image[] deleteButtonImagesToHide)
-                    foreach (var deleteButtonImage in deleteButtonImagesToHide)
-                        deleteButtonImage.color = UnityEngine.Color.clear;
+                foreach (var deleteButtonImage in deleteButtonImages ?? Enumerable.Empty<Image>())
+                    deleteButtonImage.color = UnityEngine.Color.clear;
 
                 SaveRow.deleteButton.context.disabled = true;
                 SaveRow.deleteButton.enabled = false;
                 SaveRow.deleteButton.gameObject.SetActive(value: false);
+            }
+            else
+            {
+                if (deleteButtonTextSkin is not null)
+                    deleteButtonTextSkin.color = The.Color.White;
+
+                foreach (var deleteButtonImage in deleteButtonImages ?? Enumerable.Empty<Image>())
+                    deleteButtonImage.color = The.Color.Black;
+
+                SaveRow.deleteButton.context.disabled = false;
+                SaveRow.deleteButton.enabled = true;
+                SaveRow.deleteButton.gameObject.SetActive(value: true);
             }
             return SaveRow.deleteButton.transform;
         }
@@ -609,6 +675,23 @@ namespace UD_Bones_Folder.Mod
             return indefiniteArticle;
         }
 
+        public static void PerformActionRecursively(this GameObject Object, Action<GameObject> Action, int Depth = 0)
+        {
+            Action?.Invoke(Object);
+
+            if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
+                for (int i = 0; i < inventoryObjects.Count; i++)
+                    inventoryObjects[i].PerformActionRecursively(Action, Depth + 1);
+
+            if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
+                for (int i = 0; i < installedCybernetics.Count; i++)
+                    installedCybernetics[i].PerformActionRecursively(Action, Depth + 1);
+
+            if (Object.GetContents() is List<GameObject> contentsObject)
+                for (int i = 0; i < contentsObject.Count; i++)
+                    contentsObject[i].PerformActionRecursively(Action, Depth + 1);
+        }
+
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
             //Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
@@ -618,6 +701,10 @@ namespace UD_Bones_Folder.Mod
                 if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
                     for (int i = 0; i < inventoryObjects.Count; i++)
                         inventoryObjects[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+
+                if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
+                    for (int i = 0; i < installedCybernetics.Count; i++)
+                        installedCybernetics[i].ApplyRegistrar(Active, Recursive, Depth + 1);
 
                 if (Object.GetContents() is List<GameObject> contentsObject)
                     for (int i = 0; i < contentsObject.Count; i++)
@@ -637,10 +724,6 @@ namespace UD_Bones_Folder.Mod
                     if (_effects[i] is Effect effect)
                         effect.ApplyRegistrar(Object, Active);
             }
-
-            if (Recursive)
-            {
-            }
         }
 
         public static bool IsMoonKing(this GameObject Object, string FromBonesID = null)
@@ -658,6 +741,10 @@ namespace UD_Bones_Folder.Mod
                 if (BonesObject.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
                     for (int i = 0; i < inventoryObjects.Count; i++)
                         inventoryObjects[i].FeverWarp(BonesID, Depth: Depth + 1);
+
+                if (BonesObject.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
+                    for (int i = 0; i < installedCybernetics.Count; i++)
+                        installedCybernetics[i].FeverWarp(BonesID, Depth: Depth + 1);
 
                 if (BonesObject.GetContents() is List<GameObject> contentsObject)
                     for (int i = 0; i < contentsObject.Count; i++)
@@ -841,8 +928,18 @@ namespace UD_Bones_Folder.Mod
                 || (Type.YieldInheritedTypes().ToList() is List<Type> inheritedTypes
                     && inheritedTypes.Contains(OtherType)));
 
+        public static bool TryFindLunarRegent(this Zone Z, string BonesID, out GameObject LunarRegent, out UD_Bones_LunarRegent LunarRegentPart)
+        {
+            LunarRegentPart = null;
+            UD_Bones_LunarRegent lunarRegentPart = null;
+            LunarRegent = Z.GetObjects(go => (lunarRegentPart = go.GetPart<UD_Bones_LunarRegent>())?.BonesID == BonesID).FirstOrDefault();
+            LunarRegentPart = lunarRegentPart;
+            return LunarRegent != null
+                && LunarRegentPart != null;
+        }
+
         public static bool TryFindLunarRegent(this Zone Z, string BonesID, out GameObject LunarRegent)
-            => (LunarRegent = Z.GetObjects(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID).FirstOrDefault()) != null
+            => Z.TryFindLunarRegent(BonesID, out LunarRegent, out _)
             ;
 
         public static bool TryEnsureObject(this GameObjectReference GameObjectReference, out GameObject Object)
@@ -1112,6 +1209,7 @@ namespace UD_Bones_Folder.Mod
             else
             {
                 SB.AppendPair(nameof(Report.BonesID), Report.BonesID)
+                    .AppendLine().AppendPair(nameof(Report.Blocked), Report.Blocked)
                     .AppendLine().AppendPair(nameof(Report.Type), Report.Type);
 
                 SB.AppendLine();
@@ -1193,6 +1291,10 @@ namespace UD_Bones_Folder.Mod
 
         public static string Timestamp(this DateTime Time)
             => Time.ToUniversalTime().ToString("u")
+            ;
+
+        public static List<Cell> GetEmptyReachableCellsNInFromEdge(this Zone Z, int N)
+            => Z.GetEmptyReachableCells(c => Utils.CellIsNInFromEdge(c, Z, N))
             ;
 
         public static List<Cell> GetEmptyCellsNInFromEdge(this Zone Z, int N)
@@ -1316,6 +1418,79 @@ namespace UD_Bones_Folder.Mod
         {
             while (Source.FirstOrDefault(t => Where?.Invoke(t) is not false) is T element)
                 Source.Remove(element);
+        }
+
+        public static bool GainAP(this GameObject Creatrue, int Amount)
+        {
+            if (Creatrue != null
+                && Creatrue.Statistics.TryGetValue("AP", out var aPStat))
+            {
+                aPStat.BaseValue += Amount;
+                Creatrue.FireEvent(Event.New("GainedAP", "Amount", Amount));
+                return true;
+            }
+            return false;
+        }
+
+        public static string ThisThese(this int Amount)
+            => Amount == 1
+            ? "this"
+            : "these"
+            ;
+
+        public static StringBuilder AppendThisThese(this StringBuilder SB, int Amount, bool Capitalize = false)
+            => SB.Append(Capitalize ? Amount.ThisThese().Capitalize() : Amount.ThisThese())
+            ;
+
+        public static StringBuilder AppendThings(this StringBuilder SB, int Amount, string Thing = "thing")
+        {
+            if (Amount != 1)
+                Thing = Thing.Pluralize();
+
+            return SB.Append(Thing);
+        }
+
+        public static StringBuilder AppendUnavailableMods(this StringBuilder SB, IEnumerable<string> UnavailableMods)
+        {
+            int unavailableCount = UnavailableMods.Count();
+            return UnavailableMods
+                .Select(ModManager.GetModTitle)
+                    .Aggregate(
+                        seed: SB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
+                            .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),
+                        func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
+                    .AppendLine().AppendColored("w", "You won't be able to enable these mods as they are missing outright.")
+                    ;
+        }
+
+        public static int Fibonacci(this int N)
+            => (N > 1)
+            ? Fibonacci(N - 1) + Fibonacci(N - 2)
+            : N
+            ;
+
+        public static string GetBonesWorldZoneID(this Zone Z)
+            => ZoneID.Assemble(Const.BONES_WORLD, Z.wX, Z.wY, Z.X, Z.Y, Z.Z)
+            ;
+
+        public static string GetJoppaWorldZoneID(this Zone Z)
+            => ZoneID.Assemble("JoppaWorld", Z.wX, Z.wY, Z.X, Z.Y, Z.Z)
+            ;
+
+        public static void SendJoppaZoneToBonesWorld(this Zone Z)
+            => Z.ZoneID = Z.GetBonesWorldZoneID()
+            ;
+
+        public static void SendBonesZoneToJoppaWorld(this Zone Z)
+            => Z.ZoneID = Z.GetJoppaWorldZoneID()
+            ;
+
+        public static void ToggleBonesWorld(this Zone Z)
+        {
+            if (Z.ZoneWorld != Const.BONES_WORLD)
+                Z.SendJoppaZoneToBonesWorld();
+            else
+                Z.SendBonesZoneToJoppaWorld();
         }
     }
 }

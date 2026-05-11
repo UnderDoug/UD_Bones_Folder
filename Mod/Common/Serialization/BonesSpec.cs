@@ -280,10 +280,10 @@ namespace UD_Bones_Folder.Mod
             if (SameAs(PlayerSpec))
                 return true;
 
-            if ((Level / (double)PlayerSpec.Level) < 0.9)
+            if ((Level / (double)Math.Max(1.0, PlayerSpec.Level)) < 0.85)
                 return false;
 
-            if ((PlayerSpec.Level / (double)Level) < 0.9)
+            if ((PlayerSpec.Level / (double)Math.Max(1.0, Level)) < 0.85)
                 return false;
 
             if (!ZoneStrataWithinThreshold(ZoneZ, PlayerSpec.ZoneZ))
@@ -298,7 +298,9 @@ namespace UD_Bones_Folder.Mod
             if (RegionTier != PlayerSpec.RegionTier)
                 return false;
 
-            if (TerrainTravelClass != PlayerSpec.TerrainTravelClass)
+            if (!TerrainTravelClass.IsNullOrEmpty()
+                && !PlayerSpec.TerrainTravelClass.IsNullOrEmpty()
+                && TerrainTravelClass != PlayerSpec.TerrainTravelClass)
                 return false;
 
             return true;

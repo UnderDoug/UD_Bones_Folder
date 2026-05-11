@@ -25,7 +25,7 @@ using XRL.World.Parts.Mutation;
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
-    public class BonesData : IComposite
+    public class BonesData : IComposite, IDisposable
     {
         public static BonesManager BonesManager => BonesManager.System;
         public string BonesID;
@@ -63,7 +63,9 @@ namespace UD_Bones_Folder.Mod
             if (BonesZone == null)
                 return false;
 
-            BonesZone.ZoneID = XRL.World.ZoneID.Assemble("BonesWorld", BonesZone.wX, BonesZone.wY, BonesZone.X, BonesZone.Y, BonesZone.Z);
+            Utils.Log($"{nameof(BonesData)}.{nameof(Apply)}({nameof(BonesZone)}: {BonesZone?.ZoneID ?? "null"}, {nameof(Zone)}: {Zone?.ZoneID ?? "null"})");
+            Utils.Log($"{1.Indent()}{nameof(BonesZone)} Name: {BonesZone?.DisplayName ?? "MISSING_ZONE"}");
+            Utils.Log($"{1.Indent()}{nameof(Zone)} Name: {Zone?.DisplayName ?? "MISSING_ZONE"}");
 
             foreach (var zonePart in BonesZone.Parts ?? Enumerable.Empty<IZonePart>())
                 Zone.AddPart(zonePart, true);
@@ -103,11 +105,21 @@ namespace UD_Bones_Folder.Mod
                             // Anything you want to do to objects, do it AFTER here
                             // ####################################################
 
-                            bonesObject.AddPart(new UD_Bones_ReportBones
-                            {
-                                LoadedBonesID = BonesID,
-                                SerializedBaseID = crossGameObject.Original.BaseID,
-                            });
+                            int serializedBaseID = 0;
+                            bonesObject.PerformActionRecursively(
+                                Action: delegate (GameObject go)
+                                {
+                                    if (serializedBaseID == 0)
+                                        serializedBaseID = crossGameObject.Original.BaseID;
+                                    else
+                                        serializedBaseID = go.BaseID;
+
+                                    go.AddPart(new UD_Bones_ReportBones
+                                    {
+                                        LoadedBonesID = BonesID,
+                                        SerializedBaseID = serializedBaseID,
+                                    });
+                                });
 
                             if (ShallowRelationship.TryGetFrom(crossGameObject.Original, out var shallowRelationship))
                                 shallowRelationships.Add(shallowRelationship);
@@ -325,5 +337,15 @@ namespace UD_Bones_Folder.Mod
         public void Cremate()
             => BonesManager?.CremateMoonKing(BonesID)
             ;
+
+        public void Dispose()
+        {
+            BonesID = null;
+            ZoneID = null;
+            BonesZone?.Release();
+            BonesZone = null;
+            OsseousAshID = default;
+            OsseousAshHandle = null;
+        }
     }
 }

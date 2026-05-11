@@ -141,7 +141,7 @@
         DisplayText="{{Y|[}}Manage {{black|Osseous Ash}} handle{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.Options.ManageOsseousAshHandle"
+        OnClick="UD_Bones_Folder.Mod.Options.ManageOsseousAshHandleAsync"
         Default="{{K|A Mysterious Stranger}}">
     <helptext>
       This is the name that will be associated with your bones files when uploaded to the the {{black|Osseous Ash}}.
@@ -154,7 +154,7 @@
         DisplayText="{{Y|[}}Manage {{black|Osseous Ash}} ID{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.Options.ManageOsseousAshID">
+        OnClick="UD_Bones_Folder.Mod.Options.ManageOsseousAshIDAsync">
     <helptext>
       Use this menu to manage your {{black|Osseous Ash}} ID. You can request a new one (this will disassociate you with the bones you've uplaoded), or copy your current one to your clipboard.
 

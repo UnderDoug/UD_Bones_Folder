@@ -84,45 +84,68 @@ namespace UD_Bones_Folder.Mod
 
             foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom("PhysicalObject"))
             {
-                if (!blueprint.GetRenderable().Tile.IsTile())
+                string catchFlag = "0 - Top";
+                try
+                {
+                    catchFlag = "1 - Checking Texture";
+                    if (!blueprint.GetRenderable().Tile.IsTile())
+                        continue;
+
+                    catchFlag = "2 - Check Excluded";
+                    if (blueprint.IsExcludedFromDynamicEncounters())
+                        continue;
+
+                    catchFlag = "3 - Physics Category";
+                    if (blueprint.TryGetPartParameter(nameof(Physics), nameof(Physics.Category), out string physicsCategory))
+                        CacheValue(ref BlueprintsByCategory, physicsCategory, blueprint.Name);
+
+                    catchFlag = "4 - Tier";
+                    CacheValue(ref BlueprintsByTier, blueprint.Tier, blueprint.Name);
+
+                    catchFlag = "5 - TechTier";
+                    CacheValue(ref BlueprintsByTier, blueprint.TechTier, blueprint.Name);
+
+                    catchFlag = "6 - MeleeWeapon.Skill";
+                    if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
+                        CacheValue(ref BlueprintsByWeaponSkill, meleeWeaponSkill, blueprint.Name);
+
+                    catchFlag = "7 - MeleeWeapon.Slot";
+                    if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
+                        CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
+
+                    catchFlag = "8 - MissileWeapon.Skill";
+                    if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.Skill), out string missileWeaponSkill))
+                        CacheValue(ref BlueprintsByWeaponSkill, missileWeaponSkill, blueprint.Name);
+
+                    catchFlag = "9 - MissileWeapon.SlotType";
+                    if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.SlotType), out string missileWeaponSlot))
+                        CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
+
+                    catchFlag = "10 - Armor.WornOn";
+                    if (blueprint.TryGetPartParameter(nameof(Armor), nameof(Armor.WornOn), out string armorSlot))
+                        CacheValue(ref BlueprintsByEquipmentSlot, armorSlot, blueprint.Name);
+
+                    catchFlag = "11 - Species";
+                    if (blueprint.TryGetStringPropertyOrTag("Species", out string speciesTag))
+                        CacheValue(ref BlueprintsBySpecies, speciesTag, blueprint.Name);
+
+                    catchFlag = "12 - Class";
+                    if (blueprint.TryGetStringPropertyOrTag("Class", out string classTag))
+                        CacheValue(ref BlueprintsByClass, classTag, blueprint.Name);
+
+                    catchFlag = "13 - PaintedWall";
+                    if (blueprint.TryGetStringPropertyOrTag("PaintedWall", out string paintedWallTag))
+                        CacheValue(ref BlueprintsByPaintedWall, paintedWallTag, blueprint.Name);
+
+                    catchFlag = "14 - PaintedFence";
+                    if (blueprint.TryGetStringPropertyOrTag("PaintedFence", out string paintedFenceTag))
+                        CacheValue(ref BlueprintsByPaintedFence, paintedFenceTag, blueprint.Name);
+                }
+                catch (Exception x)
+                {
+                    Error($"Failed to cache blueprint specs for {blueprint?.Name ?? "MISSING_BLUEPRINT"} at {nameof(catchFlag)} {catchFlag}", x);
                     continue;
-
-                if (blueprint.IsExcludedFromDynamicEncounters())
-                    continue;
-
-                if (blueprint.TryGetPartParameter(nameof(Physics), nameof(Physics.Category), out string physicsCategory))
-                    CacheValue(ref BlueprintsByCategory, physicsCategory, blueprint.Name);
-                
-                CacheValue(ref BlueprintsByTier, blueprint.Tier, blueprint.Name);
-
-                CacheValue(ref BlueprintsByTier, blueprint.TechTier, blueprint.Name);
-
-                if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
-                    CacheValue(ref BlueprintsByWeaponSkill, meleeWeaponSkill, blueprint.Name);
-
-                if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
-                    CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
-
-                if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.Skill), out string missileWeaponSkill))
-                    CacheValue(ref BlueprintsByWeaponSkill, missileWeaponSkill, blueprint.Name);
-
-                if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.SlotType), out string missileWeaponSlot))
-                    CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
-
-                if (blueprint.TryGetPartParameter(nameof(Armor), nameof(Armor.WornOn), out string armorSlot))
-                    CacheValue(ref BlueprintsByEquipmentSlot, armorSlot, blueprint.Name);
-
-                if (blueprint.TryGetStringPropertyOrTag("Species", out string speciesTag))
-                    CacheValue(ref BlueprintsBySpecies, speciesTag, blueprint.Name);
-
-                if (blueprint.TryGetStringPropertyOrTag("Class", out string classTag))
-                    CacheValue(ref BlueprintsByClass, classTag, blueprint.Name);
-
-                if (blueprint.TryGetStringPropertyOrTag("PaintedWall", out string paintedWallTag))
-                    CacheValue(ref BlueprintsByPaintedWall, paintedWallTag, blueprint.Name);
-
-                if (blueprint.TryGetStringPropertyOrTag("PaintedFence", out string paintedFenceTag))
-                    CacheValue(ref BlueprintsByPaintedFence, paintedFenceTag, blueprint.Name);
+                }
             }
         }
 
@@ -521,11 +544,23 @@ namespace UD_Bones_Folder.Mod
 
         private static void CacheValue<T>(ref Dictionary<T, HashSet<string>> Cache, T Key, string Value)
         {
-            if (!Cache.ContainsKey(Key))
-                Cache[Key] = new();
-            Cache[Key].Add(Value);
+            try
+            {
+                Cache ??= new();
+                if (Key is not null)
+                {
+                    if (!Cache.ContainsKey(Key))
+                        Cache[Key] = new();
+                    Cache[Key].Add(Value);
 
-            CachedBlueprints.Add(Value);
+                    CachedBlueprints ??= new();
+                    CachedBlueprints.Add(Value);
+                }
+            }
+            catch (Exception x)
+            {
+                Warn($"Failed to cache [{Key?.ToString() ?? "MISSING_KEY"}: {Value}]: {x}");
+            }
         }
 
         public static void Error(object Message)
@@ -769,14 +804,27 @@ namespace UD_Bones_Folder.Mod
 
         public static bool CellIsNInFromEdge(Cell Cell, Zone Zone, int N)
         {
-            if (!Cell.X.IsTwixt(N, Zone.Width - N))
+            if (!Cell.X.IsTwixt(N, Zone.Width - 1 - N))
                 return false;
 
-            if (!Cell.Y.IsTwixt(N, Zone.Height - N))
+            if (!Cell.Y.IsTwixt(N, Zone.Height - 1 - N))
                 return false;
 
             return true;
         }
 
-}
+        public static bool IsEdgeCell(Cell Cell, Zone Zone)
+            => Cell.X == 0
+            || Cell.X == Zone.Width - 1
+            || Cell.Y == 0
+            || Cell.Y == Zone.Height - 1
+            ;
+
+        public static bool IsCornerCell(Cell Cell, Zone Zone)
+            => (Cell.X == 0
+                || Cell.X == Zone.Width - 1)
+            && (Cell.Y == 0
+                || Cell.Y == Zone.Height - 1)
+            ;
+    }
 }

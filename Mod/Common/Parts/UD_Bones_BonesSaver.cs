@@ -7,6 +7,7 @@ using Qud.API;
 
 using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
+using UD_Bones_Folder.Mod.UI;
 
 using XRL.Collections;
 using XRL.Rules;
@@ -68,7 +69,16 @@ namespace XRL.World.Parts
             if (!Player.CanBeReplicated(Player, BonesName, Temporary: false))
                 return null;
 
-            var lunarRegent = Player.DeepCopy();
+            GameObject lunarRegent = null;
+            try
+            {
+                lunarRegent = Player.DeepCopy();
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
+                return null;
+            }
 
             using var lunarRegentInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(
                 items: lunarRegent.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
@@ -201,11 +211,15 @@ namespace XRL.World.Parts
                     && !currentZone.IsWorldMap()
                     && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
                 {
-                    var moonKing = AscendLunarRegent(ParentObject, ParentObject.CurrentCell);
+                    if (AscendLunarRegent(ParentObject, ParentObject.CurrentCell) is not GameObject lunarRegent)
+                    {
+                        Utils.Warn($"Failed to ascend player to the Lunar Throne, unable to save bones.");
+                        return false;
+                    }
                     bool success = true;
                     try
                     {
-                        BonesManager.HoardBones(BonesName, E, moonKing)?.Wait();
+                        BonesManager.HoardBones(BonesName, E, lunarRegent)?.Wait();
                     }
                     catch (Exception x)
                     {
@@ -326,14 +340,19 @@ namespace XRL.World.Parts
                 GameObject weapon = null;
                 try
                 {
-                    killer = ZoneManager.instance.CachedObjects?.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
+                    string killerSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(killer));
+                    if (BonesModeModule.SeededOddsIn10000(killerSeed, 8000))
+                        killer = The.Player.CurrentZone.GetObjects(go => go.IsCombatObject()).GetRandomElement(BonesModeModule.SeededGenerator(killerSeed));
+
+                    killer ??= ZoneManager.instance.CachedObjects?.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
                         ?? The.Player;
 
                     var weapons = Event.NewGameObjectList();
                     killer?.Body?.ForeachDefaultBehavior(go => weapons.Add(go));
                     killer?.Body?.ForeachEquippedObject(go => { if (go.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is false) weapons.Add(go); });
 
-                    weapon = weapons.GetRandomElementCosmetic();
+                    string weaponSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(weapon));
+                    weapon = weapons.GetRandomElement(BonesModeModule.SeededGenerator(weaponSeed));
 
                     if (weapon != null)
                     {
@@ -357,10 +376,13 @@ namespace XRL.World.Parts
                     The.Core.IDKFA = false;
                 }
 
-                string extraDamageType = The.Player.GetNotResistedDamageTypes().GetRandomElementCosmetic();
+                string extraDamageSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(UD_Bones_Folder.Mod.Extensions.GetNotResistedDamageTypes));
+                string extraDamageType = The.Player.GetNotResistedDamageTypes().GetRandomElement(BonesModeModule.SeededGenerator(extraDamageSeed));
                 if (!extraDamageType.IsNullOrEmpty())
                     extraDamageType = $" {extraDamageType}";
 
+                string accidentalSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(accidentalSeed));
+                bool isAccidental = BonesModeModule.SeededOddsIn10000(accidentalSeed, 2500);
                 if (!willDie
                     || !The.Player.TakeDamage(
                         Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(135, 225) / 100f)),
@@ -369,14 +391,13 @@ namespace XRL.World.Parts
                         Owner: killer,
                         Attacker: killer,
                         Source: projectile ?? weapon,
-                        Accidental: 2500.in10000())
-                    || !The.Player.IsDying)
+                        Accidental: isAccidental))
                     AfterDieEvent.Send(
                         Dying: The.Player,
                         Killer: killer,
                         Weapon: weapon,
                         Projectile: projectile,
-                        Accidental: 2500.in10000(),
+                        Accidental: isAccidental,
                         Reason: The.Player.Physics?.LastDeathReason,
                         ThirdPersonReason: The.Player.Physics?.LastThirdPersonDeathReason);
 
@@ -385,20 +406,6 @@ namespace XRL.World.Parts
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo, b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced))
                 {
-                    if (!willDie)
-                    {
-                        /*if (currentZone.TryFindLunarRegent(saveBonesInfo.ID, out GameObject lunarRegent))
-                        {
-                            foreach (var zoneGO in currentZone.GetObjects())
-                            {
-                                if (zoneGO.Brain is Brain brain
-                                    && brain.PartyLeader == lunarRegent)
-                                    brain.SetPartyLeader(The.Player, Silent: true);
-                            }
-                        }*/
-                        TidyLunarObjectsEvent.SendGameID(Context: "Wish");
-                    }
-
                     Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
                     return true;
                 }
@@ -409,6 +416,25 @@ namespace XRL.World.Parts
             }
             finally
             {
+                try
+                {
+                    if (!willDie
+                        || The.Player.IsAlive
+                        || !The.Player.IsDying)
+                    {
+                        if (currentZone.TryFindLunarRegent(The.Game?.GameID, out GameObject lunarRegent, out UD_Bones_LunarRegent lunarRegentPart))
+                            lunarRegentPart.Persists = false;
+
+                        TidyLunarObjectsEvent.SendGameID(Context: "Wish");
+
+                        if (lunarRegent != null)
+                            lunarRegent?.Obliterate();
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Error(nameof(TidyLunarObjectsEvent), x);
+                }
                 projectile?.Obliterate();
                 WishContext = false;
             }

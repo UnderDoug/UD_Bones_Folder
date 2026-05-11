@@ -36,6 +36,7 @@ namespace UD_Bones_Folder.Mod.UI
         {
             { BonesManagement.CMD_DELETE, Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
             { BonesManagement.CMD_OPTION, Event.Helpers.Handle(BonesManagement.instance.HandleModsButton) },
+            { BonesManagement.CMD_HELP, Event.Helpers.Handle(BonesManagement.instance.HandleDownloadButton) },
         };
 
         public ImageTinyFrame ImageTinyFrame;

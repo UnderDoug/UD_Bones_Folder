@@ -42,6 +42,16 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        public static List<QudMenuItem> _ConfirmButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{y|Confirm}}",
+                command = "option:-4",
+                hotkey = "Accept"
+            },
+        };
+
         public static List<QudMenuItem> BackButton
         {
             get
@@ -80,12 +90,32 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        public static List<QudMenuItem> ConfirmButton
+        {
+            get
+            {
+                if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Gamepad)
+                    return _ConfirmButton;
+
+                return new List<QudMenuItem>
+                {
+                    new QudMenuItem
+                    {
+                        text = ControlManager.getCommandInputDescription("Accept", XRL.UI.Options.ModernUI) + " {{W|Confirm}}",
+                        command = "option:-4",
+                        hotkey = "Accept"
+                    },
+                };
+            }
+        }
+
         public static async Task<TResult> PerformPickOptionAsync<T, TResult>(
             PickOptionDataSet<T, Task<TResult>> OptionDataSet,
             string Title = "",
             string Intro = null,
             IRenderable IntroIcon = null,
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
+            bool NoBackButton = false,
             int DefaultSelected = 0,
             bool RespectOptionNewlines = false,
             Func<Task<TResult>> OnBackCallback = null,
@@ -105,7 +135,8 @@ namespace UD_Bones_Folder.Mod.UI
             if (!AdditionalButtons.IsNullOrEmpty())
                 buttons.AddRange(AdditionalButtons);
 
-            buttons.AddRange(BackButton);
+            if (!NoBackButton)
+                buttons.AddRange(BackButton);
 
             int choice = DefaultSelected;
             PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[DefaultSelected];
@@ -130,27 +161,15 @@ namespace UD_Bones_Folder.Mod.UI
                         DefaultSelected: DefaultSelected,
                         RespectOptionNewlines: RespectOptionNewlines,
                         AllowEscape: true,
-                        OnResult: delegate (int choice)
-                        {
-                            /*Utils.Log($"{nameof(choice)} is {choice}");
-                            if (choice >= 0)
-                                Utils.Log($"{1.Indent()}: {OptionDataSet[choice].Text ?? "NO_CHOICE_TEXT"}");
-                            else
-                            {
-                                if (choice == -1)
-                                    Utils.Log($"{1.Indent()}: back");
-                                else
-                                    Utils.Log($"{1.Indent()}: cancel");
-                            }*/
-                            taskCompletionSource.TrySetResult(choice);
-                        });
+                        OnResult: choice => taskCompletionSource.TrySetResult(choice));
 
                     choice = await taskCompletionSource.Task;
 
                     if (choice < 0)
                     {
                         chosenOption = null;
-                        optionCallBack = ButtonCallbacks?.GetValueOrDefault(choice)?.Invoke();
+                        optionCallBack = ButtonCallbacks?.GetValueOrDefault(choice)?.Invoke()
+                            ?? ButtonCallbacks.GetValue(-2).Invoke();
                     }
                     else
                     {
@@ -165,6 +184,76 @@ namespace UD_Bones_Folder.Mod.UI
 
                     return result;
                 });
+            }
+            catch (Exception x)
+            {
+                Utils.Error(Utils.CallChain(nameof(NavigationController), nameof(NavigationController.SuspendContextWhile)), x);
+            }
+            return result;
+        }
+
+        public static TResult PerformPickOption<T, TResult>(
+            PickOptionDataSet<T, TResult> OptionDataSet,
+            string Title = "",
+            string Intro = null,
+            IRenderable IntroIcon = null,
+            IReadOnlyList<QudMenuItem> AdditionalButtons = null,
+            bool NoBackButton = false,
+            int DefaultSelected = 0,
+            bool RespectOptionNewlines = false,
+            Func<TResult> OnBackCallback = null,
+            Func<TResult> OnEscapeCallback = null,
+            Dictionary<int, Func<TResult>> ButtonCallbacks = null,
+            Func<PickOptionData<T, TResult>, TResult, TResult> FinalSelectedCallback = null
+            )
+        {
+            DefaultSelected = Math.Clamp(DefaultSelected, 0, OptionDataSet.Count - 1);
+            ButtonCallbacks ??= new();
+
+            ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => (TResult)default));
+            ButtonCallbacks.Add(-2, OnBackCallback ?? (() => (TResult)default));
+
+            var buttons = new List<QudMenuItem>();
+
+            if (!AdditionalButtons.IsNullOrEmpty())
+                buttons.AddRange(AdditionalButtons);
+
+            if (!NoBackButton)
+                buttons.AddRange(BackButton);
+
+            int choice = DefaultSelected;
+            PickOptionData<T, TResult> chosenOption = OptionDataSet[DefaultSelected];
+            TResult result = default;
+            
+            try
+            {
+                choice = Popup.PickOption(
+                    Title: Title,
+                    Intro: Intro,
+                    Options: OptionDataSet.GetOptions(),
+                    Hotkeys: OptionDataSet.GetHotkeys(),
+                    Icons: OptionDataSet.GetIcons(),
+                    IntroIcon: IntroIcon,
+                    Buttons: buttons,
+                    DefaultSelected: DefaultSelected,
+                    RespectOptionNewlines: RespectOptionNewlines,
+                    AllowEscape: true);
+
+                if (choice < 0)
+                {
+                    chosenOption = null;
+                    result = ButtonCallbacks.GetValueOrDefault(choice).Invoke();
+                }
+                else
+                {
+                    chosenOption = OptionDataSet[choice];
+                    result = chosenOption.Invoke();
+                }
+
+                if (FinalSelectedCallback != null)
+                    result = FinalSelectedCallback(chosenOption, result);
+
+                return result;
             }
             catch (Exception x)
             {
@@ -262,23 +351,37 @@ namespace UD_Bones_Folder.Mod.UI
         {
             var result = await Result.AwaitResultIfNotIsCompletedSuccessfully();
 
-            if (result == CascadableResult.BackSilent
-                || result == CascadableResult.CancelSilent)
+            if (result.IsSilent())
                 return result;
 
             return await ShowEscancellepedAsync(
                 Option: Option,
                 Result: Result,
-                CancelledWhen: r => r.IsTwixtInclusive(CascadableResult.Back, CascadableResult.BackSilent),
-                EscapedWhen: r => r.IsTwixtInclusive(CascadableResult.Cancel, CascadableResult.CancelSilent),
+                CancelledWhen: r => r.IsBack(),
+                EscapedWhen: r => r.IsCancel(),
                 PostProc: async delegate (T o, Task<CascadableResult> r)
                 {
                     var result = await r.AwaitResultIfNotIsCompletedSuccessfully();
-                    if (result == CascadableResult.Back
-                        || result == CascadableResult.Cancel)
+                    if (!result.IsContinue() && !result.IsSilent())
                         return ++result;
                     return result;
                 });
+        }
+
+        public static CascadableResult ShowEscancelleped<T>(
+            PickOptionData<T, CascadableResult> Option,
+            CascadableResult Result
+            )
+        {
+            if (Result.IsSilent())
+                return Result;
+
+            return ShowEscancelleped(
+                Option: Option,
+                Result: Result,
+                CancelledWhen: r => r.IsBack(),
+                EscapedWhen: r => r.IsCancel(),
+                PostProc: (o, r) => !r.IsContinue() && !r.IsSilent() ? ++r : r);
         }
     }
 }

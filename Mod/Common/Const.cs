@@ -23,6 +23,8 @@ namespace UD_Bones_Folder.Mod
         public const string OSSEOUS_ASH = "{{black|Osseous Ash}}";
         public const string OSSEOUS_ASH_CHECK = "Wot u doin' peeping in here?";
 
+        public const string BONES_WORLD = "BonesWorld";
+
         public const string CONTENT_TYPE_JSON = "application/json";
 
         public const string MAD_LUNAR_REGENT_TILE = "Creatures/mad_lunar_regent_human.png";

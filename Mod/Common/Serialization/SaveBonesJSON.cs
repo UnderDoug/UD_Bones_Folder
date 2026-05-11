@@ -52,6 +52,9 @@ namespace UD_Bones_Folder.Mod
         }
 
         [JsonIgnore]
+        public long Size;
+
+        [JsonIgnore]
         private bool CharIconSwapped;
         [JsonIgnore]
         private string OriginalCharIcon;
@@ -127,8 +130,8 @@ namespace UD_Bones_Folder.Mod
 
                 DeathReason = SaveBonesJSON.DeathReason,
 
-                GenotypeName = SaveBonesJSON.GenotypeName,
-                SubtypeName = SaveBonesJSON.SubtypeName,
+                GenotypeName = SaveBonesJSON.GenotypeName ?? "Human",
+                SubtypeName = SaveBonesJSON.SubtypeName ?? "Adventurer",
 
                 BonesSpec = bonesSpec,
             };

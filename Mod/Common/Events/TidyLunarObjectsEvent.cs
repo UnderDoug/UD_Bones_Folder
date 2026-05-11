@@ -42,7 +42,7 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null
             )
         {
-            if (FromPool() is not TidyLunarObjectsEvent E)
+            if (ModPooledEvent<TidyLunarObjectsEvent>.FromPool() is not TidyLunarObjectsEvent E)
                 return null;
 
             E.BonesID = BonesID;

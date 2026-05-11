@@ -106,6 +106,8 @@ namespace UD_Bones_Folder.Mod
 
             public string BonesID;
 
+            public bool Blocked;
+
             [JsonConverter(typeof(StringEnumConverter))]
             public ReportTypes Type;
 
@@ -127,7 +129,9 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public Report()
-            { }
+            {
+                Blocked = true;
+            }
 
             public Report(
                 Guid OsseousAshID,
@@ -150,6 +154,7 @@ namespace UD_Bones_Folder.Mod
             {
                 ID = 0;
                 BonesID = null;
+                Blocked = true;
                 Type = ReportTypes.None;
                 ObjectDetails = null;
                 Description = null;

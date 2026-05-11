@@ -32,11 +32,11 @@ namespace XRL.World.Parts
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
-            || ID == GetInventoryActionsAlwaysEvent.ID
+            || ID == GetInventoryActionsEvent.ID
             || ID == InventoryActionEvent.ID
             ;
 
-        public override bool HandleEvent(GetInventoryActionsAlwaysEvent E)
+        public override bool HandleEvent(GetInventoryActionsEvent E)
         {
             E.Actions[ReportBonesInventoryAction.Name] = ReportBonesInventoryAction;
             return base.HandleEvent(E);
@@ -48,11 +48,12 @@ namespace XRL.World.Parts
             {
                 if (TryReportBones(LoadedBonesID, ParentObject).WaitResult())
                 {
-                    if (Config != null)
+                    /*if (Config != null)
                     {
                         Config.BlockedBonesIDs ??= new();
                         Config.BlockedBonesIDs.Add(LoadedBonesID);
-                    }
+                        Config.Write();
+                    }*/
                     E.RequestInterfaceExit();
                     return true;
                 }

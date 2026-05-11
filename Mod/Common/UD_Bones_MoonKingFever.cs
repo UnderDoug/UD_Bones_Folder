@@ -26,6 +26,9 @@ namespace XRL.World.Effects
 
         private bool AlreadyPreacher;
 
+        public int PreachTurnThreshold = 15;
+        public long TurnLastPreached;
+
         public string RegalTitle => UD_Bones_LunarRegent.GetRegalTitle(Object);
 
         private string TileColor = "r";
@@ -71,6 +74,10 @@ namespace XRL.World.Effects
 
         public string GetDisplayName(string TileColor = "r")
             => $"{UD_Bones_LunarColors.ApplyAnimatedLunarShader(RegalTitle ?? REGAL_TITLE, TileColor)} {"fever".Colored("r")}"
+            ;
+
+        public override string GetDetails()
+            => "\"A burning fever and accompanying fever dreams of the moon followed by hyper-emotive facial expressions, delusions of grandeur, and a disregard for self-preservation.\""
             ;
 
         private void ApplyChanges()
@@ -133,8 +140,12 @@ namespace XRL.World.Effects
                 );
 
             if (!AlreadyPreacher
-                && Object.TryGetPart(out Preacher preacher))
+                && Object.TryGetPart(out Preacher preacher)
+                && The.CurrentTurn - TurnLastPreached > PreachTurnThreshold)
+            {
+                TurnLastPreached = The.CurrentTurn;
                 preacher.PreacherHomily(Dialog: false);
+            }
 
             AIHelpBroadcastEvent.Send(Object, Usurper);
             return true;

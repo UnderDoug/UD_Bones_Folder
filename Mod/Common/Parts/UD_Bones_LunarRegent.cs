@@ -120,7 +120,7 @@ namespace XRL.World.Parts
                 }
 
                 if (BonesManager.System is BonesManager system
-                    && system.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => bonesInfo.FileLocationData == LocationData))
+                    && system.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => bonesInfo.FileLocationData?.SameAs(LocationData) is true))
                     return saveBonesInfo;
             }
 
@@ -256,7 +256,21 @@ namespace XRL.World.Parts
             if (ParentObject.CurrentCell is Cell currentCell
                 // && currentCell.GetObjectCountWithPart(nameof(Gas)) > 0
                 )
-                StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: 4, Distance: 1, Stun: false, Damage: false);
+            {
+                int forceLevel = 4;
+                if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
+                {
+                    if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
+                    {
+                        currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
+                        /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                        forceLevel = 25;*/
+                    }
+                }
+                Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                forceLevel = 25;
+                StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
+            }
 
             return base.HandleEvent(E);
         }

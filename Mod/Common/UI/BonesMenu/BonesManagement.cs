@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Newtonsoft.Json;
+
+using Platform.IO;
+
 using Qud.UI;
 
 using UnityEngine;
@@ -17,6 +21,7 @@ using XRL.CharacterBuilds.UI;
 using XRL.Collections;
 using XRL.UI;
 using XRL.UI.Framework;
+using XRL.World.Parts;
 
 using Event = XRL.UI.Framework.Event;
 
@@ -49,6 +54,8 @@ namespace UD_Bones_Folder.Mod.UI
         public const string CMD_INSERT = "CmdInsert";
         public const string CMD_OPTION = "CmdOptions";
 
+        public const string CMD_HELP = "CmdHelp"; // just for testing.
+
         public static MenuOption BACK_BUTTON => EmbarkBuilderOverlayWindow.BackMenuOption;
 
         private static Transform MenuBarParentTransfrom;
@@ -75,6 +82,11 @@ namespace UD_Bones_Folder.Mod.UI
                 InputCommand = CMD_ACCEPT,
                 Description = "select"
             },
+            /*new MenuOption
+            {
+                InputCommand = CMD_HELP,
+                Description = "download"
+            },*/
             new MenuOption
             {
                 InputCommand = CMD_OPTION,
@@ -130,7 +142,7 @@ namespace UD_Bones_Folder.Mod.UI
         protected bool MoveAllBonesMenuBar;
         protected bool MoveLegendBar;
 
-        public Dictionary<SaveManagementRow, FrameworkContext> SelectionChoiceModsButtons = new();
+        public Dictionary<SaveManagementRow, GameObject> SelectionChoiceLocationBox = new();
 
         protected static void InitializeWithUIManager()
         {
@@ -489,6 +501,7 @@ namespace UD_Bones_Folder.Mod.UI
             MainNavContext.commandHandlers ??= new();
             MainNavContext.commandHandlers.Set(CMD_INSERT, Event.Helpers.Handle(HandleDeleteAll));
             MainNavContext.commandHandlers.Set(CMD_OPTION, Event.Helpers.Handle(HandleModsButton));
+            //MainNavContext.commandHandlers.Set(CMD_HELP, Event.Helpers.Handle(HandleDownloadButton));
 
             BackButton.gameObject.SetActive(value: true);
             if (BackButton.navigationContext == null)
@@ -509,7 +522,6 @@ namespace UD_Bones_Folder.Mod.UI
                     saveRow.setBonesData(bonesDataI);
                     saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
-                    SelectionChoiceModsButtons[saveRow].context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
                 }
             }
 
@@ -628,7 +640,6 @@ namespace UD_Bones_Folder.Mod.UI
                 saveRow.setBonesData(bonesData);
                 saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                 saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
-                SelectionChoiceModsButtons[saveRow].context.buttonHandlers = BonesManagementRow.ModsButtonHandler;
 
                 saveRow.Update();
             }
@@ -746,6 +757,76 @@ namespace UD_Bones_Folder.Mod.UI
                 if (CheckInit())
                     instance?.HandleDeleteAll();
             });
+
+        public void HandleDownloadButton()
+        {
+            if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
+                return;
+
+            if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
+                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo
+                || bonesInfo.FileLocationData.Type != FileLocationData.LocationType.Online)
+                return;
+
+            try
+            {
+                string catchFlag = "top";
+                Utils.Log(catchFlag);
+                bool restoreBackup = false;
+                string jsonFileName = BonesManager.GetInfoFilePath(UD_Bones_BonesSaver.BonesName);
+                string saveFileName = BonesManager.GetSaveFilePath(UD_Bones_BonesSaver.BonesName);
+                string jsonFilePath = BonesManager.BonesSaveSyncInfo.WithFileName(Path.Combine(bonesInfo.ID, jsonFileName));
+                string saveFilePath = BonesManager.BonesSaveSyncInfo.WithFileName(Path.Combine(bonesInfo.ID, saveFileName));
+                try
+                {
+                    catchFlag = "try";
+                    Utils.Log(catchFlag);
+                    if (bonesInfo.GetSavGzBytes() is byte[] savGz
+                        && bonesInfo.GetBonesJSON() is SaveBonesJSON saveBonesJSON)
+                    {
+                        catchFlag = "saveBonesJSONLocationType";
+                        Utils.Log(catchFlag);
+                        var saveBonesJSONLocationType = saveBonesJSON.FileLocationType;
+                        saveBonesJSON.FileLocationType = BonesManager.BonesSaveSyncInfo.Type;
+
+                        catchFlag = "File.WriteAllText";
+                        Utils.Log(catchFlag);
+                        File.WriteAllText(jsonFilePath, JsonConvert.SerializeObject(saveBonesJSON, Formatting.Indented));
+                        saveBonesJSON.FileLocationType = saveBonesJSONLocationType;
+
+                        if (File.Exists(saveFilePath))
+                        {
+                            catchFlag = "File.Copy";
+                            Utils.Log(catchFlag);
+                            File.Copy(saveFilePath, $"{saveFilePath}.bak", overwrite: true);
+                            restoreBackup = true;
+                        }
+                        catchFlag = "File.WriteAllBytes";
+                        Utils.Log(catchFlag);
+                        File.WriteAllBytes(saveFilePath, savGz);
+
+                        MemoryHelper.GCCollect();
+
+                        catchFlag = "The.Game.CheckSave";
+                        Utils.Log(catchFlag);
+                        The.Game.CheckSave(saveFilePath);
+
+                        Utils.Log("Popup.Show");
+                        Popup.Show($"Downloaded {bonesInfo.Name.StartReplace()} to {BonesManager.BonesSaveSyncInfo.SanitiseForDisplay(bonesInfo.ID)}");
+                        Show();
+                    }
+                }
+                catch (Exception x)
+                {
+                    BonesManager.BonesHoardError(saveFilePath, x, restoreBackup);
+                    Utils.Error($"{nameof(HandleDownloadButton)} failed to write bones to files [{catchFlag}]", x);
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error(nameof(HandleDownloadButton), x);
+            }
+        }
 
         public void HandleModsButton()
         {

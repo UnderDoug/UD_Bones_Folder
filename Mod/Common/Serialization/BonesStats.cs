@@ -137,7 +137,7 @@ namespace UD_Bones_Folder.Mod
                 sB.Append(RegentName.Capitalize()).Append(" has been encountered ").AppendRule(totalEncounters.Things("time"));
 
                 if (_LastEncountered > 0)
-                    sB.Append(", and was last encountered").AppendRule(LastEncountered.TimeAgo()).Append(" ago.");
+                    sB.Append(", and was last encountered ").AppendRule(LastEncountered.TimeAgo()).Append(" ago.");
                 else
                     sB.Append(".");
 
@@ -193,11 +193,13 @@ namespace UD_Bones_Folder.Mod
                             sB.Append("accounting for ").AppendRule(percentTriumphed).Append(" of their total defeats.");
                         }
                         else
-                            sB.AppendLine().Append("They have never faced defeat at your hand.");
+                            sB.AppendLine()
+                                .AppendLine().Append("They have never faced defeat at your hand.");
                     }
                 }
                 else
-                    sB.AppendLine().Append("They have ").AppendRule("never").Append(" been defeated.");
+                    sB.AppendLine()
+                        .AppendLine().Append("They have ").AppendRule("never").Append(" been defeated.");
                 
 
                 if (totalReclamations > 0)
@@ -225,11 +227,13 @@ namespace UD_Bones_Folder.Mod
                             sB.Append("representing ").AppendRule(percentDefeats).Append(" of the total runs they've reclaimed.");
                         }
                         else
-                            sB.AppendLine().Append("They have never reclaimed a run of yours.");
+                            sB.AppendLine()
+                            .AppendLine().Append("They have never reclaimed a run of yours.");
                     }
                 }
                 else
-                    sB.AppendLine().Append("They have ").AppendRule("never").Append(" reclaimed a run as their own.");
+                    sB.AppendLine()
+                        .AppendLine().Append("They have ").AppendRule("never").Append(" reclaimed a run as their own.");
             }
             else
                 sB.Append(RegentName.Capitalize()).Append(" has ").AppendRule("never").Append(" been encountered").Append(".");

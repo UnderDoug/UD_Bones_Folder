@@ -5,6 +5,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
+using Cysharp.Threading.Tasks;
+
 using HarmonyLib;
 
 using Qud.UI;
@@ -18,6 +22,10 @@ using XRL.UI;
 using XRL.UI.Framework;
 using XRL.Wish;
 
+using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
+
+using KeyCode = UnityEngine.KeyCode;
+
 namespace UD_Bones_Folder.Mod.UI
 {
     [HasModSensitiveStaticCache]
@@ -26,6 +34,13 @@ namespace UD_Bones_Folder.Mod.UI
     [HarmonyPatch]
     public static class MainMenuBones
     {
+        public static bool HasSeenMainMenu = false;
+
+        public static bool AllowPromptAboutLinux = false;
+
+        [ModSensitiveStaticCache]
+        public static bool PromptedAboutLinux = false;
+
         private static MainMenuOptionData _MainMenuBonesOptions = null;
         public static MainMenuOptionData MainMenuBonesOptions => _MainMenuBonesOptions ??= new MainMenuOptionData
         {
@@ -77,7 +92,7 @@ namespace UD_Bones_Folder.Mod.UI
                 && menuOptionData.Command == "Pick:Bones"
                 && XRL.UI.Options.ModernUI)
             {
-                await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+                // await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
 
                 if (MainMenuBonesOptions?.Enabled is true
                     && BonesManagement.CheckInit())
@@ -106,32 +121,124 @@ namespace UD_Bones_Folder.Mod.UI
             declaringType: typeof(MainMenu),
             methodName: nameof(MainMenu.Show))]
         [HarmonyPrefix]
-        public static void Show_ActiveInactiveBones_Prefix()
-            => SetBonesMenuOptionEnabled()
-            ;
+        public static bool Show_ActiveInactiveBones_Prefix()
+        {
+            SetBonesMenuOptionEnabled();
+            return true;
+        }
+            
+
+        [HarmonyPatch(
+            declaringType: typeof(MainMenu),
+            methodName: nameof(MainMenu.Show))]
+        [HarmonyPostfix]
+        public static void Show_PerformMainMenuStuff_Postfix()
+        {
+            //Utils.Log($"{nameof(Show_PerformMainMenuStuff_Postfix)}({nameof(HasSeenMainMenu)}: {HasSeenMainMenu})");
+            if (!HasSeenMainMenu)
+            {
+                HasSeenMainMenu = true;
+
+                // NavigationController.instance.SuspendContextWhile(PerforMainMenuFirstShowAsync).Wait();
+                PerforMainMenuFirstShowAsync();
+
+                // UIManager.showWindow("MainMenu");
+                // MainMenu.instance.Reshow();
+            }
+        }
+
+        private static async void PerforMainMenuFirstShowAsync()
+        {
+            await The.UiContext;
+
+            AllowPromptAboutLinux = true;
+            await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+
+            if (!GameManager.AwakeComplete)
+            {
+                HasSeenMainMenu = false;
+                AllowPromptAboutLinux = false;
+                return;
+            }
+
+            if (Options.EnableOsseousAshDownloads
+                || Options.EnableOsseousAshUploads)
+            {
+                try
+                {
+                    if (OsseousAsh.Hosts.FirstHostMatching(h => h.Enabled) is OsseousAsh.Host firstEnabledHost)
+                        firstEnabledHost.GetServerStatus(RethrowForLinuxPrompt: true);
+                }
+                catch (Exception x)
+                {
+                    if (!PromptedAboutLinux
+                        && (x is NotSupportedException
+                            || x?.InnerException is NotSupportedException)
+                        && (x.Message?.Contains("The URI prefix is not recognized") is true))
+                    {
+                        PromptedAboutLinux = true;
+                        var sB = XRL.World.Event.NewStringBuilder()
+                            .Append("It appears that there's a compatibility issue creating web requests on this system.")
+                            .AppendLine()
+                            .AppendLine().Append("There's a known bug with this sort of request when they originate from linux.")
+                            .AppendLine()
+                            .AppendLine().Append("If you're running Caves of Qud from a linux distribution, ")
+                                .Append("it's recommended that you switch to the '").AppendColored("C", "linuxtest")
+                                .Append("' beta, on which this issue has been resolved.")
+                            .AppendLine()
+                            .AppendLine().Append("If you're not, please contact ").Append(Utils.AuthorOnPlatforms)
+                                .Append(", since this is a pretty core error and the mod would benefit from it being investigated.");
+
+                        Popup.WaitNewPopupMessage(
+                            message: XRL.World.Event.FinalizeString(sB),
+                            title: $"Potential Compatibility Conflict",
+                            afterRender: new FlippableRender(
+                                Source: new Renderable(
+                                    Tile: "Abilities/tile_supressive_fire.png",
+                                    ColorString: "&R",
+                                    TileColor: "&R",
+                                    DetailColor: 'K'),
+                                HFlip: false,
+                                VFlip: true));
+                    }
+                }
+                finally
+                {
+                    AllowPromptAboutLinux = false;
+                    UIManager.showWindow("MainMenu");
+                    MainMenu.instance.Reshow();
+                }
+            }
+        }
 
         [HarmonyPatch(
             declaringType: typeof(MainMenu),
             methodName: nameof(MainMenu.Update))]
         [HarmonyPrefix]
-        public static void Update_ActiveInactiveBones_Prefix()
-            => SetBonesMenuOptionEnabled()
-            ;
+        public static bool Update_ActiveInactiveBones_Prefix()
+        {
+            SetBonesMenuOptionEnabled();
+            return true;
+        }
 
         [HarmonyPatch(
             declaringType: typeof(MainMenu),
             methodName: nameof(MainMenu.Hide))]
         [HarmonyPrefix]
-        public static void Hide_ActiveInactiveBones_Prefix()
-            => SetBonesMenuOptionEnabled()
-            ;
+        public static bool Hide_ActiveInactiveBones_Prefix()
+        {
+            SetBonesMenuOptionEnabled();
+            return true;
+        }
 
         [HarmonyPatch(
             declaringType: typeof(MainMenu),
             methodName: nameof(MainMenu.Reshow))]
         [HarmonyPrefix]
-        public static void Reshow_ActiveInactiveBones_Prefix()
-            => SetBonesMenuOptionEnabled()
-            ;
+        public static bool Reshow_ActiveInactiveBones_Prefix()
+        {
+            SetBonesMenuOptionEnabled();
+            return true;
+        }
     }
 }
