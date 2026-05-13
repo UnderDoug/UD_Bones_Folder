@@ -32,6 +32,7 @@ namespace UD_Bones_Folder.Mod
         {
             public enum StatusTypes
             {
+                None,
                 Pending,
                 Active,
                 Disabled,

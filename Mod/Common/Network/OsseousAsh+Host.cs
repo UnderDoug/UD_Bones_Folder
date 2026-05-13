@@ -116,6 +116,9 @@ namespace UD_Bones_Folder.Mod
             [JsonProperty]
             public bool Enabled;
 
+            [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+            public string JWT;
+
             [JsonIgnore]
             private bool IsBuilt;
 
@@ -706,6 +709,7 @@ namespace UD_Bones_Folder.Mod
                 string ContentType,
                 WebMethods Method,
                 int? Timeout = null,
+                Dictionary<string, string> Headers = null,
                 Action<System.IO.StreamWriter> Proc = null
                 )
             {
@@ -719,6 +723,10 @@ namespace UD_Bones_Folder.Mod
                     var httpReq = (HttpWebRequest)WebRequest.Create(URI);
                     httpReq.ContentType = ContentTypes.GetValue(ContentType) ?? ContentType;
                     httpReq.Method = Methods.GetValue(Method);
+
+                    foreach ((var name, var value) in Headers ?? Enumerable.Empty<KeyValuePair<string, string>>())
+                        if (!name.IsNullOrEmpty())
+                            httpReq.Headers.Add(name, value);
 
                     if (Timeout.HasValue)
                         httpReq.Timeout = Timeout.GetValueOrDefault();
