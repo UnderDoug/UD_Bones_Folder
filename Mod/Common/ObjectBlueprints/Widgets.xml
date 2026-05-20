@@ -3,9 +3,9 @@
   <object Name="UD_Bones_Folder Lunar Announcer" Inherits="Widget">
     <part Name="Render" DisplayName="[Lunar Announcer Widget]" />
     <part Name="UD_Bones_MoonKingAnnouncer"
-          Title="=subject.A.RegalTitle= Persists!"
+          Title="=subject.A.RegalTitle= =subject.verb:Persist:afterpronoun=!"
           Message="=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
-          MadTitle="=subject.A.RegalTitle:mad= Persists!"
+          MadTitle="=subject.A.RegalTitle:Mad= =subject.verb:Persist:afterpronoun=!"
           MadMessage="=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= from a world vastly different from this one, and =FeverWarped:will tolerate neither pretenders nor would-be-usurpers!=" />
   </object>
 </objects>

@@ -292,7 +292,8 @@ namespace XRL.World.Parts
             int? AnimationFrameDuration = null,
             int? AnimationLengthInFrames = null
             )
-            => GetCurrentAnimationKeyframe(Offset, out _, AnimationFrameDuration, AnimationLengthInFrames);
+            => GetCurrentAnimationKeyframe(Offset, out _, AnimationFrameDuration, AnimationLengthInFrames)
+            ;
 
         [VariablePostProcessor(Keys = new string[] { "LunarShader" })]
         public static void LunarShaderPost(DelegateContext Context)

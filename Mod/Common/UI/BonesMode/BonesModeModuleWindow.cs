@@ -16,9 +16,9 @@ namespace UD_Bones_Folder.Mod.UI
     [UIView(
         ID: "CharacterCreation:UD_Bones_BonesMode",
         NavCategory: "Chargen",
-        UICanvas: "Chargen/CustomizeCharacter",
+        UICanvas: "Chargen/Chartype",
         UICanvasHost: 1)]
-    public class BonesModeModuleWindow : EmbarkBuilderModuleWindowPrefabBase<BonesModeModule, FrameworkScroller>
+    public class BonesModeModuleWindow : EmbarkBuilderModuleWindowPrefabBase<BonesModeModule, HorizontalScroller>
     {
         // don't remove this. It's what allows the first call to UpdateControls() to actually update the controls.
         public EmbarkBuilderModuleWindowDescriptor windowDescriptor;
@@ -29,15 +29,21 @@ namespace UD_Bones_Folder.Mod.UI
 
             prefabComponent.scrollContext.wraps = false;
             prefabComponent.onSelected.RemoveAllListeners();
-            prefabComponent.BeforeShow(windowDescriptor, new List<FrameworkDataElement> { new PrefixMenuOption { Id = "1", Prefix = "", Description = "none"} });
-            module.setData(new BonesModeModuleData());
+            prefabComponent.onSelected.AddListener(ChoiceSelected);
+            prefabComponent.BeforeShow(windowDescriptor, GetSelections());
+            // module.setData(new BonesModeModuleData("InstantDie"));
             base.BeforeShow(windowDescriptor);
         }
 
         public override void AfterShow(EmbarkBuilderModuleWindowDescriptor descriptor)
         {
             base.AfterShow(descriptor);
-            module?.AdvanceToEnd();
+            //module?.AdvanceToEnd();
+        }
+
+        public void ChoiceSelected(FrameworkDataElement choice)
+        {
+            module?.SelectType(choice.Id);
         }
 
         /*public override UnityGameObject InstantiatePrefab(UnityGameObject prefab)
@@ -57,5 +63,26 @@ namespace UD_Bones_Folder.Mod.UI
                 IconForegroundColor = The.Color.Gray,
             };
         }
+
+        public IEnumerable<ChoiceWithColorIcon> GetSelections()
+        {
+            foreach (BonesModeModule.GameTypeDescriptor value in base.module.GameTypes.Values)
+            {
+                yield return new ChoiceWithColorIcon
+                {
+                    Id = value.ID,
+                    Title = value.Title,
+                    IconPath = value.IconTile,
+                    IconDetailColor = ConsoleLib.Console.ColorUtility.ColorMap[value.IconDetail[0]],
+                    IconForegroundColor = ConsoleLib.Console.ColorUtility.ColorMap[value.IconForeground[0]],
+                    Description = value.Description,
+                    Chosen = IsChoiceSelected
+                };
+            }
+        }
+
+        public bool IsChoiceSelected(ChoiceWithColorIcon choice)
+            => module?.GetSelectedType() == choice?.Id
+            ;
     }
 }

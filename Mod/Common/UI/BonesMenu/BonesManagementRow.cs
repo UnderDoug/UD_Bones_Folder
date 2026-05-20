@@ -35,7 +35,7 @@ namespace UD_Bones_Folder.Mod.UI
         public static Dictionary<string, Action> CommandHandlers => new()
         {
             { BonesManagement.CMD_DELETE, Event.Helpers.Handle(BonesManagement.instance.HandleDelete) },
-            { BonesManagement.CMD_OPTION, Event.Helpers.Handle(BonesManagement.instance.HandleModsButton) },
+            { BonesManagement.CMD_OPTION, Event.Helpers.Handle(BonesManagement.instance.HandleModesButton) },
             { BonesManagement.CMD_HELP, Event.Helpers.Handle(BonesManagement.instance.HandleDownloadButton) },
         };
 

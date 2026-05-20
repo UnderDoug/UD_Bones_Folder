@@ -91,7 +91,7 @@ namespace XRL.World.Parts
         public bool TryBeDropped()
         {
             if (!WantsToDropOnLoad)
-                return false;
+                return true;
 
             EquipmentAPI.DropObject(ParentObject);
 
@@ -104,6 +104,27 @@ namespace XRL.World.Parts
             return wasDropped;
         }
 
+        public bool IsHeldByOriginRegent(GameObject Item)
+        {
+            if (ParentObject.InInventory is not GameObject holder)
+                return false;
+
+            UD_Bones_BaseLunarPart lunarPart;
+
+            if ((lunarPart = holder.GetPart<UD_Bones_LunarRegent>()) == null
+                && (lunarPart = holder.GetPart<UD_Bones_LunarReliquary>()) == null)
+                return false;
+
+            if (lunarPart == null)
+                return false;
+
+            if (BonesID != null
+                && lunarPart.BonesID != BonesID)
+                return false;
+
+            return true;
+        }
+
         public void AttemptDamage(bool Force = false, bool Remove = true)
         {
             if (ParentObject == null)
@@ -114,20 +135,7 @@ namespace XRL.World.Parts
                 if (IsProtected)
                     return;
 
-                if (ParentObject.InInventory is not GameObject holder)
-                    return;
-
-                UD_Bones_BaseLunarPart lunarPart;
-
-                if ((lunarPart = holder.GetPart<UD_Bones_LunarRegent>()) == null
-                    && (lunarPart = holder.GetPart<UD_Bones_LunarReliquary>()) == null)
-                    return;
-
-                if (lunarPart == null)
-                    return;
-
-                if (BonesID != null
-                    && lunarPart.BonesID != BonesID)
+                if (IsHeldByOriginRegent(ParentObject))
                     return;
             }
 
@@ -147,40 +155,44 @@ namespace XRL.World.Parts
             }
         }
 
+        public void AttemptDamage()
+            => AttemptDamage(Remove: WantsRemoveOnDamage)
+            ;
+
         public override bool WantTurnTick()
             => true
             ;
 
         public override void TurnTick(long TimeTick, int Amount)
         {
-            AttemptDamage(WantsRemoveOnDamage);
+            AttemptDamage();
             base.TurnTick(TimeTick, Amount);
         }
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
-            || ID == EndTurnEvent.ID
+            || ID == BeforeBeginTakeActionEvent.ID
             || ID == AfterBonesZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
-        public override bool HandleEvent(EndTurnEvent E)
+        public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
             if (!TryBeDropped())
-                AttemptDamage(WantsRemoveOnDamage);
+                AttemptDamage();
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(DroppedEvent E)
         {
-            AttemptDamage(WantsRemoveOnDamage);
+            AttemptDamage();
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
         {
             if (!TryBeDropped())
-                AttemptDamage(WantsRemoveOnDamage);
+                AttemptDamage();
             return base.HandleEvent(E);
         }
 

@@ -20,7 +20,8 @@ namespace XRL.World.Parts
         , IModEventHandler<AfterBonesZoneLoadedEvent>
         , IModEventHandler<LunarObjectColorChangedEvent>
     {
-        public class NoInfluenceSet
+        [Serializable]
+        public class NoInfluenceSet : IComposite
         {
             public string Name;
             public string DisplayName;
@@ -203,7 +204,7 @@ namespace XRL.World.Parts
                 && NoInfluence != null)
             {
                 string influenceType = E.GetStringParameter("Type", "default");
-                if (NoInfluence.IsExcluded(influenceType)
+                if (!NoInfluence.IsExcluded(influenceType)
                     && NoInfluence.GetFor(influenceType) is string influenceMessage)
                 {
                     E.SetParameter(

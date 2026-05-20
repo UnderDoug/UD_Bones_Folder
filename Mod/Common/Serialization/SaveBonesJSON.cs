@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using ConsoleLib.Console;
@@ -9,6 +10,9 @@ using Newtonsoft.Json;
 using Platform.IO;
 
 using Qud.API;
+using Qud.UI;
+
+using UD_Bones_Folder.Mod.UI;
 
 using XRL;
 using XRL.World;
@@ -18,10 +22,10 @@ namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
-    public class SaveBonesJSON : SaveGameJSON
+    public class SaveBonesJSON : SaveGameJSON, IDisposable
     {
         [JsonIgnore]
-        public static string FileName => $"{UD_Bones_BonesSaver.BonesName}.json";
+        public static string FileName => $"{BonesManager.BonesFileName}.json";
 
         [JsonProperty]
         public Guid OsseousAshID;
@@ -63,22 +67,52 @@ namespace UD_Bones_Folder.Mod
             : base()
         { }
 
-        public static long GetDirectorySize(string Path)
-        {
-            IEnumerable<string> files = Directory.EnumerateFiles(Path);
+        public static SaveBonesJSON DummyBonesJSON(
+            BonesManagement.VisibilityModes VisibilityMode,
+            FileLocationData.LocationType LocationType = FileLocationData.LocationType.None
+            )
+            => new SaveBonesJSON
+            {
+                OsseousAshID = Guid.Empty,
+                OsseousAshHandle = $"A Highlight Entropic Being",
+                SaveVersion = 400,
+                GameVersion = typeof(MainMenu).Assembly.GetName().Version.ToString(),
+                ID = Guid.Empty.ToString(),
+                Name = $"Bones That Are Yet To Exist",
+                Level = 0,
+                GenoSubType = "Future Bones",
+                GameMode = VisibilityMode.ToString(),
+                CharIcon = "Mutations/amnesia.bmp",
+                FColor = 'K',
+                DColor = 'B', //LocationType.TypeColor()[0],
 
-            long size = 0L;
-            foreach (string file in files)
-                size += new FileInfo(file).Length;
+                Location = $"A yet to be played run",
+                InGameTime = $"{0:D2}:{0:D2}:{0:D2}",
+                Turn = 0,
+                SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
+                ModsEnabled = ModManager.GetRunningMods().ToList(),
 
-            return size;
-        }
+                ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
+
+                SaveTimeValue = DateTime.Now.Ticks,
+
+                ZoneID = "BonesWorld.11.22.1.1.10",
+
+                BonesSpec = new BonesSpec(),
+                Stats = new(),
+
+                DeathReason = $"They don't exist yet",
+                GenotypeName = "Future",
+                SubtypeName = "Bones",
+                Blueprint = "Humanoid",
+            }
+            ;
 
         public static SaveBonesInfo InfoFromJson(
             SaveBonesJSON SaveBonesJSON,
-            string SaveLocation,
-            string FileName,
-            long SaveSize
+            FileLocationData FileLocationData,
+            long SaveSize,
+            bool IsDummy = false
             )
         {
             if (SaveBonesJSON == null)
@@ -88,7 +122,7 @@ namespace UD_Bones_Folder.Mod
                     Name = "Corrupt info file".Colored("R"),
                     Size = $"Total size: {SaveSize / 1000}kb",
                     Info = "",
-                    Directory = SaveLocation
+                    Directory = FileLocationData
                 };
             }
 
@@ -113,7 +147,7 @@ namespace UD_Bones_Folder.Mod
             var saveBonesInfo = new SaveBonesInfo
             {
                 json = SaveBonesJSON,
-                Directory = SaveLocation,
+                Directory = FileLocationData,
                 Size = $"Total size: {SaveSize / 1000}kb",
                 ID = SaveBonesJSON.ID,
                 Version = SaveBonesJSON.GameVersion,
@@ -134,7 +168,11 @@ namespace UD_Bones_Folder.Mod
                 SubtypeName = SaveBonesJSON.SubtypeName ?? "Adventurer",
 
                 BonesSpec = bonesSpec,
+
+                IsDummy = IsDummy,
             };
+
+            saveBonesInfo.FileLocationDataSet.Add(FileLocationData);
 
             if (!SaveBonesJSON.CharIcon.IsTile())
                 SaveBonesJSON.HotSwapCharIcon();
@@ -148,27 +186,29 @@ namespace UD_Bones_Folder.Mod
 
             return saveBonesInfo;
         }
-        public SaveBonesInfo InfoFromJson(
-            string SaveLocation,
-            string FileName,
-            long SaveSize
-        ) => InfoFromJson(this, SaveLocation, FileName, SaveSize)
-        ;
 
-        public static async Task<SaveBonesInfo> ReadSaveBonesJson(string DirPath, string FileName)
+        public SaveBonesInfo InfoFromJson(
+            FileLocationData FileLocationData,
+            long SaveSize
+            )
+            => InfoFromJson(this, FileLocationData, SaveSize)
+            ;
+
+        public static async Task<SaveBonesInfo> ReadSaveBonesJson(FileLocationData FileLocationData)
         {
+            if (FileLocationData == null)
+                return null;
+
             try
             {
-                // Utils.Log($"{nameof(ReadSaveBonesJson)}: {DataManager.SanitizePathForDisplay(DirPath)}, {FileName}");
                 return InfoFromJson(
-                    SaveBonesJSON: await File.ReadAllJsonAsync<SaveBonesJSON>(Path.Combine(DirPath, FileName)),
-                    SaveLocation: DirPath,
-                    FileName: FileName,
-                    SaveSize: GetDirectorySize(DirPath));
+                    SaveBonesJSON: await File.ReadAllJsonAsync<SaveBonesJSON>(FileLocationData.WithFileName(FileName)),
+                    FileLocationData: FileLocationData,
+                    SaveSize: FileLocationData.GetDirectorySize());
             }
             catch (Exception x)
             {
-                Utils.Error($"Loading bones json {DataManager.SanitizePathForDisplay(Path.Combine(DirPath, FileName))}", x);
+                Utils.Error($"Loading bones json {FileLocationData.SanitiseForDisplay(FileName)}", x);
                 return null;
             }
         }
@@ -202,6 +242,84 @@ namespace UD_Bones_Folder.Mod
 
             if (swappedIcon)
                 HotSwapCharIcon();
+        }
+
+        public SaveBonesJSON Clone()
+            => new SaveBonesJSON
+            {
+                OsseousAshID = OsseousAshID,
+                OsseousAshHandle = OsseousAshHandle,
+                SaveVersion = SaveVersion,
+                GameVersion = GameVersion,
+                ID = ID,
+                Name = Name,
+                Level = Level,
+                GenoSubType = GenoSubType,
+                GameMode = GameMode,
+                CharIcon = CharIcon,
+                FColor = FColor,
+                DColor = DColor,
+
+                Location = Location,
+                InGameTime = InGameTime,
+                Turn = Turn,
+                SaveTime = SaveTime,
+                ModsEnabled = new(ModsEnabled),
+
+                ModVersion = ModVersion,
+
+                SaveTimeValue = SaveTimeValue,
+
+                ZoneID = ZoneID,
+
+                BonesSpec = BonesSpec,
+                Stats = new(Stats),
+
+                FileLocationType = FileLocationType,
+
+                DeathReason = DeathReason,
+                GenotypeName = GenotypeName,
+                SubtypeName = SubtypeName,
+                Blueprint = Blueprint,
+            }
+            ;
+
+        public void Dispose()
+        {
+            OsseousAshID = Guid.Empty;
+            OsseousAshHandle = null;
+            SaveVersion = 0;
+            GameVersion = null;
+            ID = null;
+            Name = null;
+            Level = 0;
+            GenoSubType = null;
+            GameMode = null;
+            CharIcon = null;
+            FColor = '\0';
+            DColor = '\0';
+
+            Location = null;
+            InGameTime = null;
+            Turn = 0L;
+            SaveTime = null;
+            ModsEnabled = null;
+
+            ModVersion = null;
+
+            SaveTimeValue = 0L;
+
+            ZoneID = null;
+
+            BonesSpec = null;
+            Stats = null;
+
+            FileLocationType = FileLocationData.LocationType.None;
+
+            DeathReason = null;
+            GenotypeName = null;
+            SubtypeName = null;
+            Blueprint = null;
         }
     }
 }

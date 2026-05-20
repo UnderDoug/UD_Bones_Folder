@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using Qud.API;
 
 using UD_Bones_Folder.Mod;
@@ -40,15 +42,17 @@ namespace XRL.World.Parts
             "from %t disapproving stare.",
         };
 
+        private const string COMMAND_MAKE_BONES = "CMD_UD_Bones_MakeBones";
+
         private static bool WishContext;
 
         public static int MinimumLevelForBones => 5;
 
         public static BonesManager BonesManager => BonesManager.System;
 
-        public static string BonesName => "LunarRegent";
+        public bool? BonesMode = null;
 
-        public bool BonesMode = false;
+        public Guid MakeBonesActivatedAbilityID;
 
         [CallAfterGameLoaded]
         public static void PreparePlayer()
@@ -66,7 +70,7 @@ namespace XRL.World.Parts
             Cell TargetCell
             )
         {
-            if (!Player.CanBeReplicated(Player, BonesName, Temporary: false))
+            if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
                 return null;
 
             GameObject lunarRegent = null;
@@ -79,6 +83,10 @@ namespace XRL.World.Parts
                 Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
                 return null;
             }
+
+            lunarRegent.GiveProperName(Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
+
+            lunarRegent.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
 
             using var lunarRegentInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(
                 items: lunarRegent.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
@@ -136,18 +144,18 @@ namespace XRL.World.Parts
                 $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
             */
 
-            var brain = lunarRegent.Brain;
-            brain.PartyLeader = null;
-            brain.Hibernating = false;
-            brain.Staying = false;
-            brain.Passive = false;
-            brain.Factions = "Mean-100,Playerhater-99";
-            brain.Allegiance.Hostile = true;
-            brain.Allegiance.Calm = false;
+            var lunarBrain = lunarRegent.Brain;
+            lunarBrain.PartyLeader = null;
+            lunarBrain.Hibernating = false;
+            lunarBrain.Staying = false;
+            lunarBrain.Passive = false;
+            lunarBrain.Factions = "Mean-100,Playerhater-99";
+            lunarBrain.Allegiance.Hostile = true;
+            lunarBrain.Allegiance.Calm = false;
 
             if (Player != null)
             {
-                brain.AddOpinion<OpinionMollify>(Player);
+                lunarBrain.AddOpinion<OpinionMollify>(Player);
                 Player.AddOpinion<OpinionMollify>(lunarRegent);
             }
 
@@ -162,7 +170,7 @@ namespace XRL.World.Parts
 
             var lunarRegentPart = lunarRegent.RequirePart<UD_Bones_LunarRegent>();
 
-            lunarRegentPart.Onset();
+            //lunarRegentPart.Onset();
 
             if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
             {
@@ -175,7 +183,7 @@ namespace XRL.World.Parts
                     lunarRegentMask?.Obliterate();
             }
 
-            brain.PerformEquip();
+            lunarBrain.PerformEquip();
 
             TargetCell.AddObject(lunarRegent);
 
@@ -219,7 +227,7 @@ namespace XRL.World.Parts
                     bool success = true;
                     try
                     {
-                        BonesManager.HoardBones(BonesName, E, lunarRegent)?.Wait();
+                        BonesManager.HoardBones(E, lunarRegent)?.Wait();
                     }
                     catch (Exception x)
                     {
@@ -237,6 +245,31 @@ namespace XRL.World.Parts
             return false;
         }
 
+        private bool AddInstantDieAbility(bool Silent = false)
+        {
+            if (MakeBonesActivatedAbilityID.IsEmptyOrDefault())
+            {
+                MakeBonesActivatedAbilityID = ParentObject.AddActivatedAbility(
+                    Name: "Make Bones",
+                    Command: COMMAND_MAKE_BONES,
+                    Class: "System",
+                    Description: "Instantly die, making a bones file in the process",
+                    Silent: Silent,
+                    UITileDefault: new Renderable(
+                        Tile: "Items/sw_bones_1.bmp,Items/sw_bones_2.bmp,Items/sw_bones_3.bmp,Items/sw_bones_4.bmp,Items/sw_bones_5.bmp,Items/sw_bones_6.bmp,Items/sw_bones_7.bmp,Items/sw_bones_8.bmp".CachedCommaExpansion().GetRandomElementCosmetic(),
+                        RenderString: "X",
+                        ColorString: "&y",
+                        TileColor: "&y",
+                        DetailColor: 'Y'));
+            }
+            return !MakeBonesActivatedAbilityID.IsEmptyOrDefault();
+        }
+
+        private bool RemoveInstantDieAbility()
+            => MakeBonesActivatedAbilityID.IsEmptyOrDefault()
+            || ParentObject.RemoveActivatedAbility(ref MakeBonesActivatedAbilityID)
+            ;
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register(BeforeTakeActionEvent.ID, EventOrder.EXTREMELY_LATE);
@@ -246,20 +279,46 @@ namespace XRL.World.Parts
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == AfterDieEvent.ID
+            || ID == CommandEvent.ID
+            || ID == AfterPlayerBodyChangeEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
+        public override bool HandleEvent(AfterPlayerBodyChangeEvent E)
+        {
+            if (!MakeBonesActivatedAbilityID.IsEmptyOrDefault())
+            {
+                E.OldBody.RemoveActivatedAbility(ref MakeBonesActivatedAbilityID);
+                AddInstantDieAbility(Silent: true);
+            }
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(BeforeTakeActionEvent E)
         {
-            if (BonesMode)
+            if (BonesMode.HasValue)
             {
-                BonesMode = false;
-                if (ParentObject.CurrentZone?.ZoneID != JoppaWorldBuilder.ID_JOPPA)
-                    MakeBones_WishHandler("die -f");
+                bool instant = BonesMode.GetValueOrDefault();
+                BonesMode = null;
+                AddInstantDieAbility();
+                if (instant)
+                {
+                    if (ParentObject.CurrentZone?.ZoneID != JoppaWorldBuilder.ID_JOPPA)
+                        MakeBones_WishHandler("die -f");
+                }
             }
             else
                 ParentObject.UnregisterEvent(this, BeforeTakeActionEvent.ID);
 
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(CommandEvent E)
+        {
+            if (E.Command == COMMAND_MAKE_BONES)
+            {
+                MakeBones_WishHandler("die");
+            }
             return base.HandleEvent(E);
         }
 
@@ -325,6 +384,7 @@ namespace XRL.World.Parts
 
             WishContext = true;
             GameObject projectile = null;
+            bool hadInstantDieAbility = false;
             try
             {
                 if (BonesManager.TryGetSaveBonesByID(gameID, out var saveBonesInfo))
@@ -381,6 +441,15 @@ namespace XRL.World.Parts
                 if (!extraDamageType.IsNullOrEmpty())
                     extraDamageType = $" {extraDamageType}";
 
+                if (The.Player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
+                {
+                    if (!bonesSaver.MakeBonesActivatedAbilityID.IsEmptyOrDefault())
+                    {
+                        hadInstantDieAbility = true;
+                        bonesSaver.RemoveInstantDieAbility();
+                    }
+                }
+
                 string accidentalSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(accidentalSeed));
                 bool isAccidental = BonesModeModule.SeededOddsIn10000(accidentalSeed, 2500);
                 if (!willDie
@@ -422,6 +491,12 @@ namespace XRL.World.Parts
                         || The.Player.IsAlive
                         || !The.Player.IsDying)
                     {
+                        if (hadInstantDieAbility
+                            && The.Player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
+                        {
+                            bonesSaver.AddInstantDieAbility(Silent: true);
+                        }
+
                         if (currentZone.TryFindLunarRegent(The.Game?.GameID, out GameObject lunarRegent, out UD_Bones_LunarRegent lunarRegentPart))
                             lunarRegentPart.Persists = false;
 

@@ -32,6 +32,16 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        public static List<QudMenuItem> _BackancelButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{y|Back}}",
+                command = "option:-2",
+                hotkey = "N,V Negative,Cancel"
+            },
+        };
+
         public static List<QudMenuItem> _SaveButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -66,6 +76,25 @@ namespace UD_Bones_Folder.Mod.UI
                         text = ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + " {{y|Back}}",
                         command = "option:-2",
                         hotkey = "N,V Negative"
+                    },
+                };
+            }
+        }
+
+        public static List<QudMenuItem> BackancelButton
+        {
+            get
+            {
+                if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Gamepad)
+                    return _BackancelButton;
+
+                return new List<QudMenuItem>
+                {
+                    new QudMenuItem
+                    {
+                        text = ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + " {{y|Back}}",
+                        command = "option:-2",
+                        hotkey = "N,V Negative,Cancel"
                     },
                 };
             }

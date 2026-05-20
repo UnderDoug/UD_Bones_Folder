@@ -19,11 +19,16 @@ using XRL;
 using XRL.CharacterBuilds;
 using XRL.CharacterBuilds.UI;
 using XRL.Collections;
+using XRL.Language;
 using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World.Parts;
 
+using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
+
 using Event = XRL.UI.Framework.Event;
+
+using WEvent = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod.UI
 {
@@ -58,7 +63,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static MenuOption BACK_BUTTON => EmbarkBuilderOverlayWindow.BackMenuOption;
 
-        private static Transform MenuBarParentTransfrom;
+        /*private static Transform MenuBarParentTransfrom;
         private static Vector2 MenuBarAnchoredPos;
         private static Vector2 MenuBarAnchorMin;
         private static Vector2 MenuBarAnchorMax;
@@ -66,43 +71,9 @@ namespace UD_Bones_Folder.Mod.UI
         private static RectTransform BonesScrollerVertScroll;
         private static VerticalLayoutGroup VLayout;
 
-        private static HasSelectionCaret _SelectionCaret;
-        private static HasSelectionCaret SelectionCaret => _SelectionCaret ??= Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar)
-                ?.GetComponentInChildren<HasSelectionCaret>();
-
-        public static List<MenuOption> LegendBarOptions = new List<MenuOption>
-        {
-            new MenuOption
-            {
-                InputCommand = "NavigationXYAxis",
-                Description = "navigate"
-            },
-            new MenuOption
-            {
-                InputCommand = CMD_ACCEPT,
-                Description = "select"
-            },
-            /*new MenuOption
-            {
-                InputCommand = CMD_HELP,
-                Description = "download"
-            },*/
-            new MenuOption
-            {
-                InputCommand = CMD_OPTION,
-                Description = "mods"
-            },
-            new MenuOption
-            {
-                InputCommand = CMD_DELETE,
-                Description = "cremate"
-            },
-            new MenuOption
-            {
-                InputCommand = CMD_INSERT,
-                Description = "cremate all"
-            },
-        };
+        private static HasSelectionCaret _SelectionCaret;*/
+       /* private static HasSelectionCaret SelectionCaret => _SelectionCaret ??= Instantiate(UIManager.getWindow<EmbarkBuilderOverlayWindow>("Chargen/Overlay").menuBar)
+                ?.GetComponentInChildren<HasSelectionCaret>();*/
 
         public static List<MenuOption> MenuBarOptions = new List<MenuOption>
         {
@@ -136,6 +107,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public VisibilityModes VisibilityMode = VisibilityModes.Allowed;
         public SourceModes SourceMode = SourceModes.All;
+
+        private bool IncludeBlocked => VisibilityMode > VisibilityModes.Allowed;
 
         public static bool Printed = false;
 
@@ -227,7 +200,7 @@ namespace UD_Bones_Folder.Mod.UI
                 frameworkScrollers[1].DestroyImmediate();
             }*/
 
-            MenuBarParentTransfrom = BonesScroller.transform;
+            //MenuBarParentTransfrom = BonesScroller.transform;
 
             
             if (BonesScroller.GetComponentsInChildren<FrameworkScroller>() is FrameworkScroller[] frameworkScrollers
@@ -376,6 +349,31 @@ namespace UD_Bones_Folder.Mod.UI
             LegendBar.GetNavigationContext().parentContext = MidHorizNav;
         }
 
+        private bool IsBonesToShow(SaveBonesInfo SaveBonesInfo)
+        {
+            if (VisibilityMode == VisibilityModes.Allowed
+                && SaveBonesInfo.IsBlocked)
+                return false;
+
+            if (VisibilityMode == VisibilityModes.Blocked
+                && !SaveBonesInfo.IsBlocked)
+                return false;
+
+            if (SourceMode == SourceModes.File
+                && !SaveBonesInfo.FileLocationData.Type.IsFile())
+                return false;
+
+            if (SourceMode == SourceModes.Mod
+                && !SaveBonesInfo.FileLocationData.Type.IsMod())
+                return false;
+
+            if (SourceMode == SourceModes.Online
+                && !SaveBonesInfo.FileLocationData.Type.IsOnline())
+                return false;
+
+            return true;
+        }
+
         public override void Show()
         {
             // ##############################
@@ -459,32 +457,11 @@ namespace UD_Bones_Folder.Mod.UI
 
             //Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
 
-            bool isBonesToShow(SaveBonesInfo SaveBonesInfo)
-            {
-                if (VisibilityMode == VisibilityModes.Allowed
-                    && SaveBonesInfo.IsBlocked)
-                    return false;
-
-                if (VisibilityMode == VisibilityModes.Blocked
-                    && !SaveBonesInfo.IsBlocked)
-                    return false;
-
-                if (SourceMode == SourceModes.File
-                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced))
-                    return false;
-
-                if (SourceMode == SourceModes.Mod
-                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Mod, FileLocationData.LocationType.Mod))
-                    return false;
-
-                if (SourceMode == SourceModes.Online
-                    && !SaveBonesInfo.FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Online, FileLocationData.LocationType.Online))
-                    return false;
-
-                return true;
-            }
-            bool includeBlocked = VisibilityMode > VisibilityModes.Allowed;
-            if (BonesManager.GetSaveBonesInfoAsync(isBonesToShow, IncludeBlocked: includeBlocked).WaitResult() is not IEnumerable<SaveBonesInfo> bonesInfos
+            if (BonesManager.GetSaveBonesInfoAsync(
+                    Where: IsBonesToShow,
+                    IncludeBlocked: IncludeBlocked,
+                    NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
+                    ).WaitResult() is not IEnumerable<SaveBonesInfo> bonesInfos
                 || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
                 || SaveBonesInfosToUIElements(orderedBonesInfos) is not List<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
@@ -500,7 +477,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             MainNavContext.commandHandlers ??= new();
             MainNavContext.commandHandlers.Set(CMD_INSERT, Event.Helpers.Handle(HandleDeleteAll));
-            MainNavContext.commandHandlers.Set(CMD_OPTION, Event.Helpers.Handle(HandleModsButton));
+            MainNavContext.commandHandlers.Set(CMD_OPTION, Event.Helpers.Handle(HandleModesButton));
             //MainNavContext.commandHandlers.Set(CMD_HELP, Event.Helpers.Handle(HandleDownloadButton));
 
             BackButton.gameObject.SetActive(value: true);
@@ -515,15 +492,20 @@ namespace UD_Bones_Folder.Mod.UI
 
             for (int i = 0; i < (BonesScroller.selectionClones?.Count ?? 0); i++)
             {
-                if (BonesScroller.selectionClones[i] is FrameworkUnityScrollChild selectionCloneI
-                    && Bones[i] is BonesInfoData bonesDataI
-                    && selectionCloneI.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
+                if (BonesScroller.TryGetSelectionElementsAtIndex(i, Bones, out _, out BonesInfoData bonesData, out SaveManagementRow saveRow))
                 {
-                    saveRow.setBonesData(bonesDataI);
+                    saveRow.setBonesData(bonesData);
                     saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                     saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
                 }
             }
+            SelectionChoiceLocationBox.RemoveAll(delegate (KeyValuePair<SaveManagementRow, GameObject> entry)
+            {
+                return !BonesScroller.selectionClones.Any(delegate (FrameworkUnityScrollChild element)
+                {
+                    return entry.Key == element.gameObject.GetComponent<SaveManagementRow>();
+                });
+            });
 
             if (Preselected != null
                 || MainMenuBones.ReturnToBones != null)
@@ -613,35 +595,159 @@ namespace UD_Bones_Folder.Mod.UI
         public void DisableNavContext()
             => DisableNavContext(true);
 
-        public void SelectedBones(FrameworkDataElement data)
+        public async void SelectedBones(FrameworkDataElement data)
         {
             if (data is BonesInfoData bonesData)
             {
-                var bonesInfo = bonesData.BonesInfo;
-                SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
-                Popup.WaitNewPopupMessage(
-                    message: Markup.Transform(bonesInfo.OutputBlurb()),
-                    contextTitle: $"Bones File Stats".Colored("yellow"),
-                    afterRender: bonesInfo.FlippedRender,
-                    PopupID: $"{nameof(BonesManagement)}.{nameof(SelectedBones)}::{bonesInfo.ID}");
+                var result = await AskHowManageBones(bonesData.BonesInfo);
+
+                if (!result.IsSilent())
+                {
+                    //Utils.Log($"SelectedBones.result: {result} (Exit)");
+                    CompletionSource?.TrySetResult(null);
+                    Exit();
+                }
+                else
+                {
+                    //Utils.Log($"SelectedBones.result: {result} (Show)");
+                    Show();
+                }
             }
             // CompletionSource?.TrySetResult(bonesData.BonesInfo);
         }
 
+        private async Task<UIUtils.CascadableResult> AskHowManageBones(SaveBonesInfo BonesInfo)
+        {
+            if (BonesInfo.IsDummy)
+                return UIUtils.CascadableResult.CancelSilent;
+
+            var sB = WEvent.NewStringBuilder();
+            var result = UIUtils.CascadableResult.Continue;
+            try
+            {
+                var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
+                do
+                {
+                    sB.Clear();
+                    options.Clear();
+
+                    sB.Append(BonesInfo.GetBonesMenuString(0))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuString(1))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuString(2))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuString(3))
+                    .AppendLine()
+                    .AppendLine().Append("Use the options below to manage these bones:")
+                    .AppendLineEnd();
+
+                    options.Add(new()
+                    {
+                        Element = BonesInfo,
+                        Text = "View stats",
+                        Icon = new Renderable(
+                            Tile: "Items/sw_bookshelf1.bmp,Items/sw_bookshelf2.bmp,Items/sw_bookshelf3.bmp".CachedCommaExpansion().GetRandomElementCosmetic(),
+                            ColorString: "&w",
+                            TileColor: "&w",
+                            DetailColor: BonesInfo.Render.GetDetailColor()),
+                        Hotkey = 's',
+                        Callback = SaveBonesInfo.ShowBlurbAsync,
+                    });
+                    options.Add(new()
+                    {
+                        Element = BonesInfo,
+                        Text = "Manage relative mod configuration",
+                        Icon = new Renderable(
+                            Tile: "Abilities/sw_skill_tinkering.png",
+                            ColorString: "&y",
+                            TileColor: "&y",
+                            DetailColor: 'c'),
+                        Hotkey = 'm',
+                        Callback = SaveBonesInfo.AskRestoreModsAsync,
+                    });
+                    options.Add(new()
+                    {
+                        Element = BonesInfo,
+                        Text = $"{(!BonesInfo.IsBlocked ? "Block" : "Unblock")}{(!BonesInfo.IsBlocked ? null : " (unsupported)")}",
+                        Icon = !BonesInfo.IsBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
+                        Hotkey = 'b',
+                        Callback = SaveBonesInfo.BlockUnblockAsync,
+                    });
+                    if (!BonesInfo.IsBlocked)
+                    {
+                        options.Add(new()
+                        {
+                            Element = BonesInfo,
+                            Text = "Report",
+                            Icon = OsseousAsh.ReportBonesIcon,
+                            Hotkey = 'r',
+                            Callback = SaveBonesInfo.AskForBonesReportAsync,
+                        });
+                    }
+                    if (BonesInfo.IsCrematable)
+                    {
+                        options.Add(new()
+                        {
+                            Element = BonesInfo,
+                            Text = "Cremate",
+                            Icon = new Renderable(
+                                Tile: "Mutations/spontaneous_combustion.bmp",
+                                ColorString: "&R",
+                                TileColor: "&R",
+                                DetailColor: 'K'),
+                            Hotkey = 'c',
+                            Callback = PerformDelete,
+                        });
+                    }
+
+                    result = await UIUtils.PerformPickOptionAsync(
+                        OptionDataSet: options,
+                        Title: $"Manage {Grammar.MakePossessive(BonesInfo.GetName())} Bones".Colored("yellow"),
+                        Intro: sB.ToString(),
+                        IntroIcon: BonesInfo.FlippedRender,
+                        OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.BackSilent),
+                        OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
+                        FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);
+
+                    //Utils.Log($"AskHowManageBones.result: {result}");
+                }
+                while (result.IsContinue());
+
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed to ask player how they'd like to manage their bones", x);
+                return UIUtils.CascadableResult.Cancel;
+            }
+            finally
+            {
+                WEvent.ResetTo(sB);
+            }
+            return result;
+        }
+
         public void HighlightedBones(FrameworkDataElement data)
         {
+            int selectedPos = BonesScroller.selectedPosition;
             if (data is BonesInfoData bonesData
-                && BonesScroller.selectionClones[BonesScroller.selectedPosition] is FrameworkUnityScrollChild selectionClone
+                && BonesScroller.selectionClones[selectedPos] is FrameworkUnityScrollChild selectionClone
                 && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
             {
+                // Utils.Log($"HighlightedBones {selectedPos}");
                 // this *was* working, but seemingly doesn't, now...
-                BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, BonesScroller.selectedPosition);
+                BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, selectedPos);
 
                 saveRow.setBonesData(bonesData);
                 saveRow.deleteButton.context.buttonHandlers = BonesManagementRow.DeleteButtonHandler;
                 saveRow.context.context.commandHandlers = BonesManagementRow.CommandHandlers;
 
                 saveRow.Update();
+
+                if (bonesData.BonesInfo is SaveBonesInfo bonesInfo
+                    && bonesInfo.IsCrematable)
+                {
+                    saveRow.deleteButton.context.disabled = !bonesInfo.IsCrematable;
+                    saveRow.deleteButton.enabled = bonesInfo.IsCrematable;
+                    saveRow.deleteButton.gameObject.SetActive(value: bonesInfo.IsCrematable);
+                }
             }
         }
 
@@ -706,7 +812,7 @@ namespace UD_Bones_Folder.Mod.UI
                     else
                     if (json.SaveVersion < 400)
                     {
-                        await Popup.ShowAsync("That bones file has an impossibly low save version and has either been modified haphardly or did something goofy while saving." +
+                        await Popup.ShowAsync("That bones file has an impossibly low save version and has either been modified haphazardly or did something goofy while saving." +
                             $"\n\nPlease contact {Utils.AuthorOnPlatforms} to see if the file can be recovered.");
                     }
                     else
@@ -734,7 +840,7 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         private async Task<IEnumerable<SaveBonesInfo>> BonesDeletionContext()
-            => await BonesManager.CremateAllMoonKings(() => DisableNavContext(false), EnableNavContext)
+            => await BonesManager.CremateAllLunarRegentsAsync(() => DisableNavContext(false), EnableNavContext)
             ;
 
         public async void HandleDeleteAll()
@@ -773,15 +879,15 @@ namespace UD_Bones_Folder.Mod.UI
                 string catchFlag = "top";
                 Utils.Log(catchFlag);
                 bool restoreBackup = false;
-                string jsonFileName = BonesManager.GetInfoFilePath(UD_Bones_BonesSaver.BonesName);
-                string saveFileName = BonesManager.GetSaveFilePath(UD_Bones_BonesSaver.BonesName);
+                string jsonFileName = BonesManager.GetInfoFileName(BonesManager.BonesFileName);
+                string saveFileName = BonesManager.GetSaveFileName(BonesManager.BonesFileName);
                 string jsonFilePath = BonesManager.BonesSaveSyncInfo.WithFileName(Path.Combine(bonesInfo.ID, jsonFileName));
                 string saveFilePath = BonesManager.BonesSaveSyncInfo.WithFileName(Path.Combine(bonesInfo.ID, saveFileName));
                 try
                 {
                     catchFlag = "try";
                     Utils.Log(catchFlag);
-                    if (bonesInfo.GetSavGzBytes() is byte[] savGz
+                    if (bonesInfo.GetSavGzBytes().WaitResult() is byte[] savGz
                         && bonesInfo.GetBonesJSON() is SaveBonesJSON saveBonesJSON)
                     {
                         catchFlag = "saveBonesJSONLocationType";
@@ -840,45 +946,151 @@ namespace UD_Bones_Folder.Mod.UI
             CompletionSource?.TrySetResult(bonesInfo);
         }
 
-        public async void HandleDelete()
+        public void HandleModesButton()
         {
-            if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
-                return;
+            VisibilityMode = (VisibilityModes)(((int)VisibilityMode + 1) % Enum.GetValues(typeof(VisibilityModes)).Length);
+            Show();
+        }
 
-            if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
-                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo
-                || !bonesInfo.IsCrematable)
-                return;
-
+        public static async Task PerformDelete(
+            SaveBonesInfo BonesInfo,
+            Action BeforeDeletion,
+            Action AfterDeletion
+            )
+        {
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                 buttons = PopupMessage.AcceptCancelButton;
 
-            string title = $"Cremate {bonesInfo.GetName()}".Colored("R");
+            string title = $"Cremate {BonesInfo.GetName()}".Colored("R");
             if ((await Popup.NewPopupMessageAsync(
-                    message: $"Are you sure you want to cremate {bonesInfo.GetName()}'s bones?",
+                    message: $"Are you sure you want to cremate {BonesInfo.GetName()}'s bones?",
                     buttons: buttons,
                     title: title,
                     DefaultSelected: 1)
                 ).command != "Cancel")
             {
-                DisableNavContext();
+                BeforeDeletion?.Invoke();
 
-                bonesInfo.Cremate();
+                BonesInfo.Cremate();
 
-                EnableNavContext();
+                AfterDeletion?.Invoke();
 
                 await Popup.NewPopupMessageAsync("Bones Cremated!", PopupMessage.AcceptButton);
-
-                if (await BonesManager.GetSaveBonesInfoAsync() is not IEnumerable<SaveBonesInfo> bonesInfos
-                    || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
-                    || SaveBonesInfosToUIElements(orderedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
-                    || bareBones.IsNullOrEmpty()
-                    || (Bones = new(bareBones)).IsNullOrEmpty())
-                    Exit();
-                else
-                    Show();
             }
+        }
+
+        public async Task<UIUtils.CascadableResult> PerformDelete(SaveBonesInfo BonesInfo)
+        {
+            bool hasOnline = BonesInfo.FileLocationDataSet.Any(fld => fld.Type.IsOnline());
+
+            int selectedPos = Bones.IndexOf(BonesScroller.choices.FirstOrDefault(data => data.Id == BonesInfo.ID));
+
+            await PerformDelete(BonesInfo, null, null);
+
+            if (selectedPos >= 0
+                && hasOnline)
+                if (BonesScroller.TryGetSelectionElementsAtIndex(selectedPos, Bones, out _, out BonesInfoData bonesData, out SaveManagementRow saveRow))
+                    saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
+
+            if (BonesInfo.FileLocationData == null)
+                return UIUtils.CascadableResult.CancelSilent;
+
+            return UIUtils.CascadableResult.Continue;
+        }
+
+        public async void HandleDelete()
+        {
+            if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
+                return;
+
+            int selectedPos = BonesScroller.selectedPosition;
+
+            if (Bones[selectedPos] is not BonesInfoData bonesData
+                || bonesData.BonesInfo is not SaveBonesInfo bonesInfo
+                || !bonesInfo.IsCrematable)
+                return;
+
+            bool hasOnline = bonesInfo.FileLocationDataSet.Any(fld => fld.Type.IsOnline());
+
+            await PerformDelete(
+                BonesInfo: bonesInfo,
+                BeforeDeletion: () => DisableNavContext(),
+                AfterDeletion: delegate ()
+                {
+                    if (!bonesInfo.FileLocationDataSet.IsNullOrEmpty())
+                    {
+                        if (BonesScroller.selectionClones[selectedPos] is FrameworkUnityScrollChild selectionClone
+                            && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
+                        {
+                            //Utils.Log($"HandleDelete");
+                            BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, BonesScroller.selectedPosition);
+                            saveRow.setBonesData(bonesData);
+                            saveRow.Update();
+                        }
+                    }
+
+                    EnableNavContext();
+                });
+
+            if (hasOnline)
+                if (BonesScroller.TryGetSelectionElementsAtIndex(selectedPos, Bones, out _, out bonesData, out SaveManagementRow saveRow))
+                    saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
+            
+            if (await BonesManager.GetSaveBonesInfoAsync(
+                    Where: IsBonesToShow,
+                    IncludeBlocked: IncludeBlocked,
+                    NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
+                    ) is not IEnumerable<SaveBonesInfo> bonesInfos
+                || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
+                || SaveBonesInfosToUIElements(orderedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
+                || bareBones.IsNullOrEmpty()
+                || (Bones = new(bareBones)).IsNullOrEmpty())
+                Exit();
+            else
+                Show();
+        }
+
+        public MenuOption GetVisibilityMenuOptions()
+            => new MenuOption
+            {
+                InputCommand = CMD_OPTION,
+                Description = $"{VisibilityModes.Allowed.ColorIfMatches(VisibilityMode, "y", "K")}/" +
+                    $"{VisibilityModes.Blocked.ColorIfMatches(VisibilityMode, "y", "K")}/" +
+                    $"{VisibilityModes.All.ColorIfMatches(VisibilityMode, "y", "K")}",
+            }
+            ;
+
+        public IEnumerable<MenuOption> GetLegendBarOptions()
+        {
+            yield return new MenuOption
+            {
+                InputCommand = "NavigationXYAxis",
+                Description = "Navigate",
+            };
+            yield return new MenuOption
+            {
+                InputCommand = CMD_ACCEPT,
+                Description = "Select",
+            };
+            /*yield return new MenuOption
+            {
+                InputCommand = CMD_HELP,
+                Description = "Download"
+            };*/
+
+            yield return GetVisibilityMenuOptions();
+
+            yield return new MenuOption
+            {
+                InputCommand = CMD_DELETE,
+                Description = "Cremate",
+            };
+            yield return new MenuOption
+            {
+                InputCommand = CMD_INSERT,
+                Description = "Cremate All",
+            };
         }
 
         public void UpdateLegendBar()
@@ -887,7 +1099,7 @@ namespace UD_Bones_Folder.Mod.UI
                 LegendBar.gameObject.SetActive(value: true);
 
             LegendBar.GetNavigationContext().disabled = true;
-            LegendBar.BeforeShow(LegendBarOptions);
+            LegendBar.BeforeShow(GetLegendBarOptions());
 
             if (MoveLegendBar
                 && BonesScroller.transform.parent is RectTransform bonesScrollerParentRectTransform)

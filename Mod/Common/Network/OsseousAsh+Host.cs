@@ -47,16 +47,15 @@ namespace UD_Bones_Folder.Mod
                 Name = "osseousash.cloud",
                 Port = null,
                 Encrypted = true,
-                TimeoutMS = 2200,
+                TimeoutMS = DEFAULT_TIMEOUT,
                 Enabled = false,
             };
+
+            private const int DEFAULT_TIMEOUT = 2200;
 
             private static long SeverStatusCheckInterval => 300000;
 
             private static int CurrentHostID = 0;
-
-            private IEnumerable<Report> _ReportsCache;
-            public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReportsAsync()?.WaitResult();
 
             public static string status => nameof(status);
             public static string canUp => nameof(canUp);
@@ -102,7 +101,7 @@ namespace UD_Bones_Folder.Mod
             /// The number of milliseconds to wait for a response.
             /// </summary>
             [JsonProperty]
-            public int TimeoutMS = 1500;
+            public int TimeoutMS = DEFAULT_TIMEOUT;
 
             /// <summary>
             /// Current unused but will allow for effectively (optionally) password protecting a sever which will requiring this be assigned and sent along with the request.
@@ -191,6 +190,7 @@ namespace UD_Bones_Folder.Mod
                         if (IsRunning)
                         {
                             WrittenEnabled = null;
+                            // ClearReportsCache();
                             Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
                                 $"Connection re-established to {GetHostNameWithProtocol()} - Re-enabled");
                             ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
@@ -211,6 +211,29 @@ namespace UD_Bones_Folder.Mod
                     ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                 }
             };
+
+            private IEnumerable<Report> _ReportsCache;
+            public IEnumerable<Report> ReportsCache
+            {
+                get
+                {
+                    if (_ReportsCache == null)
+                    {
+                        //Utils.Log($"{ToString()} - {nameof(_ReportsCache)} is null");
+                        var cachedReports = GetBonesReports();
+                        /*if (cachedReports == null)
+                            Utils.Log($"{2.Indent()}cachedReports null");
+                        else
+                        if (cachedReports.Count() == 0)
+                            Utils.Log($"{2.Indent()}cachedReports empty");
+                        else
+                            Utils.Log($"{1.Indent()}cachedReports: {cachedReports.Count()}");*/
+
+                        _ReportsCache = cachedReports;
+                    }
+                    return _ReportsCache;
+                }
+            }
 
             public Host()
             {
@@ -237,12 +260,6 @@ namespace UD_Bones_Folder.Mod
                     this.AuthToken = AuthToken;
 
                 this.TimeoutMS = TimeoutMS;
-            }
-
-            [ModSensitiveCacheInit]
-            public static void ActivateLinuxWarningFlag()
-            {
-                // AllowPromptAboutLinux = true;
             }
 
             private static void ClearStatusCheckTimer(ref Timer StatusCheckTimer, int Indent = 0)
@@ -306,7 +323,10 @@ namespace UD_Bones_Folder.Mod
             }
 
             public void ClearReportsCache()
-                => _ReportsCache = null;
+            {
+                // OsseousAsh.ClearReportsCache();
+                _ReportsCache = null;
+            }
 
             public static void Parse(string HostName, out string Name, out int? Port, out bool Encrypted)
             {
@@ -507,7 +527,10 @@ namespace UD_Bones_Folder.Mod
             {
                 IsBuilt = true;
                 if (Ping)
+                {
                     _ = IsRunning;
+                    ClearReportsCache();
+                }
             }
 
             public int? GetTimeout()
@@ -813,6 +836,8 @@ namespace UD_Bones_Folder.Mod
                 if (!Enabled)
                     return false;
 
+                //Utils.Log($"{1.Indent()}{nameof(GetServerStatus)}, {nameof(RethrowForLinuxPrompt)}: {RethrowForLinuxPrompt}");
+
                 string uRI = statusGetRoute();
                 HttpWebRequest httpReq = null;
                 int? timeout = GetTimeout();
@@ -849,6 +874,7 @@ namespace UD_Bones_Folder.Mod
                             && jObject["status"].ToObject<string>() is string statusString
                             && statusString == "Running")
                         {
+                            //Utils.Log($"{2.Indent()}return true");
                             return true;
                         }
                         else
@@ -866,14 +892,12 @@ namespace UD_Bones_Folder.Mod
                 {
                     Utils.Error($"Failed receiving GET response for {uRI}", x);
                 }
+                //Utils.Log($"{1.Indent()}Fell out.");
                 return false;
             }
 
             public bool GetCanUp()
             {
-                if (!Enabled)
-                    return false;
-
                 if (!IsRunning)
                     return false;
 
@@ -936,13 +960,11 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
-                if (!Enabled
+                if (!IsRunning
                     || BonesID.IsNullOrEmpty()
                     || SaveBonesJSON == null
                     || SavGz.IsNullOrEmpty())
                     return Guid.Empty;
-
-                SaveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
 
                 string uRI = BonesPostRoute();
 
@@ -950,19 +972,24 @@ namespace UD_Bones_Folder.Mod
                 int? timeout = GetTimeout();
                 try
                 {
-                    httpReq = CreatePostJSON(
-                        URI: uRI,
-                        Timeout: timeout,
-                        Proc: async delegate (System.IO.StreamWriter streamWriter)
-                        {
-                            using var record = new Record(
-                                UserID: Config.ID,
-                                BonesID: BonesID,
-                                SaveBonesJSON: SaveBonesJSON,
-                                SavGz: SavGz)
-                            ;
-                            await streamWriter.WriteAsync(JsonConvert.SerializeObject(record));
-                        });
+                    using (var tempSaveBonesJSON = SaveBonesJSON.Clone())
+                    {
+                        tempSaveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
+
+                        httpReq = CreatePostJSON(
+                            URI: uRI,
+                            Timeout: timeout,
+                            Proc: async delegate (System.IO.StreamWriter streamWriter)
+                            {
+                                using var record = new Record(
+                                    UserID: Config.ID,
+                                    BonesID: BonesID,
+                                    SaveBonesJSON: tempSaveBonesJSON,
+                                    SavGz: SavGz)
+                                ;
+                                await streamWriter.WriteAsync(JsonConvert.SerializeObject(record));
+                            });
+                    }
                 }
                 catch (Exception x)
                 {
@@ -1017,8 +1044,7 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
-                if (!Enabled
-                    || !IsRunning
+                if (!IsRunning
                     || BonesID.IsNullOrEmpty()
                     || Token.IsEmptyOrDefault()
                     || SavGz.IsNullOrEmpty())
@@ -1144,10 +1170,9 @@ namespace UD_Bones_Folder.Mod
             #endregion
             #region Post Bones Report
 
-            public async Task<bool> PostBonesReport(Report Report)
+            public async Task<bool> PostBonesReport(Report Report, bool ClearReportsCache = true)
             {
-                if (!Enabled
-                    || !IsRunning
+                if (!IsRunning
                     || Report == null
                     || Report.BonesID.IsNullOrEmpty())
                     return false;
@@ -1187,8 +1212,10 @@ namespace UD_Bones_Folder.Mod
                             {
                                 Utils.Info($"Successfully reported {Report.BonesID} on server at \"{ToString()}\"" +
                                     $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                                
+                                if (ClearReportsCache)
+                                    this.ClearReportsCache();
 
-                                ClearReportsCache();
                                 return success;
                             }
                         }
@@ -1218,8 +1245,7 @@ namespace UD_Bones_Folder.Mod
 
             public async Task<bool> GetBonesReportBlockedCheck(string BonesID)
             {
-                if (!Enabled
-                    || !IsRunning
+                if (!IsRunning
                     || BonesID.IsNullOrEmpty()
                     || (Config?.ID ?? Guid.Empty).IsEmptyOrDefault())
                     return false;
@@ -1280,10 +1306,10 @@ namespace UD_Bones_Folder.Mod
                 return false;
             }
 
-            public async Task<IEnumerable<Report>> GetBonesReportsAsync()
+            public IEnumerable<Report> GetBonesReports()
             {
-                if (!Enabled
-                    || !IsRunning)
+                //Utils.Log($"{1.Indent()}{nameof(GetBonesReports)}");
+                if (!IsRunning)
                     return null;
 
                 string uRI = BonesReportsGetRoute();
@@ -1307,7 +1333,7 @@ namespace UD_Bones_Folder.Mod
                     var httpRes = (HttpWebResponse)httpReq.GetResponse();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
-                        var result = await streamReader.ReadToEndAsync();
+                        var result = streamReader.ReadToEnd();
                         if (httpRes.StatusCode == HttpStatusCode.OK)
                         {
                             try
@@ -1336,7 +1362,7 @@ namespace UD_Bones_Folder.Mod
                                         }
                                         catch (Exception x)
                                         {
-                                            Utils.Error($"Deserializing {nameof(GetBonesReportsAsync)} response to {nameof(IEnumerable<Report>)}", x);
+                                            Utils.Error($"Deserializing {nameof(GetBonesReports)} response to {nameof(IEnumerable<Report>)}", x);
                                             break;
                                         }
                                     }
@@ -1348,20 +1374,20 @@ namespace UD_Bones_Folder.Mod
                             }
                             catch (Exception x)
                             {
-                                Utils.Error($"Reading {nameof(GetBonesReportsAsync)} response", x);
+                                Utils.Error($"Reading {nameof(GetBonesReports)} response", x);
                                 return null;
                             }
                         }
                         else
                         {
-                            Utils.Warn($"{nameof(GetBonesReportsAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            Utils.Warn($"{nameof(GetBonesReports)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                         }
                     }
                 }
                 catch (WebException x)
                 {
                     if (HandleTimeoutWebException(x, uRI, timeout))
-                        return null;
+                        return Enumerable.Empty<Report>();
                     throw x;
                 }
                 catch (Exception x)
@@ -1437,8 +1463,8 @@ namespace UD_Bones_Folder.Mod
 
             private SaveBonesJSON[] GetSaveBonesJSONs()
             {
-                if (!Enabled
-                    || !IsRunning)
+                //Utils.Log($"{3.Indent()}GetSaveBonesJSONs");
+                if (!IsRunning)
                     return null;
 
                 string uRI = BonesInfosGetRoute();
@@ -1469,7 +1495,11 @@ namespace UD_Bones_Folder.Mod
                         {
                             try
                             {
-                                return JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
+                                var saveBonesJSONs = JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
+                                foreach (var saveBonesJSON in saveBonesJSONs)
+                                    saveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
+
+                                return saveBonesJSONs;
                             }
                             catch (Exception x)
                             {
@@ -1516,8 +1546,7 @@ namespace UD_Bones_Folder.Mod
 
                     var saveBonesInfo = SaveBonesJSON.InfoFromJson(
                         SaveBonesJSON: saveBonesJSON,
-                        SaveLocation: GetHostNameWithProtocol(TrailingSlash: true),
-                        FileName: CombineRoute(SavGz, saveBonesJSON.ID),
+                        FileLocationData: FileLocationData.NewOnline(this),
                         SaveSize: saveBonesJSON.Size);
 
                     yield return saveBonesInfo;
@@ -1530,8 +1559,7 @@ namespace UD_Bones_Folder.Mod
 
             private SaveBonesJSON GetSaveBonesJSON(string BonesID)
             {
-                if (!Enabled
-                    || !IsRunning)
+                if (!IsRunning)
                     return null;
 
                 string uRI = BonesInfoGetRoute(BonesID);
@@ -1598,18 +1626,16 @@ namespace UD_Bones_Folder.Mod
 
             public SaveBonesInfo GetSaveBonesInfo(string BonesID)
                 => GetSaveBonesJSON(BonesID)?.InfoFromJson(
-                    SaveLocation: ToString(),
-                    FileName: CombineRoute(SavGz, BonesID),
+                    FileLocationData: FileLocationData.NewOnline(this),
                     SaveSize: 0)
                 ;
 
             #endregion
             #region Get Bones SavGz
 
-            public byte[] GetBonesSavGz(string BonesID)
+            public async Task<byte[]> GetBonesSavGz(string BonesID)
             {
-                if (!Enabled
-                    || !IsRunning)
+                if (!IsRunning)
                     return null;
 
                 if (BonesID.IsNullOrEmpty())
@@ -1633,15 +1659,15 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         try
                         {
-                            if (streamReader.ReadAllBytes() is byte[] rawBuffer)
+                            if ((await streamReader.ReadAllBytesAsync()) is byte[] rawBuffer)
                             {
-                                //Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from {ToString()} ({Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name)})" +
-                                //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                                Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from {ToString()} ({Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name)})" +
+                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                                 return rawBuffer;
                             }
                         }
@@ -1673,8 +1699,7 @@ namespace UD_Bones_Folder.Mod
 
             public async Task<bool> PostDownloadBones(string BonesID, FileLocationData LocationData)
             {
-                if (!Enabled
-                    || !IsRunning)
+                if (!IsRunning)
                     return false;
 
                 /*if (Enabled)        // remove this to start testing again.
@@ -1715,8 +1740,8 @@ namespace UD_Bones_Folder.Mod
                         {
                             string catchFlag = "top";
                             bool restoreBackup = false;
-                            string jsonFileName = BonesManager.GetInfoFilePath(UD_Bones_BonesSaver.BonesName);
-                            string saveFileName = BonesManager.GetSaveFilePath(UD_Bones_BonesSaver.BonesName);
+                            string jsonFileName = BonesManager.GetInfoFileName(BonesManager.BonesFileName);
+                            string saveFileName = BonesManager.GetSaveFileName(BonesManager.BonesFileName);
                             string jsonFilePath = LocationData.WithFileName(Path.Combine(BonesID, jsonFileName));
                             string saveFilePath = LocationData.WithFileName(Path.Combine(BonesID, saveFileName));
                             try
@@ -1789,8 +1814,7 @@ namespace UD_Bones_Folder.Mod
                 SaveBonesJSON SaveBonesJSON
                 )
             {
-                if (!Enabled
-                    || !IsRunning
+                if (!IsRunning
                     || BonesID.IsNullOrEmpty()
                     || SaveBonesJSON == null)
                     return false;
@@ -1863,6 +1887,7 @@ namespace UD_Bones_Folder.Mod
                 && Name == Other.Name
                 && Port == Other.Port
                 && Encrypted == Other.Encrypted
+                && TimeoutMS == Other.TimeoutMS
                 && AuthToken == Other.AuthToken
                 && (IgnoreDisabled
                     || GetEnabledValueForMenu() == Other.GetEnabledValueForMenu())

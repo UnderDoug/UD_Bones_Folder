@@ -48,6 +48,30 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
+            [JsonIgnore]
+            private bool _EnableDownloads;
+            
+            public bool EnableDownloads
+            {
+                get => _EnableDownloads;
+                set
+                {
+                    WriteEnableDownloads(value);
+                }
+            }
+
+            [JsonIgnore]
+            private bool _EnableUploads;
+            
+            public bool EnableUploads
+            {
+                get => _EnableUploads;
+                set
+                {
+                    WriteEnableUploads(value);
+                }
+            }
+
             public int? CustomPermyriadChance;
 
             [JsonIgnore]
@@ -82,14 +106,21 @@ namespace UD_Bones_Folder.Mod
                             ID = Guid.NewGuid(),
                             Handle = DefaultOsseousAshHandle,
                             AskAtStartup = true,
+                            EnableDownloads = false,
+                            EnableUploads = false,
                             CustomPermyriadChance = Options.DefaultPermyriadChance,
                             LocationData = fileLocationData,
                         };
                         Options.EnableOsseousAshStartupPopup = true;
+                        Options.EnableOsseousAshDownloads = false;
+                        Options.EnableOsseousAshUploads = false;
                     }
                     else
+                    {
                         Options.EnableOsseousAshStartupPopup = configJSON.AskAtStartup;
-
+                        Options.EnableOsseousAshDownloads = configJSON.EnableDownloads;
+                        Options.EnableOsseousAshUploads = configJSON.EnableUploads;
+                    }
                     return configJSON;
                 }
                 return null;
@@ -178,6 +209,30 @@ namespace UD_Bones_Folder.Mod
                         => XRL.UI.Options.SetOption(
                             ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshStartupPopup)}",
                             Value: Options.EnableOsseousAshStartupPopup = v));
+            }
+
+            public void WriteEnableDownloads(bool Value, bool Propagate = true)
+            {
+                WriteUpdateField(
+                    Field: ref _EnableDownloads,
+                    Value: Value,
+                    Predicate: (f, v) => f != v,
+                    PostProc: (f, v)
+                        => XRL.UI.Options.SetOption(
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshDownloads)}",
+                            Value: Options.EnableOsseousAshDownloads = v));
+            }
+
+            public void WriteEnableUploads(bool Value, bool Propagate = true)
+            {
+                WriteUpdateField(
+                    Field: ref _EnableUploads,
+                    Value: Value,
+                    Predicate: (f, v) => f != v,
+                    PostProc: (f, v)
+                        => XRL.UI.Options.SetOption(
+                            ID: $"{MOD_PREFIX}{nameof(Options.EnableOsseousAshUploads)}",
+                            Value: Options.EnableOsseousAshUploads = v));
             }
 
             public void WriteHandle(string Handle)

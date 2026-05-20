@@ -65,6 +65,9 @@ namespace UD_Bones_Folder.Mod.Events
                     LunarRegent: LunarRegent,
                     BonesZone: BonesZone) is not AfterBonesZoneLoadedEvent E)
                 return;
+                        
+            if (The.Player?.WantEvent(E.GetID(), E.GetCascadeLevel()) is true)
+                The.Player.HandleEvent(E);
 
             if (Zone.WantEvent(E.GetID(), E.GetCascadeLevel()))
                 Zone.HandleEvent(E);

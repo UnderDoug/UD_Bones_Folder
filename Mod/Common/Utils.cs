@@ -38,7 +38,8 @@ namespace UD_Bones_Folder.Mod
     {
         public static ModInfo ThisMod => ModManager.GetMod(MOD_ID);
 
-        public static string AuthorOnPlatforms => $"{ThisMod.Manifest.Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";
+        public static string Author => ThisMod.Manifest.Author;
+        public static string AuthorOnPlatforms => $"{Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";
 
         public static string BothBonesLocations 
             => $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSyncPath)} -OR- " +
@@ -575,6 +576,10 @@ namespace UD_Bones_Folder.Mod
             => ThisMod.Warn(Message)
             ;
 
+        public static void Warn(object Context, Exception X)
+            => Warn($"{Context}: {X}")
+            ;
+
         public static void Info(object Message)
             => MetricsManager.LogModInfo(ThisMod, Message)
             ;
@@ -630,7 +635,7 @@ namespace UD_Bones_Folder.Mod
             if (Context.Capitalize)
                 indefiniteArticle = indefiniteArticle.Capitalize();
 
-            return $"{indefiniteArticle} =LunarShader:{adjective}{title}:{shaderOffset}="
+            return $"{indefiniteArticle} {adjective}=LunarShader:{title}:{shaderOffset}="
                     .StartReplace()
                     .ToString()
                 ;

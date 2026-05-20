@@ -1,8 +1,59 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <objects>
+  
   <object Name="Lunar Regent" Inherits="Humanoid">
     <part Name="Render" Tile="Creatures/mad_lunar_regent_human.png" />
     <tag Name="ExcludeFromDynamicEncounters" Value="*noinherit" />
-    <tag Name="UD_BonesFolder_IsMad" Value="true" />
+    <tag Name="UD_Bones_Folder_IsMad" Value="true" />
   </object>
+  
+  <object Name="Broken Lunar Regent" Inherits="Creature">
+    <part Name="Render" DisplayName="Broken Moon Sovran"
+          ColorString="&amp;W" RenderString="@"
+          Tile="Creatures/mad_lunar_regent_human.png"
+          TileColor="&amp;W" DetailColor="G" />
+    <part Name="Description" Short="Potential snuffed by introspective fever-break stands, manifest, in philosophical ideal; feet planted firmly on the ground." />
+    <part Name="Brain" Factions="Strangers-100" />
+    <part Name="UD_Bones_BrokenLunarRegent" />
+  </object>
+  
+  <object Name="Broken Mad Lunar Regent" Inherits="Broken Lunar Regent">
+    <part Name="Render" DisplayName="Broken Mad Moon Sovran" />
+    <part Name="Brain" Factions="Entropic-100,Strangers-50" />
+    <part Name="UD_Bones_BrokenLunarRegent" PreferMad="true" />
+    <tag Name="UD_Bones_Folder_IsMad" Value="true" />
+  </object>
+  
+  <object Name="Broken Lunar Regent Low Level" Inherits="Broken Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="10" />
+  </object>
+  
+  <object Name="Broken Mad Lunar Regent Low Level" Inherits="Broken Mad Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="10" />
+  </object>
+  
+  <object Name="Broken Lunar Regent Mid Level" Inherits="Broken Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="25" />
+  </object>
+  
+  <object Name="Broken Mad Lunar Regent Mid Level" Inherits="Broken Mad Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="25" />
+  </object>
+  
+  <object Name="Broken Lunar Regent High Level" Inherits="Broken Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="40" />
+  </object>
+  
+  <object Name="Broken Mad Lunar Regent High Level" Inherits="Broken Mad Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="40" />
+  </object>
+  
+  <object Name="Broken Lunar Regent Over Level" Inherits="Broken Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="65" />
+  </object>
+  
+  <object Name="Broken Mad Lunar Regent Over Level" Inherits="Broken Mad Lunar Regent">
+    <part Name="UD_Bones_BrokenLunarRegent" ForPlayerLevel="65" />
+  </object>
+  
 </objects>

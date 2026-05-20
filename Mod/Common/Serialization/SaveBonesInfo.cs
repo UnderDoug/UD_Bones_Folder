@@ -25,6 +25,7 @@ using XRL.UI.Framework;
 using XRL.World;
 using XRL.World.Parts;
 
+using ColorUtility = ConsoleLib.Console.ColorUtility;
 using Event = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod
@@ -121,7 +122,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static string Sav => $"{UD_Bones_BonesSaver.BonesName}.sav";
+        public static string Sav => $"{BonesManager.BonesFileName}.sav";
         public static string SavGz => $"{Sav}.gz";
         public static string SavGzBak => $"{SavGz}.bak";
         public static string Json => SaveBonesJSON.FileName;
@@ -129,6 +130,20 @@ namespace UD_Bones_Folder.Mod
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
 
         public static int BaseBonesWeight = 50;
+
+        public static IRenderable ModConfigIcon = new Renderable(
+            Tile: "Abilities/sw_skill_tinkering.png",
+            ColorString: "&y",
+            TileColor: "&y",
+            DetailColor: 'c');
+
+        public static IRenderable UnavailableModsIcon = new Renderable(
+            Tile: "Abilities/abil_berate.bmp",
+            ColorString: $"&K",
+            TileColor: $"&K",
+            DetailColor: 'R');
+
+        public static IRenderable YesAvailableModsIcon = new Renderable(UnavailableModsIcon).setDetailColor('y');
 
         public Guid OsseousAshID
             => GetBonesJSON()?.OsseousAshID
@@ -150,11 +165,8 @@ namespace UD_Bones_Folder.Mod
 
         public BonesStats Stats => GetBonesJSON()?.Stats;
 
-        public bool IsMad => (GetBonesJSON()?.IsCharIconSwapped() is true)
-            || (GenotypeName?.IsNullOrEmpty() is not false)
-            || (SubtypeName?.IsNullOrEmpty() is not false)
-            || !GenotypeFactory.GenotypesByName.ContainsKey(GenotypeName)
-            || !SubtypeFactory.SubtypesByName.ContainsKey(SubtypeName)
+        private bool? _IsMad;
+        public bool IsMad => _IsMad ??= (GetBonesJSON()?.IsCharIconSwapped() is true)
             || !GameObjectFactory.Factory.HasBlueprint(GetBonesJSON()?.Blueprint ?? "MISSING_BLUEPRINT")
             ;
 
@@ -178,12 +190,14 @@ namespace UD_Bones_Folder.Mod
         public BonesRender Render => _Render ??= new(GetBonesJSON());
         public BonesRender FlippedRender => new(Render, HFlip: !Render.GetHFlip());
 
-        public string FullBonesPathSav => Path.Combine(Directory, Sav);
-        public string FullBonesPathSavGz => Path.Combine(Directory, SavGz);
-        public string FullBonesPathBak => Path.Combine(Directory, SavGzBak);
+        public string FullBonesPathSav => FileLocationData.WithFileName(Sav);
+        public string FullBonesPathSavGz => FileLocationData.WithFileName(SavGz);
+        public string FullBonesPathBak => FileLocationData.WithFileName(SavGzBak);
 
-        public string DisplayDirectory => DataManager.SanitizePathForDisplay(Directory);
-        public string BonesBakDisplay => DataManager.SanitizePathForDisplay(FullBonesPathBak);
+        public string DisplayDirectory => FileLocationData.SanitiseForDisplay();
+        public string BonesBakDisplay => FileLocationData.SanitiseForDisplay(SavGzBak);
+
+        public bool IsDummy;
 
         public FileLocationData FileLocationData
         {
@@ -203,6 +217,14 @@ namespace UD_Bones_Folder.Mod
                 }
                 return FileLocationDataSet.OrderBy(data => data.Type).FirstOrDefault();
             }
+            set
+            {
+                if (value == null)
+                    FileLocationDataSet?.Clear();
+                else
+                if (!FileLocationDataSet.Any(fld => fld.SameAs(value)))
+                    FileLocationDataSet.Add(value);
+            }
         }
 
         private HashSet<FileLocationData> _FileLocationDataSet;
@@ -211,16 +233,20 @@ namespace UD_Bones_Folder.Mod
         public OsseousAsh.Host Host => FileLocationData?.Host;
 
         public bool IsOnline
-            => FileLocationData.Type == FileLocationData.LocationType.Online
-            || Host != null
+            => FileLocationData != null
+            && FileLocationData.Type.IsOnline()
+            && Host != null
             ;
 
         public bool IsCrematable
-            => FileLocationData.Type < FileLocationData.LocationType.Mod
+            => !IsDummy
+            && FileLocationData != null
+            && FileLocationData.Type.IsFile()
             && FileLocationData.Exists()
             ;
 
-        public bool IsBlocked => OsseousAsh.IsBonesBlocked(ID); //OsseousAsh.IsBonesReported(ID)?.WaitResult() is true;
+        protected bool? _IsBlocked;
+        public bool IsBlocked => _IsBlocked ??= OsseousAsh.IsBonesBlocked(ID);
 
         public bool IsGenerated => GetBonesJSON()?.GameMode == BonesModeModule.BONES_MODE;
 
@@ -228,10 +254,32 @@ namespace UD_Bones_Folder.Mod
             : base()
         { }
 
+        public static SaveBonesInfo DummyBonesInfo(
+            BonesManagement.VisibilityModes VisibilityMode,
+            FileLocationData LocationData
+            )
+            => SaveBonesJSON.InfoFromJson(
+                SaveBonesJSON: SaveBonesJSON.DummyBonesJSON(VisibilityMode, LocationData?.Type ?? FileLocationData.LocationType.None),
+                FileLocationData: LocationData,
+                SaveSize: 0L,
+                IsDummy: true)
+            ;
+
         public string GetName()
             => $"{(IsMad ? "Mad " : null)}{Name}"
                 .StartReplace()
                 .ToString()
+            ;
+
+        public string GetBonesMenuString(int N)
+            => N switch
+            {
+                0 => $"{GetName()}::{Description}".Colored("W"),
+                1 => ColorUtility.CapitalizeExceptFormatting(Info),
+                2 => $"{DeathReason} on {SaveTime}",
+                3 => $"{Size} {"{" + ID + "} "}".Colored("K"),
+                _ => throw new ArgumentOutOfRangeException(nameof(N), "Must be between 0 and 3 inclusive."),
+            }
             ;
 
         private static async Task SafeWriteSaveBonesJSONAsync(FileLocationData LocationData, SaveBonesJSON BonesJSON, bool RequireExisting = true)
@@ -274,13 +322,16 @@ namespace UD_Bones_Folder.Mod
                 Utils.Log($"Failed to {nameof(IncrementStat)} {StatName ?? "NO_STAT_NAME"}, {nameof(IncrementStatFunc)} returned {false}");
                 return;
             }
-            FileLocationData.PerformBasedOnTypeAsync(
-                Value: bonesJSON,
-                OnlineCallback: v => FileLocationData.Host.PutBonesStats(v.ID, bonesJSON),
-                ModCallback: v => Task.Run(() => Utils.Warn($"Currently unable to increment Mod-loaded bones files.")),
-                FileCallback: v => SafeWriteSaveBonesJSONAsync(),
-                DefaultCallback: v => Task.Run(() => Utils.Warn($"Attempted to increment stat for unknown or missing File Location Type: {(FileLocationData?.Type)?.ToString() ?? "NO_DATA"}."))
-                ).Wait();
+            foreach (var fileLocationData in FileLocationDataSet)
+            {
+                fileLocationData.PerformBasedOnTypeAsync(
+                    Value: bonesJSON,
+                    OnlineCallback: v => fileLocationData.Host.PutBonesStats(v.ID, bonesJSON),
+                    ModCallback: v => Task.Run(() => Utils.Warn($"Currently unable to increment Mod-loaded bones files.")),
+                    FileCallback: v => SafeWriteSaveBonesJSONAsync(),
+                    DefaultCallback: v => Task.Run(() => Utils.Warn($"Attempted to increment stat for unknown or missing File Location Type: {(FileLocationData?.Type)?.ToString() ?? "NO_DATA"}."))
+                    ).Wait();
+            }
         }
 
         public void IncrementEncountered()
@@ -299,6 +350,12 @@ namespace UD_Bones_Folder.Mod
             => IncrementStat(
                 IncrementStatFunc: () => Stats?.IncrementReclaimed(OsseousAsh.Config.ID) is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Reclaimed)))
+                ;
+
+        public void IncrementBroken()
+            => IncrementStat(
+                IncrementStatFunc: () => Stats?.IncrementBroken(OsseousAsh.Config.ID) is true,
+                StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Broken)))
                 ;
 
         public static void RepairBonesSpec(SaveBonesInfo BonesInfo, BonesSpec BonesSpec)
@@ -324,23 +381,31 @@ namespace UD_Bones_Folder.Mod
                 ).Wait();
         }
 
-        public static async Task<SaveBonesInfo> GetSaveBonesInfo(string Directory)
+        public static async Task<SaveBonesInfo> GetPhysicalSaveBonesInfoAsync(FileLocationData FileLocationData)
         {
+            if (FileLocationData == null)
+                return null;
+
+            if (!FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced))
+            {
+                Utils.Warn($"Attempted to get \"on disk\" {nameof(SaveBonesInfo)} from {nameof(FileLocationData)} " +
+                    $"of inappropriate type: {FileLocationData.Type}({(int)FileLocationData.Type})");
+                return null;
+            }
             try
             {
-                if (Path.GetFileNameWithoutExtension(Directory).EqualsNoCase("mods")
-                    || Path.GetFileNameWithoutExtension(Directory).EqualsNoCase("textures"))
+                if (Path.GetFileNameWithoutExtension(FileLocationData).EqualsNoCase("mods")
+                    || Path.GetFileNameWithoutExtension(FileLocationData).EqualsNoCase("textures"))
                     return null;
 
-                if (Path.Combine(Directory, Json) is string path
-                    && File.Exists(path))
-                    return await SaveBonesJSON.ReadSaveBonesJson(Directory, Json);
+                if (FileLocationData.FileExists(Json))
+                    return await SaveBonesJSON.ReadSaveBonesJson(FileLocationData);
 
-                if (!Platform.IO.Directory.EnumerateFiles(Directory).Any(f => !f.EndsWith(".json")))
+                if (!Platform.IO.Directory.EnumerateFiles(FileLocationData).Any(f => !f.EndsWith(".json")))
                 {
                     try
                     {
-                        Platform.IO.Directory.Delete(Directory);
+                        Platform.IO.Directory.Delete(FileLocationData);
                     }
                     catch (Exception x)
                     {
@@ -348,8 +413,7 @@ namespace UD_Bones_Folder.Mod
                     }
                 }
                 else
-                    Utils.Warn($"Weird bones directory with no .json file present: {DataManager.SanitizePathForDisplay(Directory)}");
-
+                    Utils.Warn($"Weird bones directory with no .json file present: {FileLocationData.SanitiseForDisplay()}");
             }
             catch (ThreadInterruptedException x)
             {
@@ -390,8 +454,8 @@ namespace UD_Bones_Folder.Mod
             => GetBonesFilePathAsync().WaitResult()
             ;
 
-        public byte[] GetSavGzBytes()
-            => Host.GetBonesSavGz(ID)
+        public async Task<byte[]> GetSavGzBytes()
+            => await Host.GetBonesSavGz(ID)
             ;
 
         public async Task<System.IO.Stream> GetSavGzStreamAsync()
@@ -399,7 +463,7 @@ namespace UD_Bones_Folder.Mod
             if ((await GetBonesFilePathAsync()) is string bonesPath)
                 return File.OpenRead(bonesPath);
 
-            byte[] cloudBytes = GetSavGzBytes();
+            byte[] cloudBytes = await GetSavGzBytes();
 
             return !cloudBytes.IsNullOrEmpty()
                 ? new System.IO.MemoryStream(cloudBytes)
@@ -453,7 +517,7 @@ namespace UD_Bones_Folder.Mod
             return Math.Max(1, saveWeight);
         }
 
-        public string OutputBlurb()
+        public string GetBlurbString()
         {
             var sB = Event.NewStringBuilder();
 
@@ -499,12 +563,96 @@ namespace UD_Bones_Folder.Mod
             return Event.FinalizeString(sB);
         }
 
+        public async Task<UIUtils.CascadableResult> ShowBlurbAsync()
+        {
+            SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
+            await Popup.NewPopupMessageAsync(
+                message: Markup.Transform(GetBlurbString()),
+                buttons: UIUtils.BackancelButton,
+                contextTitle: $"Bones File Stats".Colored("yellow"),
+                afterRender: FlippedRender,
+                PopupID: $"{nameof(SaveBonesInfo)}.{nameof(ShowBlurbAsync)}::{ID}");
+
+            return UIUtils.CascadableResult.Continue;
+        }
+
+        public static async Task<UIUtils.CascadableResult> ShowBlurbAsync(SaveBonesInfo SaveBonesInfo)
+            => await SaveBonesInfo.ShowBlurbAsync()
+            ;
+
+        public static async Task<UIUtils.CascadableResult> AskForBonesReportAsync(SaveBonesInfo SaveBonesInfo)
+        {
+            if (await OsseousAsh.TryReportBonesAsync(SaveBonesInfo.ID, null))
+            {
+                SaveBonesInfo._IsBlocked = null;
+            }
+            return UIUtils.CascadableResult.Continue;
+        }
+
+        public static async Task<UIUtils.CascadableResult> BlockUnblockAsync(SaveBonesInfo SaveBonesInfo)
+        {
+            if (!SaveBonesInfo.IsBlocked)
+            {
+                /*var existingReports = OsseousAsh.Hosts.GetReportsMatchingSpec(OsseousAsh.Config.ID, SaveBonesInfo.ID);
+                if (!existingReports.IsNullOrEmpty())
+                {
+                    foreach (var report in existingReports)
+                    {
+
+                    }
+                }*/
+                switch (await Popup.ShowYesNoCancelAsync(
+                    Message: "{{yellow|Please Note}}: It's not currently possible to unblock bones " +
+                        "without contacting the server admin to have them do it manually.\n\n" +
+                        "Are you sure you want to block these bones?"))
+                {
+                    case DialogResult.Cancel:
+                        return UIUtils.CascadableResult.Cancel;
+                    case DialogResult.Yes:
+                        if (await OsseousAsh.TryReportBonesAsync(new OsseousAsh.Report
+                        {
+                            OsseousAshID = OsseousAsh.Config.ID,
+                            BonesID = SaveBonesInfo.ID,
+                            Blocked = true,
+                            Type = OsseousAsh.Report.ReportTypes.Other,
+                            Description = "For Block",
+                        },
+                        Silent: true))
+                        {
+                            SaveBonesInfo._IsBlocked = null;
+                        }
+                        //Utils.Log("BlockUnblockAsync: DialogResult.Yes");
+                        return UIUtils.CascadableResult.BackSilent;
+                    case DialogResult.No:
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                await Popup.NewPopupMessageAsync("Unblocking is unfortunately not supported in this verson of the OsseousAsh REST API.\n\n" +
+                    "Please contact the server admin to have the block manually removed");
+            }
+            return UIUtils.CascadableResult.Continue;
+        }
+
         public void Cremate()
         {
             if (IsCrematable)
             {
-                BonesManager.DeleteBonesInfoDirectory(Directory);
-                WasCremated = true;
+                using var fileLocationDataList = ScopeDisposedList<FileLocationData>.GetFromPoolFilledWith(FileLocationDataSet);
+                foreach (var fileLocationData in fileLocationDataList)
+                {
+                    bool didCremate = fileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
+                    {
+                        FileLocationDataSet.Remove(fld);
+                        BonesManager.ClearHasSaveBones();
+                    });
+                    if (didCremate)
+                    {
+                        WasCremated = true;
+                    }
+                }
             }
         }
 
@@ -720,11 +868,7 @@ namespace UD_Bones_Folder.Mod
                             Element = bonesHasButNotAvailable,
                             Text = Event.FinalizeString(sB2),
                             Hotkey = 'x',
-                            Icon = new Renderable(
-                                Tile: "Abilities/abil_berate.bmp",
-                                ColorString: $"&K",
-                                TileColor: $"&K",
-                                DetailColor: 'R'),
+                            Icon = UnavailableModsIcon,
                             Callback = async delegate (IEnumerable<string> element)
                             {
                                 string message = Event.FinalizeString(Event.NewStringBuilder().AppendUnavailableMods(element));
@@ -732,11 +876,7 @@ namespace UD_Bones_Folder.Mod
                                 await Popup.NewPopupMessageAsync(
                                     message: message,
                                     title: unavailableCount.Things("unavailable mod").Colored("red"),
-                                    afterRender: new Renderable(
-                                        Tile: "Abilities/abil_berate.bmp",
-                                        ColorString: $"&K",
-                                        TileColor: $"&K",
-                                        DetailColor: 'R'));
+                                    afterRender: UnavailableModsIcon);
 
                                 return UIUtils.CascadableResult.BackSilent;
                             },
@@ -748,11 +888,7 @@ namespace UD_Bones_Folder.Mod
                             OptionDataSet: options,
                             Title: title,
                             Intro: sB.ToString(),
-                            IntroIcon: new Renderable(
-                                Tile: "Items/sw_toolbox_large.bmp",
-                                ColorString: $"&c",
-                                TileColor: $"&c",
-                                DetailColor: 'C'),
+                            IntroIcon: ModConfigIcon,
                             DefaultSelected: !options.IsNullOrEmpty() ? 0 : -1,
                             OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                             OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
@@ -774,71 +910,20 @@ namespace UD_Bones_Folder.Mod
                         await Popup.NewPopupMessageAsync(
                             message: sB.ToString(),
                             title: title,
-                            afterRender: new Renderable(
-                                Tile: "Items/sw_toolbox_large.bmp",
-                                ColorString: $"&c",
-                                TileColor: $"&c",
-                                DetailColor: 'C'));
+                            afterRender: ModConfigIcon);
                     }
-
                 }
                 while (!result.IsCancel());
-
-                Event.ResetTo(sB);
-
-                if (!loadedButBonesMissing.IsNullOrEmpty()
-                    || !bonesHasButNotLoaded.IsNullOrEmpty())
-                {
-                    /*
-                    var options = new Dictionary<string, string>
-                    {
-                        { "Restart {{yellow|adding enabled}} mods from bones file's mod configuration", "Add" },
-                        { "Restart {{red|using}} bones file's {{red|entire}} mod configuration", "Use" },
-                    };
-                    using var optionsStrings = ScopeDisposedList<string>.GetFromPoolFilledWith(options.Keys);
-
-                    if (bonesHasButNotLoaded.IsNullOrEmpty())
-                        optionsStrings.RemoveAt(0);
-
-                    if (loadedButBonesMissing.IsNullOrEmpty())
-                        optionsStrings.RemoveAt(1);
-
-                    int pickedIndex = await Popup.PickOptionAsync(
-                        Title: "Mod Configuration Differs",
-                        Intro: Event.FinalizeString(sB),
-                        Options: optionsStrings,
-                        AllowEscape: true);
-
-                    if (pickedIndex < 0)
-                        return false;
-
-                    string picked = options[optionsStrings[pickedIndex]];
-
-                    if (picked.EqualsNoCase("Add")
-                        || picked.EqualsNoCase("Use"))
-                        foreach (string bonesExtra in bonesHasButNotLoaded)
-                            ModManager.GetMod(bonesExtra).IsEnabled = true;
-
-                    if (picked.EqualsNoCase("Use"))
-                        foreach (string bonesMissing in loadedButBonesMissing)
-                            ModManager.GetMod(bonesMissing).IsEnabled = false;
-
-                    ModManager.WriteModSettings();
-                    GameManager.Restart();
-                    */
-                }
-                else
-                {
-                    /*
-                    await Popup.NewPopupMessageAsync(
-                        message: Event.FinalizeString(sB),
-                        title: "Mod Configuration");
-                    */
-                }
             }
             Event.ResetTo(sB);
             return false;
         }
+
+        public static async Task<UIUtils.CascadableResult> AskRestoreModsAsync(SaveBonesInfo SaveBonesInfo)
+            => (await SaveBonesInfo.RestoreModsLoadedAsync(SaveBonesInfo.ModsEnabled))
+            ? UIUtils.CascadableResult.Cancel
+            : UIUtils.CascadableResult.Continue
+            ;
 
         public static UIUtils.CascadableResult EnableMods(IEnumerable<string> ModsToEnable)
         {

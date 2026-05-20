@@ -149,6 +149,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         private static HashSet<string> LockedMembers = new();
+
         private static bool? _EnableOsseousAshStartupPopup;
         [OptionFlag] public static bool EnableOsseousAshStartupPopup
         {
@@ -177,8 +178,62 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        [OptionFlag] public static bool EnableOsseousAshDownloads;
-        [OptionFlag] public static bool EnableOsseousAshUploads;
+        private static bool? _EnableOsseousAshDownloads;
+        [OptionFlag] public static bool EnableOsseousAshDownloads
+        {
+            get => (_EnableOsseousAshDownloads ??= Config?.EnableDownloads) ?? false;
+            set
+            {
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(EnableOsseousAshDownloads)))
+                {
+                    LockedMembers.Add(nameof(EnableOsseousAshDownloads));
+                    try
+                    {
+                        if (Config != null
+                            && Config.EnableDownloads != value)
+                        {
+                            Config.WriteEnableDownloads(value);
+                        }
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(EnableOsseousAshDownloads));
+                    }
+                }
+                if (_EnableOsseousAshDownloads != value)
+                    _EnableOsseousAshDownloads = value;
+            }
+        }
+
+        private static bool? _EnableOsseousAshUploads;
+        [OptionFlag] public static bool EnableOsseousAshUploads
+        {
+            get => (_EnableOsseousAshUploads ??= Config?.EnableUploads) ?? false;
+            set
+            {
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(EnableOsseousAshUploads)))
+                {
+                    LockedMembers.Add(nameof(EnableOsseousAshUploads));
+                    try
+                    {
+                        if (Config != null
+                            && Config.EnableUploads != value)
+                        {
+                            Config.WriteEnableUploads(value);
+                        }
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(EnableOsseousAshUploads));
+                    }
+                }
+                if (_EnableOsseousAshUploads != value)
+                    _EnableOsseousAshUploads = value;
+            }
+        }
+
         [OptionFlag] public static string OsseousAshHandle => Config?.Handle ?? DefaultOsseousAshHandle;
 
         public static async Task ManageOsseousAshHandleAsync()

@@ -145,6 +145,7 @@ namespace UD_Bones_Folder.Mod
 
             public void Write()
             {
+                // Utils.Log($"{nameof(Write)}({nameof(HostCollection)}: {LocationData}");
                 if (LocationData is not null
                     || TryFindBestOsseousAshPath(out LocationData, HostsFileName))
                     WriteToFile(LocationData, HostsFileName);
@@ -281,6 +282,79 @@ namespace UD_Bones_Folder.Mod
                 ColorString: $"&K",
                 TileColor: $"&K",
                 DetailColor: HostCollection?.LocationData?.GetFileLocationDataTypeColor()?[0] ?? 'y')
+            ;
+
+        public static IEnumerable<OsseousAsh.Report> CacheReports(this Rack<OsseousAsh.HostCollection> Hosts)
+        {
+            if (Hosts.IsNullOrEmpty())
+                yield break;
+
+            //Utils.Log($"{3.Indent()}Caching Reports");
+            foreach (var hostCollection in Hosts)
+            {
+                foreach (var host in hostCollection)
+                {
+                    if (!host.IsRunning)
+                        continue;
+
+                    var reportsCache = host.ReportsCache ?? Enumerable.Empty<OsseousAsh.Report>();
+                    foreach (var report in reportsCache)
+                        yield return report;
+                }
+            }
+        }
+
+        public static IEnumerable<OsseousAsh.Report> GetReports(
+            this Rack<OsseousAsh.HostCollection> Hosts,
+            Predicate<OsseousAsh.Report> Filter
+            )
+        {
+            if (Hosts.IsNullOrEmpty())
+                yield break;
+
+            //Utils.Log($"Getting Reports");
+            var reportsCache = OsseousAsh.ReportsCache ?? Enumerable.Empty<OsseousAsh.Report>();
+            foreach (var report in reportsCache)
+                if (Filter?.Invoke(report) is not false)
+                    yield return report;
+        }
+
+        public static IEnumerable<OsseousAsh.Report> GetReports(this Rack<OsseousAsh.HostCollection> Hosts)
+            => Hosts.GetReports(null)
+            ;
+
+        private static bool ReportMatchesSpec(
+            OsseousAsh.Report Report,
+            Guid OAID = default, 
+            string BonesID = null,
+            bool? Blocked = null
+            )
+        {
+            if (Report == null)
+                return false;
+
+            if (!OAID.IsEmptyOrDefault()
+                && Report.OsseousAshID != OAID)
+                return false;
+
+            if (!BonesID.IsNullOrEmpty()
+                && Report.BonesID != BonesID)
+                return false;
+
+            if (Blocked.HasValue
+                && Blocked.GetValueOrDefault() != Report.Blocked)
+                return false;
+
+            return true;
+        }
+
+        public static IEnumerable<OsseousAsh.Report> GetReportsMatchingSpec(
+            this Rack<OsseousAsh.HostCollection> Hosts,
+            Guid OAID = default,
+            string BonesID = null,
+            bool? Blocked = null
+            )
+            => Hosts.GetReports(r => ReportMatchesSpec(r, OAID, BonesID, Blocked))
             ;
     }
 }

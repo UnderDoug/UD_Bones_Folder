@@ -37,6 +37,76 @@ namespace UD_Bones_Folder.Mod.UI
 
         public string Mode => builder?.GetModule<QudGamemodeModule>()?.data?.Mode;
 
+        public class GameTypeDescriptor
+        {
+            public string ID;
+
+            public string Title;
+
+            public string IconTile;
+
+            public string IconForeground;
+
+            public string IconDetail;
+
+            public string Description;
+        }
+
+        public Dictionary<string, GameTypeDescriptor> GameTypes = new();
+
+        protected GameTypeDescriptor CurrentReadingGameTypeDescriptor;
+
+        public override Dictionary<string, Action<XmlDataHelper>> XmlNodes
+        {
+            get
+            {
+                Dictionary<string, Action<XmlDataHelper>> xmlNodes = base.XmlNodes;
+                xmlNodes.Add("types", HandleTypesNode);
+                return xmlNodes;
+            }
+        }
+
+        public Dictionary<string, Action<XmlDataHelper>> XmlTypesNodes => new Dictionary<string, Action<XmlDataHelper>>
+        {
+            { "type", HandleTypeNode },
+            { "icon", HandleTypeIconNode },
+            { "description", HandleTypeDescriptionNode }
+        };
+
+        public void HandleTypesNode(XmlDataHelper xml)
+        {
+            xml.HandleNodes(XmlTypesNodes);
+        }
+
+        protected void HandleTypeNode(XmlDataHelper xml)
+        {
+            string attribute = xml.GetAttribute("ID");
+            if (!GameTypes.TryGetValue(attribute, out CurrentReadingGameTypeDescriptor))
+            {
+                CurrentReadingGameTypeDescriptor = new GameTypeDescriptor
+                {
+                    ID = attribute
+                };
+                GameTypes.Add(attribute, CurrentReadingGameTypeDescriptor);
+            }
+            CurrentReadingGameTypeDescriptor.Title = xml.GetAttribute("Title");
+            xml.HandleNodes(XmlTypesNodes);
+            CurrentReadingGameTypeDescriptor = null;
+        }
+
+        protected void HandleTypeIconNode(XmlDataHelper xml)
+        {
+            CurrentReadingGameTypeDescriptor.IconTile = xml.GetAttribute("Tile");
+            CurrentReadingGameTypeDescriptor.IconDetail = xml.GetAttributeString("Detail", "W");
+            CurrentReadingGameTypeDescriptor.IconForeground = xml.GetAttributeString("Foreground", "y");
+            xml.DoneWithElement();
+        }
+
+        protected void HandleTypeDescriptionNode(XmlDataHelper xml)
+        {
+            CurrentReadingGameTypeDescriptor.Description = xml.GetTextNode();
+        }
+
         public override bool shouldBeEditable()
             => builder?.IsEditableGameMode() is true;
 
@@ -59,6 +129,17 @@ namespace UD_Bones_Folder.Mod.UI
                 windows.InsertRange(index + 1, this.windows.Values);
         }
 
+        public string GetSelectedType()
+        {
+            return data?.type;
+        }
+
+        public void SelectType(string type)
+        {
+            setData(new BonesModeModuleData(type));
+            AdvanceToEnd();
+        }
+
         public override object handleBootEvent(string id, XRLGame game, EmbarkInfo info, object element = null)
         {
             if (BonesManager.System != null)
@@ -79,7 +160,7 @@ namespace UD_Bones_Folder.Mod.UI
                     SimulateBeingSomewhereCool(player, worldBuilder);
 
                     if (player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
-                        bonesSaver.BonesMode = true;
+                        bonesSaver.BonesMode = (data.type == "InstantDeath");
                 }
             }
             return base.handleBootEvent(id, game, info, element);
@@ -584,7 +665,7 @@ namespace UD_Bones_Folder.Mod.UI
                             {
                                 virtualCreditWedges += creditWedgePart.Credits * go.Count;
                                 creditWedges.Add(creditWedgePart);
-                                Utils.Log($"{nameof(VirtualCreditWedges)}: {virtualCreditWedges} ({go.DebugName})");
+                                //Utils.Log($"{nameof(VirtualCreditWedges)}: {virtualCreditWedges} ({go.DebugName})");
                             }
                         });
 
@@ -646,9 +727,9 @@ namespace UD_Bones_Folder.Mod.UI
                             availableLP = totalLP - usedLP;
                         }
                     }
-                    Utils.Log($"{nameof(BecomeSomewhat)}(" +
+                    /*Utils.Log($"{nameof(BecomeSomewhat)}(" +
                         $"{nameof(Player.Level)}: {Player.Level}, " +
-                        $"{nameof(CyberneticsTerminal.Licenses)}: {Player.GetUsedCyberneticsLicensePoints()}/{Player.GetCyberneticsLicensePoints()})");
+                        $"{nameof(CyberneticsTerminal.Licenses)}: {Player.GetUsedCyberneticsLicensePoints()}/{Player.GetCyberneticsLicensePoints()})");*/
                 }
             }
             catch (Exception x)
@@ -992,7 +1073,7 @@ namespace UD_Bones_Folder.Mod.UI
                 {
                     ticker++;
 
-                    Utils.Log($"{nameof(ShedAFewPounds)} ({ticker}) - {nameof(failedAttempts)}: {failedAttempts}, Droppable: {playerInventoryWithWeightLowestValueRatioFirst.Count}, Slimmable: {playerInventoryWithWeightHeaviest.Count}");
+                    //Utils.Log($"{nameof(ShedAFewPounds)} ({ticker}) - {nameof(failedAttempts)}: {failedAttempts}, Droppable: {playerInventoryWithWeightLowestValueRatioFirst.Count}, Slimmable: {playerInventoryWithWeightHeaviest.Count}");
                     playerInventoryWithWeightLowestValueRatioFirst.StableSortInPlace(WeightValueComparison);
                     playerInventoryWithWeightHeaviest.StableSortInPlace(WeightComparison);
 
@@ -1007,7 +1088,7 @@ namespace UD_Bones_Folder.Mod.UI
                         && droppableItem != null)
                     {
                         droppableItem.SplitFromStack();
-                        Utils.Log($"{1.Indent()}Dropping: {droppableItem?.DebugName ?? "NO_ITEM"}");
+                        //Utils.Log($"{1.Indent()}Dropping: {droppableItem?.DebugName ?? "NO_ITEM"}");
                         if (!TryDoDisassembly(droppableItem, Player))
                         droppableItem?.Obliterate();
 
@@ -1026,12 +1107,12 @@ namespace UD_Bones_Folder.Mod.UI
                             {
                                 sphereOfNegativeWeight = Player.Inventory.GetFirstObject(IsSphereOfNegWeight);
                                 sphereOfNegativeWeight.MakeUnderstood();
-                                Utils.Log($"{1.Indent()}Adding: {sphereOfNegativeWeight?.DebugName ?? "NO_ITEM"}");
+                                //Utils.Log($"{1.Indent()}Adding: {sphereOfNegativeWeight?.DebugName ?? "NO_ITEM"}");
                             }
                             else
                             if (sphereOfNegativeWeight != null)
                             {
-                                Utils.Log($"{1.Indent()}Adding: {sphereOfNegativeWeight?.DebugName ?? "NO_ITEM"}: {sphereOfNegativeWeight.Count}++");
+                                //Utils.Log($"{1.Indent()}Adding: {sphereOfNegativeWeight?.DebugName ?? "NO_ITEM"}: {sphereOfNegativeWeight.Count}++");
                                 sphereOfNegativeWeight.Count++;
                             }
                         }
@@ -1048,7 +1129,7 @@ namespace UD_Bones_Folder.Mod.UI
                         if (SeededOddsIn10000(Utils.CallChain(nameof(ShedAFewPounds), nameof(ModWillowy)), 2000, ticker)
                             || !slimmableItem.ApplyModification(new ModSlender()))
                             slimmableItem.ApplyModification(new ModWillowy());
-                        Utils.Log($"{1.Indent()}Slimming: {slimmableItem?.DebugName ?? "NO_ITEM"}, {nameof(ModWillowy)}: {slimmableItem.HasPart<ModWillowy>()}, {nameof(ModSlender)}: {slimmableItem.HasPart<ModSlender>()}");
+                        //Utils.Log($"{1.Indent()}Slimming: {slimmableItem?.DebugName ?? "NO_ITEM"}, {nameof(ModWillowy)}: {slimmableItem.HasPart<ModWillowy>()}, {nameof(ModSlender)}: {slimmableItem.HasPart<ModSlender>()}");
 
                         playerInventoryWithWeightHeaviest.Clear();
                         playerInventoryWithWeightHeaviest.AddRange(Player.Inventory.Objects);
@@ -1059,7 +1140,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                     if (carriedWeight == Player.GetCarriedWeight())
                     {
-                        Utils.Log($"{1.Indent()}Attempt Failed...");
+                        //Utils.Log($"{1.Indent()}Attempt Failed...");
                         failedAttempts++;
                     }
 

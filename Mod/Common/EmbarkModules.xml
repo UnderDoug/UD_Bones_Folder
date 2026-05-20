@@ -14,10 +14,28 @@
   </module>
   
   <module Class="UD_Bones_Folder.Mod.UI.BonesModeModule">
-    <window ID="Chargen/UD_Bones_BonesModeModule" Prefab="VertScroll" Class="UD_Bones_Folder.Mod.UI.BonesModeModuleWindow">
+    <window ID="Chargen/UD_Bones_BonesModeModule" Prefab="HorizScroll" Class="UD_Bones_Folder.Mod.UI.BonesModeModuleWindow">
       <name>Bones Mode</name>
       <title>:bones mode:</title>
     </window>
+    
+    <types>
+      <type ID="InstantDeath" Title="Instant Death">
+        <icon Tile="Creatures/sw_crowsong.bmp" Foreground="g" Detail="G"></icon>
+        <description>
+          Die immediately after landing somewhere interesting.
+        </description>
+      </type>
+      
+      <type ID="PokeAround" Title="Poke Around">
+        <icon Tile="Mutations/clairvoyance.bmp" Foreground="b" Detail="B"></icon>
+        <description>
+          Have a poke around where you land
+          Use the provided ability to instantly die.
+        </description>
+      </type>
+    </types>
+    
   </module>
   
 </embarkmodules>

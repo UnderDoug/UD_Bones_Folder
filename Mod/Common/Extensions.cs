@@ -40,8 +40,7 @@ namespace UD_Bones_Folder.Mod
         public static SaveBonesJSON CreateSaveBonesJSON(
             this XRLGame Game,
             IDeathEvent E,
-            GameObject LunarRegent,
-            FileLocationData.LocationType DirectoryType
+            GameObject LunarRegent
             )
         {
             var localTimeNow = DateTime.Now;
@@ -202,8 +201,6 @@ namespace UD_Bones_Folder.Mod
                 BonesSpec = new BonesSpec(LunarRegent, zone),
                 Stats = new(),
 
-                FileLocationType = DirectoryType,
-
                 DeathReason = deathReason.StartReplace().AddObject(LunarRegent).ToString(),
                 GenotypeName = genotype ?? species,
                 SubtypeName = subtype ?? role,
@@ -274,11 +271,10 @@ namespace UD_Bones_Folder.Mod
         {
             var bonesInfo = BonesData.BonesInfo;
 
-            SaveRow.TextSkins[0].SetText($"{bonesInfo.GetName()}::{bonesInfo.Description}".Colored("W"));
-            SaveRow.TextSkins[1].SetText($"{ColorUtility.CapitalizeExceptFormatting(bonesInfo.Info)}");
-            SaveRow.TextSkins[2].SetText($"{bonesInfo.DeathReason} on {bonesInfo.SaveTime}");
-            string bonesID = "{" + bonesInfo.ID + "} ";
-            SaveRow.TextSkins[3].SetText($"{bonesInfo.Size} {bonesID}".Colored("K"));
+            SaveRow.TextSkins[0].SetText(bonesInfo.GetBonesMenuString(0));
+            SaveRow.TextSkins[1].SetText(bonesInfo.GetBonesMenuString(1));
+            SaveRow.TextSkins[2].SetText(bonesInfo.GetBonesMenuString(2));
+            SaveRow.TextSkins[3].SetText(bonesInfo.GetBonesMenuString(3));
         }
 
         public static UnityEngine.Transform SetLocationBox(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -332,14 +328,14 @@ namespace UD_Bones_Folder.Mod
             return SaveRow.modsDiffer.transform;
         }
 
-        public static UnityEngine.Transform SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData)
+        public static UnityEngine.Transform SetBonesDeleteButton(this SaveManagementRow SaveRow, BonesInfoData BonesData, bool PerformSetButtonActive = false)
         {
             var bonesInfo = BonesData.BonesInfo;
             SaveRow.deleteButton ??= new();
             SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
 
             UITextSkin deleteButtonTextSkin = null;
-            var deleteButtonImages = SaveRow.deleteButton.GetComponentsInChildren<Image>();
+            var deleteButtonImages = SaveRow.deleteButton.GetComponentsInChildren<Image>() ?? Enumerable.Empty<Image>();
             if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
             {
                 foreach (var textSkin in deleteButtonTextSkins)
@@ -359,25 +355,18 @@ namespace UD_Bones_Folder.Mod
                 if (deleteButtonTextSkin is not null)
                     deleteButtonTextSkin.color = UnityEngine.Color.clear;
 
-                foreach (var deleteButtonImage in deleteButtonImages ?? Enumerable.Empty<Image>())
+                foreach (var deleteButtonImage in deleteButtonImages)
                     deleteButtonImage.color = UnityEngine.Color.clear;
-
-                SaveRow.deleteButton.context.disabled = true;
-                SaveRow.deleteButton.enabled = false;
-                SaveRow.deleteButton.gameObject.SetActive(value: false);
             }
-            else
+
+            if (PerformSetButtonActive)
             {
-                if (deleteButtonTextSkin is not null)
-                    deleteButtonTextSkin.color = The.Color.White;
-
-                foreach (var deleteButtonImage in deleteButtonImages ?? Enumerable.Empty<Image>())
-                    deleteButtonImage.color = The.Color.Black;
-
-                SaveRow.deleteButton.context.disabled = false;
-                SaveRow.deleteButton.enabled = true;
-                SaveRow.deleteButton.gameObject.SetActive(value: true);
+                SaveRow.deleteButton.context.disabled = !bonesInfo.IsCrematable;
+                SaveRow.deleteButton.enabled = bonesInfo.IsCrematable;
+                SaveRow.deleteButton.gameObject.SetActive(value: bonesInfo.IsCrematable);
             }
+
+            deleteButtonTextSkin.Apply();
             return SaveRow.deleteButton.transform;
         }
 
@@ -440,6 +429,11 @@ namespace UD_Bones_Folder.Mod
                 durationValue = Duration.TotalMilliseconds;
             }
             if (Duration.TotalMilliseconds < 1)
+            {
+                durationUnit = "microsecond";
+                durationValue = Duration.TotalMilliseconds / 1000;
+            }
+            if (Duration.TotalMilliseconds / 1000 < 0)
             {
                 durationUnit = "microsecond";
                 durationValue = Duration.TotalMilliseconds / 1000;
@@ -726,10 +720,16 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static bool IsMoonKing(this GameObject Object, string FromBonesID = null)
+        public static bool IsLunarRegent(this GameObject Object, string FromBonesID = null)
             => Object.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
                 && (FromBonesID.IsNullOrEmpty()
                     || lunarRegent.BonesID.EqualsNoCase(FromBonesID))
+            ;
+
+        public static bool IsLunarCourtier(this GameObject Object, string FromBonesID = null)
+            => Object.TryGetPart(out UD_Bones_LunarCourtier lunarCourtier)
+                && (FromBonesID.IsNullOrEmpty()
+                    || lunarCourtier.BonesID.EqualsNoCase(FromBonesID))
             ;
 
         public static void FeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
@@ -752,7 +752,7 @@ namespace UD_Bones_Folder.Mod
             }
 
             if (BonesID != null
-                && !BonesObject.IsMoonKing(BonesID))
+                && !BonesObject.IsLunarRegent(BonesID))
             {
                 if (BonesObject.NeedsFeverWarped(out bool tileOnly))
                 {
@@ -1274,8 +1274,14 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static string TimeAgo(this DateTime DateTime, string PostFix = null)
-            => $"{(DateTime.Now - DateTime).ValueUnits()}{(!PostFix.IsNullOrEmpty() ? $" {PostFix}" : null)}"
-            ;
+        {
+            var timeAgo = DateTime.Now.ToUniversalTime() - DateTime;
+
+            if (timeAgo.Ticks <= 0)
+                return "just now";
+
+            return $"{timeAgo.ValueUnits()}{(!PostFix.IsNullOrEmpty() ? $" {PostFix}" : null)}";
+        }
 
         public static string DateTimeString(this DateTime Time, bool LongDate, bool LongTime)
             => $"{(LongDate ? Time.ToLongDateString() : Time.ToShortDateString())} {(LongTime ? Time.ToLongTimeString() : Time.ToShortTimeString())}"
@@ -1491,6 +1497,72 @@ namespace UD_Bones_Folder.Mod
                 Z.SendJoppaZoneToBonesWorld();
             else
                 Z.SendBonesZoneToJoppaWorld();
+        }
+
+        public static string ColorIfMatches<T>(this T Value, T Target, string MatchColor, string NotMatchColor = null)
+            where T : Enum
+        {
+            if (Equals(Value, Target))
+                return Value.ToString().WithColor(MatchColor);
+            else
+                return Value.ToString().WithColor(NotMatchColor);
+        }
+
+        public static void AddRange<T>(this ICollection<T> Source, IEnumerable<T> Range, Predicate<T> Where)
+        {
+            if (Source == null
+                || Range.IsNullOrEmpty())
+                return;
+
+            foreach (var element in Range)
+                if (Where?.Invoke(element) is not false)
+                    Source.Add(element);
+        }
+
+        public static string FeverWarped(this string Text, bool DoShaderReplace = true)
+            => UD_Bones_FeverWarped.FeverWarpText(Text, DoShaderReplace)
+            ;
+
+        public static bool TryGetSelectionElementsAtIndex<TDataElement, TComponent>(
+            this FrameworkScroller ScrollChild,
+            int Index,
+            IList<FrameworkDataElement> Choices,
+            out FrameworkUnityScrollChild SelectionClone,
+            out TDataElement DataElement,
+            out TComponent Component
+            )
+            where TDataElement : FrameworkDataElement
+            where TComponent : IFrameworkControl
+        {
+            SelectionClone = null;
+            DataElement = null;
+            Component = default;
+            try
+            {
+                if (ScrollChild?.selectionClones.IsNullOrEmpty() is not false)
+                    return false;
+
+                if (Index >= ScrollChild.selectionClones.Count)
+                    return false;
+
+                if (Choices.IsNullOrEmpty())
+                    return false;
+
+                if (Index >= Choices.Count)
+                    return false;
+
+                if (Index < 0)
+                    return false;
+
+                SelectionClone = ScrollChild.selectionClones[Index];
+                DataElement = Choices[Index] as TDataElement;
+                Component = SelectionClone.gameObject.GetComponent<TComponent>();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

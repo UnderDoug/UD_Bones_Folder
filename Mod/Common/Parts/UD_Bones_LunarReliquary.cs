@@ -30,13 +30,13 @@ namespace XRL.World.Parts
             get
             {
                 if (ParentObject != null)
-                    _IsMad = ParentObject.GetStringProperty(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}").EqualsNoCase($"{true}");
+                    _IsMad = ParentObject.GetPropertyOrTag(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}").EqualsNoCase($"{true}");
                 return _IsMad.GetValueOrDefault();
             }
             set
             {
                 _IsMad = value;
-                ParentObject?.SetStringProperty(Const.IS_MAD_PROP, _IsMad.GetValueOrDefault() ? $"{true}" : null, true);
+                ParentObject?.SetStringProperty(Const.IS_MAD_PROP, $"{_IsMad.GetValueOrDefault()}");
             }
         }
 

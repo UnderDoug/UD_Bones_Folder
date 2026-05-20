@@ -83,7 +83,10 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public double GetPercentOfStat(Guid OsseousAshID)
-            => GetStatValue(OsseousAshID) / GetStatTotal()
+            => GetStatTotal() is int statTotal
+                && statTotal != 0
+            ? GetStatValue(OsseousAshID) / statTotal
+            : 0
             ;
 
         public IEnumerable<string> GetAllIDs(Predicate<BonesStat> Where = null)

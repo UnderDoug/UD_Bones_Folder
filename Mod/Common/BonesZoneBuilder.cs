@@ -57,7 +57,7 @@ namespace XRL.World.ZoneBuilders
             BonesData bonesData = null;
             try
             {
-                bonesData = BonesData.GetFromSaveBonesInfo(ZoneID, saveBonesInfo);
+                bonesData = BonesData.GetFromSaveBonesInfo(saveBonesInfo);
             }
             catch (FatalDeserializationVersionException fX)
             {

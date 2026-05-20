@@ -120,7 +120,7 @@ namespace XRL.World.Parts
                             message: Markup.Transform(message),
                             contextTitle: title,
                             afterRender: new FlippableRender(render, false),
-                            PopupID: $"{nameof(BonesZoneBuilder)}::{UD_Bones_BonesSaver.BonesName}");
+                            PopupID: $"{nameof(BonesZoneBuilder)}::{BonesManager.BonesFileName}");
                     }
                     $"{title} {message}".StartReplace().AddObject(MoonKing).EmitMessage(AlwaysVisible: true);
                 }

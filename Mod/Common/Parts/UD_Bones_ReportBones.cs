@@ -46,7 +46,7 @@ namespace XRL.World.Parts
         {
             if (E.Command == ReportBonesInventoryAction.Command)
             {
-                if (TryReportBones(LoadedBonesID, ParentObject).WaitResult())
+                if (TryReportBonesAsync(LoadedBonesID, ParentObject).WaitResult())
                 {
                     /*if (Config != null)
                     {

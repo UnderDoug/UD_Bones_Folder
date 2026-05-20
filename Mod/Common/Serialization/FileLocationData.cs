@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -100,8 +101,8 @@ namespace UD_Bones_Folder.Mod
             => GetFileLocationDataTypeColor(Type)
             ;
 
-        public static FileLocationData Clone(FileLocationData DirectoryInfo)
-            => new(DirectoryInfo)
+        public static FileLocationData Clone(FileLocationData FileLocationData)
+            => new(FileLocationData)
             ;
 
         public FileLocationData Clone()
@@ -239,6 +240,68 @@ namespace UD_Bones_Folder.Mod
         public bool TryEnsureExists()
             => !EnsureExists().IsNullOrEmpty()
             ;
+
+        public long GetDirectorySize()
+            => Type.IsTwixtInclusive(LocationType.Local, LocationType.Synced)
+                && TryEnsureExists()
+            ? Directory.EnumerateFiles(this).Aggregate(0L, (a, n) => a + new FileInfo(n).Length)
+            : 0L
+            ;
+
+        public async Task<IEnumerable<FileLocationData>> EnumerateDirectoriesAsync(bool LogErrorIfFailed = true)
+        {
+            try
+            {
+                var enumerationResult = await Folder.EnumerateDirectoriesAsync(this);
+
+                if (LogErrorIfFailed)
+                {
+                    enumerationResult.LogErrorIfFailed();
+                }
+                return enumerationResult.directories.Select(s => NewAssumed(s));
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Enumerating directories in {SanitiseForDisplay()}", x);
+                return Enumerable.Empty<FileLocationData>();
+            }
+        }
+
+        public IEnumerable<FileLocationData> EnumerateDirectories(bool LogErrorIfFailed = true)
+            => EnumerateDirectoriesAsync(LogErrorIfFailed).WaitResult()
+            ;
+
+        public bool TryDeleteDirectory(Action<FileLocationData> OnSuccess = null, Action<FileLocationData> OnFailure = null)
+        {
+            if (Type <= LocationType.Synced)
+            {
+                int attempts = 0;
+                while (true)
+                {
+                    try
+                    {
+                        Directory.Delete(this);
+                        BonesManager.ClearHasSaveBones();
+                        OnSuccess?.Invoke(this);
+                        return true;
+                    }
+                    catch (Exception x)
+                    {
+                        if (attempts++ < 20)
+                        {
+                            Thread.Sleep(50);
+                            continue;
+                        }
+
+                        Utils.Error($"Error deleting directory {SanitiseForDisplay()}", x);
+                        break;
+                    }
+                }
+            }
+
+            OnFailure?.Invoke(this);
+            return false;
+        }
 
         public string WithFileName(string FileName)
             => Platform.IO.Path.Combine(this, FileName)
@@ -440,6 +503,18 @@ namespace UD_Bones_Folder.Mod
 
                 _ => await DefaultCallback?.Invoke(Value),
             }
+            ;
+
+        public static bool IsFile(this FileLocationData.LocationType Type)
+            => Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced)
+            ;
+
+        public static bool IsMod(this FileLocationData.LocationType Type)
+            => Type.IsTwixtInclusive(FileLocationData.LocationType.Mod, FileLocationData.LocationType.Mod)
+            ;
+
+        public static bool IsOnline(this FileLocationData.LocationType Type)
+            => Type.IsTwixtInclusive(FileLocationData.LocationType.Online, FileLocationData.LocationType.Online)
             ;
     }
 }

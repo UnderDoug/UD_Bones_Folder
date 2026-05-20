@@ -57,7 +57,7 @@ namespace XRL.World.WorldBuilders
             if (BonesManager == null)
                 return;
 
-            if (BonesManager.GetAvailableSaveBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
+            if (BonesManager.GetEligibleSaveBonesInfo() is not IEnumerable<SaveBonesInfo> savedBonesInfos
                 || savedBonesInfos.IsNullOrEmpty())
                 return;
 

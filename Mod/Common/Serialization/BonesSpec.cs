@@ -113,7 +113,7 @@ namespace UD_Bones_Folder.Mod
             {
                 if (!await File.ExistsAsync(bonesPath))
                 {
-                    bonesPath =SaveBonesInfo.FullBonesPathSav;
+                    bonesPath = SaveBonesInfo.FullBonesPathSav;
                     if (!await File.ExistsAsync(bonesPath))
                     {
                         Utils.Error($"No saved bones exist. ({SaveBonesInfo.DisplayDirectory})");
@@ -275,15 +275,23 @@ namespace UD_Bones_Folder.Mod
             => GetApproxDepth(ZoneZ) == GetApproxDepth(SpecZ)
             ;
 
+        public static bool IsWithinLevel(int Level, int SpecLevel)
+        {
+            if ((Level / (double)Math.Max(1.0, SpecLevel)) < 0.85)
+                return false;
+
+            if ((SpecLevel / (double)Math.Max(1.0, Level)) < 0.85)
+                return false;
+
+            return true;
+        }
+
         public bool IsWithinSpec(BonesSpec PlayerSpec)
         {
             if (SameAs(PlayerSpec))
                 return true;
 
-            if ((Level / (double)Math.Max(1.0, PlayerSpec.Level)) < 0.85)
-                return false;
-
-            if ((PlayerSpec.Level / (double)Math.Max(1.0, Level)) < 0.85)
+            if (!IsWithinLevel(Level, PlayerSpec.Level))
                 return false;
 
             if (!ZoneStrataWithinThreshold(ZoneZ, PlayerSpec.ZoneZ))

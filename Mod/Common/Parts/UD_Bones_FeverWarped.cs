@@ -29,8 +29,7 @@ namespace XRL.World.Parts
         [SerializeField]
         private bool TileOnly;
 
-        [SerializeField]
-        private bool CosmeticOnly;
+        public bool CosmeticOnly;
 
         protected string OriginalShortDesc;
 
@@ -373,14 +372,14 @@ namespace XRL.World.Parts
 
         [VariableReplacer(Keys = new string[] { "FeverWarped" })]
         public static string FeverWarped(DelegateContext Context)
-            => FeverWarpText(Context?.Parameters?[0]);
+            => Context.Parameters.Aggregate("", (a, n) => a + (!a.IsNullOrEmpty() ? ":" : null) + n).FeverWarped();
 
         [VariablePostProcessor(Keys = new string[] { "FeverWarped" })]
         public static void FeverWarpedPost(DelegateContext Context)
         {
             var oldValue = Context.Value.ToString();
             Context.Value.Clear();
-            Context.Value.Append(FeverWarpText(oldValue));
+            Context.Value.Append(oldValue.FeverWarped());
         }
     }
 }

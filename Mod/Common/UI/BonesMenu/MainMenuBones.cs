@@ -149,18 +149,24 @@ namespace UD_Bones_Folder.Mod.UI
 
         private static async void PerforMainMenuFirstShowAsync()
         {
+            Utils.Log($"PerformMainMenuFirstShowAsync - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
+            bool needReshow = false;
             try
             {
-                await The.UiContext;
+                if (OsseousAsh.WantToAsk)
+                {
+                    needReshow = true;
+                    await The.UiContext;
 
-                AllowPromptAboutLinux = true;
-                await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+                    AllowPromptAboutLinux = true;
+                    await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+                }
 
-                if (!GameManager.AwakeComplete)
+                /*if (!GameManager.AwakeComplete)
                 {
                     HasSeenMainMenu = false;
                     return;
-                }
+                }*/
 
                 if (Options.EnableOsseousAshDownloads
                     || Options.EnableOsseousAshUploads)
@@ -208,8 +214,11 @@ namespace UD_Bones_Folder.Mod.UI
             finally
             {
                 AllowPromptAboutLinux = false;
-                UIManager.showWindow("MainMenu");
-                MainMenu.instance.Reshow();
+                if (needReshow)
+                {
+                    UIManager.showWindow("MainMenu");
+                    MainMenu.instance.Reshow();
+                }
             }
 
         }

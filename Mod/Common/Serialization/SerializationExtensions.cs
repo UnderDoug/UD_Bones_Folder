@@ -9,6 +9,7 @@ using HarmonyLib;
 
 using XRL;
 using XRL.Collections;
+using XRL.Core;
 using XRL.UI;
 using XRL.World;
 using XRL.World.AI.Pathfinding;
@@ -18,7 +19,6 @@ using XRL.World.Parts;
 using XRL.World.ZoneParts;
 
 using static XRL.World.Cell;
-using static XRL.World.GameObject;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -118,6 +118,16 @@ namespace UD_Bones_Folder.Mod
                 $"actual [{actualCell?.X ?? (-1)},{actualCell?.Y ?? (-1)},{actualCell?.HasStairs()}] in {actualCell?.ParentZone?.ZoneID}");
         }
 
+        private static GameObject ReadGameObjectMetricsOff(
+            this SerializationReader Reader,
+            string Forensics = null
+            )
+        {
+            GameObject go = null;
+            PerformWithoutMetrics(() => go = Reader.ReadGameObject(Forensics));
+            return go;
+        }
+
         public static Cell ReadBonesCell(
             this SerializationReader Reader,
             int x,
@@ -134,10 +144,11 @@ namespace UD_Bones_Folder.Mod
                 Y = y
             };
 
+
             int writtenObjects = Reader.ReadInt32();
             for (int i = 0; i < writtenObjects; i++)
             {
-                if (Reader.ReadGameObject() is GameObject gameObject)
+                if (Reader.ReadGameObjectMetricsOff() is GameObject gameObject)
                 {
                     if (gameObject.NeedsFeverWarped(out bool tileOnly))
                     {
@@ -345,7 +356,14 @@ namespace UD_Bones_Folder.Mod
             if (Reader == null)
                 throw new ArgumentNullException(nameof(Reader));
 
-            var type = Reader.ReadTokenizedType();
+            bool forceMetricsOff = Globals.ForceMetricsOff;
+            Globals.ForceMetricsOff = false;
+
+            Type type = null;
+            
+            PerformWithoutMetrics(() => type = Reader.ReadTokenizedType());
+
+            Globals.ForceMetricsOff = forceMetricsOff;
 
             if (Activator.CreateInstance(type, nonPublic: true) is not Zone zone)
             {
@@ -353,12 +371,33 @@ namespace UD_Bones_Folder.Mod
                 return null;
             }
 
-            Reader.ReadTypeFields(zone, type);
+            PerformWithoutMetrics(() => Reader.ReadTypeFields(zone, type));
             zone.Built = false;
             zone.ReadBonesZone(Reader);
             zone.Built = true;
             zone.BroadcastEvent(Event.New("ZoneLoaded"));
             return zone;
         }
+
+        public static void PerformWithoutMetrics(Action Action)
+        {
+            bool forceMetricsOff = Globals.ForceMetricsOff;
+            Globals.ForceMetricsOff = false;
+
+            Action?.Invoke();
+
+            Globals.ForceMetricsOff = forceMetricsOff;
+        }
+
+        public static void StartMetricsOff(
+            this SerializationReader Reader,
+            bool SerializePlayer = false
+            )
+            => PerformWithoutMetrics(() => Reader.Start(SerializePlayer))
+            ;
+
+        public static void FinalizeReadMetricsOff(this SerializationReader Reader)
+            => PerformWithoutMetrics(() => Reader.FinalizeRead())
+            ;
     }
 }

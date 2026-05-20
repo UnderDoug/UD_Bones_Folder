@@ -93,7 +93,7 @@ namespace XRL.World.Parts
             E.ReplacePrimaryBase(
                 desc: E.GetPrimaryBase()
                     .StartReplace()
-                    .AddObject(ParentObject?.Equipped ?? The.Player)
+                    .AddObject(ParentObject?.Equipped ?? The.Player, "observer")
                     .ToString()
                 );
             return base.HandleEvent(E);

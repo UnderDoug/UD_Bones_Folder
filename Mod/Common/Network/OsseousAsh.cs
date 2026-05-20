@@ -171,6 +171,37 @@ namespace UD_Bones_Folder.Mod
             AsMinEvent = true,
         };
 
+        private static IEnumerable<Report> _ReportsCache;
+        public static IEnumerable<Report> ReportsCache
+        { 
+            get
+            {
+                /*if (_ReportsCache == null)
+                    Utils.Log($"{1.Indent()}_ReportsCache null");
+                else
+                if (_ReportsCache.Count() == 0)
+                    Utils.Log($"{1.Indent()}_ReportsCache empty");
+                else
+                    Utils.Log($"{1.Indent()}_ReportsCache: {_ReportsCache.Count()}");*/
+
+                if (_ReportsCache == null)
+                {
+                    var cachedReports = Hosts.CacheReports();
+                    /*if (cachedReports == null)
+                        Utils.Log($"{2.Indent()}cachedReports null");
+                    else
+                    if (cachedReports.Count() == 0)
+                        Utils.Log($"{2.Indent()}cachedReports empty");
+                    else
+                        Utils.Log($"{1.Indent()}cachedReports: {cachedReports.Count()}");*/
+
+                    _ReportsCache = cachedReports;
+                }
+
+                return _ReportsCache;
+            }
+        }
+
         public static string ReportBonesTitle => "{{yellow|Report Loaded Bones}}";
         public static IRenderable ReportBonesIcon
             => new Renderable()
@@ -183,7 +214,7 @@ namespace UD_Bones_Folder.Mod
         [ModSensitiveCacheInit]
         public static void EnsureConfiguration()
         {
-            Utils.Log($"{3.Indent()}{nameof(EnsureConfiguration)}");
+            //Utils.Log($"EnsureConfiguration - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
             _ = Config;
             if (Options.EnableOsseousAshDownloads)
             {
@@ -195,8 +226,16 @@ namespace UD_Bones_Folder.Mod
         [ModSensitiveCacheInit]
         public static void EnsureHosts()
         {
+            //Utils.Log($"EnsureHosts - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
             _ = Hosts;
             Hosts?.BuildHosts(Ping: true);
+            _ = ReportsCache;
+        }
+
+        public static void ClearReportsCache()
+        {
+            //Utils.Log($"ClearReportsCache - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
+            _ReportsCache = null;
         }
 
         public static bool TryFindBestOsseousAshPath(out FileLocationData FileLocationData, string FileName)
@@ -309,6 +348,11 @@ namespace UD_Bones_Folder.Mod
                             .AppendLine()
                             .AppendLine().Append("Please note: the ").Append(OSSEOUS_ASH).Append(" community bones cloud ")
                                 .Append("requires an internet connection to function.")
+                            .AppendLine()
+                            .AppendLine().AppendColored("w", "This feature is currently in closed beta, and typically requires being whitelisted to participate.")
+                            .AppendLine()
+                            .AppendLine().Append("Feel free to opt-in now so that, when testing goes public, you're already opted in, ")
+                                .Append("but be aware that you'll be unable to communicate with the server until then.")
                             .AppendLineEnd();
 
                             options.Add(new()
@@ -961,6 +1005,7 @@ namespace UD_Bones_Folder.Mod
             UIUtils.CascadableResult result;
             var sB = Event.NewStringBuilder();
             Dictionary<int, Func<Task<UIUtils.CascadableResult>>> buttonCallbacks = null;
+            bool wasRunningBefore = Host.IsRunning;
             do
             {
                 sB.Clear();
@@ -1137,6 +1182,9 @@ namespace UD_Bones_Folder.Mod
             while (result.ToBool());
 
             Host.Build(Ping: true);
+
+            if (wasRunningBefore != Host.IsRunning)
+                ClearReportsCache();
 
             Event.ResetTo(sB);
 
@@ -1363,18 +1411,23 @@ namespace UD_Bones_Folder.Mod
 
         public static List<SaveBonesInfo> GetBonesInfos()
         {
+            //Utils.Log($"{1.Indent()}GetBonesInfos");
             List<SaveBonesInfo> saveBonesInfos = null;
             foreach (var host in AllHosts(h => h.Enabled))
             {
+                //Utils.Log($"{1.Indent()}{host} - GetSaveBonesInfos");
                 if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
                     || saveBonesInfosFromHost.IsNullOrEmpty())
                     continue;
 
                 foreach (var hostedSaveBonesInfo in saveBonesInfosFromHost)
                 {
-                    if ((saveBonesInfos?.Any(info => info.ID == hostedSaveBonesInfo.ID)) is true)
+                    if (saveBonesInfos?.FirstOrDefault(b => b.ID == hostedSaveBonesInfo.ID) is SaveBonesInfo existingInfo
+                        && existingInfo.FileLocationData != null)
+                    {
+                        existingInfo.FileLocationData = hostedSaveBonesInfo.FileLocationData;
                         continue;
-
+                    }
                     saveBonesInfos ??= new();
                     saveBonesInfos.Add(hostedSaveBonesInfo);
                 }
@@ -1382,14 +1435,13 @@ namespace UD_Bones_Folder.Mod
             return saveBonesInfos;
         }
 
-        public static async Task<bool> TryReportBones(
-            string BonesID,
-            GameObject ReportedObject
+        public static async Task<bool> TryReportBonesAsync(
+            Report Report,
+            bool Silent = false,
+            bool ClearReportsCache = true
             )
         {
-            using var report = await AskForBonesReport(BonesID, ReportedObject);
-
-            if (report == null)
+            if (Report == null)
                 return false;
 
             try
@@ -1399,7 +1451,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        if (await host.PostBonesReport(report))
+                        if (await host.PostBonesReport(Report, ClearReportsCache))
                             any = true;
                         else
                             Utils.Warn($"Failed to upload Bones Report to {host}");
@@ -1410,52 +1462,58 @@ namespace UD_Bones_Folder.Mod
                         continue;
                     }
                 }
-                if (any)
-                    await Popup.ShowAsync("Thank you! Your report was successfully submitted to at least one host.");
-                else
-                    await Popup.ShowAsync("Unfortunately, none of your currently enabled hosts were able to receive your report.");
-
+                if (!Silent)
+                {
+                    if (any)
+                        await Popup.ShowAsync("Thank you! Your report was successfully submitted to at least one host.");
+                    else
+                        await Popup.ShowAsync("Unfortunately, none of your currently enabled hosts were able to receive your report.");
+                }
                 return any;
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(TryUploadBones)} failed to upload Bones Report for BonesID {BonesID}", x);
+                Utils.Error($"{nameof(TryUploadBones)} failed to upload Bones Report for BonesID {Report.BonesID}", x);
                 return false;
             }
         }
 
-        public static async Task<bool> IsBonesReported(string BonesID)
+        public static async Task<bool> TryReportBonesAsync(
+            string BonesID,
+            GameObject ReportedObject,
+            bool Silent = false,
+            bool ClearReportsCache = true
+            )
+        {
+            using var report = await AskForBonesReportAsync(BonesID, ReportedObject);
+
+            return report != null
+                && await TryReportBonesAsync(report, Silent, ClearReportsCache)
+                ;
+        }
+
+        public static bool IsBonesReported(string BonesID)
         {
             if (BonesID.IsNullOrEmpty())
                 return false;
 
             try
             {
-                foreach (var host in AllHosts(h => h.Enabled))
-                {
-                    try
-                    {
-                        if (await host.GetBonesReportBlockedCheck(BonesID))
-                            return true;
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Error($"Failed to check {host} for blocked Bones Reports for BonesID {BonesID}", x);
-                        continue;
-                    }
-                }
-                return false;
+                return !Hosts
+                    .GetReportsMatchingSpec(BonesID: BonesID)
+                    .IsNullOrEmpty();
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(IsBonesReported)} failed check any hosts for blocked Bones Reports with BonesID {BonesID}", x);
+                Utils.Error($"{nameof(IsBonesReported)} failed to check any hosts for Bones Reports with BonesID {BonesID}", x);
                 return false;
             }
         }
 
         public static bool IsBonesBlocked(string BonesID)
         {
-            if (BonesID.IsNullOrEmpty())
+            if (BonesID.IsNullOrEmpty()
+                || Config == null)
                 return false;
 
             try
@@ -1467,7 +1525,7 @@ namespace UD_Bones_Folder.Mod
                         if (host.ReportsCache.IsNullOrEmpty())
                             continue;
 
-                        if (host.ReportsCache.Any(r => r.BonesID == BonesID && r.OsseousAshID == Config?.ID && r.Blocked))
+                        if (host.ReportsCache.Any(r => r.BonesID == BonesID && r.OsseousAshID == Config.ID && r.Blocked))
                             return true;
                     }
                     catch (Exception x)
@@ -1480,21 +1538,26 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(IsBonesReported)} failed check any hosts for blocked Bones Reports with BonesID {BonesID}", x);
+                Utils.Error($"{nameof(IsBonesBlocked)} failed to check any hosts for blocked Bones Reports with BonesID {BonesID}", x);
                 return false;
             }
         }
 
-        private static async Task<Report> AskForBonesReport(
+        private static async Task<Report> AskForBonesReportAsync(
             string BonesID,
             GameObject ReportedObject
             )
         {
-            if (Report.ObjectReportDetails.FromGameObject(ReportedObject) is not Report.ObjectReportDetails reportObjectDetails)
+            Report.ObjectReportDetails reportObjectDetails = null;
+            if (ReportedObject != null)
             {
-                await Popup.ShowAsync($"Something about {ReportedObject?.DebugName ?? "MISSING_OBJECT"} is making reporting from it unavailable.\n\n" +
-                    $"Please consider making your report from another object loaded by the offending bones file.");
-                return null;
+                reportObjectDetails = Report.ObjectReportDetails.FromGameObject(ReportedObject);
+                if (reportObjectDetails == null)
+                {
+                    await Popup.ShowAsync($"Something about {ReportedObject?.DebugName ?? "MISSING_OBJECT"} is making reporting from it unavailable.\n\n" +
+                        $"Please consider making your report from another object loaded by the offending bones file.");
+                    return null;
+                }
             }
 
             PickOptionDataSetAsync<Report, UIUtils.CascadableResult> options = new();
@@ -1513,10 +1576,16 @@ namespace UD_Bones_Folder.Mod
 
             do
             {
-                sB.Append("Please use the provided options to fill out your report about the bones that loaded the below object:")
-                    .AppendLine()
-                    .AppendLine().AppendBonesReportedObject(reportObjectDetails)
-                    ;
+                sB.Append("Please use the provided options to fill out your report about ");
+                if (reportObjectDetails != null)
+                {
+                    sB.Append("the bones that loaded the below object:")
+                        .AppendLine()
+                        .AppendLine().AppendBonesReportedObject(reportObjectDetails)
+                        ;
+                }
+                else
+                    sB.Append("these bones.");
 
                 sB.AppendLine()
                     .AppendLine().Append("Below is what your current report contains:")
@@ -1560,24 +1629,27 @@ namespace UD_Bones_Folder.Mod
                     Hotkey = 't',
                     Callback = element => Task.Run(async delegate ()
                     {
-                        element.Type = await AskBonesReportType();
+                        element.Type = await AskBonesReportTypeAsync();
                         return UIUtils.CascadableResult.Continue;
                     }),
                 });
-                options.Add(new()
+                if (reportObjectDetails != null)
                 {
-                    Element = report,
-                    Text = $"{report.IsSpecificObject.GetCheckboxText("For Specific Object")}",
-                    Hotkey = 's',
-                    Callback = element => Task.Run(delegate ()
+                    options.Add(new()
                     {
-                        if (element.IsSpecificObject)
-                            element.ObjectDetails = null;
-                        else
-                            element.ObjectDetails = reportObjectDetails;
-                        return UIUtils.CascadableResult.Continue;
-                    }),
-                });
+                        Element = report,
+                        Text = $"{report.IsSpecificObject.GetCheckboxText("For Specific Object")}",
+                        Hotkey = 's',
+                        Callback = element => Task.Run(delegate ()
+                        {
+                            if (element.IsSpecificObject)
+                                element.ObjectDetails = null;
+                            else
+                                element.ObjectDetails = reportObjectDetails;
+                            return UIUtils.CascadableResult.Continue;
+                        }),
+                    });
+                }
                 options.Add(new()
                 {
                     Element = report,
@@ -1651,7 +1723,7 @@ namespace UD_Bones_Folder.Mod
             return report;
         }
 
-        private static async Task<Report.ReportTypes> AskBonesReportType()
+        private static async Task<Report.ReportTypes> AskBonesReportTypeAsync()
         {
             PickOptionDataSetAsync<Report.ReportTypes, Report.ReportTypes> options = new();
 
