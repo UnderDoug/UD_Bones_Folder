@@ -71,6 +71,19 @@
       The default is {{w|Disabled}}.
     </helptext>
   </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableIgnoreAllowReallyDie"
+        Requires="OptionAllowReallydie==Yes"
+        DisplayText="{{Y|Bones}}: Override the debug option &quot;Get prompted to confirm deaths&quot; when &quot;forcing&quot; the &quot;make bones&quot; wish."
+        Category="Debug"
+        Type="Checkbox"
+        Default="Yes">
+    <helptext>
+      When enabled, using the &quot;make bones&quot; wish with the &quot;die&quot; or &quot;-d&quot; flag set, if the &quot;force&quot; or &quot;-f&quot; flag is set, you won't be asked if you really want to die and dying will move forward as though &quot;Get prompted to confirm deaths&quot; is not enabled.
+
+      The default is {{W|Enabled}}.
+    </helptext>
+  </option>
 
   <!--
   
@@ -232,13 +245,13 @@
         DisplayText="Enable bones from earlier version of the mod to load (provided it's possible)."
         Category="Mod: Bones"
         Type="Checkbox"
-        Default="Yes">
+        Default="No">
     <helptext>
       When enabled, bones files from previous versions of this mod will be eligible for loading (provided it's possible), albeit at a reduced weight.
       
       When disabled, only bones whose mod version matches the currently enabled bones mod will be eligible for loading, maximising stability.
 
-      The default is {{W|Enabled}}.
+      The default is {{w|Disabled}}.
     </helptext>
   </option>
 </options>

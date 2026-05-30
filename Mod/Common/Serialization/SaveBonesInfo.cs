@@ -207,9 +207,9 @@ namespace UD_Bones_Folder.Mod
         public BonesRender Render => _Render ??= new(GetBonesJSON());
         public BonesRender FlippedRender => new(Render, HFlip: !Render.GetHFlip());
 
-        public string FullBonesPathSav => FileLocationData.WithFileName(Sav);
-        public string FullBonesPathSavGz => FileLocationData.WithFileName(SavGz);
-        public string FullBonesPathBak => FileLocationData.WithFileName(SavGzBak);
+        public string FullBonesPathSav => GetFullBonesPathSav(FileLocationData);
+        public string FullBonesPathSavGz => GetFullBonesPathSavGz(FileLocationData);
+        public string FullBonesPathBak => GetFullBonesPathBak(FileLocationData);
 
         public string DisplayDirectory => FileLocationData.SanitiseForDisplay();
         public string BonesBakDisplay => FileLocationData.SanitiseForDisplay(SavGzBak);
@@ -232,7 +232,20 @@ namespace UD_Bones_Folder.Mod
                     FileLocationDataSet.Add(new FileLocationData(type, assumedLocationData.Path, assumedLocationData.Host));
                     // Utils.Log($"New {nameof(_FileLocationData)}: {_FileLocationData?.SanitiseForDisplay() ?? "NO_DATA"}");
                 }
-                return FileLocationDataSet.OrderBy(data => data.Type).FirstOrDefault();
+                return FileLocationDataSet.OrderBy(data => data.Type).FirstOrDefault(delegate (FileLocationData locationData)
+                {
+                    if (locationData.Type.IsFile())
+                    {
+                        if (locationData.FileExists(SavGz))
+                            return true;
+
+                        if (locationData.FileExists(Sav))
+                            return true;
+
+                        return false;
+                    }
+                    return true;
+                });
             }
             set
             {
@@ -247,7 +260,7 @@ namespace UD_Bones_Folder.Mod
         private HashSet<FileLocationData> _FileLocationDataSet;
         public HashSet<FileLocationData> FileLocationDataSet => _FileLocationDataSet ??= new();
 
-        public OsseousAsh.Host Host => FileLocationData?.Host;
+        public OsseousAsh.Host Host => FileLocationDataSet.FirstOrDefault(ld => ld.Type.IsOnline())?.Host;
 
         public bool IsOnline
             => FileLocationData != null
@@ -451,19 +464,60 @@ namespace UD_Bones_Folder.Mod
             => json as SaveBonesJSON
             ;
 
+
+        public static string GetFullBonesPathSav(FileLocationData FileLocationData)
+            => FileLocationData.WithFileName(Sav)
+            ;
+
+        public static string GetFullBonesPathSavGz(FileLocationData FileLocationData)
+            => FileLocationData.WithFileName(SavGz)
+            ;
+
+        public static string GetFullBonesPathBak(FileLocationData FileLocationData)
+            => FileLocationData.WithFileName(SavGzBak)
+            ;
+
         public async Task<string> GetBonesFilePathAsync()
         {
-            string bonesPath = FullBonesPathSavGz;
-
             if (!IsOnline)
             {
-                if (!await File.ExistsAsync(bonesPath))
+                string bonesPath = null;
+                int attempts = 0;
+                int setCount = FileLocationDataSet.Count;
+                while (FileLocationData != null
+                    && attempts++ < setCount
+                    && FileLocationData.Type.IsFile())
                 {
-                    bonesPath = FullBonesPathSav;
+                    var fileLocationData = FileLocationData;
+                    bonesPath = FullBonesPathSavGz;
                     if (!await File.ExistsAsync(bonesPath))
                     {
-                        Utils.Error($"No saved bones exist. ({DisplayDirectory})");
-                        return null;
+                        bonesPath = FullBonesPathSav;
+                        if (!await File.ExistsAsync(bonesPath))
+                        {
+                            Utils.Error($"No saved bones exist. ({DisplayDirectory})");
+
+                            try
+                            {
+                                if (!FileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
+                                {
+                                    FileLocationDataSet.Remove(fld);
+                                    BonesManager.ClearHasSaveBones();
+                                }))
+                                {
+                                    Utils.Warn($"Failed to delete empty bones directory. ({DisplayDirectory})");
+                                }
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"Deleting empty bones directory failed ({DisplayDirectory})", x);
+                            }
+                            finally
+                            {
+                                FileLocationDataSet.Remove(fileLocationData);
+                                BonesManager.ClearHasSaveBones();
+                            }
+                        }
                     }
                 }
                 return bonesPath;
@@ -726,15 +780,16 @@ namespace UD_Bones_Folder.Mod
                     case DialogResult.Cancel:
                         return UIUtils.CascadableResult.Cancel;
                     case DialogResult.Yes:
-                        if (await OsseousAsh.TryReportBonesAsync(new OsseousAsh.Report
-                        {
-                            OsseousAshID = OsseousAsh.Config.ID,
-                            BonesID = SaveBonesInfo.ID,
-                            Blocked = true,
-                            Type = OsseousAsh.Report.ReportTypes.Other,
-                            Description = "For Block",
-                        },
-                        Silent: true))
+                        if (await OsseousAsh.TryReportBonesAsync(
+                            Report: new OsseousAsh.Report
+                            {
+                                OsseousAshID = OsseousAsh.Config.ID,
+                                BonesID = SaveBonesInfo.ID,
+                                Blocked = true,
+                                Type = OsseousAsh.Report.ReportTypes.Other,
+                                Description = "For Block",
+                            },
+                            Silent: true))
                         {
                             SaveBonesInfo._IsBlocked = null;
                         }

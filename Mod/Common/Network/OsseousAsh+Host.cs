@@ -213,27 +213,7 @@ namespace UD_Bones_Folder.Mod
             };
 
             private IEnumerable<Report> _ReportsCache;
-            public IEnumerable<Report> ReportsCache
-            {
-                get
-                {
-                    if (_ReportsCache == null)
-                    {
-                        //Utils.Log($"{ToString()} - {nameof(_ReportsCache)} is null");
-                        var cachedReports = GetBonesReports();
-                        /*if (cachedReports == null)
-                            Utils.Log($"{2.Indent()}cachedReports null");
-                        else
-                        if (cachedReports.Count() == 0)
-                            Utils.Log($"{2.Indent()}cachedReports empty");
-                        else
-                            Utils.Log($"{1.Indent()}cachedReports: {cachedReports.Count()}");*/
-
-                        _ReportsCache = cachedReports;
-                    }
-                    return _ReportsCache;
-                }
-            }
+            public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
             public Host()
             {
@@ -1362,7 +1342,7 @@ namespace UD_Bones_Folder.Mod
                                         }
                                         catch (Exception x)
                                         {
-                                            Utils.Error($"Deserializing {nameof(GetBonesReports)} response to {nameof(IEnumerable<Report>)}", x);
+                                            Utils.Error($"Deserializing {nameof(GetBonesReports)} response into {nameof(IEnumerable<Report>)}", x);
                                             break;
                                         }
                                     }
@@ -1379,6 +1359,8 @@ namespace UD_Bones_Folder.Mod
                             }
                         }
                         else
+                        if (httpRes.StatusCode > HttpStatusCode.NoContent
+                            || httpRes.StatusCode < HttpStatusCode.OK)
                         {
                             Utils.Warn($"{nameof(GetBonesReports)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                         }

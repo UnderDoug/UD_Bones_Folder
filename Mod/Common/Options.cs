@@ -36,6 +36,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool DebugEnableNoExhuming;
         [OptionFlag] public static bool DebugEnablePickingBones;
         [OptionFlag] public static bool DebugEnableForcePickingBones;
+        [OptionFlag] public static bool DebugEnableIgnoreAllowReallyDie;
 
         // General Settings
         [OptionFlag] public static bool EnableFlashingLightEffects;

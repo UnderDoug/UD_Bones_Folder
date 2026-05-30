@@ -351,24 +351,26 @@ namespace UD_Bones_Folder.Mod.UI
 
         private bool IsBonesToShow(SaveBonesInfo SaveBonesInfo)
         {
+            bool isBlocked = SaveBonesInfo.IsBlocked;
             if (VisibilityMode == VisibilityModes.Allowed
-                && SaveBonesInfo.IsBlocked)
+                && isBlocked)
                 return false;
 
             if (VisibilityMode == VisibilityModes.Blocked
-                && !SaveBonesInfo.IsBlocked)
+                && !isBlocked)
                 return false;
 
+            var fileLocationDataType = SaveBonesInfo.FileLocationData.Type;
             if (SourceMode == SourceModes.File
-                && !SaveBonesInfo.FileLocationData.Type.IsFile())
+                && !fileLocationDataType.IsFile())
                 return false;
 
             if (SourceMode == SourceModes.Mod
-                && !SaveBonesInfo.FileLocationData.Type.IsMod())
+                && !fileLocationDataType.IsMod())
                 return false;
 
             if (SourceMode == SourceModes.Online
-                && !SaveBonesInfo.FileLocationData.Type.IsOnline())
+                && !fileLocationDataType.IsOnline())
                 return false;
 
             return true;
@@ -665,15 +667,16 @@ namespace UD_Bones_Folder.Mod.UI
                     });
                     if (BonesInfo.IsOnline)
                     {
+                        bool isBlocked = BonesInfo.IsBlocked;
                         options.Add(new()
                         {
                             Element = BonesInfo,
-                            Text = $"{(!BonesInfo.IsBlocked ? "Block" : "Unblock")}{(!BonesInfo.IsBlocked ? null : " (currently unsupported)")}",
-                            Icon = !BonesInfo.IsBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
+                            Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
+                            Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
                             Hotkey = 'b',
                             Callback = SaveBonesInfo.BlockUnblockAsync,
                         });
-                        if (!BonesInfo.IsBlocked)
+                        if (!isBlocked)
                         {
                             options.Add(new()
                             {

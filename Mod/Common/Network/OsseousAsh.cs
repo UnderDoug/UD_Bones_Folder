@@ -649,7 +649,11 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static IEnumerable<Host> AllHosts()
-            => AllHosts(null)
+            => AllHosts(null).IteratorSafe()
+            ;
+
+        public static IEnumerable<Host> AllEnabledHosts()
+            => AllHosts(h => h.Enabled).IteratorSafe()
             ;
 
         public static IEnumerable<KeyValuePair<FileLocationData, Host>> AllHostsWithLocation(Predicate<KeyValuePair<FileLocationData, Host>> Where)
@@ -1518,7 +1522,7 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                foreach (var host in AllHosts(h => h.Enabled))
+                foreach (var host in AllEnabledHosts())
                 {
                     try
                     {

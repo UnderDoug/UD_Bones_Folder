@@ -289,7 +289,6 @@ namespace UD_Bones_Folder.Mod
             if (Hosts.IsNullOrEmpty())
                 yield break;
 
-            //Utils.Log($"{3.Indent()}Caching Reports");
             foreach (var hostCollection in Hosts)
             {
                 foreach (var host in hostCollection)

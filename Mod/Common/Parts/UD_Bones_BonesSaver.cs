@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using HistoryKit;
+
 using Qud.API;
 
 using UD_Bones_Folder.Mod;
@@ -381,7 +383,7 @@ namespace XRL.World.Parts
                 if (instant)
                 {
                     if (ParentObject.CurrentZone?.ZoneID != JoppaWorldBuilder.ID_JOPPA)
-                        MakeBones_WishHandler("die -f");
+                        MakeBones_WishHandler("die force");
                 }
             }
 
@@ -392,7 +394,7 @@ namespace XRL.World.Parts
         {
             if (E.Command == COMMAND_MAKE_BONES)
             {
-                MakeBones_WishHandler("die");
+                MakeBones_WishHandler("die ability");
             }
             return base.HandleEvent(E);
         }
@@ -417,6 +419,49 @@ namespace XRL.World.Parts
             => MakeBones_WishHandler(null)
             ;
 
+        private static bool IsObjectEligibleToBeKiller(GameObject Object)
+        {
+            if (Object == null)
+                return false;
+
+            if (Object.GetBlueprint() == null)
+                return false;
+
+            if (!Object.HasPart("Body")
+                || !Object.HasPart("Combat"))
+            {
+                if (!Object.HasTagOrProperty("BodySubstitute"))
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool IsObjectStrictlyEligibleToBeKiller(GameObject Object)
+        {
+            if (!IsObjectEligibleToBeKiller(Object))
+                return false;
+
+            if (Object.GetBlueprint() is not GameObjectBlueprint model)
+                return false;
+
+            string objectSeed = $"{nameof(IsObjectStrictlyEligibleToBeKiller)}::{Object.BaseID}";
+            int objectSeedIterator = 0;
+
+            if (Object.HasTag("Merchant")
+                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                return false;
+
+            if (model.InheritsFromSafe("Fungus")
+                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                return false;
+
+            if (Object.IsPlayerLed()
+                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                return false;
+
+            return true;
+        }
+
         [WishCommand("make bones")]
         public static bool MakeBones_WishHandler(string Params)
         {
@@ -436,6 +481,9 @@ namespace XRL.World.Parts
 
             bool interesting = (Params?.Contains("interesting") is true)
                 || (Params?.Contains("-i") is true);
+
+            bool isAbility = (Params?.Contains("ability") is true)
+                || (Params?.Contains("-a") is true);
 
             if (interesting)
             {
@@ -488,11 +536,21 @@ namespace XRL.World.Parts
                 try
                 {
                     string killerSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(killer));
+                    var seededGenerator = BonesModeModule.SeededGenerator(killerSeed);
                     if (BonesModeModule.SeededOddsIn10000(killerSeed, 8000))
-                        killer = The.Player.CurrentZone.GetObjects(go => go.IsCombatObject()).GetRandomElement(BonesModeModule.SeededGenerator(killerSeed));
+                        killer = FuzzyFunctions.DoThisButRarelyDoThat(
+                            Primary: () => The.Player.CurrentZone.GetObjects(go => go.IsCombatObject() && !go.IsPlayerLed())?.GetRandomElement(seededGenerator),
+                            Secondary: () => The.Player.CurrentZone.GetObjects(go => go.IsCombatObject())?.GetRandomElement(seededGenerator),
+                            Chance: "10")
+                            .Invoke();
 
-                    killer ??= ZoneManager.instance.CachedObjects?.Values?.Where(GO => GO.IsCombatObject())?.GetRandomElementCosmetic()
-                        ?? The.Player;
+                    killer ??= FuzzyFunctions.DoThisButRarelyDoThat(
+                        Primary: () => ZoneManager.instance.CachedObjects?.Values?.Where(IsObjectStrictlyEligibleToBeKiller)?.GetRandomElement(seededGenerator),
+                        Secondary: () => ZoneManager.instance.CachedObjects?.Values?.Where(IsObjectEligibleToBeKiller)?.GetRandomElement(seededGenerator),
+                        Chance: "20")
+                        .Invoke();
+
+                    killer ??= The.Player; 
 
                     var weapons = Event.NewGameObjectList();
                     killer?.Body?.ForeachDefaultBehavior(go => weapons.Add(go));
@@ -521,6 +579,17 @@ namespace XRL.World.Parts
                 {
                     originalIDKFA = The.Core.IDKFA;
                     The.Core.IDKFA = false;
+                }
+
+                bool? originalAllowRealyDie = null;
+                if (Options.DebugEnableIgnoreAllowReallyDie
+                    && (noAsk
+                        || isAbility)
+                    && UI.Options.AllowReallydie
+                    && willDie)
+                {
+                    originalAllowRealyDie = UI.Options.AllowReallydie;
+                    UI.Options.AllowReallydie = false;
                 }
 
                 string extraDamageSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(UD_Bones_Folder.Mod.Extensions.GetNotResistedDamageTypes));
@@ -559,6 +628,9 @@ namespace XRL.World.Parts
 
                 if (originalIDKFA.HasValue)
                     The.Core.IDKFA = originalIDKFA.GetValueOrDefault();
+
+                if (originalAllowRealyDie.HasValue)
+                    UI.Options.AllowReallydie = originalAllowRealyDie.GetValueOrDefault();
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo, b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced))
                 {

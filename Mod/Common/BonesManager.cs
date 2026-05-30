@@ -593,7 +593,8 @@ namespace UD_Bones_Folder.Mod
                             if (Where?.Invoke(onlineBonesInfo) is not false)
                             {
                                 if (saveBonesInfos.FirstOrDefault(b => b.ID == onlineBonesInfo.ID) is SaveBonesInfo existingInfo
-                                    && existingInfo.FileLocationData != null)
+                                    && existingInfo.FileLocationData != null
+                                    && !existingInfo.FileLocationData.SameAs(onlineBonesInfo.FileLocationData))
                                 {
                                     existingInfo.FileLocationData = onlineBonesInfo.FileLocationData;
                                     continue;
