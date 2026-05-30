@@ -173,7 +173,7 @@ namespace UD_Bones_Folder.Mod
             public void WriteAddHosts(params Host[] Hosts)
             {
                 bool any = false;
-                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
+                foreach (var host in Hosts.IteratorSafe())
                     if (Add(host))
                         any = true;
 
@@ -194,7 +194,7 @@ namespace UD_Bones_Folder.Mod
             public void WriteRemoveHostsDispose(params Host[] Hosts)
             {
                 bool any = false;
-                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
+                foreach (var host in Hosts.IteratorSafe())
                     if (Remove(host))
                     {
                         host.Dispose();
@@ -208,7 +208,7 @@ namespace UD_Bones_Folder.Mod
             public void WriteRemoveHosts(params Host[] Hosts)
             {
                 bool any = false;
-                foreach (var host in Hosts ?? Enumerable.Empty<Host>())
+                foreach (var host in Hosts.IteratorSafe())
                     if (Remove(host))
                         any = true;
 
@@ -268,7 +268,7 @@ namespace UD_Bones_Folder.Mod
 
         public static void BuildHosts(this Rack<OsseousAsh.HostCollection> Hosts, bool Ping = false)
         {
-            foreach (var hostCollection in Hosts ?? Enumerable.Empty<OsseousAsh.HostCollection>())
+            foreach (var hostCollection in Hosts.IteratorSafe())
                 hostCollection.BuildHosts(Ping);
         }
 
@@ -297,7 +297,7 @@ namespace UD_Bones_Folder.Mod
                     if (!host.IsRunning)
                         continue;
 
-                    var reportsCache = host.ReportsCache ?? Enumerable.Empty<OsseousAsh.Report>();
+                    var reportsCache = host.ReportsCache.IteratorSafe();
                     foreach (var report in reportsCache)
                         yield return report;
                 }
@@ -313,7 +313,7 @@ namespace UD_Bones_Folder.Mod
                 yield break;
 
             //Utils.Log($"Getting Reports");
-            var reportsCache = OsseousAsh.ReportsCache ?? Enumerable.Empty<OsseousAsh.Report>();
+            var reportsCache = OsseousAsh.ReportsCache.IteratorSafe();
             foreach (var report in reportsCache)
                 if (Filter?.Invoke(report) is not false)
                     yield return report;

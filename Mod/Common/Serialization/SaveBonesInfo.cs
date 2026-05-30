@@ -145,6 +145,23 @@ namespace UD_Bones_Folder.Mod
 
         public static IRenderable YesAvailableModsIcon = new Renderable(UnavailableModsIcon).setDetailColor('y');
 
+        public bool IsYou
+        {
+            get
+            {
+                if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
+                    return true;
+
+                if (bonesJSON.IsYou is bool isYou)
+                    return isYou;
+
+                if (!OsseousAshID.IsEmptyOrDefault())
+                    return OsseousAshID == OsseousAsh.Config.ID;
+
+                return true;
+            }
+        }
+
         public Guid OsseousAshID
             => GetBonesJSON()?.OsseousAshID
             ?? Guid.Empty;
@@ -259,7 +276,7 @@ namespace UD_Bones_Folder.Mod
             FileLocationData LocationData
             )
             => SaveBonesJSON.InfoFromJson(
-                SaveBonesJSON: SaveBonesJSON.DummyBonesJSON(VisibilityMode, LocationData?.Type ?? FileLocationData.LocationType.None),
+                SaveBonesJSON: SaveBonesJSON.DummyBonesJSON(VisibilityMode),
                 FileLocationData: LocationData,
                 SaveSize: 0L,
                 IsDummy: true)
@@ -271,12 +288,16 @@ namespace UD_Bones_Folder.Mod
                 .ToString()
             ;
 
-        public string GetBonesMenuString(int N)
+        public XRL.Version GetModVersion()
+            => new(ModVersion)
+            ;
+
+        public string GetBonesMenuDataRowString(int N)
             => N switch
             {
                 0 => $"{GetName()}::{Description}".Colored("W"),
                 1 => ColorUtility.CapitalizeExceptFormatting(Info),
-                2 => $"{DeathReason} on {SaveTime}",
+                2 => $"{DeathReason} on {GetSaveTimeString()}",
                 3 => $"{Size} {"{" + ID + "} "}".Colored("K"),
                 _ => throw new ArgumentOutOfRangeException(nameof(N), "Must be between 0 and 3 inclusive."),
             }
@@ -514,8 +535,66 @@ namespace UD_Bones_Folder.Mod
 
             saveWeight += ModsDiffer.UnavailableWhereBonesEnabled * -4;
 
+            /*if (Stats.Encountered is BonesStatSet encountered)
+            {
+                int timesEncountered = encountered.GetStatValue(OsseousAsh.Config.ID);
+                // do something on the basis of times encountered maybe?
+            }*/
+
+            if (GetModVersion() is XRL.Version saveVersion
+                && Utils.ModVersion is XRL.Version modVersion)
+            {
+                if (modVersion < saveVersion)
+                    saveWeight = 0;
+
+                if (modVersion.Build != saveVersion.Build)
+                    saveWeight = 0;
+
+                int versionDiff = Math.Max(0, modVersion.Revision - saveVersion.Revision);
+
+                int diffReduction = 100;
+                for (int i = 0; i < versionDiff; i++)
+                {
+                    if (diffReduction <= 0
+                        || saveWeight <= 0)
+                        break;
+
+                    saveWeight -= diffReduction;
+
+                    diffReduction *= 2;
+                }
+            }
+
             return Math.Max(1, saveWeight);
         }
+
+        public static DateTime GetSaveTime(SaveBonesJSON BonesJSON)
+        {
+            try
+            {
+                return new DateTime(BonesJSON.SaveTimeValue).ToLocalTime();
+            }
+            catch
+            {
+                return new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
+            }
+        }
+
+        public DateTime GetSaveTime()
+            => GetSaveTime(GetBonesJSON())
+            ;
+
+        public static string GetSaveTimeString(DateTime SaveTime)
+            => $"{SaveTime.ToLongDateString()} at {SaveTime.ToLongTimeString()}"
+            ;
+
+        public static string GetSaveTimeString(SaveBonesJSON BonesJSON)
+            => GetSaveTimeString(GetSaveTime(BonesJSON))
+            ;
+
+        public string GetSaveTimeString()
+            => GetSaveTimeString(GetSaveTime())
+            ;
 
         public string GetBlurbString()
         {
@@ -549,16 +628,54 @@ namespace UD_Bones_Folder.Mod
             }
 
             sB.Append(FileLocationData?.ShortDisplayName() ?? FileLocationData.MissingLocaitonShortDisplayName)
-                .Append(" on ").Append(SaveTime).Append(", ")
-                .AppendRule(SaveTimeValue.TimeAgo()).Append(" ago.")
+                .Append(" on ").Append(GetSaveTimeString()).Append(", ")
+                .AppendRule(SaveTimeValue.TimeAgo("ago")).Append(".")
                 .AppendLine();
+
+            sB.AppendLine()
+                .Append("They are from version ").AppendRule(GetModVersion()).Append(" of the ").AppendColored("Y", Utils.ModTitle).Append(" mod");
+            if (GetModVersion() == Utils.ModVersion)
+            {
+                sB.Append(", which is the current one.");
+            }
+            else
+                sB.Append(".");
+            sB.AppendLine();
 
             sB.AppendLine().AppendBonesStatsBlurb(Stats, Name)
                 .AppendLine();
 
-            sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
-                .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
-                .AppendLine();
+            bool showModConfigLine = true;
+            if (GetModVersion() is XRL.Version infoVersion
+                && Utils.ModVersion is XRL.Version modVersion)
+            {
+                bool saveIsLaterVersion = modVersion < infoVersion;
+                bool buildVersionDiffers = modVersion.Build != infoVersion.Build;
+                int versionDiff = modVersion.Revision - infoVersion.Revision;
+                if (saveIsLaterVersion
+                    || buildVersionDiffers)
+                {
+                    showModConfigLine = false;
+                    sB.AppendLine().Append("Based on the ").AppendRule("version difference").Append(" between the ").AppendColored("Y", Utils.ModTitle)
+                        .Append(" mod (").AppendRule(modVersion).Append("), ")
+                        .Append("and these bones (").AppendRule(infoVersion).Append("), they are ineligible to be loaded.")
+                        .AppendLine();
+                }
+                else
+                if (versionDiff > 0)
+                {
+                    showModConfigLine = false;
+                    sB.AppendLine().Append("Based on your current mod configuration, and the version disparty, these bones are weighted ")
+                        .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
+                        .AppendLine();
+                }
+            }
+            if (showModConfigLine)
+            {
+                sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
+                    .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
+                    .AppendLine();
+            }
 
             return Event.FinalizeString(sB);
         }

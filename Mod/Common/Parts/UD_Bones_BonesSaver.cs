@@ -11,6 +11,8 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 using UD_Bones_Folder.Mod.UI;
 
+using XRL.CharacterBuilds;
+using XRL.CharacterBuilds.Qud;
 using XRL.Collections;
 using XRL.Rules;
 using XRL.UI;
@@ -30,6 +32,7 @@ namespace XRL.World.Parts
     public class UD_Bones_BonesSaver
         : IPlayerPart
         , IPlayerMutator
+        , IModEventHandler<GetLunarRegentEvent>
     {
         public static List<string> DamageTexts = new()
         {
@@ -54,6 +57,10 @@ namespace XRL.World.Parts
 
         public Guid MakeBonesActivatedAbilityID;
 
+        protected bool CheckAnnounce;
+
+        public string PetBlueprint;
+
         [CallAfterGameLoaded]
         public static void PreparePlayer()
             => PreparePlayer(The.Player)
@@ -70,13 +77,31 @@ namespace XRL.World.Parts
             Cell TargetCell
             )
         {
+            if (Player == null)
+                return null;
+
+            TargetCell ??= Player.CurrentCell;
+
+            if (!BeforeCreateLunarRegentEvent.Check(Player, out string blockedMessage, Context: nameof(AscendLunarRegent)))
+            {
+                string forReasons = null;
+                if (!blockedMessage.IsNullOrEmpty())
+                    forReasons = $" for the following reasons: {blockedMessage}";
+                Utils.Info($"Creation of Lunar Regent blocked{forReasons}.");
+                return null;
+            }
+
             if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
                 return null;
 
             GameObject lunarRegent = null;
             try
             {
-                lunarRegent = Player.DeepCopy();
+                lunarRegent = GetLunarRegentEvent.GetFor(
+                    Player: Player,
+                    TargetCell: TargetCell,
+                    LunarRegent: Player.DeepCopy(),
+                    Context: nameof(AscendLunarRegent));
             }
             catch (Exception x)
             {
@@ -84,80 +109,8 @@ namespace XRL.World.Parts
                 return null;
             }
 
-            lunarRegent.GiveProperName(Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
-
-            lunarRegent.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
-
-            using var lunarRegentInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(
-                items: lunarRegent.Inventory?.Objects ?? Enumerable.Empty<GameObject>());
-
-            var lunarReliquary = GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT);
-            var reliquaryInventory = lunarReliquary?.Inventory;
-
-            foreach (var lunarRegentItem in lunarRegentInventoryList)
-            {
-                lunarRegentItem.RequirePart<UD_Bones_FragileLunarObject>();
-
-                if (lunarRegentItem.Equipped != null
-                    || lunarRegentItem.GetBlueprint().InheritsFrom("Grenade")
-                    || lunarRegentItem.GetBlueprint().InheritsFrom("Tonic")
-                    || lunarRegentItem.GetBlueprint().InheritsFrom("Projectile")
-                    || lunarRegentItem.GetBlueprint().InheritsFrom("Energy Cell")
-                    || lunarRegentItem.GetBlueprint().InheritsFrom("BaseThrownWeapon"))
-                    continue;
-
-                if (lunarReliquary != null)
-                {
-                    lunarRegent.Inventory?.RemoveObject(lunarRegentItem);
-                    reliquaryInventory.AddObject(lunarRegentItem, Silent: true);
-                    continue;
-                }
-                lunarRegentItem.SetStringProperty($"{nameof(UD_Bones_FragileLunarObject)}.DropOnLoad", $"{true}");
-            }
-
-            if (lunarReliquary != null)
-            {
-                lunarRegent.Inventory.AddObject(lunarReliquary);
-                if (!lunarRegent.Inventory.InventoryContains(lunarReliquary))
-                {
-                    Utils.Error($"Failed to give {lunarRegent?.DebugName?.Strip() ?? "NO_REGENT"} =subject.possessive= {nameof(lunarReliquary)}"
-                        .StartReplace()
-                        .AddObject(lunarRegent)
-                        );
-                    TargetCell.AddObject(lunarReliquary);
-                }
-            }
-
-            lunarRegent.RestorePristineHealth();
-
-            lunarRegent.RenderForUI("SaveGameInfo", true);
-
-            /*
-            var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
-
-            Utils.Log($"{nameof(RenderEvent)}({nameof(renderEvent.getColorString)}: {renderEvent.getColorString()}, " +
-                $"{nameof(renderEvent.GetForegroundColorChar)}: {renderEvent.GetForegroundColorChar()}, " +
-                $"{nameof(renderEvent.GetDetailColorChar)}: {renderEvent.GetDetailColorChar()})");
-
-            Utils.Log($"{nameof(Parts.Render)}({nameof(moonKing.Render.getColorString)}: {moonKing.Render.getColorString()}, " +
-                $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
-                $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
-            */
-
-            var lunarBrain = lunarRegent.Brain;
-            lunarBrain.PartyLeader = null;
-            lunarBrain.Hibernating = false;
-            lunarBrain.Staying = false;
-            lunarBrain.Passive = false;
-            lunarBrain.Factions = "Mean-100,Playerhater-99";
-            lunarBrain.Allegiance.Hostile = true;
-            lunarBrain.Allegiance.Calm = false;
-
-            if (Player != null)
-            {
-                lunarBrain.AddOpinion<OpinionMollify>(Player);
-                Player.AddOpinion<OpinionMollify>(lunarRegent);
-            }
+            if (lunarRegent == null)
+                return null;
 
             if (TargetCell == null)
             {
@@ -165,29 +118,11 @@ namespace XRL.World.Parts
                 return null;
             }
 
-            if (lunarRegent.Render is Render render)
-                render.Visible = false;
-
-            var lunarRegentPart = lunarRegent.RequirePart<UD_Bones_LunarRegent>();
-
-            //lunarRegentPart.Onset();
-
-            if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
-            {
-                if (lunarRegent.ReceiveObject(lunarRegentMask))
-                {
-                    if (lunarRegentMask.TryGetPart(out UD_Bones_LunarFace lunarFace))
-                        lunarFace.TryBeWorn();
-                }
-                else
-                    lunarRegentMask?.Obliterate();
-            }
-
-            lunarBrain.PerformEquip();
-
             TargetCell.AddObject(lunarRegent);
 
             lunarRegent.MakeActive();
+
+            AfterCreatedLunarRegentEvent.Send(Player, lunarRegent, Context: nameof(AscendLunarRegent));
 
             return lunarRegent;
         }
@@ -270,9 +205,78 @@ namespace XRL.World.Parts
             || ParentObject.RemoveActivatedAbility(ref MakeBonesActivatedAbilityID)
             ;
 
+        public static bool PreparePetForBonesMode(string PetBlueprint, GameObject Player)
+        {
+            if (PetBlueprint.IsNullOrEmpty())
+                return false;
+
+            if (Player == null)
+                return false;
+
+            Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
+
+            foreach (var companion in Player.GetCompanions(MaxDistance: 999999).IteratorSafe())
+            {
+                if (companion.Blueprint == PetBlueprint)
+                {
+                    Utils.SuppressPopupsWhile(delegate ()
+                    {
+                        if (Player.Level > companion.Level
+                            && companion.TryGetPart(out Leveler companionLeveler)
+                            && companion.CurrentCell is Cell companionCell
+                            && companion.CurrentZone is Zone companionZone)
+                        {
+                            int targetLevel = Player.Level;
+                            int minXP = Leveler.GetXPForLevel(targetLevel);
+                            int maxXP = Leveler.GetXPForLevel(targetLevel + 1) - 1;
+                            int xpToAward = Math.Min(Stat.RandomCosmetic(minXP, maxXP), Stat.RandomCosmetic(minXP, maxXP));
+
+                            companion.GetStat("XP").BaseValue = xpToAward;
+
+                            int visMapIndex = companionCell.X + (companionCell.Y * companionZone.Width);
+                            var visMap = companionZone.VisibilityMap;
+                            bool visibility = visMap[visMapIndex];
+                            visMap[visMapIndex] = false;
+
+                            while (companion.GetStatValue("XP") >= Leveler.GetXPForLevel(companion.Level - 1))
+                                companionLeveler.LevelUp();
+
+                            visMap[visMapIndex] = visibility;
+                        }
+                        BonesModeModule.GiveOverTierStuff(companion);
+                        BonesModeModule.GiveTierStuff(companion);
+                        BonesModeModule.PerformVeryIntelligentPointAssignment(companion);
+                        BonesModeModule.GrowLimbs(companion);
+
+                        companion.Brain?.PerformReequip(Silent: true, Initial: true);
+
+                        using (var nonequippedItems = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(companion.GetInventory()))
+                        {
+                            for (int i = 0; i < nonequippedItems.Count; i++)
+                            {
+                                if (nonequippedItems[i] is GameObject nonequippedItem
+                                    && nonequippedItem.Equipped == null)
+                                {
+                                    companion.Inventory?.RemoveObjectFromInventory(nonequippedItem, Silent: true);
+                                    nonequippedItem?.Obliterate();
+                                }
+                            }
+                        }
+                        companion.ForeachEquippedObject(go => go.MakeUnderstood());
+                    });
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
-            Registrar.Register(BeforeTakeActionEvent.ID, EventOrder.EXTREMELY_LATE);
+            Registrar.Register(GetLunarRegentEvent.ID, EventOrder.EXTREMELY_EARLY);
+            Registrar.Register(EarlyBeforeBeginTakeActionEvent.ID, EventOrder.EXTREMELY_LATE);
+            Registrar.Register(EnteringZoneEvent.ID, EventOrder.EXTREMELY_LATE);
             base.Register(Object, Registrar);
         }
 
@@ -284,6 +288,62 @@ namespace XRL.World.Parts
             || ID == GetDebugInternalsEvent.ID
             ;
 
+        public virtual bool HandleEvent(GetLunarRegentEvent E)
+        {
+            if (E.LunarObject is GameObject lunarRegent)
+            {
+                lunarRegent.GiveProperName(E.Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
+
+                lunarRegent.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
+
+                lunarRegent.RestorePristineHealth();
+
+                lunarRegent.RenderForUI("SaveGameInfo", true);
+
+                /*
+                var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
+
+                Utils.Log($"{nameof(RenderEvent)}({nameof(renderEvent.getColorString)}: {renderEvent.getColorString()}, " +
+                    $"{nameof(renderEvent.GetForegroundColorChar)}: {renderEvent.GetForegroundColorChar()}, " +
+                    $"{nameof(renderEvent.GetDetailColorChar)}: {renderEvent.GetDetailColorChar()})");
+
+                Utils.Log($"{nameof(Parts.Render)}({nameof(moonKing.Render.getColorString)}: {moonKing.Render.getColorString()}, " +
+                    $"{nameof(moonKing.Render.GetForegroundColorChar)}: {moonKing.Render.GetForegroundColorChar()}, " +
+                    $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
+                */
+
+                var lunarBrain = lunarRegent.Brain;
+                lunarBrain.PartyLeader = null;
+                lunarBrain.Hibernating = false;
+                lunarBrain.Staying = false;
+                lunarBrain.Passive = false;
+                lunarBrain.Factions = "Mean-100,Playerhater-99";
+                lunarBrain.Allegiance.Hostile = true;
+                lunarBrain.Allegiance.Calm = false;
+
+                if (lunarRegent.Render is Render render)
+                    render.Visible = false;
+
+                var lunarRegentPart = lunarRegent.RequirePart<UD_Bones_LunarRegent>();
+
+                //lunarRegentPart.Onset();
+
+                if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
+                {
+                    if (!lunarRegent.ReceiveObject(lunarRegentMask))
+                        lunarRegentMask?.Obliterate();
+                    else
+                    if (lunarRegentMask.TryGetPart(out UD_Bones_LunarFace lunarFace))
+                        lunarFace.TryBeWorn();
+                    else
+                        Utils.Warn($"Strange unequippable {lunarRegentMask?.DebugName ?? "NO_MASK_OBJECT"} without {nameof(UD_Bones_LunarFace)} part...");
+                }
+
+                lunarBrain.PerformEquip();
+            }
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(AfterPlayerBodyChangeEvent E)
         {
             if (!MakeBonesActivatedAbilityID.IsEmptyOrDefault())
@@ -294,21 +354,36 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
-        public override bool HandleEvent(BeforeTakeActionEvent E)
+        public override bool HandleEvent(EnteringZoneEvent E)
         {
+            Utils.Log($"{nameof(EnteringZoneEvent)}: {E.Cell?.ParentZone?.ZoneID ?? "NO_ZONE_ID"}, from: {ParentObject?.CurrentZone?.ZoneID ?? "NO_ZONE_ID"}");
+            if (!CheckAnnounce)
+            {
+                if (E.Cell.ParentZone.HasZoneProperty("BonesID"))
+                    CheckAnnounce = true;
+            }
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
+        {
+            if (CheckAnnounce)
+            {
+                AnnounceLunarRegentEvent.Send();
+                CheckAnnounce = false;
+            }
             if (BonesMode.HasValue)
             {
                 bool instant = BonesMode.GetValueOrDefault();
                 BonesMode = null;
-                AddInstantDieAbility();
+                AddInstantDieAbility(Silent: instant);
+                PreparePetForBonesMode(PetBlueprint, ParentObject);
                 if (instant)
                 {
                     if (ParentObject.CurrentZone?.ZoneID != JoppaWorldBuilder.ID_JOPPA)
                         MakeBones_WishHandler("die -f");
                 }
             }
-            else
-                ParentObject.UnregisterEvent(this, BeforeTakeActionEvent.ID);
 
             return base.HandleEvent(E);
         }
@@ -334,7 +409,6 @@ namespace XRL.World.Parts
             E.AddEntry(this, nameof(Options.DebugEnableNoHoarding), Options.DebugEnableNoHoarding);
             E.AddEntry(this, nameof(Options.DebugEnableNoExhuming), Options.DebugEnableNoExhuming);
             E.AddEntry(this, nameof(Options.DebugEnablePickingBones), Options.DebugEnablePickingBones);
-            E.AddEntry(this, nameof(Options.DebugEnableNoCremation), Options.DebugEnableNoCremation);
             return base.HandleEvent(E);
         }
 
@@ -353,8 +427,24 @@ namespace XRL.World.Parts
                 return false;
 
             bool willDie = Params?.Contains("die") is true;
-            bool noSave = Params?.Contains("eligible") is true;
-            bool noAsk = Params?.Contains("-f") is true;
+
+            bool noSave = (Params?.Contains("eligible") is true)
+                || (Params?.Contains("-e") is true);
+
+            bool noAsk = (Params?.Contains("force") is true)
+                || (Params?.Contains("-f") is true);
+
+            bool interesting = (Params?.Contains("interesting") is true)
+                || (Params?.Contains("-i") is true);
+
+            if (interesting)
+            {
+                BonesModeModule.SimulateNormalRunProgress(The.Player);
+                BonesModeModule.SimulateBeingSomewhereCool(The.Player, false);
+                if (Utils.TryGetEmbarkBuilderModule(out QudCustomizeCharacterModule customizeCharacterModule)
+                    && customizeCharacterModule?.data?.pet is string petBlueprint)
+                    PreparePetForBonesMode(petBlueprint, The.Player);
+            }
 
             if (The.Player.Level < MinimumLevelForBones)
             {
@@ -363,10 +453,7 @@ namespace XRL.World.Parts
                         $"Would you like your level increased to {MinimumLevelForBones} to complete this operation?"
                         ) == DialogResult.Yes)
                 {
-                    bool originalPopupSuppress = Popup.Suppress;
-                    Popup.Suppress = true;
-                    The.Player.AwardXP((Leveler.GetXPForLevel(MinimumLevelForBones) - The.Player.Stat("XP")) + 1);
-                    Popup.Suppress = originalPopupSuppress;
+                    Utils.SuppressPopupsWhile(() => The.Player.AwardXP((Leveler.GetXPForLevel(MinimumLevelForBones) - The.Player.Stat("XP")) + 1));
                     // Add any other eligibility enforcing code here.
                 }
                 else

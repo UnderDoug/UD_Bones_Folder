@@ -631,10 +631,10 @@ namespace UD_Bones_Folder.Mod.UI
                     sB.Clear();
                     options.Clear();
 
-                    sB.Append(BonesInfo.GetBonesMenuString(0))
-                    .AppendLine().Append(BonesInfo.GetBonesMenuString(1))
-                    .AppendLine().Append(BonesInfo.GetBonesMenuString(2))
-                    .AppendLine().Append(BonesInfo.GetBonesMenuString(3))
+                    sB.Append(BonesInfo.GetBonesMenuDataRowString(0))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuDataRowString(1))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuDataRowString(2))
+                    .AppendLine().Append(BonesInfo.GetBonesMenuDataRowString(3))
                     .AppendLine()
                     .AppendLine().Append("Use the options below to manage these bones:")
                     .AppendLineEnd();
@@ -663,24 +663,27 @@ namespace UD_Bones_Folder.Mod.UI
                         Hotkey = 'm',
                         Callback = SaveBonesInfo.AskRestoreModsAsync,
                     });
-                    options.Add(new()
-                    {
-                        Element = BonesInfo,
-                        Text = $"{(!BonesInfo.IsBlocked ? "Block" : "Unblock")}{(!BonesInfo.IsBlocked ? null : " (unsupported)")}",
-                        Icon = !BonesInfo.IsBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
-                        Hotkey = 'b',
-                        Callback = SaveBonesInfo.BlockUnblockAsync,
-                    });
-                    if (!BonesInfo.IsBlocked)
+                    if (BonesInfo.IsOnline)
                     {
                         options.Add(new()
                         {
                             Element = BonesInfo,
-                            Text = "Report",
-                            Icon = OsseousAsh.ReportBonesIcon,
-                            Hotkey = 'r',
-                            Callback = SaveBonesInfo.AskForBonesReportAsync,
+                            Text = $"{(!BonesInfo.IsBlocked ? "Block" : "Unblock")}{(!BonesInfo.IsBlocked ? null : " (currently unsupported)")}",
+                            Icon = !BonesInfo.IsBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
+                            Hotkey = 'b',
+                            Callback = SaveBonesInfo.BlockUnblockAsync,
                         });
+                        if (!BonesInfo.IsBlocked)
+                        {
+                            options.Add(new()
+                            {
+                                Element = BonesInfo,
+                                Text = "Report",
+                                Icon = OsseousAsh.ReportBonesIcon,
+                                Hotkey = 'r',
+                                Callback = SaveBonesInfo.AskForBonesReportAsync,
+                            });
+                        }
                     }
                     if (BonesInfo.IsCrematable)
                     {

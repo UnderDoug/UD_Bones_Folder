@@ -3,4 +3,11 @@
   <world Name="BonesWorld" ZoneFactory="BonesWorldZoneFactory" Map="QudWorldMap.rpm" AmbientBed="amb_worldMap_sky" DisplayName="Qud?" Plane="Inherit" Protocol="Inherit">
     <!--builder Class="JoppaWorldBuilder"></builder-->
   </world>
+  <!--world Name="JoppaWorld" Load="Merge">
+    <cell Name="DefaultJoppaCell" Load="Merge">
+      <zone x="0-2" y="0-2">
+        <builder Class="BonesZoneBuilder"></builder>
+      </zone>
+    </cell>
+  </world-->
 </worlds>

@@ -8,11 +8,15 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 using Platform.IO;
+
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+
 using UnityEngine;
 
 using XRL;
 using XRL.UI;
 using XRL.World;
+using XRL.World.Capabilities;
 using XRL.World.Parts;
 
 using static UD_Bones_Folder.Mod.Const;
@@ -84,6 +88,43 @@ namespace UD_Bones_Folder.Mod
                     int.TryParse(zoneTerrain.GetTag("RegionTier", "1"), out RegionTier);
 
                     TerrainTravelClass = zoneTerrain.GetPart<TerrainTravel>()?.TravelClass ?? "none";
+                }
+
+                if (GetApproxDepth(ZoneZ) >= ApproxDepth.Abyssal)
+                {
+                    RegionTier = Tier.Constrain(RegionTier + 5);
+                    ZoneTerrainType = "Underground";
+                    TerrainTravelClass = "Underground";
+                }
+            }
+        }
+
+        public BonesSpec(
+            GameObject LunarRegent,
+            PseudoZone PseudoZone
+            )
+            : this()
+        {
+            BonesID = The.Game?.GameID;
+
+            if (LunarRegent != null)
+                Level = LunarRegent.Level;
+
+            if (PseudoZone != null)
+            {
+                ZoneID = PseudoZone.ZoneID;
+                ZoneZ = PseudoZone.ZoneRequest.Z;
+                ZoneTier = PseudoZone.NewTier;
+
+                ZoneTerrainType = PseudoZone.ZoneTerrainType;
+                RegionTier = PseudoZone.RegionTier;
+                TerrainTravelClass = PseudoZone.TerrainTravelClass;
+
+                if (GetApproxDepth(ZoneZ) >= ApproxDepth.Abyssal)
+                {
+                    RegionTier = Tier.Constrain(RegionTier + 5);
+                    ZoneTerrainType = "Underground";
+                    TerrainTravelClass = "Underground";
                 }
             }
         }

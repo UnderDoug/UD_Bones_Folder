@@ -35,6 +35,7 @@ namespace XRL.World.Effects
         private string DetailColor = "R";
 
         public UD_Bones_MoonKingFever()
+            : base()
         {
             SetDisplayName();
             Duration = DURATION_INDEFINITE;

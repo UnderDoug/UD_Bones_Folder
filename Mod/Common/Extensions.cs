@@ -32,6 +32,10 @@ using static UD_Bones_Folder.Mod.OsseousAsh.Report;
 using Range = XRL.Range;
 using System.Collections.Concurrent;
 using Event = XRL.World.Event;
+using XRL.World.Skills;
+using XRL.World.Parts.Skill;
+using XRL.Rules;
+using UD_Bones_Folder.Mod.Parts;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -271,10 +275,10 @@ namespace UD_Bones_Folder.Mod
         {
             var bonesInfo = BonesData.BonesInfo;
 
-            SaveRow.TextSkins[0].SetText(bonesInfo.GetBonesMenuString(0));
-            SaveRow.TextSkins[1].SetText(bonesInfo.GetBonesMenuString(1));
-            SaveRow.TextSkins[2].SetText(bonesInfo.GetBonesMenuString(2));
-            SaveRow.TextSkins[3].SetText(bonesInfo.GetBonesMenuString(3));
+            SaveRow.TextSkins[0].SetText(bonesInfo.GetBonesMenuDataRowString(0));
+            SaveRow.TextSkins[1].SetText(bonesInfo.GetBonesMenuDataRowString(1));
+            SaveRow.TextSkins[2].SetText(bonesInfo.GetBonesMenuDataRowString(2));
+            SaveRow.TextSkins[3].SetText(bonesInfo.GetBonesMenuDataRowString(3));
         }
 
         public static UnityEngine.Transform SetLocationBox(this SaveManagementRow SaveRow, BonesInfoData BonesData)
@@ -335,7 +339,7 @@ namespace UD_Bones_Folder.Mod
             SaveRow.deleteButton.RequireContext<NavigationContext>().parentContext = SaveRow.context.context;
 
             UITextSkin deleteButtonTextSkin = null;
-            var deleteButtonImages = SaveRow.deleteButton.GetComponentsInChildren<Image>() ?? Enumerable.Empty<Image>();
+            var deleteButtonImages = SaveRow.deleteButton.GetComponentsInChildren<Image>().IteratorSafe();
             if (SaveRow.deleteButton.GetComponentsInChildren<UITextSkin>() is UITextSkin[] deleteButtonTextSkins)
             {
                 foreach (var textSkin in deleteButtonTextSkins)
@@ -389,10 +393,333 @@ namespace UD_Bones_Folder.Mod
             return output;
         }
 
-        public static string ValueUnits(this TimeSpan Duration, int Digits = 2)
+        public enum TimespanUnits
+        {
+            Microsecond,
+            Millisecond,
+            Second,
+            Minute,
+            Hour,
+            Day,
+            Week,
+            Month,
+            Year,
+        }
+
+        public enum TimespanUnitFractionStyles
+        {
+            Trunc,
+            Decimal,
+            NextUnit,
+            Cascade,
+        }
+
+        public static string MicrosecondsString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Microsecond)
+                return null;
+
+            string unit = TimespanUnits.Microsecond.ToString().ToLower();
+            var microseconds = Duration.TotalMilliseconds / 1000;
+
+            return Style switch
+            {
+                TimespanUnitFractionStyles.Decimal => Math.Round(microseconds, Math.Max(0, Digits)).Things(unit),
+                _ => microseconds.Things(unit),
+            };
+        }
+
+        public static string MillisecondsString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Millisecond)
+                return null;
+
+            string unit = TimespanUnits.Millisecond.ToString().ToLower();
+
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalMilliseconds, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        var microseconds = Duration.TotalMilliseconds / 1000;
+
+                        string nextUnit = Duration.MicrosecondsString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (microseconds % 1000 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Milliseconds.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.MicrosecondsString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Microsecond)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Milliseconds.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Milliseconds.Things(unit);
+            }
+        }
+
+        public static string SecondsString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Second)
+                return null;
+
+            string unit = TimespanUnits.Second.ToString().ToLower();
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalSeconds, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        string nextUnit = Duration.MillisecondsString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (Duration.Milliseconds % 1000 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Seconds.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.MillisecondsString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Millisecond)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Seconds.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Seconds.Things(unit);
+            }
+        }
+
+        public static string MinutesString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Day)
+                return null;
+
+            string unit = TimespanUnits.Minute.ToString().ToLower();
+
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalMinutes, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        string nextUnit = Duration.SecondsString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (Duration.Seconds % 60 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Minutes.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.SecondsString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Second)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Minutes.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Minutes.Things(unit);
+            }
+        }
+
+        public static string HoursString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Day)
+                return null;
+
+            string unit = TimespanUnits.Hour.ToString().ToLower();
+
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalHours, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        string nextUnit = Duration.MinutesString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (Duration.Minutes % 60 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Hours.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.MinutesString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Minute)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Hours.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Hours.Things(unit);
+            }
+        }
+
+        public static string DaysString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Day)
+                return null;
+
+            string unit = TimespanUnits.Day.ToString().ToLower();
+
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalDays, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        string nextUnit = Duration.HoursString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (Duration.Hours % 45 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Days.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.HoursString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Hour)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Days.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Days.Things(unit);
+            }
+        }
+
+        public static string WeeksString(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
+        {
+            if (SmallestCascade < TimespanUnits.Week)
+                return null;
+
+            string unit = TimespanUnits.Week.ToString().ToLower();
+
+            switch (Style)
+            {
+                case TimespanUnitFractionStyles.Decimal:
+                    return Math.Round(Duration.TotalDays, Math.Max(0, Digits)).Things(unit);
+
+                case TimespanUnitFractionStyles.NextUnit:
+                    {
+                        string nextUnit = Duration.HoursString(Style: TimespanUnitFractionStyles.Trunc, SmallestCascade: SmallestCascade);
+                        if (Duration.Hours % 45 != 0
+                            && !nextUnit.IsNullOrEmpty())
+                            nextUnit = $" and {nextUnit}";
+
+                        return $"{Duration.Days.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Cascade:
+                    {
+                        string nextUnit = Duration.HoursString(Style: Style, SmallestCascade: SmallestCascade);
+
+                        if (SmallestCascade == TimespanUnits.Hour)
+                            nextUnit = $"and {nextUnit}";
+
+                        nextUnit = $", {nextUnit}";
+
+                        return $"{Duration.Days.Things(unit)}{nextUnit}";
+                    }
+
+                case TimespanUnitFractionStyles.Trunc:
+                default:
+                    return Duration.Days.Things(unit);
+            }
+        }
+
+        public static string ValueUnits(
+            this TimeSpan Duration,
+            int Digits = 2,
+            TimespanUnitFractionStyles Style = TimespanUnitFractionStyles.NextUnit,
+            TimespanUnits SmallestUnit = TimespanUnits.Microsecond,
+            TimespanUnits BiggestUnit = TimespanUnits.Year,
+            TimespanUnits SmallestCascade = TimespanUnits.Microsecond
+            )
         {
             string durationUnit = "year";
             double durationValue = Duration.TotalDays / 365.25;
+
+            if (SmallestUnit > BiggestUnit)
+                throw new ArgumentOutOfRangeException(nameof(BiggestUnit), $"Must be bigger than {nameof(SmallestUnit)}");
+
             if (Duration.TotalDays < Math.Floor(365.25))
             {
                 durationUnit = "month";
@@ -436,7 +763,7 @@ namespace UD_Bones_Folder.Mod
             if (Duration.TotalMilliseconds / 1000 < 0)
             {
                 durationUnit = "microsecond";
-                durationValue = Duration.TotalMilliseconds / 1000;
+                durationValue = 0;
             }
             return Math.Round(durationValue, Math.Max(0, Digits)).Things(durationUnit);
         }
@@ -605,8 +932,25 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static bool IsTile(this string Tile)
-            => Utils.TileExists(Tile)
-            ;
+        {
+            try
+            {
+                return Utils.TileExistsAsync(Tile).WaitResult();
+            }
+            catch (Exception x)
+            {
+                Utils.Error(nameof(IsTile), x);
+            }
+            try
+            {
+                return Utils.TileExists(Tile);
+            }
+            catch (Exception x)
+            {
+                Utils.Error(nameof(IsTile), x);
+            }
+            return true;
+        }
 
         public static string ThisThese(this GameObject Object)
             => Object.IsPlural
@@ -720,19 +1064,32 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static string GetBonesID(this GameObject Object, string Default)
+            => Object != null
+                && Object.GetFirstPartDescendedFrom<UD_Bones_BaseLunarPart>() is UD_Bones_BaseLunarPart baseLunarPart
+            ? baseLunarPart.BonesID
+            : Default
+            ;
+
+        public static string GetBonesID(this GameObject Object)
+            => Object.GetBonesID(The.Game?.GameID)
+            ;
+
         public static bool IsLunarRegent(this GameObject Object, string FromBonesID = null)
-            => Object.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
-                && (FromBonesID.IsNullOrEmpty()
-                    || lunarRegent.BonesID.EqualsNoCase(FromBonesID))
+            => Object != null
+            && Object.TryGetPart(out UD_Bones_LunarRegent lunarRegent)
+            && (FromBonesID.IsNullOrEmpty()
+                || lunarRegent.BonesID.EqualsNoCase(FromBonesID))
             ;
 
         public static bool IsLunarCourtier(this GameObject Object, string FromBonesID = null)
-            => Object.TryGetPart(out UD_Bones_LunarCourtier lunarCourtier)
-                && (FromBonesID.IsNullOrEmpty()
-                    || lunarCourtier.BonesID.EqualsNoCase(FromBonesID))
+            => Object != null
+            && Object.TryGetPart(out UD_Bones_LunarCourtier lunarCourtier)
+            && (FromBonesID.IsNullOrEmpty()
+                || lunarCourtier.BonesID.EqualsNoCase(FromBonesID))
             ;
 
-        public static void FeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
+        public static void TryFeverWarp(this GameObject BonesObject, string BonesID = null, bool Recursive = true, int Depth = 0)
         {
             //Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {BonesObject?.DebugName ?? "NO_OBJECT??"}");
 
@@ -740,15 +1097,15 @@ namespace UD_Bones_Folder.Mod
             {
                 if (BonesObject.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
                     for (int i = 0; i < inventoryObjects.Count; i++)
-                        inventoryObjects[i].FeverWarp(BonesID, Depth: Depth + 1);
+                        inventoryObjects[i].TryFeverWarp(BonesID, Depth: Depth + 1);
 
                 if (BonesObject.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
                     for (int i = 0; i < installedCybernetics.Count; i++)
-                        installedCybernetics[i].FeverWarp(BonesID, Depth: Depth + 1);
+                        installedCybernetics[i].TryFeverWarp(BonesID, Depth: Depth + 1);
 
                 if (BonesObject.GetContents() is List<GameObject> contentsObject)
                     for (int i = 0; i < contentsObject.Count; i++)
-                        contentsObject[i].FeverWarp(BonesID, Depth: Depth + 1);
+                        contentsObject[i].TryFeverWarp(BonesID, Depth: Depth + 1);
             }
 
             if (BonesID != null
@@ -761,7 +1118,7 @@ namespace UD_Bones_Folder.Mod
                             P: new UD_Bones_FeverWarped(TileOnly: tileOnly)
                             {
                                 Persists = true,
-                            }.OverrideBonesID<UD_Bones_FeverWarped>(BonesID));
+                            }.OverrideBonesIDTyped<UD_Bones_FeverWarped>(BonesID));
                 }
                 else
                 {
@@ -776,7 +1133,7 @@ namespace UD_Bones_Folder.Mod
                                 P: new UD_Bones_FeverWarped(TileOnly: false)
                                 {
                                     Persists = true,
-                                }.OverrideBonesID<UD_Bones_FeverWarped>(BonesID));
+                                }.OverrideBonesIDTyped<UD_Bones_FeverWarped>(BonesID));
                     }
                 }
             }
@@ -797,7 +1154,10 @@ namespace UD_Bones_Folder.Mod
                 return true;
             }
 
-            bool blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
+            bool blueprintExists = true;
+
+            SerializationExtensions.OptionallyPerformWithoutMetrics(() => blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint));
+
             if (BonesObject.GetTile() is string bonesTile
                 && !bonesTile.IsTile())
             {
@@ -821,7 +1181,7 @@ namespace UD_Bones_Folder.Mod
 
         public static bool IsEquipment(this GameObject GameObject)
         {
-            if (GameObject.GetBlueprint()?.InheritsFrom("Item") is not true)
+            if (GameObject.GetBlueprint()?.InheritsFromSafe("Item") is not true)
                 return false;
 
             if (GameObject.HasPart<Armor>())
@@ -914,6 +1274,34 @@ namespace UD_Bones_Folder.Mod
             ? String.IsNullOrEmpty()
             : Strings.Any(s => String.Contains(s))
             ;
+
+        public static bool ContainsNoCase(this string String, string Value)
+        {
+            if (Value.IsNullOrEmpty())
+                return String.IsNullOrEmpty();
+
+            if (String.IsNullOrEmpty())
+                return Value.IsNullOrEmpty();
+
+            if (Value.Length >= String.Length)
+                return String.EqualsNoCase(Value);
+
+            int valLen = Value.Length;
+            int strLen = String.Length;
+            int end = strLen - valLen;
+            bool contains = false;
+            for (int i = 0; i < end; i++)
+            {
+                int toLen = i + valLen - 1;
+                if (toLen > String.Length - 1)
+                    break;
+
+                Utils.Log($"{String}, {Value}; {i}: {String[i..toLen]}");
+                if (String[i..toLen].EqualsNoCase(Value))
+                    contains = true;
+            }
+            return contains;
+        }
 
         public static bool InheritsFrom(
             [NotNullWhen(true)] this Type Type,
@@ -1057,7 +1445,7 @@ namespace UD_Bones_Folder.Mod
             )
         {
             int index = -1;
-            foreach (T element in Source ?? Enumerable.Empty<T>())
+            foreach (T element in Source.IteratorSafe())
             {
                 index++;
                 if (OnBasis?.Invoke(element) is not false)
@@ -1234,7 +1622,7 @@ namespace UD_Bones_Folder.Mod
 
         public static IEnumerable<string> GetNotResistedDamageTypes(this GameObject Object)
         {
-            foreach ((var statName, var stat) in Object?.Statistics ?? Enumerable.Empty<KeyValuePair<string, Statistic>>())
+            foreach ((var statName, var stat) in Object?.Statistics.IteratorSafe())
             {
                 if (statName.Contains("Resistance")
                     && stat.Value < 25)
@@ -1275,7 +1663,7 @@ namespace UD_Bones_Folder.Mod
 
         public static string TimeAgo(this DateTime DateTime, string PostFix = null)
         {
-            var timeAgo = DateTime.Now.ToUniversalTime() - DateTime;
+            var timeAgo = DateTime.Now.ToUniversalTime() - DateTime.ToUniversalTime();
 
             if (timeAgo.Ticks <= 0)
                 return "just now";
@@ -1563,6 +1951,80 @@ namespace UD_Bones_Folder.Mod
             {
                 return false;
             }
+        }
+
+        public static BallBag<T> ToBallBag<T>(this Dictionary<T, int> Dictionary, Random Rnd)
+        {
+            if (Dictionary == null)
+                return null;
+
+            var ballBag = new BallBag<T>(Rnd ?? Stat.Rnd, Dictionary.Count);
+            foreach ((T item, int weight) in Dictionary)
+                ballBag.Add(item, weight);
+
+            return ballBag;
+        }
+
+        public static BallBag<T> ToBallBag<T>(this Dictionary<T, int> Dictionary)
+            => Dictionary.ToBallBag(Stat.Rnd)
+            ;
+
+        public static IEnumerable<T> IteratorSafe<T>(this IEnumerable<T> Source)
+            => Source ?? Enumerable.Empty<T>()
+            ;
+
+        public static bool HasObjectWithRegisteredEvent(this Zone Zone, string Event)
+        {
+            foreach (var gameObject in Zone.YieldObjects())
+                if (gameObject.HasRegisteredEvent(Event))
+                    return true;
+
+            return false;
+        }
+
+        public static bool HasPart(this GameObject Object, Predicate<IPart> Where)
+        {
+            if (Object == null)
+                return false;
+
+            for (int i = 0; i < Object.PartsList.Count; i++)
+                if (Where?.Invoke(Object.PartsList[i]) is not false)
+                    return true;
+
+            return false;
+        }
+
+        public static bool HasEffect(this GameObject Object, Predicate<Effect> Where)
+        {
+            if (Object == null)
+                return false;
+
+            for (int i = 0; i < Object.Effects.Count; i++)
+                if (Where?.Invoke(Object.Effects[i]) is not false)
+                    return true;
+
+            return false;
+        }
+
+        public static bool CanBeLunarFragile(this GameObject Object, bool RequireAllTrue = false)
+        {
+            if (Object == null)
+                return false;
+
+            int count = 0;
+            int trueCount = 0;
+            foreach (var lunarPart in Object.GetPartsDescendedFrom<ILunarObjectPart>())
+            {
+                count++;
+                if (lunarPart.CanBeFragile)
+                {
+                    if (!RequireAllTrue)
+                        return true;
+
+                    trueCount++;
+                }
+            }
+            return count == trueCount;
         }
     }
 }

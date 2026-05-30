@@ -81,7 +81,7 @@ namespace XRL.World.Parts
             ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{true}");
 
             var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
-                .OverrideBonesID<UD_Bones_LunarColors>(BonesID);
+                .OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
             bonesColors.Persists = true;
 
             if (ParentObject.IsEquipment())

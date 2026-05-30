@@ -11,6 +11,8 @@ using Genkit;
 
 using HarmonyLib;
 
+using HistoryKit;
+
 using Kobold;
 
 using Qud.UI;
@@ -23,21 +25,29 @@ using XRL.Messages;
 using XRL.Rules;
 using XRL.UI;
 using XRL.World;
+using XRL.World.Conversations;
 using XRL.World.Effects;
 using XRL.World.Parts;
 using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
 
+using ReplacerContext = XRL.World.Text.Delegates.DelegateContext;
+using ConversationContext = XRL.World.Conversations.DelegateContext;
+
 using static UD_Bones_Folder.Mod.Const;
+using XRL.CharacterBuilds;
 
 namespace UD_Bones_Folder.Mod
 {
     [HasModSensitiveStaticCache]
     [HasVariableReplacer]
+    [HasConversationDelegate]
     public static class Utils
     {
         public static ModInfo ThisMod => ModManager.GetMod(MOD_ID);
 
+        public static XRL.Version ModVersion => ThisMod.Manifest.Version;
+        public static string ModTitle => ThisMod.Manifest.Title;
         public static string Author => ThisMod.Manifest.Author;
         public static string AuthorOnPlatforms => $"{Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";
 
@@ -170,7 +180,7 @@ namespace UD_Bones_Folder.Mod
             {
             }
 
-            public BlueprintSpec(XRL.World.GameObject GameObject)
+            public BlueprintSpec(GameObject GameObject)
                 : this()
             {
                 DebugName = GameObject.DebugName;
@@ -426,9 +436,9 @@ namespace UD_Bones_Folder.Mod
                     return Enumerable.Empty<string>();
 
                 if (Equals(Key, AllValue))
-                    return Cache.Values.GetUnionOfSets() ?? Enumerable.Empty<string>();
+                    return Cache.Values.GetUnionOfSets().IteratorSafe();
                 else
-                    return Cache.GetValue(Key) ?? Enumerable.Empty<string>();
+                    return Cache.GetValue(Key).IteratorSafe();
             }
 
             public IEnumerable<string> GetMatchingStringKey(Dictionary<string, HashSet<string>> Cache, string Key)
@@ -594,9 +604,8 @@ namespace UD_Bones_Folder.Mod
             return Return;
         }
 
-
         [VariableReplacer]
-        public static string ud_nbsp(DelegateContext Context)
+        public static string ud_nbsp(ReplacerContext Context)
         {
             string nbsp = "\xFF";
             string output = nbsp;
@@ -607,15 +616,133 @@ namespace UD_Bones_Folder.Mod
             return output;
         }
 
+        private static string ProcessSpiceReplacer(ReplacerContext Context)
+        {
+            if (Context.Parameters.IsNullOrEmpty())
+                return null;
+
+            if (Context.Target != null)
+            {
+                for (int i = 0; i < Context.Parameters.Count; i++)
+                {
+                    if (Context.Parameters[i] is string parameter)
+                    {
+                        if (parameter.Contains("entity$"))
+                        {
+                            var entityCategoryPair = parameter.Split('$');
+                            if (entityCategoryPair.Length < 2)
+                            {
+                                Context.Parameters[i] = "!random";
+                                continue;
+                            }
+                            string category = entityCategoryPair[1];
+                            if (category.ContainsNoCase("domain"))
+                            {
+                                if (!category.Contains("[")
+                                    || !category.EndsWith("]")
+                                    || category.Split('[') is not string[] categoryValuePair
+                                    || categoryValuePair.Length <= 1
+                                    || !int.TryParse(categoryValuePair[1].Replace("]", ""), out int domainRange))
+                                    domainRange = 5;
+
+                                Context.Parameters[i] = Context.Target.GetMythicDomain(domainRange);
+                                continue;
+                            }
+                            if (category.ContainsNoCase("elements"))
+                            {
+                                var e = GetItemElementsEvent.FromPool();
+                                e.HandleFor(Context.Target);
+                                e.Weights ??= new();
+
+                                var element = HistoricStringExpander.ExpandString("<spice.elements.!random>") ?? "might";
+
+                                if (e.Weights.ContainsKey(element))
+                                    e.Weights[element]++;
+                                else
+                                    e.Weights.Add(element, 1);
+
+                                var elements = e.Weights.ToBallBag();
+                                try
+                                {
+                                    if (elements.IsNullOrEmpty())
+                                    {
+                                        Context.Parameters[i] = element;
+                                        continue;
+                                    }
+
+                                    if (!category.Contains("[")
+                                        || !category.EndsWith("]")
+                                        || category.Split('[') is not string[] categoryValuePair
+                                        || categoryValuePair.Length <= 1)
+                                        element = elements.PickOne();
+                                    else
+                                    if (categoryValuePair[1].Replace("]", "").EqualsNoCase("Random"))
+                                        element = e.Weights.Keys.GetRandomElementCosmetic();
+                                    else
+                                    if (int.TryParse(categoryValuePair[1].Replace("]", ""), out int valueIndex))
+                                        element = e.Weights.Keys.ElementAtOrDefault(valueIndex) ?? element;
+                                    else
+                                        element = elements.PickOne();
+
+                                    Context.Parameters[i] = element;
+                                    continue;
+                                }
+                                finally
+                                {
+                                    GetItemElementsEvent.ResetTo(ref e);
+                                }
+                            }
+                            Context.Parameters[i] = "!random";
+                        }
+                    }
+                }
+            }
+
+            string output = HistoricStringExpander.ExpandString($"<{Context.Parameters.Aggregate("spice", PeriodDelimitedAggregator)}>");
+            return Context.Capitalize
+                ? output.Capitalize()
+                : output
+                ;
+        }
+
+        [VariableReplacer(Keys = new string[] { "spice" }, Capitalization = true)]
+        public static string UDSpiceReplacer(ReplacerContext Context)
+            => ProcessSpiceReplacer(Context)
+            ;
+
+        [VariableObjectReplacer(Keys = new string[] { "spice" }, Capitalization = true)]
+        public static string UDSpiceObjectReplacer(ReplacerContext Context)
+            => ProcessSpiceReplacer(Context)
+            ;
+
+        private static bool? StoredAllowSecondPerson = null;
+        [VariableReplacer("no2nd")]
+        public static string UD_no2nd(ReplacerContext Context)
+        {
+            StoredAllowSecondPerson ??= Grammar.AllowSecondPerson;
+            Grammar.AllowSecondPerson = false;
+            return null;
+        }
+
+        [VariableReplacer("no2nd.restore")]
+        public static string UD_no2nd_restore(ReplacerContext Context)
+        {
+            if (StoredAllowSecondPerson is bool storedAllowSecondPerson)
+                Grammar.AllowSecondPerson = storedAllowSecondPerson;
+
+            StoredAllowSecondPerson = null;
+            return null;
+        }
+
         [VariableObjectReplacer(Keys = new string[] { "RegalTitle", "UD_RegalTitle" })]
-        public static string RegalTitle(DelegateContext Context)
+        public static string RegalTitle(ReplacerContext Context)
             => $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(Context.Target)}:{(Context.Target?.BaseID)?.ToString() ?? "*"}="
                 .StartReplace()
                 .ToString()
             ;
 
         [VariableObjectReplacer(Keys = new string[] { "A.RegalTitle" })]
-        public static string UD_A_RegalTitle(DelegateContext Context)
+        public static string UD_A_RegalTitle(ReplacerContext Context)
         {
             string adjective = null;
             if (!Context.Parameters.IsNullOrEmpty())
@@ -639,6 +766,65 @@ namespace UD_Bones_Folder.Mod
                     .StartReplace()
                     .ToString()
                 ;
+        }
+
+        [ConversationDelegate]
+        public static bool IfLastChoiceAny(ConversationContext Context)
+            => (ConversationUI.LastChoice?.ID).IsNullOrEmpty() == Context.Value.IsNullOrEmpty()
+            || (Context.Value?.CachedCommaExpansion()?.Contains(ConversationUI.LastChoice?.ID) is true)
+            ;
+
+        [ConversationDelegate(Speaker = true)]
+        public static void ModIntProperty(ConversationContext Context)
+        {
+            Context.Value.AsDelimitedSpans(',', out var property, out var value);
+            if (value.IsEmpty)
+                Context.Target.RemoveIntProperty(Context.Value);
+            else
+            if (int.TryParse(value, out int result))
+                Context.Target.ModIntProperty(new string(property), result);
+        }
+
+        [ConversationDelegate(Speaker = true)]
+        public static bool IfTestIntProperty(ConversationContext Context)
+        {
+            string[] array = Context.Value.Split(' ', 3);
+            string propName = array[0];
+            string @operator = (array.Length >= 2) ? array[1] : null;
+            string testValueString = (array.Length >= 3) ? array[2] : null;
+
+            if (!int.TryParse(testValueString, out int testValue))
+                return false;
+
+            return @operator?[0] == '!'
+                ? !TestIntPropInternal(Context.Target, propName, @operator[1..], testValue)
+                : TestIntPropInternal(Context.Target, propName, @operator, testValue)
+                ;
+        }
+
+        private static bool TestIntPropInternal(
+            GameObject Object,
+            string Property,
+            string Operator,
+            int TestValue
+            )
+        {
+            if (Operator != null
+                && Object.TryGetIntProperty(Property, out var value))
+            {
+                return Operator switch
+                {
+                    "=" => value == TestValue,
+                    ">" => value > TestValue,
+                    ">=" => value >= TestValue,
+                    "<" => value < TestValue,
+                    "<=" => value <= TestValue,
+                    "%" => value % TestValue == 0,
+                    "&" => (value & TestValue) == TestValue,
+                    _ => false,
+                };
+            }
+            return false;
         }
 
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
@@ -790,22 +976,66 @@ namespace UD_Bones_Folder.Mod
             }
             catch (ArgumentOutOfRangeException x)
             {
-                Error($"", x);
+                Error(nameof(GetSpriteManagerInvalidInfoNaughty), x);
                 textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp");
             }
             catch (InvalidCastException x)
             {
-                Error($"", x);
+                Error(nameof(GetSpriteManagerInvalidInfoNaughty), x);
                 textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp");
             }
             return textureInfo;
         }
 
         public static bool TileExists(string Tile)
-            => Tile != null
-            && SpriteManager.GetTextureInfo(Tile, false) != null
-            && SpriteManager.GetTextureInfo(Tile) != GetSpriteManagerInvalidInfoNaughty(Tile)
-            ;
+        {
+            if (Tile == null)
+                return false;
+
+            bool textureNull = false;
+            SerializationExtensions.PerformSilently(() => textureNull = SpriteManager.GetTextureInfo(Tile, false) == null);
+            if (textureNull)
+                return false;
+
+            bool textureInvalid = false;
+            SerializationExtensions.PerformSilently(() => textureInvalid = SpriteManager.GetTextureInfo(Tile) == GetSpriteManagerInvalidInfoNaughty(Tile));
+            if (textureInvalid)
+                return false;
+
+            return true;
+        }
+
+        public static async Task<bool> TileExistsAsync(string Tile)
+        {
+            if (Tile == null)
+                return false;
+
+            bool isGameInValidState = GameManager.AwakeComplete
+                && The.Game != null
+                && The.Game.Running
+                && The.GameContext != null;
+
+            var previousContext = The.CurrentContext;
+
+            if (isGameInValidState)
+                await The.GameContext;
+
+            try
+            {
+                if (SpriteManager.GetTextureInfo(Tile, false) == null)
+                    return false;
+
+                if (SpriteManager.GetTextureInfo(Tile) == GetSpriteManagerInvalidInfoNaughty(Tile))
+                    return false;
+            }
+            finally
+            {
+                if (isGameInValidState
+                    && The.CurrentContext != previousContext)
+                    await previousContext;
+            }
+            return true;
+        }
 
         public static bool CellIsNInFromEdge(Cell Cell, Zone Zone, int N)
         {
@@ -831,5 +1061,50 @@ namespace UD_Bones_Folder.Mod
             && (Cell.Y == 0
                 || Cell.Y == Zone.Height - 1)
             ;
+
+        public static void SuppressPopupsWhile(Action Action)
+        {
+            bool originalPopupSuppress = Popup.Suppress;
+            Popup.Suppress = true;
+            try
+            {
+                Action?.Invoke();
+            }
+            finally
+            {
+                Popup.Suppress = originalPopupSuppress;
+            }
+        }
+
+        public static T GetEmbarkBuilderModule<T>()
+            where T : AbstractEmbarkBuilderModule
+        {
+            string activeModulesString = nameof(EmbarkBuilderConfiguration) + "." + nameof(EmbarkBuilderConfiguration.activeModules);
+            if (EmbarkBuilderConfiguration.activeModules.IsNullOrEmpty())
+                throw new Exception(activeModulesString + " null or empty");
+
+            foreach (AbstractEmbarkBuilderModule activeModule in EmbarkBuilderConfiguration.activeModules)
+                if (activeModule.type == typeof(T).Name
+                    && activeModule is T desiredModule)
+                    return desiredModule;
+
+            throw new Exception(typeof(T).Name + " not in " + activeModulesString);
+        }
+
+        public static bool TryGetEmbarkBuilderModule<T>(out T EmbarkBuilderModule)
+            where T : AbstractEmbarkBuilderModule
+        {
+            try
+            {
+                EmbarkBuilderModule = GetEmbarkBuilderModule<T>();
+            }
+            catch (Exception x)
+            {
+                MetricsManager.LogModWarning(ThisMod, x);
+                EmbarkBuilderModule = null;
+                return false;
+            }
+            return true;
+        }
     }
 }

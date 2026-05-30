@@ -10,11 +10,21 @@ using XRL.World.Parts.Skill;
 
 using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
+using XRL.World.AI.GoalHandlers;
+using XRL.World.AI;
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using UD_Bones_Folder.Mod.Parts;
+using XRL.Collections;
+using XRL.Rules;
+using UD_Bones_Folder.Mod.UI;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_LunarRegent : UD_Bones_BaseLunarPart
+    public class UD_Bones_LunarRegent
+        : UD_Bones_BaseLunarPart
+        , IFragileObjectHolderPart
+        , ILoadLunarRegentEventHandler
     {
         public static int TitleHonorificOrderAdjust = 49;
         public static int TitleEpithetOrderAdjust = -600;
@@ -41,7 +51,7 @@ namespace XRL.World.Parts
             }
         }
 
-        public string OriginalShortDesc;
+        public string BakedShortDesc;
 
         private bool _DoneDescription;
         public bool DoneDescription
@@ -95,6 +105,8 @@ namespace XRL.World.Parts
             }
         }
 
+        public override bool CanBeFragile => false;
+
         private Version? MigrateFrom = null;
 
         public UD_Bones_LunarRegent()
@@ -143,7 +155,6 @@ namespace XRL.World.Parts
         public override void FinalizeRead(SerializationReader Reader)
         {
             base.FinalizeRead(Reader);
-
         }
 
         public static string GetRegalTitle(GameObject LunarRegent)
@@ -269,13 +280,13 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
+            // ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
 
             if (BonesID != The.Game.GameID
-                && !OriginalShortDesc.IsNullOrEmpty())
+                && !BakedShortDesc.IsNullOrEmpty())
             {
                 if (ParentObject.TryGetPart(out Description description)
-                    && description._Short == OriginalShortDesc)
+                    && description._Short == BakedShortDesc)
                     DoneDescription = false;
             }
         }
@@ -285,14 +296,13 @@ namespace XRL.World.Parts
             base.Initialize();
 
             ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{IsMad}");
-            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
-                .OverrideBonesID<UD_Bones_LunarColors>(BonesID);
+            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>().OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
             bonesColors.Persists = true;
 
             if (ParentObject.TryGetPart(out Description description))
-                OriginalShortDesc = description._Short;
+                BakedShortDesc = description._Short;
             else
-                OriginalShortDesc = "It was you.";
+                BakedShortDesc = "It was you.";
         }
 
         public void IncrementReclaimed()
@@ -316,6 +326,214 @@ namespace XRL.World.Parts
         {
             if (GetSourceSaveBonesInfo() is SaveBonesInfo saveBonesInfo)
                 saveBonesInfo.IncrementBroken();
+        }
+
+        public static void ApplyHostility(GameObject Actor, Brain Brain, int Depth)
+        {
+            if (Actor == null)
+                return;
+            if (Depth >= 100)
+                return;
+
+            Brain.AddOpinion<OpinionInscrutable>(Actor);
+
+            ApplyHostility(Actor.PartyLeader, Brain, Depth + 1);
+
+            if (Actor.TryGetEffect<Dominated>(out var Effect))
+                ApplyHostility(Effect.Dominator, Brain, Depth + 1);
+        }
+
+        public void SetBakedShortDesc(
+            bool IsYou,
+            string WhoItWas,
+            string Prefix = null,
+            string Postfix = null,
+            string FullOverride = null
+            )
+        {
+            if (ParentObject == null)
+                return;
+
+            if (ParentObject.TryGetPart(out Description description))
+            {
+                if (FullOverride == null)
+                {
+                    if (IsYou)
+                        WhoItWas = $"you";
+
+                    BakedShortDesc = $"It was {WhoItWas}.";
+
+                    AdjustBakedShortDesc(Prefix, Postfix, Bake: false);
+                }
+                else
+                    BakedShortDesc = FullOverride;
+
+                description._Short = BakedShortDesc;
+                DoneDescription = false;
+
+            }
+        }
+
+        public void AdjustBakedShortDesc(
+            string Prefix = null,
+            string Postfix = null,
+            bool Bake = true
+            )
+        {
+            if (ParentObject == null)
+                return;
+
+            if (ParentObject.TryGetPart(out Description description))
+            {
+                if (!Prefix.IsNullOrEmpty())
+                    BakedShortDesc = $"{Prefix}{BakedShortDesc}";
+
+                if (!Postfix.IsNullOrEmpty())
+                    BakedShortDesc = $"{BakedShortDesc}{Postfix}";
+
+                if (Bake)
+                    description._Short = BakedShortDesc;
+            }
+
+            if (!Prefix.IsNullOrEmpty()
+                || !Postfix.IsNullOrEmpty())
+                DoneDescription = false;
+        }
+
+        public static bool ObjectShouldBeHeldOnto(GameObject Item)
+            => Item.GetBlueprint() is GameObjectBlueprint itemBlueprint
+            && (itemBlueprint.InheritsFromSafe("Grenade")
+                || itemBlueprint.InheritsFromSafe("Tonic")
+                || itemBlueprint.InheritsFromSafe("Projectile")
+                || itemBlueprint.InheritsFromSafe("Energy Cell")
+                || itemBlueprint.InheritsFromSafe("BaseThrownWeapon"))
+            ;
+
+        public static bool IsAbleToBeMadeFragile(GameObject Object, GameObject LunarReliquary)
+        {
+            if (Object == LunarReliquary)
+                return false;
+
+            if (Object.HasPart(p => p is UD_Bones_FragileLunarObject))
+                return false;
+
+            if (!Object.CanBeLunarFragile())
+                return false;
+
+            if (Object.GetTagOrStringProperty(Const.NOT_FRAGILE_PROPTAG, $"{false}").EqualsNoCase($"{true}"))
+                return false;
+
+            return true;
+        }
+
+        public static bool MakeInventoryFragile(
+            GameObject LunarCreature,
+            GameObject LunarReliquary = null,
+            string Context = null
+            )
+        {
+            if (LunarCreature == null)
+                return false;
+
+            string bonesID = LunarCreature.GetBonesID();
+
+            Utils.Log($"{nameof(MakeInventoryFragile)} for {LunarCreature?.DebugName ?? "NO_OBJECT"}");
+
+            var creatureBelongings = LunarCreature.GetInventoryEquipmentAndCybernetics().IteratorSafe();
+            using var lunarCreatureInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(creatureBelongings);
+
+            if (LunarReliquary != null)
+            {
+                if (!LunarCreature.ReceiveObject(LunarReliquary, Context: Context))
+                {
+                    Utils.Error($"Failed to give {LunarCreature?.DebugName?.Strip() ?? "NO_LUNAR_CREATURE"} =subject.possessive= {nameof(LunarReliquary)}"
+                        .StartReplace()
+                        .AddObject(LunarCreature)
+                        );
+                    LunarReliquary?.Obliterate();
+                    LunarReliquary = null;
+                }
+            }
+
+            bool isNotFragileObjectAndNotReliquary(GameObject gameObject)
+                => IsAbleToBeMadeFragile(gameObject, LunarReliquary)
+                ;
+
+            string seededMethod = $"{nameof(MakeInventoryFragile)}::{LunarCreature.BaseID}";
+
+            using var objectsToDestroy = ScopeDisposedList<GameObject>.GetFromPool();
+            while (LunarCreature.GetInventoryEquipmentAndCybernetics(isNotFragileObjectAndNotReliquary).FirstOrDefault() is GameObject item)
+            {
+                Utils.Log($"{1.Indent()}{nameof(MakeInventoryFragile)}::{item?.DebugName ?? "NO_ITEM"}, {nameof(item.Count)} {item?.Count ?? -1}");
+                var objectBlueprint = item.GetBlueprint();
+
+                item.PerformActionRecursively(delegate (GameObject go)
+                {
+                    var fragilePart = item.RequirePart<UD_Bones_FragileLunarObject>()
+                        .OverrideBonesIDTyped<UD_Bones_FragileLunarObject>(bonesID);
+
+                    fragilePart.WantsRemoveOnDamage = true;
+                    if (!LunarCreature.IsLunarRegent())
+                        fragilePart.Persists = true;
+                });
+
+                var fragilePart = item.RequirePart<UD_Bones_FragileLunarObject>()
+                    .OverrideBonesIDTyped<UD_Bones_FragileLunarObject>(bonesID);
+                fragilePart.WantsRemoveOnDamage = true;
+
+                if (item.Equipped != null
+                    || item.Implantee != null)
+                    continue;
+
+                if (LunarReliquary != null)
+                {
+                    if (ObjectShouldBeHeldOnto(item))
+                    {
+                        if (item.Count <= 1)
+                            continue;
+
+                        int high = (int)Math.Ceiling(item.Count * 0.5);
+                        int count = BonesModeModule.GetNAdvantage(seededMethod, 0, high, 2, item.BaseID);
+                        item = item.SplitStack(count, LunarCreature, NoRemove: true);
+                    }
+                    LunarCreature.Inventory?.RemoveObject(item);
+                    LunarReliquary.ReceiveObject(item, Context: Context);
+                    continue;
+                }
+                if (LunarCreature.IsLunarRegent()
+                    && Context == PseudoZone.RECLAIM_CONTEXT)
+                {
+                    fragilePart.WantsToBeDropped = true;
+                }
+                else
+                if (LunarCreature.IsLunarCourtier()
+                    && Context == PseudoZone.RECLAIM_CONTEXT)
+                {
+                    objectsToDestroy.Add(item);
+                }
+            }
+            foreach (var objectToDestroy in objectsToDestroy.IteratorSafe())
+            {
+                LunarCreature.Inventory.RemoveObject(objectToDestroy);
+                objectToDestroy?.Obliterate();
+            }
+
+            foreach (var projectile in LunarCreature.GetInventory().IteratorSafe())
+                if (projectile.GetBlueprint().InheritsFromSafe("Projectile"))
+                    projectile.RemovePart<UD_Bones_FragileLunarObject>();
+
+            foreach (var projectile in (LunarReliquary?.GetInventory()).IteratorSafe())
+                if (projectile.GetBlueprint().InheritsFromSafe("Projectile"))
+                    projectile.RemovePart<UD_Bones_FragileLunarObject>();
+
+            Utils.Log($"{nameof(MakeInventoryFragile)} Finished");
+            return true;
+        }
+
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_EARLY);
+            base.Register(Object, Registrar);
         }
 
         public override bool WantEvent(int ID, int Cascade)
@@ -390,12 +608,13 @@ namespace XRL.World.Parts
         {
             if (!DoneDescription
                 && BonesID != The.Game?.GameID
-                && !OriginalShortDesc.IsNullOrEmpty()
+                && !BakedShortDesc.IsNullOrEmpty()
                 && ParentObject.TryGetPart(out Description description)
-                && description._Short == OriginalShortDesc)
+                //&& description._Short == ShortDesc
+                )
             {
                 DoneDescription = true;
-                description._Short = OriginalShortDesc.StartReplace().ToString();
+                description._Short = BakedShortDesc.StartReplace().ToString();
             }
             return base.HandleEvent(E);
         }
@@ -413,6 +632,94 @@ namespace XRL.World.Parts
 
             return base.HandleEvent(E);
         }
+
+        public virtual bool HandleEvent(EarlyBeforeLoadLunarRegentEvent E)
+            => base.HandleEvent(E)
+            ;
+
+        public virtual bool HandleEvent(BeforeLoadLunarRegentEvent E)
+            => base.HandleEvent(E)
+            ;
+
+        public virtual bool HandleEvent(LoadLunarRegentEvent E)
+        {
+            Utils.Log($"{nameof(UD_Bones_LunarRegent)}: {nameof(HandleEvent)}({nameof(LoadLunarRegentEvent)})");
+            if (ParentObject == E.LunarObject)
+            {
+                string catchFlag = $"Top";
+                try
+                {
+                    LocationData = E.BonesInfo.FileLocationData;
+
+                    foreach (var part in BonesManager.PartsLunarRegentsShouldNotHave.IteratorSafe())
+                        E.LunarObject.RemovePart(part);
+
+                    var playerParts = E.LunarObject.GetPartsDescendedFrom<IPlayerPart>();
+                    foreach (var part in playerParts.IteratorSafe())
+                        E.LunarObject.RemovePart(part);
+
+                    E.LunarObject.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
+
+                    if (E.IsMad)
+                        IsMad = true;
+
+                    catchFlag = $"{nameof(GameObjectFactory.Factory.HasBlueprint)}";
+                    if (!GameObjectFactory.Factory.HasBlueprint(E.LunarObject.Blueprint))
+                    {
+                        E.LunarObject.Blueprint = "Lunar Regent";
+                        IsMad = true;
+                    }
+
+                    catchFlag = $"{nameof(IsMad)}?";
+                    if (IsMad)
+                    {
+                        catchFlag = $"{nameof(IsMad)}: true";
+                        E.LunarObject.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                        IsMad = true;
+                    }
+                    else
+                        catchFlag = $"{nameof(IsMad)}: false";
+
+                    catchFlag = nameof(Description);
+                    SetBakedShortDesc(IsYou: E.IsYou, WhoItWas: E.BonesInfo?.OsseousAshHandle ?? OsseousAsh.DefaultOsseousAshHandle);
+
+                    if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT)
+                        && The.Player is GameObject player)
+                    {
+                        E.LunarObject.AddOpinion<OpinionMollify>(player);
+                        player.AddOpinion<OpinionMollify>(E.LunarObject);
+
+                        catchFlag = $"{nameof(BonesManager.BonesFileName)}AttitudeSetup";
+                        var attitudeSetup = Event.New($"{nameof(BonesManager.BonesFileName)}AttitudeSetup")
+                            .SetParameter(nameof(E.LunarObject), E.LunarObject)
+                            .SetParameter(nameof(The.Player), player);
+
+                        catchFlag = nameof(GameObject.FireEvent);
+                        if (player.FireEvent(attitudeSetup))
+                        {
+                            var brain = E.LunarObject.Brain;
+                            brain?.PushGoal(new Kill(player));
+                            ApplyHostility(player, brain, 0);
+                        }
+
+                        MakeInventoryFragile(E.LunarObject, UD_Bones_LunarReliquary.Create(E.BonesInfo.ID), E.Context);
+                    }
+
+                    if (E.LunarObject.Render is Render render)
+                        render.Visible = true;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"{nameof(LoadLunarRegentEvent)}, ({catchFlag}): {E.LunarObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                }
+            }
+
+            return base.HandleEvent(E);
+        }
+
+        public virtual bool HandleEvent(AfterLoadedLunarRegentEvent E)
+            => base.HandleEvent(E)
+            ;
 
         public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
         {

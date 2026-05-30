@@ -74,6 +74,19 @@ namespace UD_Bones_Folder.Mod
             return cachedLunarParty;
         }
 
+        public void Obliterate(
+            string Reason = null,
+            bool Silent = false,
+            string ThirdPersonReason = null
+            )
+        {
+            LunarRegent?.Obliterate(Reason, Silent, ThirdPersonReason);
+            foreach (var lunarCourtier in LunarCourtiers.IteratorSafe())
+                lunarCourtier?.Obliterate(Reason, Silent, ThirdPersonReason);
+            LunarCourtiers?.Clear();
+            Dispose();
+        }
+
         public void Dispose()
         {
             LunarRegent = null;

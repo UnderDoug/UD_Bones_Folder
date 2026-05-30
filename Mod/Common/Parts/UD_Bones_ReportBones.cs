@@ -34,6 +34,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == GetInventoryActionsEvent.ID
             || ID == InventoryActionEvent.ID
+            || ID == GetDebugInternalsEvent.ID
             ;
 
         public override bool HandleEvent(GetInventoryActionsEvent E)
@@ -58,6 +59,31 @@ namespace XRL.World.Parts
                     return true;
                 }
             }
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(GetDebugInternalsEvent E)
+        {
+            E.AddEntry(this, nameof(LoadedBonesID), LoadedBonesID);
+            if (BonesManager.System.GetSavedBonesByID(LoadedBonesID) is SaveBonesInfo bonesInfo)
+            {
+                E.AddEntry(this, nameof(bonesInfo.ModVersion), bonesInfo.ModVersion);
+                E.AddEntry(this, nameof(bonesInfo.SaveTimeValue), bonesInfo.SaveTimeValue.Timestamp());
+
+                string fileLocationDataDebugString = "empty";
+                if (!bonesInfo.FileLocationDataSet.IsNullOrEmpty())
+                    fileLocationDataDebugString = bonesInfo.FileLocationDataSet
+                        .Aggregate(
+                            seed: "",
+                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, n.TaggedDisplayName()))
+                        ;
+
+                E.AddEntry(this, nameof(bonesInfo.FileLocationData), fileLocationDataDebugString);
+                E.AddEntry(this, nameof(SaveBonesJSON.ZoneID), bonesInfo.GetBonesJSON().ZoneID);
+            }
+            else
+                E.AddEntry(this, nameof(SaveBonesInfo), "Not Found...");
+
             return base.HandleEvent(E);
         }
     }

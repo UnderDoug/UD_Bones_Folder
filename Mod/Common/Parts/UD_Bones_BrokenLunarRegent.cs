@@ -18,15 +18,20 @@ using XRL.World.ZoneBuilders;
 using XRL.World;
 using XRL.Wish;
 using XRL.UI;
+using XRL.World.AI;
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using XRL;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_BrokenLunarRegent : IScribedPart
+    public class UD_Bones_BrokenLunarRegent
+        : IScribedPart
+        , IModEventHandler<LoadLunarRegentEvent>
     {
         private static IEnumerable<SaveBonesInfo> CachedSaveBonesInfo;
 
-        public LunarPartyIDs CachedParty;
+        public LunarPartyIDs CachedCourtiers;
 
         public string BonesID;
 
@@ -38,7 +43,17 @@ namespace XRL.World.Parts
 
         public int ForPlayerLevel;
 
-        public bool HasIncremented;
+        public string OriginalDescription;
+
+        protected bool HasIncremented;
+
+        private AllegianceSet OriginalAllegience;
+
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_LATE);
+            base.Register(Object, Registrar);
+        }
 
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
@@ -78,42 +93,48 @@ namespace XRL.World.Parts
         {
             GameObject replacement = null;
 
+            OriginalAllegience = ParentObject?.Brain?.Allegiance;
+            OriginalDescription = ParentObject?.GetPart<Description>()?._Short;
+
             if (CachedSaveBonesInfo.IsNullOrEmpty())
                 CachedSaveBonesInfo = BonesManager.System.GetEligibleSaveBonesInfo();
 
             if (CachedSaveBonesInfo.Where(MatchesSpec) is IEnumerable<SaveBonesInfo> saveBonesInfos
                 && !saveBonesInfos.IsNullOrEmpty())
             {
-                var bonesBag = new BallBag<SaveBonesInfo>();
-                //int attempts = 0;
-                foreach (var bonesInfo in saveBonesInfos)
-                    if (bonesInfo.GetBonesWeight() is int weight)
-                        bonesBag.Add(bonesInfo, weight);
-
-                int biggestWeight = bonesBag.Aggregate(0, (a, n) => Math.Max(a, bonesBag[n]));
-                for (int i = 0; i < bonesBag.Count; i++)
+                var bonesWeights = new Dictionary<string, int>();
+                using var bonesInfoList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(saveBonesInfos);
+                foreach (var bonesInfo in bonesInfoList)
                 {
-                    try
+                    if (bonesInfo.GetBonesWeight() is int weight)
                     {
-                        if (bonesBag[i] is SaveBonesInfo bonesInfo
-                            && bonesBag[bonesInfo] is int weight)
-                        {
-                            if (PreferMad
-                                && bonesInfo.IsMad)
-                                bonesBag[bonesInfo] += biggestWeight;
-                        }
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Warn("Issue while prefering Mad Lunar Regents", x);
+                        if (!bonesWeights.ContainsKey(bonesInfo.ID))
+                            bonesWeights[bonesInfo.ID] = 0;
+
+                        bonesWeights[bonesInfo.ID] += weight;
                     }
                 }
 
+                int biggestWeight = bonesWeights.Aggregate(0, (a, n) => Math.Max(a, n.Value));
+                foreach (var bonesInfo in bonesInfoList)
+                {
+                    if (PreferMad
+                        && bonesInfo.IsMad
+                        && bonesWeights.ContainsKey(bonesInfo.ID))
+                        bonesWeights[bonesInfo.ID] += biggestWeight;
+                }
+
+                var bonesBag = bonesWeights.ToBallBag();
+
+                foreach ((var bonesID, var weight) in bonesWeights)
+                    bonesBag.Add(bonesID, weight);
+
+                var originalObject = ParentObject;
+
                 while (!bonesBag.IsNullOrEmpty()
                     && bonesBag.Count > 10 // prevents exauhsting bones before the player has an oportunity to fight them
-                    && bonesBag.PickOne() is SaveBonesInfo pickedBones
-                    //&& attempts++ < 50
-                    )
+                    && bonesBag.PickOne() is string bonesID
+                    && bonesInfoList.FirstOrDefault(bonesInfo => bonesInfo.ID == bonesID) is SaveBonesInfo pickedBones)
                 {
                     try
                     {
@@ -121,42 +142,15 @@ namespace XRL.World.Parts
                             ObjectID: ParentObject.ID,
                             PickedBones: pickedBones,
                             LunarRegent: out replacement,
-                            CachedParty: out CachedParty,
-                            PostLoad: delegate (GameObject lunarRegent)
+                            CachedCourtiers: out CachedCourtiers,
+                            ProcPreLoad: delegate (GameObject go)
                             {
-                                if (lunarRegent.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
-                                {
-                                    BonesID = lunarRegentPart.BonesID;
-                                    lunarRegentPart.Broken = true;
-                                }
-
-                                if (lunarRegent.HasEffect<UD_Bones_MoonKingFever>())
-                                    lunarRegent.RemoveEffect<UD_Bones_MoonKingFever>();
-
-                                lunarRegent.Brain.Mobile = true;
-                                lunarRegent.Brain.Factions = "";
-                                lunarRegent.Brain.Allegiance.Clear();
-                                foreach ((var faction, var amount) in ParentObject.Brain.Allegiance)
-                                    lunarRegent.Brain.Allegiance.Add(faction, amount);
-                                lunarRegent.Brain.Allegiance.Hostile = ParentObject.Brain.Allegiance.Hostile;
-                                lunarRegent.Brain.Allegiance.Calm = ParentObject.Brain.Allegiance.Calm;
-                                lunarRegent.Brain.Opinions.Clear();
-                                lunarRegent.Brain.Goals.Clear();
-
-                                lunarRegent.AddPart(this);
-
-                                if (lunarRegent.GetInventoryAndEquipment().FirstOrDefault(IsReliquaryOfThisRegent) is GameObject reliquary
-                                    && !lunarRegent.Inventory.FireEvent(Event.New("CommandRemoveObject", "Object", reliquary)))
-                                    reliquary.Obliterate(Silent: true);
-
-                                lunarRegent.PerformActionRecursively(go => go.RemovePart<UD_Bones_FragileLunarObject>());
+                                if (go.IsLunarRegent())
+                                    go?.AddPart(this);
                             }))
-                        {
-                            if (!BonesManager.System.Encountered.Contains(BonesID))
-                                BonesManager.System.Encountered.Add(BonesID);
-
                             break;
-                        }
+
+                        originalObject?.AddPart(this);
                     }
                     catch (Exception x)
                     {
@@ -164,14 +158,64 @@ namespace XRL.World.Parts
                     }
                 }
                 bonesBag?.Clear();
+
+                if (replacement == null
+                    && !originalObject.HasPart<UD_Bones_BrokenLunarRegent>())
+                    originalObject?.AddPart(this);
             }
             E.ReplacementObject = replacement ?? EncountersAPI.GetANonLegendaryCreature(model => !model.InheritsFromSafe("Broken Lunar Regent"));
             return base.HandleEvent(E);
         }
 
+        public virtual bool HandleEvent(LoadLunarRegentEvent E)
+        {
+            if (ParentObject == E.LunarObject
+                && E.CheckContextNot(PseudoZone.RECLAIM_CONTEXT))
+            {
+                if (ParentObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                {
+                    BonesID = lunarRegentPart.BonesID;
+                    lunarRegentPart.Broken = true;
+
+                    if (!OriginalDescription.IsNullOrEmpty())
+                        lunarRegentPart.AdjustBakedShortDesc(Postfix: $"\n\n{OriginalDescription}");
+                }
+
+                if (ParentObject.HasEffect<UD_Bones_MoonKingFever>())
+                    ParentObject.RemoveEffect<UD_Bones_MoonKingFever>();
+
+                if (!OriginalAllegience.IsNullOrEmpty())
+                {
+                    ParentObject.Brain.Mobile = true;
+                    ParentObject.Brain.Factions = "";
+                    ParentObject.Brain.Allegiance.Clear();
+
+                    foreach ((var faction, var amount) in OriginalAllegience.IteratorSafe())
+                        ParentObject.Brain.Allegiance.Add(faction, amount);
+
+                    ParentObject.Brain.Allegiance.Hostile = OriginalAllegience.Hostile;
+                    ParentObject.Brain.Allegiance.Calm = OriginalAllegience.Calm;
+
+                    ParentObject.Brain.Opinions.Clear();
+                    ParentObject.Brain.Goals.Clear();
+                }
+
+                if (ParentObject.RequirePart<ConversationScript>() is ConversationScript convoScript)
+                    convoScript.ConversationID = "UD_Bones_LunarRegent_Broken";
+
+                if (ParentObject.GetInventoryAndEquipment().FirstOrDefault(IsReliquaryOfThisRegent) is GameObject reliquary
+                    && !ParentObject.Inventory.FireEvent(Event.New("CommandRemoveObject", "Object", reliquary)))
+                    reliquary.Obliterate(Silent: true);
+
+                ParentObject.PerformActionRecursively(go => go.RemovePart<UD_Bones_FragileLunarObject>());
+            }
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(EnteredCellEvent E)
         {
-            if (!HasEnteredCell)
+            if (!HasEnteredCell
+                && ParentObject != null)
             {
                 HasEnteredCell = true;
                 CachedSaveBonesInfo = null;
@@ -187,8 +231,8 @@ namespace XRL.World.Parts
                     }
                 }
 
-                if (CachedParty != null
-                    && CachedParty.TryPullCachedLunarCourtiers(out HashSet<GameObject> lunarCourtiers))
+                if (CachedCourtiers != null
+                    && CachedCourtiers.TryPullCachedLunarCourtiers(out HashSet<GameObject> lunarCourtiers))
                 {
                     var partyCount = lunarCourtiers.Count;
                     var cellsList = E.Cell.GetConnectedSpawnLocations(partyCount * 2);
@@ -208,6 +252,7 @@ namespace XRL.World.Parts
                                 && lunarCourtierPart.PerformAllyship(ParentObject, Force: true, Initial: true))
                             {
                                 lunarCourtier.MakeActive();
+                                lunarCourtier.Energy.BaseValue = 0;
                                 var placementCell = cellsList.GetRandomElement();
                                 placementCell.AddObject(lunarCourtier);
                                 cellsList.Remove(placementCell);
@@ -216,7 +261,7 @@ namespace XRL.World.Parts
                     }
                 }
             }
-            ParentObject.RemovePart(this);
+            ParentObject?.RemovePart(this);
             return base.HandleEvent(E);
         }
     }
@@ -274,6 +319,93 @@ namespace UD_Bones_Folder.Mod
         [WishCommand(Command = "show warden blueprints")]
         public static bool ShowWardenBlueprints_WishHandler()
             => ShowWardenBlueprints_WishHandler("10000")
+            ;
+
+        [WishCommand(Command = "tons of statues")]
+        public static bool TonsOfStatues_WishHandler(string Iterations)
+        {
+            if (The.Player?.CurrentZone is not Zone currentZone)
+                return false;
+
+            Iterations ??= "1000";
+            if (!int.TryParse(Iterations, out int iterations))
+                return false;
+
+            iterations = Math.Clamp(iterations, 1, 1000);
+
+            int originalIterations = iterations;
+            Utils.Log($"{nameof(TonsOfStatues_WishHandler)}, {nameof(iterations)}: {iterations}");
+            foreach (var cell in currentZone.LoopCells())
+            {
+                if (iterations-- <= 0)
+                    break;
+
+                if (cell.HasObject(go => go.IsPlayer() || go.IsLedBy(The.Player)))
+                {
+                    //Utils.Log($"Skipping Cell: {cell?.DebugName ?? "NO_CELL"}");
+                    iterations++;
+                    continue;
+                }
+
+                try
+                {
+                    cell.Clear(Combat: true).AddObject("Random Stone Statue");
+                    //Utils.Log($"{1.Indent()}iteration: {originalIterations - iterations}");
+                }
+                catch (Exception x)
+                {
+                    Utils.Error(nameof(TonsOfStatues_WishHandler), x);
+                }
+            }
+            return true;
+        }
+
+        [WishCommand(Command = "tons of statues")]
+        public static bool TonsOfStatues_WishHandler()
+            => TonsOfStatues_WishHandler("1000")
+            ;
+
+        [WishCommand(Command = "tons of converts")]
+        public static bool TonsOfConverts_WishHandler(string Iterations)
+        {
+            if (The.Player?.CurrentZone is not Zone currentZone)
+                return false;
+
+            Iterations ??= "100";
+            if (!int.TryParse(Iterations, out int iterations))
+                return false;
+
+            iterations = Math.Clamp(iterations, 1, 100);
+
+            int originalIterations = iterations;
+            //Utils.Log($"{nameof(TonsOfStatues_WishHandler)}, {nameof(iterations)}: {iterations}");
+            foreach (var cell in currentZone.LoopCells())
+            {
+                if (iterations-- <= 0)
+                    break;
+
+                if (cell.HasObject(go => go.IsPlayer() || go.IsLedBy(The.Player)))
+                {
+                    iterations++;
+                    continue;
+                }
+
+                try
+                {
+                    cell.Clear(Combat: true).AddObject(GameObject.Create("Yd Freeholder Still"), System: true);
+                    //Utils.Log($"{1.Indent()}iteration: {originalIterations - iterations}");
+                }
+                catch (Exception x)
+                {
+                    Utils.Error(nameof(TonsOfConverts_WishHandler), x);
+                }
+            }
+            return true;
+        }
+
+        [WishCommand(Command = "tons of converts")]
+        public static bool TonsOfConverts_WishHandler()
+            => TonsOfConverts_WishHandler("100")
             ;
 
         [HarmonyPatch(

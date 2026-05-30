@@ -15,6 +15,7 @@
     <part Name="Description" Short="Potential snuffed by introspective fever-break stands, manifest, in philosophical ideal; feet planted firmly on the ground." />
     <part Name="Brain" Factions="Strangers-100" />
     <part Name="UD_Bones_BrokenLunarRegent" />
+    <!--tag Name="ExcludeFromDynamicEncounters" /-->
   </object>
   
   <object Name="Broken Mad Lunar Regent" Inherits="Broken Lunar Regent">

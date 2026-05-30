@@ -21,6 +21,7 @@ using XRL.World.Anatomy;
 using XRL.World.Capabilities;
 using XRL.World.Parts;
 using XRL.World.Parts.Skill;
+using XRL.World.Skills;
 using XRL.World.Tinkering;
 using XRL.World.WorldBuilders;
 
@@ -157,10 +158,13 @@ namespace UD_Bones_Folder.Mod.UI
                     && UD_Bones_WorldBuilder.Builder is JoppaWorldBuilder worldBuilder)
                 {
                     player = The.Player;
-                    SimulateBeingSomewhereCool(player, worldBuilder);
+                    SimulateBeingSomewhereCool(player, worldBuilder, Silent: true);
 
                     if (player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
+                    {
                         bonesSaver.BonesMode = (data.type == "InstantDeath");
+                        bonesSaver.PetBlueprint = info.getData<QudCustomizeCharacterModuleData>()?.pet;
+                    }
                 }
             }
             return base.handleBootEvent(id, game, info, element);
@@ -185,7 +189,7 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public static int GetRandomLevel()
-            => GetNDisadvantage(nameof(GetRandomLevel), MinimumLevelForBones, MaximumLevelForBonesMode, 2)
+            => GetNDisadvantage(nameof(GetRandomLevel), MinimumLevelForBones, MaximumLevelForBonesMode, 3)
             ;
 
         public static int GetRandomXPForLevel(int Level)
@@ -293,7 +297,8 @@ namespace UD_Bones_Folder.Mod.UI
         {
             try
             {
-                Player.AwardXP(GetRandomXPForLevel(GetRandomLevel() - (Player.Level - 1)));
+                Utils.SuppressPopupsWhile(() => Player.AwardXP(GetRandomXPForLevel(GetRandomLevel() - (Player.Level - 1))));
+
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
                 ReceiveStageSpecificStuff(Player);
@@ -307,6 +312,8 @@ namespace UD_Bones_Folder.Mod.UI
                 GiveExoticStuff(Player, ref virtualCreditWedges);
 
                 PerformVeryIntelligentPointAssignment(Player);
+
+                LearnDataDisksIfPossible(Player);
 
                 // AdvanceRapidly(Player); // this might be happening automatically
 
@@ -351,15 +358,15 @@ namespace UD_Bones_Folder.Mod.UI
                 GetTierAndOverTier(Player, out int tier, out _);
 
                 if (tier == 8)
-                    Player.ReceivePopulation("FinalSupply");
+                    Player.ReceivePopulation("UD_Bones_BonesMode_Final");
                 else
                     if (tier >= 7)
-                    Player.ReceivePopulation("ReefBetaSupply");
+                    Player.ReceivePopulation("UD_Bones_BonesMode_Reef");
                 else
                     if (tier >= 6)
-                    Player.ReceivePopulation("TombSupply");
+                    Player.ReceivePopulation("UD_Bones_BonesMode_Tomb");
                 else
-                    Player.ReceivePopulation($"Tier{Tier.Constrain(tier - 1)}Wares");
+                    Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(tier - 1)}");
             }
             catch (Exception x)
             {
@@ -400,7 +407,7 @@ namespace UD_Bones_Folder.Mod.UI
                         int wares = overTier[i] - 1;
                         if (SeededOddsIn10000($"{nameof(GiveOverTierStuff)}:{nameof(wares)}", 2000, i))
                             wares = overTier[i];
-                        Player.ReceivePopulation($"Tier{Tier.Constrain(wares)}Wares");
+                        Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(wares)}");
                     }
 
                     int relicCount = SeededRandom(Utils.CallChain(nameof(GiveOverTierStuff), nameof(RelicGenerator)), -2, 2, i);
@@ -416,8 +423,8 @@ namespace UD_Bones_Folder.Mod.UI
                         Player.AdjustCyberneticsLicensePointsFromWedges(
                             Amount: VirtualCreditWedges + GetNAdvantage(
                                 Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(overTier)}:{i}",
-                                Low: 3,
-                                High: 6,
+                                Low: 2,
+                                High: 4,
                                 N: 2,
                                 Iteration: j),
                             Remaining: out VirtualCreditWedges);
@@ -437,13 +444,19 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
+        public static bool GiveOverTierStuff(GameObject Player)
+        {
+            int discard = 0;
+            return GiveOverTierStuff(Player, ref discard);
+        }
+
         public static bool GiveTierStuff(GameObject Player, ref int VirtualCreditWedges)
         {
             try
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                Player.ReceivePopulation($"Tier{Tier.Constrain(tier - 1)}Wares");
+                Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(tier - 1)}");
                 for (int i = tier; i > 0; i--)
                 {
                     if (SeededOddsIn10000(nameof(GiveTierStuff), 5000, i))
@@ -451,7 +464,7 @@ namespace UD_Bones_Folder.Mod.UI
                         int wares = i - 1;
                         if (SeededOddsIn10000($"{nameof(GiveTierStuff)}:{nameof(wares)}", 2000, i))
                             wares = i;
-                        Player.ReceivePopulation($"Tier{Tier.Constrain(wares)}Wares");
+                        Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(wares)}");
                     }
 
                     int cyberTicker = 0;
@@ -468,8 +481,8 @@ namespace UD_Bones_Folder.Mod.UI
                             Player.AdjustCyberneticsLicensePointsFromWedges(
                                 Amount: VirtualCreditWedges + GetNAdvantage(
                                     Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(tier)}:{i}",
-                                    Low: Math.Clamp(i / 2, 1, 2),
-                                    High: Math.Clamp(i, 2, 6),
+                                    Low: Math.Clamp(i / 2, 0, 2),
+                                    High: Math.Clamp(i, 2, 3),
                                     N: 2,
                                     Iteration: cyberTicker++),
                                 Remaining: out VirtualCreditWedges);
@@ -479,8 +492,8 @@ namespace UD_Bones_Folder.Mod.UI
                     Player.AdjustCyberneticsLicensePointsFromWedges(
                         Amount: VirtualCreditWedges + GetNAdvantage(
                             Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(tier)}:{i}",
-                            Low: Math.Clamp(i / 2, 1, 2),
-                            High: Math.Clamp(i, 2, 6),
+                            Low: Math.Clamp(i / 2, 0, 2),
+                            High: Math.Clamp(i, 2, 3),
                             N: 2,
                             Iteration: cyberTicker++),
                         Remaining: out VirtualCreditWedges);
@@ -506,17 +519,17 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
+        public static bool GiveTierStuff(GameObject Player)
+        {
+            int discard = 0;
+            return GiveTierStuff(Player, ref discard);
+        }
+
         public static bool GiveExoticStuff(GameObject Player, ref int VirtualCreditWedges)
         {
             try
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
-
-                if (Player.Inventory.GetFirstObject(go => go.HasPart<SultanMask>()) is GameObject sultanMask)
-                {
-                    sultanMask.Obliterate();
-                    Player.ReceiveObject("The Kesil Face");
-                }
 
                 for (int i = 4; i < tier; i++)
                 {
@@ -546,6 +559,285 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
+        public static void SpendMutationPointsInSmallChunks(GameObject Player, int? MaxToSpend = null, bool Silent = true)
+        {
+            if (Player == null)
+                return;
+
+            int maxPointsToSpend = Player.Stat("MP");
+            if (MaxToSpend.HasValue)
+                maxPointsToSpend = Math.Min(MaxToSpend.Value, Player.Stat("MP"));
+
+            if (maxPointsToSpend > 0)
+            {
+                var sB = Event.NewStringBuilder().AppendLine();
+                int totalSpent = 0;
+                int lastRemainingPoints = 0;
+                int lastPointsToSpend = 0;
+                bool stuck = false;
+                int attempts = 0;
+                while (Player.Stat("MP") > 0
+                    && Player.Stat("MP") != lastRemainingPoints
+                    && totalSpent < maxPointsToSpend
+                    && !stuck
+                    && ++attempts < 200)
+                {
+                    int maxPointSpend = Math.Max(1, Math.Min(Player.Stat("MP"), 4));
+                    int pointsToSpend = SeededRandom(nameof(GameObject.RandomlySpendPoints), 1, maxPointSpend, attempts);
+
+                    if (lastRemainingPoints != Player.Stat("MP"))
+                        stuck = false;
+                    else
+                    {
+                        stuck = true;
+                        pointsToSpend += lastPointsToSpend;
+                    }
+
+                    lastPointsToSpend = pointsToSpend;
+                    lastRemainingPoints = Player.Stat("MP");
+                    totalSpent += pointsToSpend;
+                    Player.RandomlySpendPoints(maxAPtospend: 0, maxSPtospend: 0, maxMPtospend: pointsToSpend, result: sB);
+                }
+
+                var resultString = sB.ToString().Strip().Trim();
+                Event.ResetTo(sB);
+                if (!Silent
+                    && Player.IsPlayer())
+                {
+                    using var resultStrings = ScopeDisposedList<string>.GetFromPoolFilledWith(resultString.Split("! ").IteratorSafe());
+                    for (int i = 0; i < resultStrings.Count; i++)
+                    {
+                        resultStrings[i] = resultStrings[i].Replace("base rank in ", "").Trim();
+                    }
+                    Utils.Log(resultStrings.Aggregate("Spending Mutation Points...", Utils.NewLineDelimitedAggregator));
+                }
+            }
+        }
+
+        private static bool SkillIsNotMeaningfullyLearnable(IBaseSkillEntry Entry, GameObject Player, int RemainingPoints)
+        {
+            if (RemainingPoints <= 0)
+                return true;
+
+            if (Player == null)
+                return true;
+
+            if (Player.HasPart(Entry.Class))
+                return true;
+
+            if (Entry.Cost > RemainingPoints)
+                return true;
+
+            if (Entry is PowerEntry power
+                && !Player.HasPart(power.ParentSkill.Class))
+                return SkillIsNotMeaningfullyLearnable(power.ParentSkill, Player, RemainingPoints);
+
+            return false;
+        }
+
+        private static bool LearnASkill(
+            IBaseSkillEntry Entry,
+            GameObject Player,
+            ref int TotalSpent,
+            ScopeDisposedList<IBaseSkillEntry> SkillsList,
+            ScopeDisposedList<IBaseSkillEntry> UnlearnedSkills,
+            int Depth = 0
+            )
+        {
+            if (Entry == null)
+                return false;
+
+            if (Player == null)
+                return false;
+
+            if (SkillsList == null)
+                return false;
+
+            if (UnlearnedSkills == null)
+                return false;
+
+            if (Player.HasPart(Entry.Class))
+            {
+                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Already Know {Entry.Class}");
+                SkillsList.Remove(Entry);
+                UnlearnedSkills.Remove(Entry);
+                return false;
+            }
+
+            Utils.SuppressPopupsWhile(() => Player.AddSkill(Entry.Class));
+
+            if (!Player.HasPart(Entry.Class))
+            {
+                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Issue Learning {Entry.Class}");
+                return false;
+            }
+
+            SkillsList.Remove(Entry);
+            UnlearnedSkills.Remove(Entry);
+
+            foreach (var unlearnedSkill in UnlearnedSkills.IteratorSafe())
+            {
+                if (unlearnedSkill is PowerEntry unlearnedPower
+                    && unlearnedPower.ParentSkill == Entry
+                    && unlearnedPower.Cost <= 0
+                    && !Player.HasPart(unlearnedPower.Class))
+                {
+                    LearnASkill(
+                        Entry: unlearnedPower,
+                        Player: Player,
+                        TotalSpent: ref TotalSpent,
+                        SkillsList: SkillsList,
+                        UnlearnedSkills: UnlearnedSkills,
+                        Depth: Depth + 1);
+                }
+            }
+
+            Player.Statistics["SP"].Penalty += Entry.Cost;
+            TotalSpent += Entry.Cost;
+
+            //Utils.Log($"{(Depth + 2).Indent()}[{Const.TICK}] Learned {Entry.Class}");
+            return true;
+        }
+
+        public static void SpendSkillPointsRandomly(GameObject Player, int? MaxToSpend = null)
+        {
+            if (Player == null)
+                return;
+
+            int maxPointsToSpend = Player.Stat("SP");
+            if (MaxToSpend.HasValue)
+                maxPointsToSpend = Math.Min(MaxToSpend.Value, Player.Stat("SP"));
+
+            using var skillsList = ScopeDisposedList<IBaseSkillEntry>.GetFromPoolFilledWith(SkillFactory.Factory.SkillList.Values);
+            skillsList.AddRange(SkillFactory.Factory.PowersByClass.Values);
+            skillsList.OrderBy(entry => entry.Name);
+            skillsList.RemoveAll(entry => Player.HasSkill(entry.Class));
+
+            int totalSpent = 0;
+            int remainingPoints = maxPointsToSpend;
+            int attempts = 0;
+
+            //Utils.Log($"{nameof(SpendSkillPointsRandomly)}(For: {Player?.DebugName ?? "NO_OBJECT"}, {nameof(maxPointsToSpend)}: {maxPointsToSpend})");
+            while (Player.Stat("SP") > 0
+                && remainingPoints > 0
+                && totalSpent < maxPointsToSpend
+                && !skillsList.IsNullOrEmpty()
+                && attempts++ < 250)
+            {
+                skillsList.RemoveAll(entry => SkillIsNotMeaningfullyLearnable(entry, Player, remainingPoints));
+
+                var eligibleSkills = skillsList.Where(entry => entry.MeetsRequirements(Player));
+
+                if (eligibleSkills.IsNullOrEmpty())
+                {
+                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                        $"{nameof(attempts)}: {attempts}, " +
+                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
+                    break;
+                }
+
+                if (!eligibleSkills.Any(entry => entry.Cost <= remainingPoints))
+                {
+                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                        $"{nameof(attempts)}: {attempts}, " +
+                        $"{nameof(remainingPoints)}: {remainingPoints}, " +
+                        $"lowest cost: {eligibleSkills.Aggregate(int.MaxValue, (a, n) => Math.Min(a, n.Cost))}");*/
+                    break;
+                }
+
+                using var unlearnedSkills = ScopeDisposedList<IBaseSkillEntry>.GetFromPoolFilledWith(eligibleSkills);
+
+                int index = SeededRandom(nameof(SpendSkillPointsRandomly), 0, unlearnedSkills.Count - 1, attempts);
+                if (unlearnedSkills.TakeAt(index) is not IBaseSkillEntry skill)
+                {
+                    /*Utils.Log($"{1.Indent()}{Const.UNCHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                        $"{nameof(index)}: {index}, " +
+                        $"{nameof(attempts)}: {attempts}, " +
+                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
+                    continue;
+                }
+                /*Utils.Log($"{1.Indent()}{Const.CHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                    $"{nameof(index)}: {index}, " +
+                    $"{nameof(attempts)}: {attempts}, " +
+                    $"{nameof(remainingPoints)}: {remainingPoints}");*/
+                //Utils.Log($"{2.Indent()}{nameof(skill)}: {skill.Class}, {nameof(skill.Cost)}: {skill.Cost}");
+
+                if (skill is PowerEntry power
+                    && !Player.HasPart(power.ParentSkill.Class))
+                {
+                    //Utils.Log($"{2.Indent()}[/] Missing Parent Skill: {power.ParentSkill.Class}");
+                    unlearnedSkills.Add(skill);
+                    if (unlearnedSkills.Contains(power.ParentSkill)
+                        || (power.ParentSkill.MeetsRequirements(Player)
+                            && power.ParentSkill.Cost <= remainingPoints))
+                    {
+                        //Utils.Log($"{3.Indent()}{nameof(skill)} set to Parent: {power.ParentSkill.Class}");
+                        skill = power.ParentSkill;
+                    }
+                    else
+                    {
+                        //Utils.Log($"{2.Indent()}[{Const.CROSS}] Unable to learn Parent: {power.ParentSkill.Class}");
+                        continue;
+                    }
+                }
+
+                LearnASkill(
+                    Entry: skill,
+                    Player: Player,
+                    TotalSpent: ref totalSpent,
+                    SkillsList: skillsList,
+                    UnlearnedSkills: unlearnedSkills);
+
+                remainingPoints = Math.Min(Player.Stat("SP"), maxPointsToSpend - totalSpent);
+            }
+        }
+
+        public static void SpendAbilityPointsWeighted(GameObject Player, int? MaxToSpend = null)
+        {
+            if (Player == null)
+                return;
+
+            int maxPointsToSpend = Player.Stat("AP");
+            if (MaxToSpend.HasValue)
+                maxPointsToSpend = Math.Min(MaxToSpend.Value, Player.Stat("AP"));
+
+            int totalSpent = 0;
+            int remainingPoints = maxPointsToSpend;
+            int attempts = 0;
+            while (Player.Stat("AP") > 0
+                && remainingPoints > 0
+                && totalSpent < maxPointsToSpend
+                && ++attempts < 200)
+            {
+                var abilityStats = new Dictionary<string, int>();
+                foreach ((var name, var stat) in Player.Statistics.IteratorSafe())
+                {
+                    if (name.EqualsNoCase("Strength")
+                        || name.EqualsNoCase("Agility")
+                        || name.EqualsNoCase("Toughness")
+                        || name.EqualsNoCase("Intelligence")
+                        || name.EqualsNoCase("Willpower")
+                        || name.EqualsNoCase("Ego"))
+                        abilityStats.Add(name, stat.Value);
+
+                    if (abilityStats.Count >= 6)
+                        break;
+                }
+
+                var abilityBag = abilityStats.ToBallBag(SeededGenerator(nameof(SpendAbilityPointsWeighted), attempts));
+
+                var abilityStat = Player.Statistics[abilityBag.PluckOne()];
+
+                abilityBag.Clear();
+
+                abilityStat.BaseValue++;
+                Player.Statistics["AP"].Penalty++;
+
+                totalSpent++;
+                remainingPoints = Math.Min(Player.Stat("AP"), maxPointsToSpend - totalSpent);
+            }
+        }
+
         public static bool PerformVeryIntelligentPointAssignment(GameObject Player)
         {
             try
@@ -560,40 +852,41 @@ namespace UD_Bones_Folder.Mod.UI
                 else
                     Player.GainAP((Math.Max(tier - 2, 1) * 2) + (overTier.Count * 2)); // represents getting some eaters injectors.
 
-                int startingMP = Player.Stat("MP");
-                if (startingMP > 0)
-                {
-                    int lastRemainingPoints = 0;
-                    int lastPointsToSpend = 0;
-                    bool stuck = false;
-                    int attempts = 0;
-                    while (Player.Stat("MP") > 0
-                        && Player.Stat("MP") != lastRemainingPoints
-                        && !stuck
-                        && ++attempts < 200)
-                    {
-                        int maxPointSpend = Math.Max(1, Math.Min(Player.Stat("MP"), 4));
-                        int pointsToSpend = SeededRandom(nameof(GameObject.RandomlySpendPoints), 1, maxPointSpend, attempts);
-
-                        if (lastRemainingPoints != Player.Stat("MP"))
-                            stuck = false;
-                        else
-                        {
-                            stuck = true;
-                            pointsToSpend += lastPointsToSpend;
-                        }
-
-                        lastPointsToSpend = pointsToSpend;
-                        lastRemainingPoints = Player.Stat("MP");
-                        Player.RandomlySpendPoints(maxAPtospend: 0, maxSPtospend: 0, maxMPtospend: pointsToSpend);
-                    }
-                }
-                Player.RandomlySpendPoints();
+                SpendMutationPointsInSmallChunks(Player, Silent: false);
+                SpendAbilityPointsWeighted(Player);
+                SpendSkillPointsRandomly(Player);
             }
             catch (Exception x)
             {
                 Utils.Error($"{nameof(PerformVeryIntelligentPointAssignment)} for {Player?.DebugName ?? "MISSING_PLAYER"}", x);
                 return false;
+            }
+            return true;
+        }
+
+        public static bool LearnDataDisksIfPossible(GameObject Player)
+        {
+            if (Player.HasPart(nameof(Tinkering_Tinker1)))
+            {
+                using var dataDisks = ScopeDisposedList<DataDisk>.GetFromPool();
+                foreach (var dataDiskObject in Player.GetInventoryAndEquipment(go => go.HasPart<DataDisk>()).IteratorSafe())
+                    if (dataDiskObject.TryGetPart(out DataDisk dataDisk))
+                        dataDisks.Add(dataDisk);
+
+                foreach (var dataDisk in dataDisks?.IteratorSafe())
+                {
+                    Utils.SuppressPopupsWhile(delegate ()
+                    {
+                        InventoryActionEvent.Check(
+                            Object: dataDisk.ParentObject,
+                            Actor: Player,
+                            Item: dataDisk.ParentObject,
+                            Command: "LearnFromDataDisk",
+                            OverrideEnergyCost: true,
+                            Silent: true,
+                            EnergyCostOverride: 0);
+                    });
+                }
             }
             return true;
         }
@@ -604,7 +897,8 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                if (Player.IsMutant()
+                if (!Player.IsPlayer()
+                    && Player.IsMutant()
                     && !Player.IsEsper())
                 {
                     for (int i = 0; i < Player.Level; i++)
@@ -634,8 +928,9 @@ namespace UD_Bones_Folder.Mod.UI
                 {
                     int physicalMutationsCount = Player.GetPhysicalMutations().Count;
 
+                    // makes up for the 1:3 odds used by the base game's random pick.
                     for (int i = 0; i < physicalMutationsCount; i++)
-                        if (SeededOdds(nameof(Mutations.AddChimericBodyPart), 4000, 7000, i))
+                        if (SeededOdds(nameof(Mutations.AddChimericBodyPart), 1000, 3000, i))
                             mutations.AddChimericBodyPart();
                 }
             }
@@ -740,42 +1035,52 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
-        public static bool CashOutVirtualCreditWedges(GameObject Player, ref int virtualCreditWedges)
+        public static bool CashOutVirtualCreditWedge(GameObject Player, int Amount, ref int VirtualCreditWedges, int Depth = 0)
+        {
+            if (VirtualCreditWedges <= 0)
+            {
+                // Utils.Log($"{(Depth + 1).Indent()}Out of Virtual Credit Wedges.");
+                return false;
+            }
+
+            if (Amount <= 0)
+            {
+                // Utils.Log($"{(Depth + 1).Indent()}Zero or fewer wedges to produce.");
+                return false;
+            }
+
+            Amount = Math.Clamp(Amount, 1, 3);
+            if (Amount > VirtualCreditWedges)
+                return CashOutVirtualCreditWedge(Player, Amount - 1, ref VirtualCreditWedges, Depth + 1);
+
+            string creditWedgeBlueprint = $"CyberneticsCreditWedge{(Amount > 1 ? Amount : null)}";
+
+            if (Player.FindObjectInInventory(creditWedgeBlueprint) is not GameObject creditWedge)
+                Player.ReceiveObject(creditWedgeBlueprint);
+            else
+                creditWedge.Count++;
+
+            VirtualCreditWedges -= Amount;
+            // Utils.Log($"{(Depth + 1).Indent()}{nameof(Amount)}: {Amount}; Created a {creditWedgeBlueprint}; {nameof(VirtualCreditWedges)}: {VirtualCreditWedges}");
+            return true;
+        }
+
+        public static bool CashOutVirtualCreditWedges(GameObject Player, ref int VirtualCreditWedges)
         {
             try
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                while (virtualCreditWedges >= 3)
-                {
-                    if (Player.FindObjectInInventory("CyberneticsCreditWedge3") is not GameObject creditWedge3)
-                        Player.ReceiveObject("CyberneticsCreditWedge3");
-                    else
-                        creditWedge3.Count++;
+                int ticker = 0;
+                int amount;
 
-                    virtualCreditWedges -= 3;
-                    // Utils.Log($"{nameof(virtualCreditWedges)}: {virtualCreditWedges} (CyberneticsCreditWedge3)");
-                }
-                while (virtualCreditWedges >= 2)
-                {
-                    if (Player.FindObjectInInventory("CyberneticsCreditWedge2") is not GameObject creditWedge2)
-                        Player.ReceiveObject("CyberneticsCreditWedge2");
-                    else
-                        creditWedge2.Count++;
+                if (!Player.IsTrueKin())
+                    VirtualCreditWedges /= 2;
 
-                    virtualCreditWedges -= 2;
-                    // Utils.Log($"{nameof(virtualCreditWedges)}: {virtualCreditWedges} (CyberneticsCreditWedge2)");
-                }
-                while (virtualCreditWedges >= 1)
-                {
-                    if (Player.FindObjectInInventory("CyberneticsCreditWedge") is not GameObject creditWedge1)
-                        Player.ReceiveObject("CyberneticsCreditWedge");
-                    else
-                        creditWedge1.Count++;
-
-                    virtualCreditWedges -= 1;
-                    // Utils.Log($"{nameof(virtualCreditWedges)}: {virtualCreditWedges} (CyberneticsCreditWedge1)");
-                }
+                // Utils.Log($"{nameof(CashOutVirtualCreditWedges)}(Total: {VirtualCreditWedges})");
+                do
+                    amount = SeededRandom(nameof(CashOutVirtualCreditWedges), 1, 3, ticker++);
+                while (CashOutVirtualCreditWedge(Player, amount, ref VirtualCreditWedges));
             }
             catch (Exception x)
             {
@@ -833,7 +1138,7 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                foreach (var item in Player.GetInventoryEquipmentAndCybernetics() ?? Enumerable.Empty<GameObject>())
+                foreach (var item in Player.GetInventoryEquipmentAndCybernetics().IteratorSafe())
                     if (!item.Understood())
                         item.MakeUnderstood(ShowMessage: false);
 
@@ -1090,7 +1395,7 @@ namespace UD_Bones_Folder.Mod.UI
                         droppableItem.SplitFromStack();
                         //Utils.Log($"{1.Indent()}Dropping: {droppableItem?.DebugName ?? "NO_ITEM"}");
                         if (!TryDoDisassembly(droppableItem, Player))
-                        droppableItem?.Obliterate();
+                            droppableItem?.Obliterate();
 
                         playerInventoryWithWeightLowestValueRatioFirst.Clear();
                         playerInventoryWithWeightLowestValueRatioFirst.AddRange(Player.Inventory.Objects);
@@ -1156,8 +1461,16 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
-        public static bool SimulateBeingSomewhereCool(GameObject Player, JoppaWorldBuilder WorldBuilder)
+        public static bool SimulateBeingSomewhereCool(GameObject Player, JoppaWorldBuilder WorldBuilder, bool Silent = false)
         {
+            WorldBuilder ??= UD_Bones_WorldBuilder.Builder;
+            if (WorldBuilder == null)
+            {
+                if (!Silent)
+                    Popup.Show($"Missing a necessary instance of a {nameof(JoppaWorldBuilder)}. Unable to {nameof(SimulateBeingSomewhereCool)}.\n\n:(");
+                return false;
+            }
+
             try
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
@@ -1168,7 +1481,7 @@ namespace UD_Bones_Folder.Mod.UI
                 while (randomParasang == null
                     && parasangTries++ < 25
                     && maxTier > 0)
-                    randomParasang = WorldBuilder.getLocationOfTier(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 2));
+                    randomParasang = WorldBuilder.getLocationOfTier(Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 2, parasangTries)));
 
                 int xOffset = SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), -1, 1, 1);
                 int yOffset = SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), -1, 1, 2);
@@ -1176,8 +1489,14 @@ namespace UD_Bones_Folder.Mod.UI
                 int zoneY = Math.Clamp(randomParasang.Y + yOffset, 0, (25 * 3) - 1);
                 var zoneReq = new ZoneRequest(WorldBuilder.ZoneIDFromXY("JoppaWorld", zoneX, zoneY));
 
-                int undergroundThreshold = 2500 + (overTier.Count * 200);
-                int maxStrata = 1000 + (overTier.Count * 125);
+                int overtierCount = overTier.Count;
+
+                int undergroundThreshold = 1500 + (overtierCount * 200);
+                int maxStrata = tier * (tier + 4);
+
+                if (tier >= 8)
+                    maxStrata = 998 + (overtierCount * 125);
+
                 if (SeededOddsIn10000(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), undergroundThreshold))
                     zoneReq = new(
                         WorldID: zoneReq.WorldID,
@@ -1185,7 +1504,7 @@ namespace UD_Bones_Folder.Mod.UI
                         WorldY: zoneReq.WorldY,
                         X: zoneReq.X,
                         Y: zoneReq.Y,
-                        Z: GetNDisadvantage(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), 11, maxStrata, 5));
+                        Z: GetNDisadvantage(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), 11, maxStrata, 6));
 
                 var destinationZone = The.ZoneManager.GetZone(zoneReq.ZoneID);
                 if (destinationZone != null)
@@ -1205,7 +1524,7 @@ namespace UD_Bones_Folder.Mod.UI
                         var findpath = new FindPath(edgeCell, destintionCell);
 
                         int adjacentTicker = 0;
-                        foreach (var step in findpath?.Steps ?? Enumerable.Empty<Cell>())
+                        foreach (var step in findpath?.Steps.IteratorSafe())
                         {
                             if (step.IsSolidFor(Player))
                                 step.Clear(Combat: true);
@@ -1229,8 +1548,8 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
-        public static bool SimulateBeingSomewhereCool(GameObject Player)
-            => SimulateBeingSomewhereCool(Player, UD_Bones_WorldBuilder.Builder)
+        public static bool SimulateBeingSomewhereCool(GameObject Player, bool Silent = false)
+            => SimulateBeingSomewhereCool(Player, UD_Bones_WorldBuilder.Builder, Silent)
             ;
     }
 }

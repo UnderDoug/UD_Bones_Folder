@@ -6,7 +6,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod
 {
-    public class CrossGameObject
+    public class CrossGameObject : IDisposable
     {
         public GameObject Clone;
         public GameObject Original;
@@ -43,6 +43,12 @@ namespace UD_Bones_Folder.Mod
         {
             this.Original = Original;
             return this;
+        }
+
+        public void Dispose()
+        {
+            Clone = null;
+            Original = null;
         }
 
         public static implicit operator KeyValuePair<GameObject, GameObject>(CrossGameObject CrossGameObject)

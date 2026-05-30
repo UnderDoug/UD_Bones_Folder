@@ -31,6 +31,7 @@ namespace UD_Bones_Folder.Mod
         public const string MOON_KING_FEVER_TILE = "Effects/lunar_regent_fever.png";
 
         public const string ANNOUNCER_WIDGET = "UD_Bones_Folder Lunar Announcer";
+        public const string NOT_FRAGILE_PROPTAG = MOD_PREFIX + "NotFragile";
 
         public const string EQ_FRAME_COLORS = "EquipmentFrameColors";
 
@@ -41,5 +42,12 @@ namespace UD_Bones_Folder.Mod
         public const string REPORT_LOADED_BONES_COMMAND = "Cmd_" + MOD_PREFIX + "ReportLoadedBonesID";
 
         public const string LUNAR_RELIQUARY_BLUEPRINT = "Lunar Reliquary";
+        public const string LUNAR_RELIQUARY_TRIGGERED = "UD_Bones_Reliquary_Triggered";
+
+        public const string UNCHECKED = "[ ]";
+        public const string CHECKED = "[■]";
+
+        public const string TICK = "\u221A";  // √
+        public const string CROSS = "\u0058"; // X
     }
 }

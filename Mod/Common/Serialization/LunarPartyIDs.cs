@@ -22,7 +22,7 @@ namespace UD_Bones_Folder.Mod
         public virtual void Write(SerializationWriter Writer)
         {
             Writer.WriteOptimized(LunarCourtiers == null ? -1 : LunarCourtiers.Count);
-            foreach (var lunarCourtier in LunarCourtiers ?? Enumerable.Empty<string>())
+            foreach (var lunarCourtier in LunarCourtiers.IteratorSafe())
                 Writer.WriteOptimized(lunarCourtier);
         }
 

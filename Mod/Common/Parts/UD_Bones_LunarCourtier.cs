@@ -15,11 +15,16 @@ using XRL.World.Parts.Mutation;
 using XRL.World.Parts.Skill;
 using XRL.Language;
 using XRL.Collections;
+using UD_Bones_Folder.Mod.Parts;
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_LunarCourtier : UD_Bones_BaseLunarSubject
+    public class UD_Bones_LunarCourtier
+        : UD_Bones_BaseLunarSubject
+        , IFragileObjectHolderPart
+        , ILoadLunarCourtierEventHandler
     {
         public struct Appointment
         {
@@ -210,6 +215,12 @@ namespace XRL.World.Parts
             }
         };
 
+        public override bool CanBeFragile => false;
+
+        public UD_Bones_LunarCourtier()
+            : base()
+        { }
+
         public override void FinalizeRead(SerializationReader Reader)
         {
             base.FinalizeRead(Reader);
@@ -221,9 +232,16 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
-            var colorsPart = ParentObject.RequirePart<UD_Bones_LunarColors>();
+        }
+
+        public override void Initialize()
+        {
+            base.Initialize();
+
+            var colorsPart = ParentObject.RequirePart<UD_Bones_LunarColors>()
+                .OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
+
             colorsPart.Persists = true;
-            PerformAllyship();
         }
 
         public override IPart DeepCopy(GameObject Parent, Func<GameObject, GameObject> MapInv)
@@ -288,7 +306,7 @@ namespace XRL.World.Parts
                     string parentObjectName = ParentObject?.DebugName ?? "NO_COURTIER";
                     string lunarRegentName = LunarRegent?.DebugName ?? "NO_REGENT";
                     string allyReasonName = allyReason.GetType().Name;
-                    Utils.Log($"{parentObjectName} made follower of {lunarRegentName} for reason {allyReasonName}.");
+                    //Utils.Log($"{parentObjectName} made follower of {lunarRegentName} for reason {allyReasonName}.");
                 }
             }
             catch (Exception x)
@@ -301,13 +319,9 @@ namespace XRL.World.Parts
             return DoneAllyship;
         }
 
-        public override void Initialize()
-        {
-            base.Initialize();
-        }
-
         public string GetAdjective()
-            => AdjectiveCache ??= UD_Bones_LunarColors.ApplyAnimatedLunarShader("lunar courtier", TileColor);
+            => AdjectiveCache ??= UD_Bones_LunarColors.ApplyAnimatedLunarShader("lunar courtier", TileColor)
+            ;
 
         public string GetDescription()
         {
@@ -349,6 +363,7 @@ namespace XRL.World.Parts
             || ID == GetShortDescriptionEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == ZoneActivatedEvent.ID
+            || ID == LoadLunarCourtierEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
@@ -387,6 +402,33 @@ namespace XRL.World.Parts
 
             return base.HandleEvent(E);
         }
+
+        public virtual bool HandleEvent(EarlyBeforeLoadLunarCourtierEvent E)
+            => base.HandleEvent(E)
+            ;
+
+        public virtual bool HandleEvent(BeforeLoadLunarCourtierEvent E)
+            => base.HandleEvent(E)
+            ;
+
+        public virtual bool HandleEvent(LoadLunarCourtierEvent E)
+        {
+            Utils.Log($"{nameof(UD_Bones_LunarCourtier)}: {nameof(HandleEvent)}({nameof(LoadLunarCourtierEvent)})");
+            if (E.LunarRegent != null
+                && E.LunarObject == ParentObject)
+            {
+                PerformAllyship(E.LunarRegent, Force: true, Initial: true);
+
+                if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT))
+                    UD_Bones_LunarRegent.MakeInventoryFragile(ParentObject, null, E.Context);
+            }
+
+            return base.HandleEvent(E);
+        }
+
+        public virtual bool HandleEvent(AfterLoadedLunarCourtierEvent E)
+            => base.HandleEvent(E)
+            ;
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
         {

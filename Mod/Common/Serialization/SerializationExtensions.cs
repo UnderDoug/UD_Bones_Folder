@@ -90,7 +90,7 @@ namespace UD_Bones_Folder.Mod
             Writer.Write(Cell.PaintDetailColor);
 
             Writer.Write(Cell.SemanticTags?.Count ?? 0);
-            foreach (string semanticTag in Cell?.SemanticTags ?? Enumerable.Empty<string>())
+            foreach (string semanticTag in Cell?.SemanticTags.IteratorSafe())
                 Writer.Write(semanticTag);
         }
 
@@ -124,7 +124,7 @@ namespace UD_Bones_Folder.Mod
             )
         {
             GameObject go = null;
-            PerformWithoutMetrics(() => go = Reader.ReadGameObject(Forensics));
+            OptionallyPerformSilently(() => go = Reader.ReadGameObject(Forensics));
             return go;
         }
 
@@ -236,7 +236,6 @@ namespace UD_Bones_Folder.Mod
 
         public static IZonePart ReadBonesZonePart(this SerializationReader Reader, Zone Zone)
         {
-
             if (Reader == null)
                 throw new ArgumentNullException(nameof(Reader));
 
@@ -245,7 +244,7 @@ namespace UD_Bones_Folder.Mod
                 return null;
 
             if (Zone == null)
-                throw new ArgumentNullException(nameof(Reader));
+                throw new ArgumentNullException(nameof(Zone));
 
             Type type = null;
             IZonePart zonePart = null;
@@ -360,8 +359,8 @@ namespace UD_Bones_Folder.Mod
             Globals.ForceMetricsOff = false;
 
             Type type = null;
-            
-            PerformWithoutMetrics(() => type = Reader.ReadTokenizedType());
+
+            OptionallyPerformSilently(() => type = Reader.ReadTokenizedType());
 
             Globals.ForceMetricsOff = forceMetricsOff;
 
@@ -371,7 +370,7 @@ namespace UD_Bones_Folder.Mod
                 return null;
             }
 
-            PerformWithoutMetrics(() => Reader.ReadTypeFields(zone, type));
+            OptionallyPerformSilently(() => Reader.ReadTypeFields(zone, type));
             zone.Built = false;
             zone.ReadBonesZone(Reader);
             zone.Built = true;
@@ -383,21 +382,80 @@ namespace UD_Bones_Folder.Mod
         {
             bool forceMetricsOff = Globals.ForceMetricsOff;
             Globals.ForceMetricsOff = false;
-
-            Action?.Invoke();
-
-            Globals.ForceMetricsOff = forceMetricsOff;
+            try
+            {
+                Action?.Invoke();
+            }
+            finally
+            {
+                Globals.ForceMetricsOff = forceMetricsOff;
+            }
         }
+
+        public static void OptionallyPerformWithoutMetrics(Action Action, bool WithoutMetricsWhen)
+        {
+            if (WithoutMetricsWhen)
+                PerformWithoutMetrics(Action);
+            else
+                Action?.Invoke();
+        }
+
+        public static void OptionallyPerformWithoutMetrics(Action Action)
+            => OptionallyPerformWithoutMetrics(Action, WithoutMetricsWhen: true) // Change true to an eventual new option.
+            ;
+
+        public static void PerformWithoutLogging(Action Action)
+        {
+            bool forceLoggingOff = UnityEngine.Debug.unityLogger.logEnabled;
+            UnityEngine.Debug.unityLogger.logEnabled = false;
+            try
+            {
+                Action?.Invoke();
+            }
+            finally
+            {
+                UnityEngine.Debug.unityLogger.logEnabled = forceLoggingOff;
+            }
+        }
+
+        public static void OptionallyPerformWithoutLogging(Action Action, bool WithoutLoggingWhen)
+        {
+            if (WithoutLoggingWhen)
+                PerformWithoutLogging(Action);
+            else
+                Action?.Invoke();
+        }
+
+        public static void OptionallyPerformWithoutLogging(Action Action)
+            => OptionallyPerformWithoutLogging(Action, WithoutLoggingWhen: true) // Change true to an eventual new option.
+            ;
+
+        public static void PerformSilently(Action Action)
+            => PerformWithoutMetrics(()
+                => PerformWithoutLogging(Action))
+            ;
+
+        public static void OptionallyPerformSilently(Action Action, bool SilentlyWhen)
+        {
+            if (SilentlyWhen)
+                PerformSilently(Action);
+            else
+                Action?.Invoke();
+        }
+
+        public static void OptionallyPerformSilently(Action Action)
+            => OptionallyPerformSilently(Action, SilentlyWhen: true) // Change true to an eventual new option.
+            ;
 
         public static void StartMetricsOff(
             this SerializationReader Reader,
             bool SerializePlayer = false
             )
-            => PerformWithoutMetrics(() => Reader.Start(SerializePlayer))
+            => OptionallyPerformSilently(() => Reader.Start(SerializePlayer))
             ;
 
         public static void FinalizeReadMetricsOff(this SerializationReader Reader)
-            => PerformWithoutMetrics(() => Reader.FinalizeRead())
+            => OptionallyPerformSilently(() => Reader.FinalizeRead())
             ;
     }
 }

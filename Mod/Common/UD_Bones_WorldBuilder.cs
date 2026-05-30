@@ -36,6 +36,18 @@ namespace XRL.World.WorldBuilders
             //MetricsManager.rngCheckpoint("UD_Bones_WorldBuilder_Finish");
         }
 
+        public override void OnAfterMutableInit(JoppaWorldBuilder Builder)
+        {
+            if (The.ZoneManager.ZoneBuilders is Dictionary<string, ZoneBuilderCollection> zoneBuilders)
+            {
+                foreach ((var zoneID, var zoneBuilderCollection) in zoneBuilders)
+                {
+
+                }
+            }
+            base.OnAfterMutableInit(Builder);
+        }
+
         public void ExhumeLunarRegent(string WorldID)
         {
             if (WorldID != "JoppaWorld")
@@ -159,7 +171,7 @@ namespace XRL.World.WorldBuilders
                 The.ZoneManager.AddZonePostBuilder(
                     ZoneID: BoneZoneID,
                     Class: nameof(BonesZoneBuilder),
-                    Key1: nameof(BonesZoneBuilder.SaveBonesInfoID), Value1: pickedBones.ID,
+                    Key1: nameof(BonesZoneBuilder.BonesID), Value1: pickedBones.ID,
                     Key2: nameof(BonesZoneBuilder.ZoneID), Value2: pickedBones.BonesSpec.ZoneID);
 
                 Utils.Info($"Bones pending: {pickedBones.Name}, {pickedBones.GetBonesJSON().Location} " +

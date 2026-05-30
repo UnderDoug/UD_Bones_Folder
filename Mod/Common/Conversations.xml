@@ -1,0 +1,211 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<!-- 
+    Emoting
+      {{emote|*Emotion expressed by conversant.*}}
+    
+    Grammar Replacements
+      =player.formalAddressTerm=
+    
+    <text Load="Replace" Priority="1">
+			replaced, =name=.
+		</text>	
+    
+    =name=        is the player
+    
+    =subject.t=   is the other conversant
+    
+    IfTestState
+    IfNotHaveState
+    
+    IfHavePart
+    IfNotHavePart
+    
+-->
+<conversations>
+  <conversation ID="UD_Bones_LunarRegent_Broken">
+    
+    <node ID="WaterRitual" Load="Merge">
+      <text IfSpeakerHavePart="UD_Bones_LunarRegent" Priority="100">
+        Sip and sing, moon-=player.siblingTerm=.~
+        Wisdom and will, moon-=player.siblingTerm=.
+      </text>
+      
+      <choice ID="JoinPartyChoice" Target="NoJoinParty" Load="Replace">
+        <text>I would ask you to join me, =subject.waterRitualLiquid=-=pronouns.siblingTerm=.</text>
+        <part Name="Tag">{{g|[{{C|&#xec;}} reputation]}}</part>
+      </choice>
+
+      <!--choice ID="PretendJoinPartyChoice" IfSpeakerNotHavePart="UD_Bones_LunarRegent" >
+      </choice-->
+      
+    </node>
+
+    <node ID="NoJoinParty">
+      <text>
+        I'm long past those days, moon-=player.siblingTerm=.~
+        Another life, another time... But not this one, I'm afraid, moon-=player.siblingTerm=.~
+        Oh, moon-=player.siblingTerm=. I'm honored, but must decline.
+      </text>
+      <choice ID="ReturnWaterRitual" Target="WaterRitual">
+        Understandable!~
+        I understand, moon-=pronouns.siblingTerm=.
+      </choice>
+    </node>
+
+    <node ID="Choices">
+
+      <choice ID="WhoAreYou" Target="WhoIAm" IfNotLastChoice="WhoAreYou">
+        <text ID="FirstAsk" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+          I'm =no2nd==player.Refname==no2nd.restore=, who are you?
+        </text>
+        <text ID="HaveAsked" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+          I'm afraid I've forgotten your name.
+        </text>
+      </choice>
+
+      <choice ID="WhatMask" Target="WhatMyMask" IfNotLastChoice="WhatMask"
+              IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        <text ID="FirstAsk" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_AskedWhatMask">
+          What is that strange mask you are wearing?
+        </text>
+        <text ID="HaveAsked" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_AskedWhatMask">
+          Tell me again about your mask?
+        </text>
+      </choice>
+
+      <choice ID="WhyHere" Target="WhyIHere" IfNotLastChoice="WhyHere"
+              IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        <text ID="FirstAsk" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_AskedWhyHere">
+          Why are you here?
+        </text>
+        <text ID="HaveAsked" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_AskedWhyHere">
+          Tell me again why you're here?
+        </text>
+      </choice>
+
+      <choice ID="HereLong" Target="IHereLong" IfNotLastChoice="HereLong"
+              IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_AskedWhyHere">
+        <text ID="FirstAsk" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_AskedHowLongHere">
+          Have you been here long?
+        </text>
+        <text ID="HaveAsked" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_AskedHowLongHere">
+          How long you've been here, again?
+        </text>
+      </choice>
+
+      <choice ID ="GoStart" Target="Greeting" IfNotLastChoice="GoStart"
+              IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        <text>There was something else...</text>
+      </choice>
+
+      <choice ID ="GoQuestions" Target="SomeQuestions" IfLastChoiceNotAny="GoQuestions,WhoAreYou,WhatMask,WhyHere,HereLong"
+              IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        <text>Could I ask some questions?</text>
+      </choice>
+
+      <choice ID="GoEnd" Target="End">
+        <text ID="NotHaveMet" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">Live and drink.</text>
+        <text ID="HaveMet" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">Live and drink, =subject.Refname=.</text>
+      </choice>
+
+    </node>
+
+    <node ID="AlwaysHaveChoices">
+      <choice UseID="WhoAreYou" />
+      <choice UseID="GoQuestions" />
+      <choice UseID="GoEnd" />
+    </node>
+
+    <node ID="SomeQuestionsChoices">
+      <choice UseID="WhoAreYou" />
+      <choice UseID="WhatMask" />
+      <choice UseID="WhyHere" />
+      <choice UseID="HereLong" />
+      <choice UseID="GoStart" />
+      <choice UseID="GoEnd" />
+    </node>
+
+    <start ID="Greeting" Inherits="AlwaysHaveChoices">
+      <text ID="NotHaveMet" IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        Ah, an up-and-comer!~
+        Wisdom and will.~
+        To whom do I owe this pleasure?
+      </text>
+      <text ID="HaveMet" IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        =no2nd==player.Refname==no2nd.restore=?~
+        Hmm?~
+        Yes?~
+        Wisdom and will.~
+        Ah!
+      </text>
+    </start>
+
+    <node ID="SomeQuestions" Inherits="SomeQuestionsChoices">
+      <text IfSpeakerNotHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        Straight to the point, aren't we? Please, ask away.~
+        How very forward, but, by all means...~
+        Of course... but, perhaps, start with an introduction?
+      </text>
+      <text IfSpeakerHaveProperty="UD_Bones_Convo_LunarRegent_HaveMet">
+        But of course!~
+        Ask away; I shall answer as best I can.~
+        More questions??\n\nPay me no mind, I merely jest!~
+        You know what they say about curiosity... Though, perhaps answers are alms?
+      </text>
+    </node>
+
+    <node ID="WhoIAm" Inherits="SomeQuestionsChoices"
+          ModSpeakerIntProperty="UD_Bones_Convo_LunarRegent_HaveMet,1">
+      <text IfSpeakerTestIntProperty="UD_Bones_Convo_LunarRegent_HaveMet &lt; 2">
+        I'm known by a few names, but =subject.Refname= was my first.~
+        There is much to name, and mine is =subject.Refname=!
+      </text>
+      <text IfSpeakerNotTestIntProperty="UD_Bones_Convo_LunarRegent_HaveMet &lt; 2">
+        Such is the fancy of the mind; I am =subject.Refname=.~
+        Fear not, =no2nd==player.Refname==no2nd.restore=, I go by =subject.Refname=.~
+        I'm far past the want for notoriety. You can call me =subject.Refname=.
+      </text>
+    </node>
+
+    <node ID="WhatMyMask" Inherits="SomeQuestionsChoices"
+          ModSpeakerIntProperty="UD_Bones_Convo_LunarRegent_AskedWhatMask,1">
+      <text ID="Emphasis">
+        It really emphasises my =subject.spice:elements:entity$elements:quality:!random=, does it not?
+      </text>
+      <text ID="MostAdjective">
+        It is most =subject.spice:elements:entity$elements:adjectives:!random=, isn't it?
+      </text>
+      <text ID="NotComeOff">
+        This old heirloom? Has a rather =subject.spice:elements:entity$elements:adjectives:!random= appearance, wouldn't you agree?
+        
+        I'd offer a closer look, but...
+        
+        =ud_nbsp:36={{K|...It doesn't come off.}}
+      </text>
+    </node>
+
+    <node ID="WhyIHere" Inherits="SomeQuestionsChoices"
+          ModSpeakerIntProperty="UD_Bones_Convo_LunarRegent_AskedWhyHere,1">
+      <text>
+        We all search for meaning, =player.siblingTerm=. Some contemporary thinkers are inclined towards the concept that questions of an ontological nature are themselves one of&#196;
+
+        Oh! You meant {{Y|here}}, physically.
+
+        Well, be for long enough and life is wont to take us to strange places.
+      </text>
+    </node>
+
+    <node ID="IHereLong" Inherits="SomeQuestionsChoices"
+          ModSpeakerIntProperty="UD_Bones_Convo_LunarRegent_AskedHowLongHere,1">
+      <text>
+        Always. To some extent at least. I think I always will be, too.
+
+        Even when I'm not {{emote|*gesturing toward the ground*}} here, I'm still...
+
+        {{emote|*=pronouns.subjective= =verb:gesture:afterpronoun= broadly*}}
+
+        {{Y|Here}}.
+      </text>
+    </node>
+  </conversation>
+</conversations>

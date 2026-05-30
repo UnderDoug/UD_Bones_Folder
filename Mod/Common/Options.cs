@@ -36,10 +36,10 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool DebugEnableNoExhuming;
         [OptionFlag] public static bool DebugEnablePickingBones;
         [OptionFlag] public static bool DebugEnableForcePickingBones;
-        [OptionFlag] public static bool DebugEnableNoCremation;
 
         // General Settings
         [OptionFlag] public static bool EnableFlashingLightEffects;
+        [OptionFlag] public static bool EnableBonesFromEarlierModVersions;
 
         private static int _ChosenPermyriadChance;
         [OptionFlag] public static int ChosenPermyriadChance

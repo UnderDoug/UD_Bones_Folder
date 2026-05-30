@@ -15,11 +15,15 @@ using XRL.World.Parts.Mutation;
 using XRL.World.Parts.Skill;
 using XRL.Language;
 using XRL.Collections;
+using UD_Bones_Folder.Mod.Parts;
+using System.Linq;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_LunarReliquary : UD_Bones_FragileLunarObject
+    public class UD_Bones_LunarReliquary
+        : UD_Bones_FragileLunarObject
+        , IFragileObjectHolderPart
     {
         protected string TileColor;
         protected string DetailColor;
@@ -40,20 +44,61 @@ namespace XRL.World.Parts
             }
         }
 
+        public UD_Bones_LunarReliquary()
+            : base()
+        { }
+
+        public static GameObject Create(string BonesID)
+        {
+            if (GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT) is not GameObject lunarReliquary)
+                return null;
+
+            if (!lunarReliquary.TryGetPart(out UD_Bones_LunarReliquary reliquaryPart))
+            {
+                Utils.Warn($"{nameof(UD_Bones_LunarReliquary)}.{nameof(Create)} resulted in {nameof(lunarReliquary)} with no {nameof(UD_Bones_LunarReliquary)} Part. Aborting.");
+                lunarReliquary?.Obliterate();
+                return null;
+            }
+
+            reliquaryPart.OverrideBonesID(BonesID ?? The.Game?.GameID);
+
+            return lunarReliquary;
+        }
+
+        public static GameObject Create()
+            => Create(null)
+            ;
+
         public override void Attach()
         {
             base.Attach();
-            ParentObject.RequirePart<UD_Bones_LunarColors>();
         }
 
         public override void Initialize()
         {
             base.Initialize();
+            ParentObject.RequirePart<UD_Bones_LunarColors>().OverrideBonesID(BonesID);
         }
+
+        public static bool IsFragileAndShouldBeDamaged(GameObject Object, GameObject TriggeringObject)
+        {
+            if (Object == TriggeringObject)
+                return false;
+
+            if (!Object.TryGetPart(out UD_Bones_FragileLunarObject fragilePart))
+                return false;
+
+            if (!fragilePart.WantsRemoveOnDamage)
+                return !fragilePart.Triggered;
+
+            return true;
+        }
+
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register("AfterContentsTaken");
+            Registrar.Register(Const.LUNAR_RELIQUARY_TRIGGERED);
             Registrar.Register(GetDisplayNameEvent.ID, EventOrder.EXTREMELY_LATE);
             base.Register(Object, Registrar);
         }
@@ -124,18 +169,59 @@ namespace XRL.World.Parts
         public override bool FireEvent(Event E)
         {
             if (E.ID == "AfterContentsTaken")
+                ParentObject.FireEvent(Event.New(Const.LUNAR_RELIQUARY_TRIGGERED, "Source", E.ID));
+            else
+            if (E.ID == Const.LUNAR_RELIQUARY_TRIGGERED)
             {
-                if (ParentObject.Inventory.GetObjectCount() > 0)
+                string source = $"{nameof(UD_Bones_LunarReliquary)}.Triggered";
+                string addtlSource = E.GetStringParameter("Source");
+                if (!addtlSource.IsNullOrEmpty())
+                    source += $" ({addtlSource})";
+
+                if (ParentObject.Inventory is Inventory inventory)
+                {
+                    var triggeringObject = E.GetGameObjectParameter("TriggeringObject");
+                    GameObject lastObject = null;
+                    while (inventory.Objects.FirstOrDefault(go => IsFragileAndShouldBeDamaged(go, triggeringObject)) is GameObject containedObject)
+                    {
+                        if (containedObject == lastObject)
+                        {
+                            Utils.Log($"{nameof(Event)}.{E.ID} ({nameof(IsFragileAndShouldBeDamaged)}) - Repeat Object: {containedObject?.DebugName ?? "NO_OBJECT"}");
+                            break;
+                        }
+
+                        if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
+                            fragileObject.AttemptDamage(
+                                Force: true,
+                                Cascade: false,
+                                Source: source);
+
+                        lastObject = containedObject;
+                    }
+                }
+                /*if (ParentObject.Inventory.GetObjectCount() > 0)
                 {
                     using var containedObjects = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(ParentObject.Inventory.GetObjects());
                     foreach (var containedObject in containedObjects)
-                        if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
-                            fragileObject.AttemptDamage(Force: true, Remove: fragileObject.WantsRemoveOnDamage);
-                }
-                IsProtected = false;
-                AttemptDamage(Force: true, Remove: WantsRemoveOnDamage);
-            }
+                    {
+                        if (E.GetGameObjectParameter("TriggeringObject") == containedObject)
+                            continue;
 
+                        if (containedObject.TryGetPart(out UD_Bones_FragileLunarObject fragileObject))
+                            fragileObject.AttemptDamage(
+                                Force: true,
+                                Remove: fragileObject.WantsRemoveOnDamage,
+                                Cascade: false,
+                                Source: source);
+                    }
+                }*/
+                IsProtected = false;
+                AttemptDamage(
+                    Force: true,
+                    Remove: WantsRemoveOnDamage,
+                    Cascade: false,
+                    Source: source);
+            }
             return base.FireEvent(E);
         }
 

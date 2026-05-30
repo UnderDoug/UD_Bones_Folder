@@ -10,14 +10,22 @@ using XRL.World.Anatomy;
 using System.Linq;
 using XRL.Core;
 using UD_Bones_Folder.Mod.Events;
+using XRL.World.Text.Attributes;
+using XRL.World.Text.Delegates;
 
 namespace XRL.World.Parts
 {
+    [HasVariableReplacer]
     [Serializable]
     public class UD_Bones_LunarFace : UD_Bones_BaseLunarPart
     {
         protected string TileColor;
         protected string DetailColor;
+        public override bool CanBeFragile => false;
+
+        public UD_Bones_LunarFace()
+            : base()
+        { }
 
         public bool TryBeWorn()
         {
@@ -110,11 +118,11 @@ namespace XRL.World.Parts
             if (E.Actor.TryGetPart(out UD_Bones_LunarRegent lunarRegent))
             {
                 if (LastBonesID != lunarRegent.BonesID)
-                    SetBonesID<UD_Bones_LunarFace>(lunarRegent.BonesID);
+                    SetBonesIDTyped<UD_Bones_LunarFace>(lunarRegent.BonesID);
             }
             else
             if (E.Actor.IsPlayer())
-                SetBonesID<UD_Bones_LunarFace>(The.Game?.GameID);
+                SetBonesIDTyped<UD_Bones_LunarFace>(The.Game?.GameID);
 
             return base.HandleEvent(E);
         }

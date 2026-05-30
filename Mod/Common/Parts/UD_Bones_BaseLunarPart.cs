@@ -10,12 +10,14 @@ using XRL.World.Effects;
 using UD_Bones_Folder.Mod;
 
 using UD_Bones_Folder.Mod.Events;
+using UD_Bones_Folder.Mod.Parts;
 
 namespace XRL.World.Parts
 {
     [Serializable]
     public abstract class UD_Bones_BaseLunarPart
         : IScribedPart
+        , ILunarObjectPart
         , IModEventHandler<TidyLunarObjectsEvent>
         , IModEventHandler<AfterBonesZoneLoadedEvent>
         , IModEventHandler<LunarObjectColorChangedEvent>
@@ -78,6 +80,12 @@ namespace XRL.World.Parts
         }
 
         public bool Persists;
+        bool ILunarObjectPart.Persists {
+            get => Persists;
+            set => Persists = value;
+        }
+
+        public virtual bool CanBeFragile => true;
 
         public UD_Bones_BaseLunarPart()
             : base()
@@ -90,10 +98,30 @@ namespace XRL.World.Parts
             SetBonesIDInternal(BonesID, true);
         }
 
+        public override void Write(GameObject Basis, SerializationWriter Writer)
+        {
+            base.Write(Basis, Writer);
+            Writer.WriteOptimized(_BonesID);
+            Writer.WriteOptimized(_LastBonesID);
+        }
+
+        public override void Read(GameObject Basis, SerializationReader Reader)
+        {
+            base.Read(Basis, Reader);
+            _BonesID = Reader.ReadOptimizedString();
+            _LastBonesID = Reader.ReadOptimizedString();
+        }
+
+        public override void FinalizeRead(SerializationReader Reader)
+        {
+            base.FinalizeRead(Reader);
+            SetBonesIDInternal(BonesID);
+        }
+
         public override void Initialize()
         {
             base.Initialize();
-            SetBonesID<UD_Bones_BaseLunarPart>(The.Game?.GameID);
+            SetBonesIDInternal(The.Game?.GameID, true);
         }
 
         protected virtual void SetBonesIDInternal(string BonesID, bool Override)
@@ -108,25 +136,27 @@ namespace XRL.World.Parts
         protected virtual void SetBonesIDInternal(string BonesID)
             => SetBonesIDInternal(BonesID, false);
 
-        public T SetBonesID<T>(string BonesID)
+        public T SetBonesIDTyped<T>(string BonesID)
             where T : UD_Bones_BaseLunarPart
         {
             SetBonesIDInternal(BonesID, false);
             return (T)this;
         }
 
-        public T OverrideBonesID<T>(string BonesID)
+        public void SetBonesID(string BonesID)
+            => SetBonesIDInternal(BonesID, false)
+            ;
+
+        public T OverrideBonesIDTyped<T>(string BonesID)
             where T : UD_Bones_BaseLunarPart
         {
             SetBonesIDInternal(BonesID, true);
             return (T)this;
         }
 
-        public override void FinalizeRead(SerializationReader Reader)
-        {
-            SetBonesIDInternal(BonesID);
-            base.FinalizeRead(Reader);
-        }
+        public void OverrideBonesID(string BonesID)
+            => SetBonesIDInternal(BonesID, true)
+            ;
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {

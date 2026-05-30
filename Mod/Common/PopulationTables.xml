@@ -1,0 +1,388 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<populations>
+
+  <population Name="UD_Bones_BonesMode_ScrapLow">
+    <group Name="Items" Style="pickeach">
+      <table Name="Scrap 1" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Scrap 2" Chance="100,75,75,50,50,25,25" />
+      <table Name="Scrap 3" Chance="75,75,50,50,25,25" />
+      <table Name="Scrap 4" Chance="75,50,50,25,25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_ScrapMid">
+    <group Name="Items" Style="pickeach">
+      <table Name="Scrap 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Scrap 4" Chance="100,75,75,50,50,25,25" />
+      <table Name="Scrap 5" Chance="75,75,50,50,25,25" />
+      <table Name="Scrap 6" Chance="75,50,50,25,25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_ScrapHigh">
+    <group Name="Items" Style="pickeach">
+      <table Name="Scrap 5" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Scrap 6" Chance="100,75,75,50,50,25,25" />
+      <table Name="Scrap 7" Chance="75,75,50,50,25,25" />
+      <table Name="Scrap 8" Chance="75,50,50,25,25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Food 5">
+    <group Name="Items" Style="pickone">
+      <object Weight="3" Number="1d3" Blueprint="Urberry" />
+      <object Weight="1" Number="1" Blueprint="HoneyWaterskin" />
+      <object Weight="1" Number="1" Blueprint="WineWaterskin" />
+      <object Weight="1" Number="1" Blueprint="Black Puma Haunch" />
+      <table Weight="30" Number="1d4" Name="Ingredients5" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Food 6">
+    <group Name="Items" Style="pickone">
+      <object Weight="3" Number="1d3" Blueprint="Urberry" />
+      <object Weight="1" Number="1" Blueprint="HoneyWaterskin" />
+      <object Weight="1" Number="1" Blueprint="WineWaterskin" />
+      <object Weight="1" Number="1" Blueprint="Black Puma Haunch" />
+      <table Weight="30" Number="1d4" Name="Ingredients6" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Food 7">
+    <group Name="Items" Style="pickone">
+      <object Weight="3" Number="1d3" Blueprint="Urberry" />
+      <object Weight="1" Number="1" Blueprint="HoneyWaterskin" />
+      <object Weight="1" Number="1" Blueprint="WineWaterskin" />
+      <object Weight="1" Number="1" Blueprint="Black Puma Haunch" />
+      <table Weight="30" Number="1d4" Name="Ingredients7" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Food 8">
+    <group Name="Items" Style="pickone">
+      <object Weight="5" Number="1d3" Blueprint="Urberry" />
+      <object Weight="5" Number="1" Blueprint="Taco Suprema" />
+      <object Weight="1" Number="1" Blueprint="HoneyWaterskin" />
+      <object Weight="1" Number="1" Blueprint="WineWaterskin" />
+      <object Weight="1" Number="1" Blueprint="Black Puma Haunch" />
+      <table Weight="30" Number="1d4" Name="Ingredients8" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 1">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapLow" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="10" />
+      <table Name="Food 1" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 1" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 2" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 3" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 2" Chance="100,100,75,75,50,50,25,25" />
+      <object Blueprint="Copper Nugget" Chance="50,25,10" />
+      <object Blueprint="Wooden Buckler" Chance="50" />
+      <object Blueprint="Musket" Chance="75" />
+      <object Blueprint="Dagger"  Chance="75, 75" />
+      <object Blueprint="Mace2" Chance="75" />
+      <object Blueprint="Hand Axe" Chance="75" />
+      <object Blueprint="Long Sword" Chance="75" />
+      <object Blueprint="Leather Armor" Chance="75" />
+      <object Blueprint="Spectacles" Chance="25" />
+      <object Blueprint="Joppa Recoiler" Chance="50" />
+      <object Blueprint="Grit Gate Recoiler" Chance="25" />
+      <object Blueprint="Golgotha Recoiler" Chance="10" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 2">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapLow" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="20" />
+      <table Name="Food 2" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 2" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 3" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 4" Chance="75,50,50,25,25" />
+      <table Name="Ammo 2" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <object Blueprint="Copper Nugget" Chance="50,25,10" />
+      <object Blueprint="Grit Gate Recoiler" Chance="25" />
+      <object Blueprint="Spectacles" Chance="25" />
+      <object Blueprint="Joppa Recoiler" Chance="75" />
+      <object Blueprint="Golgotha Recoiler" Chance="25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 3">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapLow" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="Food 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 3" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 4" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 5" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <object Blueprint="Silver Nugget" Chance="50,25,10" />
+      <object Blueprint="Grit Gate Recoiler" Chance="25" />
+      <object Blueprint="Kyakukya Recoiler" Chance="50" />
+      <object Blueprint="Joppa Recoiler" Chance="50" />
+      <object Blueprint="Golgotha Recoiler" Chance="25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 4">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapMid" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="Food 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 4" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 5" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 6" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,75,50,50,25,25" />
+      <object Blueprint="Silver Nugget" Chance="50,25,10" />
+      <object Blueprint="Grit Gate Recoiler" Chance="25" />
+      <object Blueprint="Kyakukya Recoiler" Chance="75" />
+      <object Blueprint="Ezra Recoiler" Chance="25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 5">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapMid" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,50,10,10,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="UD_Bones_BonesMode_Food 5" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 5" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 6" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 7" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25,10,10" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 5" Chance="100,75,50,50,25,25" />
+      <object Blueprint="Silver Nugget" Chance="50,25,10,10,10" />
+      <object Blueprint="Bethesda Susa Recoiler" Chance="50" />
+      <object Blueprint="Ezra Recoiler" Chance="35" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 6">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapMid" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,50,10,10,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="UD_Bones_BonesMode_Food 6" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Junk 6" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 7" Chance="75,75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25,10,10" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 5" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 6" Chance="100,75,50,50,25,25" />
+      <object Blueprint="Silver Nugget" Chance="50,25,10,10,10" />
+      <object Blueprint="Bethesda Susa Recoiler" Chance="25" />
+      <object Blueprint="Ezra Recoiler" Chance="50" />
+      <object Blueprint="Yd Freehold Recoiler" Chance="25" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 7">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapHigh" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,50,10,10,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="UD_Bones_BonesMode_Food 7" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 6" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 7" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 8" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25,10,10" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 5" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 6" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 7" Chance="100,75,50,50,25,25" />
+      <object Blueprint="Gold Nugget" Chance="25,25,10,10,10" />
+      <object Blueprint="Ezra Recoiler" Chance="25" />
+      <object Blueprint="Yd Freehold Recoiler" Chance="50" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tier 8">
+    <group Name="Items" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_ScrapHigh" />
+      <table Name="GeneralMerchantWares" />
+      <object Blueprint="DataDisk" Chance="50,50,50,10,10,10,10,1,1" />
+      <object Blueprint="Pickaxe" Chance="30" />
+      <table Name="UD_Bones_BonesMode_Food 8" Chance="100,75,75,50,50,25,25" />
+      <table Name="Junk 6" Chance="100,75,50,25,25" />
+      <table Name="Junk 7" Chance="75,75,50,50,25,25" />
+      <table Name="Junk 8" Chance="75,50,50,25,25" />
+      <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25,10,10" />
+      <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
+      <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 5" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 6" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="Ammo 7" Chance="100,75,75,50,50,25,25" />
+      <table Name="Ammo 8" Chance="100,75,50,50,25,25" />
+      <object Blueprint="Gold Nugget" Chance="25,25,25,25,10,10,10" />
+      <object Blueprint="Ezra Recoiler" Chance="25" />
+      <object Blueprint="Yd Freehold Recoiler" Chance="25" />
+    </group>
+  </population>
+  
+  <population Name="UD_Bones_BonesMode_Tomb_Melee">
+    <group Name="Items" Style="pickone">
+      <object Blueprint="Long Sword8" Weight="1" />
+      <object Blueprint="Cudgel8" Weight="1" />
+      <object Blueprint="Battle Axe8" Weight="1" />
+      <object Blueprint="Dagger8" Weight="1" Chance="100,75" />
+      <object Blueprint="Long Sword7" Weight="40" />
+      <object Blueprint="Cudgel7" Weight="40" />
+      <object Blueprint="Battle Axe7" Weight="40" />
+      <object Blueprint="Dagger7" Weight="40" Chance="100,75" />
+      <object Blueprint="Long Sword6" Weight="80" />
+      <object Blueprint="Cudgel6" Weight="80" />
+      <object Blueprint="Battle Axe6" Weight="80" />
+      <object Blueprint="Dagger6" Weight="80" Chance="100,75" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Tomb_Shield">
+    <group Name="Items" Style="pickone">
+      <object Blueprint="Flawless Crysteel Shield" Weight="20" />
+      <object Blueprint="Crysteel Shield" Weight="40" />
+    </group>
+  </population>
+  
+  <population Name="UD_Bones_BonesMode_Tomb">
+    <group Name="Items" Style="pickeach">
+      <group Name="Rifle" Style="pickone">
+        <object Blueprint="Chain Laser" Weight="1" />
+        <object Blueprint="Phase Cannon" Weight="1" />
+        <object Blueprint="Eigenrifle" Weight="6" />
+        <object Blueprint="Eigenpistol" Number="2" Weight="6" />
+        <object Blueprint="Light Rail" Weight="12" />
+        <object Blueprint="Hand Rail" Number="2" Weight="12" />
+      </group>
+      <group Name="Cell" Style="pickone">
+        <object Blueprint="Antimatter Cell" Chance="100,50,25,1,1,1" />
+        <object Blueprint="Nuclear Cell" Chance="100,100,50,50,25,25,1,1,1" />
+      </group>
+      <table Name="UD_Bones_BonesMode_Tomb_Melee" Chance="100,50,25,1,1,1" />
+      <table Name="UD_Bones_BonesMode_Tomb_Shield" Chance="100,25,1,1" />
+      <group Name="Shoes" Style="pickone">
+        <table Name="Shoes 8" Weight="1" />
+        <table Name="Shoes 7" Weight="4" />
+        <table Name="Shoes 6" Weight="8" />
+      </group>
+      <group Name="BodyArmor" Style="pickone">
+        <object Blueprint="Zetachrome Lune" Weight="1" />
+        <object Blueprint="Flawless Crysteel Shardmail" Weight="40" />
+        <object Blueprint="Crysteel Shardmail" Weight="80" />
+      </group>
+      <group Name="Boots" Style="pickone">
+        <object Blueprint="Zetachrome Pumps" Weight="1" />
+        <object Blueprint="Flawless Crysteel Boots" Weight="40" />
+        <object Blueprint="Crysteel Boots" Weight="80" />
+      </group>
+      <group Name="Helmet" Style="pickone">
+        <object Blueprint="Zetachrome Apex" Weight="1" />
+        <object Blueprint="Flawless Crysteel Coronet" Weight="40" />
+        <object Blueprint="Crysteel Coronet" Weight="80" />
+      </group>
+      <group Name="Gloves" Style="pickone">
+        <object Blueprint="Zetachrome Gloves" Weight="1" />
+        <object Blueprint="Flawless Crysteel Gauntlets" Weight="40" />
+        <object Blueprint="Crysteel Gauntlets" Weight="80" />
+      </group>
+      <group Name="Artifacts" Style="pickeach">
+        <table Name="Artifact 5R" Chance="100,100,50,50,25,25,25,25" />
+        <table Name="Artifact 6R" Chance="100,50,25,25" />
+        <table Name="Artifact 7R" Chance="100,50,25" />
+      </group>
+      <group Name="Cloak" Style="pickone">
+        <table Name="Cloaks 5" />
+      </group>
+      <group Name="Explosives" Style="pickeach">
+        <table Name="Explosives 3" Number="6-10" />
+      </group>
+      <object Blueprint="Urberry" Chance="100,50,25,1,1,1" />
+      <object Blueprint="Bracelet3" Number="0-2" />
+      <object Blueprint="BlazeTonic" Number="0-4" />
+      <object Blueprint="HulkHoneyTonic" Number="0-4" />
+      <object Blueprint="SalveTonic" Number="5-10" />
+      <object Blueprint="SkulkTonic" Number="0-4" />
+      <object Blueprint="SphynxSaltTonic" Number="0-2" />
+      <object Blueprint="ShadeOilTonic" Number="0-2" />
+      <object Blueprint="UbernostrumTonic" Number="0-2" />
+      <object Blueprint="RubbergumTonic" Number="0-3" />
+      <object Blueprint="LoveTonic" Number="0-5" />
+      <object Blueprint="NectarTonic" Number="0-2" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_SultanFace">
+    <group Name="Masks" Style="pickone">
+      <object Blueprint="The Nil Face" Weight="6" />
+      <object Blueprint="The Olive Face" Weight="5" />
+      <object Blueprint="The Levant Face" Weight="4" />
+      <object Blueprint="The Earth Face" Weight="3" />
+      <object Blueprint="The Shemesh Face" Weight="2" />
+      <object Blueprint="The Kesil Face" Weight="1" />
+    </group>
+
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Reef">
+    <group Name="Supplies" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_Tomb" />
+      <group Name="Artifacts" Style="pickeach">
+        <table Name="Artifact 6R" Chance="100,100,50,25,25" />
+        <table Name="Artifact 7R" Chance="100,100,100,50,50,25,25" />
+        <table Name="Artifact 8R" Chance="100,25,25" />
+      </group>
+      <table Name="UD_Bones_BonesMode_SultanFace" />
+      <object Blueprint="Quantum Mote" />
+    </group>
+  </population>
+  
+  <population Name="UD_Bones_BonesMode_Final">
+    <table Name="UD_Bones_BonesMode_Reef" />
+    <table Name="Armor 8C" />
+    <object Blueprint="Urberry" Number="3-6" />
+    <object Blueprint="Sun-Dried Banana" Number="1-2" />
+    <object Blueprint="SalveTonic" Number="5-10" />
+    <object Blueprint="UbernostrumTonic" Number="1-2" />
+    <group Name="Artifacts" Style="pickeach">
+      <table Name="Artifact 7R" Chance="100,100,25,25" />
+      <table Name="Artifact 8R" Chance="100,100,25,25" />
+    </group>
+    <group Name="Weapon" Style="pickone">
+      <object Blueprint="Long Sword8" Chance="100,50,1" />
+      <object Blueprint="Cudgel8" Chance="100,50,1" />
+      <object Blueprint="Battle Axe8" Chance="100,50,1" />
+      <object Blueprint="Dagger8" Chance="100,100,50,1" />
+    </group>
+    <object Blueprint="Polished Emerald" Number="5d8" />
+  </population>
+  
+</populations>

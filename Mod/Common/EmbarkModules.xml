@@ -27,8 +27,8 @@
         </description>
       </type>
       
-      <type ID="PokeAround" Title="Poke Around">
-        <icon Tile="Mutations/clairvoyance.bmp" Foreground="b" Detail="B"></icon>
+      <type ID="PokeAround" Title="Investigate First">
+        <icon Tile="Mutations/night_vision_mutation.bmp" Foreground="b" Detail="B"></icon>
         <description>
           Have a poke around where you land
           Use the provided ability to instantly die.

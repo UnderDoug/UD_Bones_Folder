@@ -52,7 +52,7 @@ namespace UD_Bones_Folder.Mod
             string newFollowerName = newFollower?.DebugName ?? "NO_COURTIER";
             string newLeaderName = newLeader?.DebugName ?? "NO_REGENT";
             string allyReasonName = allyReason.GetType().Name;
-            Utils.Log($"{newFollowerName} made follower of {newLeaderName} for reason {allyReasonName}.");
+            //Utils.Log($"{newFollowerName} made follower of {newLeaderName} for reason {allyReasonName}.");
             return true;
         }
     }

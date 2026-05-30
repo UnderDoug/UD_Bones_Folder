@@ -642,8 +642,8 @@ namespace UD_Bones_Folder.Mod
 
         public static IEnumerable<Host> AllHosts(Predicate<Host> Where)
         {
-            foreach (var hostsCollection in Hosts ?? Enumerable.Empty<HostCollection>())
-                foreach (var host in hostsCollection ?? Enumerable.Empty<Host>())
+            foreach (var hostsCollection in Hosts.IteratorSafe())
+                foreach (var host in hostsCollection.IteratorSafe())
                     if (Where?.Invoke(host) is not false)
                         yield return host;
         }
@@ -654,9 +654,9 @@ namespace UD_Bones_Folder.Mod
 
         public static IEnumerable<KeyValuePair<FileLocationData, Host>> AllHostsWithLocation(Predicate<KeyValuePair<FileLocationData, Host>> Where)
         {
-            foreach (var hostCollection in Hosts ?? Enumerable.Empty<HostCollection>())
+            foreach (var hostCollection in Hosts.IteratorSafe())
             {
-                foreach (var host in hostCollection ?? Enumerable.Empty<Host>())
+                foreach (var host in hostCollection.IteratorSafe())
                 {
                     var element = new KeyValuePair<FileLocationData, Host>(hostCollection.LocationData, host);
                     if (Where?.Invoke(element) is not false)

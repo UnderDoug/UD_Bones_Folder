@@ -41,13 +41,11 @@ namespace XRL.World.Parts
         public override void Initialize()
         {
             base.Initialize();
-
         }
 
         public override void FinalizeRead(SerializationReader Reader)
         {
             base.FinalizeRead(Reader);
-
         }
 
         public override IPart DeepCopy(GameObject Parent, Func<GameObject, GameObject> MapInv)

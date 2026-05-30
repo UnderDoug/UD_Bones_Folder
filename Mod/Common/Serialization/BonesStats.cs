@@ -24,8 +24,8 @@ namespace UD_Bones_Folder.Mod
         [JsonIgnore]
         public DateTime LastEncountered
         {
-            get => new(_LastEncountered);
-            set => _LastEncountered = value.Ticks;
+            get => new DateTime(_LastEncountered).ToLocalTime();
+            set => _LastEncountered = value.ToUniversalTime().Ticks;
         }
 
         [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
@@ -188,7 +188,7 @@ namespace UD_Bones_Folder.Mod
                 sB.Append(RegentName.Capitalize()).Append(" has been encountered ").AppendRule(totalEncounters.Things("time"));
 
                 if (_LastEncountered > 0)
-                    sB.Append(", and was last encountered ").AppendRule(LastEncountered.TimeAgo()).Append(" ago.");
+                    sB.Append(", and was last encountered ").AppendRule(LastEncountered.TimeAgo("ago")).Append(".");
                 else
                     sB.Append(".");
 

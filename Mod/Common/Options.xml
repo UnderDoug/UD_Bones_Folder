@@ -71,18 +71,6 @@
       The default is {{w|Disabled}}.
     </helptext>
   </option>
-  <option
-        ID="UD_Bones_Folder_DebugEnableNoCremation"
-        DisplayText="{{Y|Bones}}: Pause cremating {{rainbow|Lunar Regent}} bones (deleting bones files)."
-        Category="Debug"
-        Type="Checkbox"
-        Default="No">
-    <helptext>
-      When enabled, loaded bones files will not be deleted upon being encountered.
-
-      The default is {{w|Disabled}}.
-    </helptext>
-  </option>
 
   <!--
   
@@ -235,6 +223,20 @@
       When enabled, items such as the {{rainbow|Lunar Regent}} masks and objects such as mad {{rainbow|Lunar Regent}}s will have visual effects that might trigger photosensitivity.
       
       When disabled, these effects will be absent.
+
+      The default is {{W|Enabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_EnableBonesFromEarlierModVersions"
+        DisplayText="Enable bones from earlier version of the mod to load (provided it's possible)."
+        Category="Mod: Bones"
+        Type="Checkbox"
+        Default="Yes">
+    <helptext>
+      When enabled, bones files from previous versions of this mod will be eligible for loading (provided it's possible), albeit at a reduced weight.
+      
+      When disabled, only bones whose mod version matches the currently enabled bones mod will be eligible for loading, maximising stability.
 
       The default is {{W|Enabled}}.
     </helptext>

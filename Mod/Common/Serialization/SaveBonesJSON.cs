@@ -27,6 +27,7 @@ namespace UD_Bones_Folder.Mod
         [JsonIgnore]
         public static string FileName => $"{BonesManager.BonesFileName}.json";
 
+        public bool? IsYou;
         [JsonProperty]
         public Guid OsseousAshID;
         public string OsseousAshHandle;
@@ -67,12 +68,10 @@ namespace UD_Bones_Folder.Mod
             : base()
         { }
 
-        public static SaveBonesJSON DummyBonesJSON(
-            BonesManagement.VisibilityModes VisibilityMode,
-            FileLocationData.LocationType LocationType = FileLocationData.LocationType.None
-            )
+        public static SaveBonesJSON DummyBonesJSON(BonesManagement.VisibilityModes VisibilityMode)
             => new SaveBonesJSON
             {
+                IsYou = true,
                 OsseousAshID = Guid.Empty,
                 OsseousAshHandle = $"A Highlight Entropic Being",
                 SaveVersion = 400,
@@ -94,7 +93,7 @@ namespace UD_Bones_Folder.Mod
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
-                SaveTimeValue = DateTime.Now.Ticks,
+                SaveTimeValue = DateTime.Now.ToUniversalTime().Ticks,
 
                 ZoneID = "BonesWorld.11.22.1.1.10",
 
@@ -126,16 +125,7 @@ namespace UD_Bones_Folder.Mod
                 };
             }
 
-            DateTime saveTimeValue;
-            try
-            {
-                saveTimeValue = new DateTime(SaveBonesJSON.SaveTimeValue).ToLocalTime();
-            }
-            catch //(Exception x)
-            {
-                // Utils.Error(Utils.CallChain(nameof(SaveBonesJSON), nameof(ReadSaveBonesJson)), x);
-                saveTimeValue = new DateTime(2026, 04, 01, 11, 59, 59, DateTimeKind.Local);
-            }
+            DateTime saveTimeValue = SaveBonesInfo.GetSaveTime(SaveBonesJSON);
 
             var bonesSpec = SaveBonesJSON.BonesSpec
                 ?? new BonesSpec
@@ -154,7 +144,7 @@ namespace UD_Bones_Folder.Mod
                 Name = SaveBonesJSON.Name,
                 Description = $"Level {SaveBonesJSON.Level} {SaveBonesJSON.GenoSubType}",// [{json.GameMode}]",
                 Info = $"{SaveBonesJSON.Location}, {SaveBonesJSON.InGameTime} turn {SaveBonesJSON.Turn}",
-                SaveTime = SaveBonesJSON.SaveTime,
+                SaveTime = SaveBonesInfo.GetSaveTimeString(SaveBonesJSON),
                 ModsEnabled = SaveBonesJSON.ModsEnabled,
 
                 JSONFilePath = FileName,

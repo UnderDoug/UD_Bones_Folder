@@ -1,19 +1,23 @@
 ﻿using System;
-
 using ConsoleLib.Console;
 
+using Qud.UI;
+
+using XRL.Core;
 using XRL.UI;
 using XRL.World.ZoneBuilders;
 
 using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.Events;
+
 using Options = UD_Bones_Folder.Mod.Options;
-using XRL.Core;
-using Qud.UI;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_MoonKingAnnouncer : UD_Bones_BaseLunarSubject
+    public class UD_Bones_MoonKingAnnouncer
+        : UD_Bones_BaseLunarSubject
+        , IModEventHandler<AnnounceLunarRegentEvent>
     {
         [Serializable]
         public class FlippableRender : Renderable
@@ -39,8 +43,6 @@ namespace XRL.World.Parts
         public const string GAME_ID_PROPERTY = SerializationExtensions.GAME_ID_PROPERTY;
         public const string ACTIVE_OBJECT_PROPERTY = SerializationExtensions.ACTIVE_OBJECT_PROPERTY;
         public const string ABILITY_OBJECT_PROPERTY = SerializationExtensions.ABILITY_OBJECT_PROPERTY;
-
-        public bool Cremated;
 
         public string Title;
         public string Message;
@@ -135,6 +137,8 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == AfterObjectCreatedEvent.ID
             || ID == ZoneActivatedEvent.ID
+            || ID == AnnounceLunarRegentEvent.ID
+            || ID == EarlyBeforeBeginTakeActionEvent.ID
             || ID == EndTurnEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
@@ -144,25 +148,14 @@ namespace XRL.World.Parts
             if (E.Context.StartsWith($"{nameof(BonesID)}::"))
             {
                 Utils.Log($"{nameof(UD_Bones_MoonKingAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context})");
-                OverrideBonesID<UD_Bones_MoonKingAnnouncer>(E.Context.Split("::")[1]);
+                OverrideBonesIDTyped<UD_Bones_MoonKingAnnouncer>(E.Context.Split("::")[1]);
             }
             return base.HandleEvent(E);
         }
 
-        public override bool HandleEvent(ZoneActivatedEvent E)
+        public virtual bool HandleEvent(AnnounceLunarRegentEvent E)
         {
-            if (!Options.DebugEnableNoCremation
-                && !Cremated
-                && BonesManager.System != null
-                && BonesManager.System.TryGetSaveBonesByID(BonesID, out var bonesInfo))
-            {
-                // bonesInfo.Cremate();
-                Cremated = true;
-                if (MoonKing?.GetPart<UD_Bones_LunarRegent>() is UD_Bones_LunarRegent lunarRegentPart)
-                    lunarRegentPart.Cremated = true;
-            }
-            // ActivateObjects();
-            // Announce();
+            Announce();
             return base.HandleEvent(E);
         }
 
@@ -172,9 +165,14 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
+        public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
+        {
+            Announce();
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            E.AddEntry(this, nameof(Cremated), Cremated);
             E.AddEntry(this, nameof(Title), Title);
             E.AddEntry(this, nameof(Message), Message);
             return base.HandleEvent(E);
