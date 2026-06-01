@@ -4,6 +4,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 
+using Genkit;
+
 using XRL;
 using XRL.Collections;
 using XRL.World;
@@ -97,6 +99,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             && X == Other.X
             && Y == Other.Y
             && I == Other.I
+            ;
+
+        public Location2D GetLocation()
+            => Location2D.Get(X, Y)
             ;
 
         public bool TryRetrieveObject(PseudoZone Zone, out GameObject Object)

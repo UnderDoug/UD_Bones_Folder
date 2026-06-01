@@ -52,6 +52,19 @@ namespace UD_Bones_Folder.Mod
             : null
             ;
 
+        public LunarParty SetLunarRegent(GameObject LunarRegent, bool WarnAlreadyAssigned = true)
+        {
+            if (this.LunarRegent != null
+                && this.LunarRegent != LunarRegent
+                && WarnAlreadyAssigned)
+            {
+                Utils.Warn($"Probable error loading {nameof(this.LunarRegent)} {LunarRegent.DebugName}, " +
+                    $"{nameof(this.LunarRegent)} already assigned {this.LunarRegent.DebugName}");
+            }
+            this.LunarRegent = LunarRegent;
+            return this;
+        }
+
         public LunarPartyIDs CacheLunarCourtiers()
             => !LunarCourtiers.IsNullOrEmpty()
             ? new LunarPartyIDs

@@ -10,6 +10,7 @@ using HistoryKit;
 using Qud.API;
 
 using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.Events;
 using UD_Bones_Folder.Mod.UI;
 
@@ -359,9 +360,14 @@ namespace XRL.World.Parts
         public override bool HandleEvent(EnteringZoneEvent E)
         {
             Utils.Log($"{nameof(EnteringZoneEvent)}: {E.Cell?.ParentZone?.ZoneID ?? "NO_ZONE_ID"}, from: {ParentObject?.CurrentZone?.ZoneID ?? "NO_ZONE_ID"}");
-            if (!CheckAnnounce)
+            if (!CheckAnnounce
+                && E.Cell.ParentZone is Zone enteringZone)
             {
-                if (E.Cell.ParentZone.HasZoneProperty("BonesID"))
+                if (enteringZone.HasZoneProperty("BonesID"))
+                    CheckAnnounce = true;
+
+                if (BonesManager.ZoneBones[enteringZone.ZoneID] is ZoneBonesAllocation allocation
+                    && allocation.HasAssignedBones())
                     CheckAnnounce = true;
             }
             return base.HandleEvent(E);

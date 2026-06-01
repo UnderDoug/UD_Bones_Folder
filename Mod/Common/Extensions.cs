@@ -36,6 +36,8 @@ using XRL.World.Skills;
 using XRL.World.Parts.Skill;
 using XRL.Rules;
 using UD_Bones_Folder.Mod.Parts;
+using Genkit;
+using XRL.World.WorldBuilders;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -1907,6 +1909,10 @@ namespace UD_Bones_Folder.Mod
                     Source.Add(element);
         }
 
+        public static void AddRange<T>(this ICollection<T> Source, IEnumerable<T> Range)
+            => Source.AddRange(Range, null)
+            ;
+
         public static string FeverWarped(this string Text, bool DoShaderReplace = true)
             => UD_Bones_FeverWarped.FeverWarpText(Text, DoShaderReplace)
             ;
@@ -2026,5 +2032,103 @@ namespace UD_Bones_Folder.Mod
             }
             return count == trueCount;
         }
+
+        public static Location2D PeekLocationOfTier(this JoppaWorldBuilder Builder, int tier)
+        {
+            List<Location2D> locations;
+            int attempts = 0;
+            while (!Builder.worldInfo.tierLocations.TryGetValue(tier, out locations))
+            {
+                Utils.Warn($"Couldn't find location of tier {tier}");
+                tier--;
+                if (tier < 1)
+                    tier = 8;
+
+                attempts++;
+                if (attempts > 9)
+                    return null;
+            }
+
+            using var locationZones = ScopeDisposedList<Location2D>.GetFromPool();
+            foreach (var location in locations)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    for (int j = 0; j < 3; j++)
+                    {
+                        int xOffset = i - 1;
+                        int yOffset = j - 1;
+                        int offsetX = location.X + xOffset;
+                        int offsetY = location.Y + yOffset;
+
+                        if (offsetX != Math.Clamp(offsetX, 0, Const.MAX_ZONE_X)
+                            || offsetY != Math.Clamp(offsetY, 0, Const.MAX_ZONE_Y))
+                            continue;
+
+                        locationZones.Add(Location2D.Get(offsetX, offsetY));
+                    }
+                }
+            }
+            locationZones.ShuffleInPlace();
+            foreach (var location in locationZones.IteratorSafe())
+                if (Builder.mutableMap.GetMutable(location) > 0)
+                    return location;
+
+            return null;
+        }
+
+        public static IEnumerable<Location2D> YieldParasangZoneLocations(this Location2D Parasang)
+        {
+            if (Parasang == null)
+                yield break;
+
+            for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++)
+                    if (Location2D.Get(Parasang.X * 3 + i, Parasang.Y * 3 + j) is Location2D location)
+                        yield return location;
+        }
+
+        public static int GetCenterZoneX(this Location2D WorldLocation)
+            => Math.Clamp(WorldLocation.X * 3 + 1, 0, 239)
+            ;
+
+        public static int GetCenterZoneY(this Location2D WorldLocation)
+            => Math.Clamp(WorldLocation.Y * 3 + 1, 0, 74)
+            ;
+
+        public static Location2D GetCenterZone(this Location2D WorldLocation)
+            => Location2D.Get(WorldLocation.GetCenterZoneX(), WorldLocation.GetCenterZoneY())
+            ;
+
+        public static IEnumerable<Cell> GetCellsInACosmeticCircle(this Zone Zone, int X, int Y, int Radius)
+        {
+            if (X < 0
+                || Y < 0)
+                yield break;
+
+            int yRadius = (int)Math.Max(1.0, Radius * 0.66);
+            float radiusSquared = Radius * Radius;
+            int minX = X - Radius;
+            int maxX = X + Radius;
+            int minY = Y - yRadius;
+            int maxY = Y + yRadius;
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    float xD = Math.Abs(x - X);
+                    float yD = Math.Abs(y - Y) * 1.3333f;
+                    float d = (xD * xD) + (yD * yD);
+
+                    if (radiusSquared > d
+                        && Zone.GetCell(x, y) != null)
+                        yield return Zone.GetCell(x, y);
+                }
+            }
+        }
+
+        public static IEnumerable<Cell> GetCellsInACosmeticCircleSilent(this Cell Cell, int Radius)
+            => Cell.ParentZone.GetCellsInACosmeticCircle(Cell.X, Cell.Y, Radius)
+            ;
     }
 }

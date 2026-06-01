@@ -437,7 +437,7 @@ namespace XRL.World.Parts
 
             string bonesID = LunarCreature.GetBonesID();
 
-            Utils.Log($"{nameof(MakeInventoryFragile)} for {LunarCreature?.DebugName ?? "NO_OBJECT"}");
+            // Utils.Log($"{nameof(MakeInventoryFragile)} for {LunarCreature?.DebugName ?? "NO_OBJECT"}");
 
             var creatureBelongings = LunarCreature.GetInventoryEquipmentAndCybernetics().IteratorSafe();
             using var lunarCreatureInventoryList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(creatureBelongings);
@@ -464,7 +464,7 @@ namespace XRL.World.Parts
             using var objectsToDestroy = ScopeDisposedList<GameObject>.GetFromPool();
             while (LunarCreature.GetInventoryEquipmentAndCybernetics(isNotFragileObjectAndNotReliquary).FirstOrDefault() is GameObject item)
             {
-                Utils.Log($"{1.Indent()}{nameof(MakeInventoryFragile)}::{item?.DebugName ?? "NO_ITEM"}, {nameof(item.Count)} {item?.Count ?? -1}");
+                //Utils.Log($"{1.Indent()}{nameof(MakeInventoryFragile)}::{item?.DebugName ?? "NO_ITEM"}, {nameof(item.Count)} {item?.Count ?? -1}");
                 var objectBlueprint = item.GetBlueprint();
 
                 item.PerformActionRecursively(delegate (GameObject go)
@@ -526,7 +526,7 @@ namespace XRL.World.Parts
                 if (projectile.GetBlueprint().InheritsFromSafe("Projectile"))
                     projectile.RemovePart<UD_Bones_FragileLunarObject>();
 
-            Utils.Log($"{nameof(MakeInventoryFragile)} Finished");
+            //Utils.Log($"{nameof(MakeInventoryFragile)} Finished");
             return true;
         }
 
@@ -643,7 +643,7 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(LoadLunarRegentEvent E)
         {
-            Utils.Log($"{nameof(UD_Bones_LunarRegent)}: {nameof(HandleEvent)}({nameof(LoadLunarRegentEvent)})");
+            //Utils.Log($"{nameof(UD_Bones_LunarRegent)}: {nameof(HandleEvent)}({nameof(LoadLunarRegentEvent)})");
             if (ParentObject == E.LunarObject)
             {
                 string catchFlag = $"Top";

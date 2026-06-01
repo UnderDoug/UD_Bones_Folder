@@ -14,6 +14,7 @@ using Platform.IO;
 using Qud.API;
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.UI;
 
 using UnityEngine;
@@ -889,8 +890,8 @@ namespace UD_Bones_Folder.Mod
             : GetName()
             ;
 
-        public bool AttemptLoad(Zone Z)
-            => BonesManager.System.AttemptLoadBones(Z, this)
+        public bool AttemptLoad(Zone Z, ZoneBonesAllocation.AllocationTypes Type, out bool Blocked)
+            => BonesManager.System.AttemptLoadBones(Z, this, Type, out Blocked)
             ;
 
         public async Task<bool> TryRestoreModsAsync()

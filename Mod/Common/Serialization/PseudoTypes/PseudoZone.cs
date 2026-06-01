@@ -7,11 +7,13 @@ using System.Text;
 using Genkit;
 
 using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.Events;
 using UD_Bones_Folder.Mod.Serialization;
 
 using XRL;
 using XRL.Collections;
+using XRL.Rules;
 using XRL.World;
 using XRL.World.AI.Pathfinding;
 using XRL.World.Parts;
@@ -788,6 +790,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             : GetCell(Cell.Location)
             ;
 
+        public PseudoCell GetCell(PseudoAddress Address)
+            => Address == null
+            ? throw new ArgumentNullException(nameof(Address))
+            : GetCell(Address.X, Address.Y)
+            ;
+
         public bool TryGetCell(int X, int Y, out PseudoCell PseudoCell)
         {
             PseudoCell = null;
@@ -811,34 +819,15 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             => TryGetCell(Cell?.Location, out PseudoCell)
             ;
 
-        public bool TryApplyToZone(
+        private bool ApplyTypeZoneInternal(
             Zone Zone,
             SaveBonesInfo BonesInfo,
-            out GameObject LunarRegent,
-            out bool Blocked,
-            Predicate<GameObject> ExceptFor = null,
-            bool IgnoreLocationMismatch = false
-            )
+            ref GameObject LunarRegent,
+            Dictionary<string, LunarParty> LunarParties,
+            ScopeDisposedList<CrossGameObject> CrossGameObjects,
+            Predicate<GameObject> AddWhenNot = null,
+            bool IgnoreLocationMismatch = false)
         {
-            LunarRegent = null;
-            Blocked = false;
-            if (!BeforePseudoZoneLoadedEvent.Check(Zone, BonesID, this, RECLAIM_CONTEXT))
-            {
-                Blocked = true;
-                return false;
-            }
-            if (!TryGetLunarParty(out _))
-            {
-                Utils.Error(
-                    Context: $"Attempted to apply PseudoZone without {nameof(LunarRegent)} to null {nameof(Zone)}",
-                    X: new InvalidOperationException($"Loading bones Zone must have {nameof(LunarRegent)}"));
-                //return false;
-            }
-            if (Zone == null)
-            {
-                Utils.Error($"Attempted to apply PseudoZone to null {nameof(Zone)}", new ArgumentNullException(nameof(Zone)));
-                return false;
-            }
             if (Zone.Width != Width
                 || Zone.Height != Height)
             {
@@ -851,6 +840,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             Zone.BaseDisplayName = BaseDisplayName;
             Zone.DisplayName = DisplayName;
+
             Zone.NameContext = NameContext;
             Zone.DefiniteArticle = DefiniteArticle;
             Zone.IndefiniteArticle = IndefiniteArticle;
@@ -880,17 +870,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     Zone.MissileMap[i][j] = MissileMapType.Empty;
             }
 
-            // Zone.ClearLightMap();
             Zone.LightMap = new LightLevel[Width * Height];
-
-            //Zone.ClearExploredMap();
             Zone.ExploredMap = new bool[Width * Height];
             Zone.FakeUnexploredMap = null;
-
-            //Zone.ClearVisiblityMap();
             Zone.VisibilityMap = new bool[Width * Height];
-
-            //Zone.ClearReachableMap();
             Zone.ReachableMap = new bool[Width, Height];
 
             Zone.NavigationMap = new NavigationWeight[Width, Height];
@@ -916,9 +899,6 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 Zone.AddPart(zonePart, true);
             }
 
-            var lunarParties = new Dictionary<string, LunarParty>();
-            using var crossGameObjects = ScopeDisposedList<CrossGameObject>.GetFromPool();
-
             foreach (var cell in Zone.LoopCells())
             {
                 if (!TryGetCell(cell, out PseudoCell pseudoCell))
@@ -930,15 +910,335 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     Cell: cell,
                     BonesInfo: BonesInfo,
                     LunarRegent: ref LunarRegent,
-                    LunarParties: ref lunarParties,
-                    CrossGameObjects: crossGameObjects,
-                    ExceptFor: ExceptFor,
+                    LunarParties: ref LunarParties,
+                    CrossGameObjects: CrossGameObjects,
+                    AddWhenNot: AddWhenNot,
+                    RemovalExclusions: IsObjectSpecial,
                     IgnoreLocationMismatch: IgnoreLocationMismatch))
                 {
                     Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
                     continue;
                 }
             }
+
+            return LunarRegent != null;
+        }
+
+        public static bool IsObjectSpecial(GameObject Object)
+            => Object.HasPart<GameUnique>()
+            || Object.HasPropertyOrTag("QuestGiver")
+            || Object.IsImportant()
+            || Object.IsInteresting()
+            || Object.HasPart<GivesRep>()
+            ;
+
+        private bool ApplyTypeBubbleInternal(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
+            ref GameObject LunarRegent,
+            Dictionary<string, LunarParty> LunarParties,
+            ScopeDisposedList<CrossGameObject> CrossGameObjects,
+            Predicate<GameObject> AddWhenNot = null,
+            bool IgnoreLocationMismatch = false)
+        {
+            int radius = 4;
+            using var bubble = ScopeDisposedList<PseudoCell>.GetFromPoolFilledWith(GetRegentBubble(radius));
+
+            using var availableZoneCells = ScopeDisposedList<Cell>.GetFromPoolFilledWith(Zone.LoopCells());
+
+            using var protectedObjects = ScopeDisposedList<GameObject>.GetFromPool();
+            foreach (var zoneObject in Zone.YieldObjects())
+            {
+                if (IsObjectSpecial(zoneObject))
+                {
+                    protectedObjects.Add(zoneObject);
+                    if (!availableZoneCells.IsNullOrEmpty())
+                    {
+                        var cellsNearObject = zoneObject.CurrentCell.GetCellsInACosmeticCircleSilent(radius);
+                        availableZoneCells.RemoveAll(c => cellsNearObject.Contains(c));
+                    }
+                }
+            }
+
+            availableZoneCells.RemoveAll(delegate (Cell cell)
+            {
+                return cell.X < radius - 1
+                    || cell.X > cell.ParentZone.Width - radius
+                    || cell.Y < radius - 1
+                    || cell.Y > cell.ParentZone.Height - radius
+                    ;
+            });
+
+            Cell targetCell = availableZoneCells.GetRandomElement(Stat.GetSeededRandomGenerator($"{Const.MOD_PREFIX}{Zone.ZoneID}"));
+
+            if (targetCell == null)
+            {
+                availableZoneCells.Clear();
+                availableZoneCells.AddRange(Zone.LoopCells());
+                availableZoneCells.RemoveAll(delegate (Cell cell)
+                {
+                    return cell.X < radius
+                        || cell.X >= cell.ParentZone.Width - radius
+                        || cell.Y < radius
+                        || cell.Y >= cell.ParentZone.Height - radius
+                        ;
+                });
+                targetCell = availableZoneCells.GetRandomElement(Stat.GetSeededRandomGenerator($"{Const.MOD_PREFIX}{Zone.ZoneID}"));
+            }
+
+            if (targetCell == null)
+            {
+                Utils.Error($"Couldn't find a target cell in zone {Zone.ZoneID} to place Bones Bubble.", new InvalidOperationException($"{nameof(targetCell)} is null"));
+                return false;
+            }
+
+            using var targetBubble = ScopeDisposedList<Cell>.GetFromPoolFilledWith(targetCell.GetCellsInACosmeticCircleSilent(radius));
+
+            if (targetBubble.Count != bubble.Count)
+            {
+                Utils.Error(Context:
+                    $"Bubble ({targetBubble.Count}) and target bubble ({bubble.Count}) have different counts",
+                    X: new IndexOutOfRangeException($"Bubbles must have same element count"));
+                return false;
+            }
+
+            for (int i = 0; i < bubble.Count; i++)
+            {
+                if (targetBubble[i] is Cell cell
+                    && bubble[i] is PseudoCell pseudoCell)
+                {
+                    if (!pseudoCell.TryApplyToCell(
+                        Cell: cell,
+                        BonesInfo: BonesInfo,
+                        LunarRegent: ref LunarRegent,
+                        LunarParties: ref LunarParties,
+                        CrossGameObjects: CrossGameObjects,
+                        AddWhenNot: AddWhenNot,
+                        RemovalExclusions: IsObjectSpecial,
+                        IgnoreLocationMismatch: IgnoreLocationMismatch))
+                    {
+                        Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
+                        continue;
+                    }
+                }
+            }
+
+            if (LunarRegent?.CurrentCell is Cell lunarCell
+                && !lunarCell.IsReachable())
+            {
+
+                Cell nearestReachableCell = null;
+                foreach (var cell in Zone.LoopCells())
+                {
+                    if (!cell.IsReachable())
+                        continue;
+
+                    nearestReachableCell ??= cell;
+                    int distanceToCell = cell.CosmeticDistanceTo(lunarCell.X, lunarCell.Y);
+                    int currentDistanceToCell = nearestReachableCell.CosmeticDistanceTo(lunarCell.X, lunarCell.Y);
+                    if (currentDistanceToCell < distanceToCell)
+                        nearestReachableCell = cell;
+                }
+
+                if (nearestReachableCell != null)
+                {
+                    var findpath = new FindPath(nearestReachableCell, lunarCell);
+
+                    var lunarRegent = LunarRegent;
+                    foreach (var step in findpath?.Steps.IteratorSafe())
+                    {
+                        if (step.IsSolidFor(lunarRegent))
+                            step.Clear(Combat: true);
+
+                        step.ForeachAdjacentCell(delegate (Cell c)
+                        {
+                            if (step.IsSolidFor(lunarRegent)
+                                && 1750.in10000())
+                                c.Clear(Combat: true);
+                        });
+                    }
+                }
+            }
+
+            return LunarRegent != null;
+        }
+
+        private bool ApplyTypePartyInternal(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
+            ref GameObject LunarRegent,
+            Dictionary<string, LunarParty> LunarParties,
+            ScopeDisposedList<CrossGameObject> CrossGameObjects,
+            Predicate<GameObject> AddWhenNot = null,
+            bool IgnoreLocationMismatch = false)
+        {
+            if (LunarParty == null)
+                return false;
+
+            var rnd = Stat.GetSeededRandomGenerator($"{Const.MOD_PREFIX}{Zone.ZoneID}");
+
+            var destinationCell = Zone.GetEmptyReachableCellsNInFromEdge(N: 3).GetRandomElement(rnd)
+                ?? Zone.GetEmptyReachableCells().GetRandomElement(rnd)
+                ?? Zone.GetEmptyCellsNInFromEdge(N: 3).GetRandomElement(rnd)
+                ?? Zone.GetEmptyCells().GetRandomElement(rnd)
+                ?? Zone.GetCells().GetRandomElement(rnd);
+
+            if (!GetCell(LunarParty.LunarRegent).TryApplyToCell(
+                Cell: destinationCell,
+                BonesInfo: BonesInfo,
+                LunarRegent: ref LunarRegent,
+                LunarParties: ref LunarParties,
+                CrossGameObjects: CrossGameObjects,
+                AddWhenNot: AddWhenNot,
+                RemovalExclusions: IsObjectSpecial,
+                IgnoreLocationMismatch: IgnoreLocationMismatch))
+            {
+                Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{destinationCell?.DebugName ?? "NO_CELL"}]");
+                return false;
+            }
+            
+            if (LunarRegent?.CurrentCell is Cell lunarCell
+                && !lunarCell.IsReachable())
+            {
+
+                Cell nearestReachableCell = null;
+                foreach (var cell in Zone.LoopCells())
+                {
+                    if (!cell.IsReachable())
+                        continue;
+
+                    nearestReachableCell ??= cell;
+                    int distanceToCell = cell.CosmeticDistanceTo(lunarCell.X, lunarCell.Y);
+                    int currentDistanceToCell = nearestReachableCell.CosmeticDistanceTo(lunarCell.X, lunarCell.Y);
+                    if (currentDistanceToCell < distanceToCell)
+                        nearestReachableCell = cell;
+                }
+
+                if (nearestReachableCell != null)
+                {
+                    var findpath = new FindPath(nearestReachableCell, lunarCell);
+
+                    var lunarRegent = LunarRegent;
+                    foreach (var step in findpath?.Steps.IteratorSafe())
+                    {
+                        if (step.IsSolidFor(lunarRegent))
+                            step.Clear(Combat: true);
+
+                        step.ForeachAdjacentCell(delegate (Cell c)
+                        {
+                            if (step.IsSolidFor(lunarRegent)
+                                && 1750.in10000())
+                                c.Clear(Combat: true);
+                        });
+                    }
+                }
+            }
+
+            if (LunarParty.LunarCourtiers is HashSet<PseudoAddress> lunarCourtiers)
+            {
+                var partyCount = lunarCourtiers.Count;
+                var cellsList = destinationCell.GetConnectedSpawnLocations(partyCount * 2);
+                foreach (var lunarCourtier in lunarCourtiers)
+                {
+                    if (cellsList.IsNullOrEmpty())
+                    {
+                        cellsList ??= new();
+
+                        var prospectiveCell = destinationCell.getClosestEmptyCell()
+                            ?? destinationCell.getClosestPassableCell();
+
+                        if (prospectiveCell != null)
+                            cellsList.Add(prospectiveCell);
+                    }
+
+                    while (!cellsList.IsNullOrEmpty())
+                    {
+                        var courtierCell = cellsList.GetRandomElement();
+                        if (!GetCell(lunarCourtier).TryApplyToCell(
+                            Cell: courtierCell,
+                            BonesInfo: BonesInfo,
+                            LunarRegent: ref LunarRegent,
+                            LunarParties: ref LunarParties,
+                            CrossGameObjects: CrossGameObjects,
+                            AddWhenNot: AddWhenNot,
+                            RemovalExclusions: IsObjectSpecial,
+                            IgnoreLocationMismatch: IgnoreLocationMismatch))
+                        {
+                            cellsList.Remove(courtierCell);
+                        }
+                        else
+                            break;
+                    }
+                }
+            }
+
+            return LunarRegent != null;
+        }
+
+        public bool TryApplyToZone(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
+            ZoneBonesAllocation.AllocationTypes Type,
+            out GameObject LunarRegent,
+            out bool Blocked,
+            Predicate<GameObject> AddWhenNot = null,
+            bool IgnoreLocationMismatch = false
+            )
+        {
+            LunarRegent = null;
+            Blocked = false;
+            if (!BeforePseudoZoneLoadedEvent.Check(Zone, BonesID, this, RECLAIM_CONTEXT))
+            {
+                Blocked = true;
+                return false;
+            }
+            if (!TryGetLunarParty(out _))
+            {
+                Utils.Error(
+                    Context: $"Attempted to apply PseudoZone without {nameof(LunarRegent)} to null {nameof(Zone)}",
+                    X: new InvalidOperationException($"Loading bones Zone must have {nameof(LunarRegent)}"));
+                //return false;
+            }
+            if (Zone == null)
+            {
+                Utils.Error($"Attempted to apply PseudoZone to null {nameof(Zone)}", new ArgumentNullException(nameof(Zone)));
+                return false;
+            }
+
+            var lunarParties = new Dictionary<string, LunarParty>();
+            using var crossGameObjects = ScopeDisposedList<CrossGameObject>.GetFromPool();
+
+            bool applied = Type switch
+            {
+                ZoneBonesAllocation.AllocationTypes.Zone => ApplyTypeZoneInternal(
+                    Zone: Zone,
+                    BonesInfo: BonesInfo,
+                    LunarRegent: ref LunarRegent,
+                    LunarParties: lunarParties,
+                    CrossGameObjects: crossGameObjects,
+                    AddWhenNot: AddWhenNot,
+                    IgnoreLocationMismatch: IgnoreLocationMismatch),
+
+                ZoneBonesAllocation.AllocationTypes.Bubble => ApplyTypeBubbleInternal(
+                    Zone: Zone,
+                    BonesInfo: BonesInfo,
+                    LunarRegent: ref LunarRegent,
+                    LunarParties: lunarParties,
+                    CrossGameObjects: crossGameObjects,
+                    AddWhenNot: AddWhenNot,
+                    IgnoreLocationMismatch: true),
+
+                ZoneBonesAllocation.AllocationTypes.Party => ApplyTypePartyInternal(
+                    Zone: Zone,
+                    BonesInfo: BonesInfo,
+                    LunarRegent: ref LunarRegent,
+                    LunarParties: lunarParties,
+                    CrossGameObjects: crossGameObjects,
+                    AddWhenNot: AddWhenNot,
+                    IgnoreLocationMismatch: true),
+
+                _ => false,
+            };
 
             if (LunarRegent == null
                 || !EarlyBeforeLoadLunarRegentEvent.Check(
@@ -962,21 +1262,21 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
                 return false;
             }
-            Utils.Log($"{nameof(TryApplyToZone)}: {nameof(LoadLunarRegentEvent)}");
+            //Utils.Log($"{nameof(TryApplyToZone)}: {nameof(LoadLunarRegentEvent)}");
             LoadLunarRegentEvent.Send(
                 Player: The.Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarRegent,
                 Context: RECLAIM_CONTEXT);
 
-            Utils.Log($"{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarRegentEvent)}");
+            //Utils.Log($"{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarRegentEvent)}");
             AfterLoadedLunarRegentEvent.Send(
                 Player: The.Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarRegent,
                 Context: RECLAIM_CONTEXT);
 
-            Utils.Log($"foreach ((var regentID, var lunarParty) in lunarParties.IteratorSafe())");
+            //Utils.Log($"foreach ((var regentID, var lunarParty) in lunarParties.IteratorSafe())");
             foreach ((var regentID, var lunarParty) in lunarParties.IteratorSafe())
             {
                 if (lunarParty.LunarRegent == null)
@@ -985,13 +1285,13 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 if (regentID != BonesID)
                     continue;
 
-                Utils.Log($"{1.Indent()}foreach (var lunarCourtier in lunarParty.LunarCourtiers.IteratorSafe())");
+                //Utils.Log($"{1.Indent()}foreach (var lunarCourtier in lunarParty.LunarCourtiers.IteratorSafe())");
                 using (var courtiersToRemove = ScopeDisposedList<GameObject>.GetFromPool())
                 {
                     foreach (var lunarCourtier in lunarParty.LunarCourtiers.IteratorSafe())
                     {
-                        Utils.Log($"{1.Indent()}{nameof(lunarCourtier)}: {lunarCourtier?.DebugName ?? "NO_COURTIER"}");
-                        Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(EarlyBeforeLoadLunarCourtierEvent)} & {nameof(BeforeLoadLunarCourtierEvent)}");
+                        //Utils.Log($"{1.Indent()}{nameof(lunarCourtier)}: {lunarCourtier?.DebugName ?? "NO_COURTIER"}");
+                        //Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(EarlyBeforeLoadLunarCourtierEvent)} & {nameof(BeforeLoadLunarCourtierEvent)}");
                         if (!EarlyBeforeLoadLunarCourtierEvent.Check(
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
@@ -1007,14 +1307,14 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                             continue;
                         }
 
-                        Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(LoadLunarCourtierEvent)}");
+                        //Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(LoadLunarCourtierEvent)}");
                         LoadLunarCourtierEvent.Send(
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
                             LunarRegent: LunarRegent,
                             Context: RECLAIM_CONTEXT);
 
-                        Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarCourtierEvent)}");
+                        //Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarCourtierEvent)}");
                         AfterLoadedLunarCourtierEvent.Send(
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
@@ -1035,6 +1335,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     || crossGameObject.Original is not GameObject original)
                     continue;
 
+                clone.ForfeitTurn();
+
                 if (crossGameObject.Clone == LunarRegent)
                     continue;
 
@@ -1054,9 +1356,65 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             crossGameObjects?.Clear();
 
+            if (LunarRegent != null)
+            {
+                if (!Zone.DisplayName.Contains("feverish"))
+                    Zone.DisplayName = $"feverish {Zone.DisplayName}";
+            }
+
             AfterPseudoZoneLoadedEvent.Send(Zone, BonesID, LunarRegent, this, RECLAIM_CONTEXT);
             return LunarRegent != null;
         }
+
+        public IEnumerable<PseudoCell> GetRegentBubble(int Radius, Predicate<PseudoCell> Where = null)
+        {
+            if (LunarParty?.LunarRegent is not PseudoAddress regentAddress)
+                yield break;
+
+            if (Radius < 0)
+                throw new ArgumentOutOfRangeException(nameof(Radius), "Must be positive number");
+
+            int startingX = Math.Clamp(regentAddress.X, Radius, Width - Radius);
+            int startingY = Math.Clamp(regentAddress.Y, Radius, Height - Radius);
+
+            if (GetCell(startingX, startingY) is not PseudoCell startingCell)
+                yield break;
+
+            foreach (var pseudoCell in GetCellsInACosmeticCircle(startingCell, Radius))
+                if (Where?.Invoke(pseudoCell) is not false)
+                    yield return pseudoCell;
+        }
+
+        public IEnumerable<PseudoCell> GetCellsInACosmeticCircle(int X, int Y, int Radius)
+        {
+            if (X < 0
+                || Y < 0)
+                yield break;
+
+            int yRadius = (int)Math.Max(1.0, Radius * 0.66);
+            float radiusSquared = Radius * Radius;
+            int minX = X - Radius;
+            int maxX = X + Radius;
+            int minY = Y - yRadius;
+            int maxY = Y + yRadius;
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    float xD = Math.Abs(x - X);
+                    float yD = Math.Abs(y - Y) * 1.3333f;
+                    float d = (xD * xD) + (yD * yD);
+
+                    if (radiusSquared > d 
+                        && GetCell(x, y) != null)
+                        yield return GetCell(x, y);
+                }
+            }
+        }
+
+        public IEnumerable<PseudoCell> GetCellsInACosmeticCircle(PseudoCell PseudoCell, int Radius)
+            => GetCellsInACosmeticCircle(PseudoCell?.X ?? -1, PseudoCell?.Y ?? -1, Radius)
+            ;
 
         public void Dispose()
         {

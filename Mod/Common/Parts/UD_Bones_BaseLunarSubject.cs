@@ -77,6 +77,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == TidyLunarObjectsEvent.ID
             || ID == AfterBonesZoneLoadedEvent.ID
+            || ID == AfterPseudoZoneLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
 
@@ -89,6 +90,15 @@ namespace XRL.World.Parts
             => base.HandleEvent(E);
 
         public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        {
+            if (E.BonesID == BonesID
+                && E.LunarRegent != null)
+                SetLunarRegentReference(E.LunarRegent);
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(AfterPseudoZoneLoadedEvent E)
         {
             if (E.BonesID == BonesID
                 && E.LunarRegent != null)

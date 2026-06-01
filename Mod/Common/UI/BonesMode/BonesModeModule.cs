@@ -200,7 +200,7 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public static string GetSeedFor(string Method, int? Iteration = null)
-            => $"{BONES_MODE}::{The.Game.GameID}:{Method}{(Iteration != null ? $":{Iteration}" : Iteration)}"
+            => $"{BONES_MODE}::{The.Game?.GameID}:{Method}{(Iteration != null ? $":{Iteration}" : Iteration)}"
             ;
 
         public static int SeededRandom(string Method, int Low, int High, int? Iteration = null)
@@ -1475,29 +1475,31 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                int maxTier = tier;
-                Location2D randomParasang = null;
-                int parasangTries = 0;
-                while (randomParasang == null
-                    && parasangTries++ < 25
+                int maxTier = Math.Max(1, tier + (overTier.Count / 2));
+                Location2D randomZone = null;
+                int zoneTries = 0;
+                while (randomZone == null
+                    && zoneTries++ < 25
                     && maxTier > 0)
-                    randomParasang = WorldBuilder.getLocationOfTier(Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 2, parasangTries)));
+                    randomZone = WorldBuilder.PeekLocationOfTier(Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 3, zoneTries)));
 
-                int xOffset = SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), -1, 1, 1);
-                int yOffset = SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), -1, 1, 2);
-                int zoneX = Math.Clamp(randomParasang.X + xOffset, 0, (80 * 3) - 1);
-                int zoneY = Math.Clamp(randomParasang.Y + yOffset, 0, (25 * 3) - 1);
-                var zoneReq = new ZoneRequest(WorldBuilder.ZoneIDFromXY("JoppaWorld", zoneX, zoneY));
+                randomZone ??= Location2D.Get(
+                    X: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_X, 1),
+                    Y: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_Y, 2));
+
+                var zoneReq = new ZoneRequest(WorldBuilder.ZoneIDFromXY("JoppaWorld", randomZone.X, randomZone.Y));
 
                 int overtierCount = overTier.Count;
 
                 int undergroundThreshold = 1500 + (overtierCount * 200);
-                int maxStrata = tier * (tier + 4);
-
-                if (tier >= 8)
-                    maxStrata = 998 + (overtierCount * 125);
 
                 if (SeededOddsIn10000(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), undergroundThreshold))
+                {
+                    int maxStrata = Math.Max(10 + tier * (tier + 4), 11);
+
+                    if (tier >= 8)
+                        maxStrata = 998 + (overtierCount * 125);
+
                     zoneReq = new(
                         WorldID: zoneReq.WorldID,
                         WorldX: zoneReq.WorldX,
@@ -1505,6 +1507,7 @@ namespace UD_Bones_Folder.Mod.UI
                         X: zoneReq.X,
                         Y: zoneReq.Y,
                         Z: GetNDisadvantage(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), 11, maxStrata, 6));
+                }
 
                 var destinationZone = The.ZoneManager.GetZone(zoneReq.ZoneID);
                 if (destinationZone != null)

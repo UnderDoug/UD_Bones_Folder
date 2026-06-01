@@ -22,6 +22,7 @@ using XRL.World.Capabilities;
 using XRL.World.Parts.Skill;
 using XRL.World.Parts.Mutation;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using UD_Bones_Folder.Mod.BonesSystem;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -299,12 +300,18 @@ namespace UD_Bones_Folder.Mod
             => (LunarPartyIDs = CacheLunarParty(BonesInfo)) != null
             ;
 
-        public bool Apply(Zone Zone, SaveBonesInfo BonesInfo, out GameObject LunarRegent, out bool Blocked)
+        public bool Apply(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
+            ZoneBonesAllocation.AllocationTypes Type,
+            out GameObject LunarRegent,
+            out bool Blocked
+            )
         {
             LunarRegent = null;
             Blocked = false;
 
-            Utils.Log($"{nameof(BonesData)}.{nameof(Apply)}({nameof(Zone)}: {Zone?.ZoneID ?? "NO_ZONE"})");
+            //Utils.Log($"{nameof(BonesData)}.{nameof(Apply)}({nameof(Zone)}: {Zone?.ZoneID ?? "NO_ZONE"})");
             if (Zone.GetZoneProperty(nameof(BonesID), null) is string existingBonesID)
             {
                 if (existingBonesID != BonesID)
@@ -317,38 +324,47 @@ namespace UD_Bones_Folder.Mod
                         $"Zone may have errors.");
             }
 
-            BonesManager.ZoneBones ??= new();
-            BonesManager.ZoneBones[Zone.ZoneID] = BonesID;
             Zone.SetZoneProperty(nameof(BonesID), BonesID);
             if (PseudoZone != null)
-                return ApplyPseudoZone(Zone, BonesInfo, out LunarRegent, out Blocked);
+                return ApplyPseudoZone(Zone, BonesInfo, Type, out LunarRegent, out Blocked);
 
             if (BonesZone != null)
-                return ApplyZone(Zone, out LunarRegent, BonesInfo.IsMad);
+                return ApplyZone(Zone, Type, out LunarRegent, BonesInfo.IsMad);
 
             return false;
         }
 
-        public bool ApplyPseudoZone(Zone Zone, SaveBonesInfo BonesInfo, out GameObject LunarRegent, out bool Blocked)
+        public bool ApplyPseudoZone(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
+            ZoneBonesAllocation.AllocationTypes Type,
+            out GameObject LunarRegent,
+            out bool Blocked
+            )
         {
             LunarRegent = null;
             Blocked = false;
             if (PseudoZone == null)
                 return false;
 
-            Utils.Log($"{nameof(BonesData)}.{nameof(ApplyPseudoZone)}({nameof(Zone)}: {Zone?.ZoneID ?? "NO_ZONE"})");
+            //Utils.Log($"{nameof(BonesData)}.{nameof(ApplyPseudoZone)}({nameof(Zone)}: {Zone?.ZoneID ?? "NO_ZONE"})");
             if (!PseudoZone.TryApplyToZone(
                 Zone: Zone,
                 BonesInfo: BonesInfo,
+                Type: Type,
                 LunarRegent: out LunarRegent,
-                out Blocked)
+                Blocked: out Blocked)
                 || Blocked)
                 return false;
 
             return true;
         }
 
-        public bool ApplyZone(Zone Zone, out GameObject LunarRegent, bool IsMad)
+        public bool ApplyZone(Zone Zone,
+            ZoneBonesAllocation.AllocationTypes Type,
+            out GameObject LunarRegent,
+            bool IsMad
+            )
         {
             LunarRegent = null;
             if (BonesZone == null)

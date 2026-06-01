@@ -18,8 +18,8 @@ namespace XRL.World.Parts
     public abstract class UD_Bones_BaseLunarPart
         : IScribedPart
         , ILunarObjectPart
+        , IPseudoZoneEventHandler
         , IModEventHandler<TidyLunarObjectsEvent>
-        , IModEventHandler<AfterBonesZoneLoadedEvent>
         , IModEventHandler<LunarObjectColorChangedEvent>
     {
         [Serializable]
@@ -210,6 +210,12 @@ namespace XRL.World.Parts
             }
             return base.HandleEvent(E);
         }
+
+        public virtual bool HandleEvent(BeforePseudoZoneLoadedEvent E)
+            => base.HandleEvent(E);
+
+        public virtual bool HandleEvent(AfterPseudoZoneLoadedEvent E)
+            => base.HandleEvent(E);
 
         public virtual bool HandleEvent(AfterBonesZoneLoadedEvent E)
             => base.HandleEvent(E);

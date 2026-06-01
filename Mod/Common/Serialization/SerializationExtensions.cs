@@ -457,5 +457,114 @@ namespace UD_Bones_Folder.Mod
         public static void FinalizeReadMetricsOff(this SerializationReader Reader)
             => OptionallyPerformSilently(() => Reader.FinalizeRead())
             ;
+
+        public static void WriteCompositeHashSet<T>(this SerializationWriter Writer, HashSet<T> CompositeHashSet)
+            where T : IComposite, new()
+        {
+            Writer.WriteOptimized(CompositeHashSet?.Count ?? -1);
+            foreach (var item in CompositeHashSet.IteratorSafe())
+                Writer.WriteComposite(item);
+        }
+
+        public static void WriteStringHashSet(this SerializationWriter Writer, HashSet<string> StringHashSet)
+        {
+            Writer.WriteOptimized(StringHashSet?.Count ?? -1);
+            foreach (var item in StringHashSet.IteratorSafe())
+                Writer.WriteOptimized(item);
+        }
+
+        public static void WriteIntHashSet(this SerializationWriter Writer, HashSet<int> IntHashSet)
+        {
+            Writer.WriteOptimized(IntHashSet?.Count ?? -1);
+            foreach (var item in IntHashSet.IteratorSafe())
+                Writer.WriteOptimized(item);
+        }
+
+        public static void WriteHashSet(this SerializationWriter Writer, HashSet<object> HashSet)
+        {
+            Writer.WriteOptimized(HashSet?.Count ?? -1);
+            foreach (var item in HashSet.IteratorSafe())
+                Writer.WriteObject(item);
+        }
+
+        public static void WriteSpecialHashSet<T>(
+            this SerializationWriter Writer,
+            HashSet<T> SpecialHashSet,
+            Action<SerializationWriter, T> WriteEach
+            )
+        {
+            Writer.WriteOptimized(SpecialHashSet?.Count ?? -1);
+            foreach (var item in SpecialHashSet.IteratorSafe())
+                WriteEach.Invoke(Writer, item);
+        }
+
+        public static HashSet<T> ReadCompositeHashSet<T>(this SerializationReader Reader)
+            where T : IComposite, new()
+        {
+            int count = Reader.ReadOptimizedInt32();
+            if (count < 0)
+                return null;
+
+            var output = new HashSet<T>(count);
+            for (int i = 0; i < count; i++)
+                output.Add(Reader.ReadComposite<T>());
+
+            return output;
+        }
+
+        public static HashSet<string> ReadStringHashSet(this SerializationReader Reader)
+        {
+            int count = Reader.ReadOptimizedInt32();
+            if (count < 0)
+                return null;
+
+            var output = new HashSet<string>(count);
+            for (int i = 0; i < count; i++)
+                output.Add(Reader.ReadOptimizedString());
+
+            return output;
+        }
+
+        public static HashSet<int> ReadIntHashSet(this SerializationReader Reader)
+        {
+            int count = Reader.ReadOptimizedInt32();
+            if (count < 0)
+                return null;
+
+            var output = new HashSet<int>(count);
+            for (int i = 0; i < count; i++)
+                output.Add(Reader.ReadOptimizedInt32());
+
+            return output;
+        }
+
+        public static HashSet<object> ReadHashSet(this SerializationReader Reader)
+        {
+            int count = Reader.ReadOptimizedInt32();
+            if (count < 0)
+                return null;
+
+            var output = new HashSet<object>(count);
+            for (int i = 0; i < count; i++)
+                output.Add(Reader.ReadObject());
+
+            return output;
+        }
+
+        public static HashSet<T> ReadSpecialHashSet<T>(
+            this SerializationReader Reader,
+            Func<SerializationReader, T> ReadEach
+            )
+        {
+            int count = Reader.ReadOptimizedInt32();
+            if (count < 0)
+                return null;
+
+            var output = new HashSet<T>(count);
+            for (int i = 0; i < count; i++)
+                output.Add(ReadEach.Invoke(Reader));
+
+            return output;
+        }
     }
 }

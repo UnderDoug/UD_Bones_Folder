@@ -75,7 +75,7 @@ namespace XRL.World.Parts
                     fileLocationDataDebugString = bonesInfo.FileLocationDataSet
                         .Aggregate(
                             seed: "",
-                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, n.TaggedDisplayName()))
+                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, n.TaggedDisplayName().Strip()))
                         ;
 
                 E.AddEntry(this, nameof(bonesInfo.FileLocationData), fileLocationDataDebugString);

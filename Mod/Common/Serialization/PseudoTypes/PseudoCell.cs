@@ -247,8 +247,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             ref GameObject LunarRegent,
             ref Dictionary<string, LunarParty> LunarParties,
             ScopeDisposedList<CrossGameObject> CrossGameObjects,
-            Predicate<GameObject> ExceptFor = null,
-            IEnumerable<GameObject> RemovalExclusions = null,
+            Predicate<GameObject> AddWhenNot = null,
+            Predicate<GameObject> RemovalExclusions = null,
             bool IgnoreLocationMismatch = false
             )
         {
@@ -266,15 +266,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return false;
             }
 
-            bool isUniqueOrExcluded(GameObject go)
-                => go.HasPart<GameUnique>()
-                || (RemovalExclusions?.Contains(go) is true)
-                ;
+            RemovalExclusions ??= go => false;
 
             Cell.Clear(
                 Important: true,
                 Combat: true,
-                alsoExclude: isUniqueOrExcluded);
+                alsoExclude: RemovalExclusions.Invoke);
 
             Cell.PaintTile = PaintTile;
             Cell.PaintTileColor = PaintTileColor;
@@ -287,7 +284,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             for (int i = 0; i < Objects.Count; i++)
             {
-                if (ExceptFor?.Invoke(Objects[i]?.GameObject) is true)
+                if (AddWhenNot?.Invoke(Objects[i]?.GameObject) is true)
                     continue;
 
                 if (Objects[i].PerformExtraction(
@@ -304,6 +301,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
                         if (bonesObject.IsLunarRegent(BonesID))
                         {
+                            if (LunarRegent != null
+                                && LunarRegent != bonesObject)
+                            {
+                                Utils.Warn($"Probable error loading {nameof(LunarRegent)} {bonesObject.DebugName}, " +
+                                    $"{nameof(LunarRegent)} already assigned {LunarRegent.DebugName}");
+                            }
                             LunarRegent = bonesObject;
                         }
 
@@ -312,7 +315,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                             LunarParties ??= new();
                             if (!LunarParties.TryGetValue(lunarRegentPart.BonesID, out var lunarParty))
                                 lunarParty = LunarParties[lunarRegentPart.BonesID] = new();
-                            lunarParty.LunarRegent = bonesObject;
+
+                            lunarParty.SetLunarRegent(bonesObject);
                         }
                         else
                         if (bonesObject.TryGetPart(out UD_Bones_LunarCourtier lunarCoutierPart))

@@ -44,6 +44,11 @@ namespace UD_Bones_Folder.Mod
         public const string LUNAR_RELIQUARY_BLUEPRINT = "Lunar Reliquary";
         public const string LUNAR_RELIQUARY_TRIGGERED = "UD_Bones_Reliquary_Triggered";
 
+        public const int MYRIAD = 10000;
+
+        public const int MAX_ZONE_X = 239;
+        public const int MAX_ZONE_Y = 74;
+
         public const string UNCHECKED = "[ ]";
         public const string CHECKED = "[■]";
 
