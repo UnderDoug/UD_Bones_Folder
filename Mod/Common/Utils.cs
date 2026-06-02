@@ -1018,7 +1018,7 @@ namespace UD_Bones_Folder.Mod
             var previousContext = The.CurrentContext;
 
             if (isGameInValidState)
-                await The.GameContext;
+                await The.UiContext;
 
             try
             {

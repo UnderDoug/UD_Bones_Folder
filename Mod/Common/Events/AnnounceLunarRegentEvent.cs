@@ -29,7 +29,9 @@ namespace UD_Bones_Folder.Mod.Events
             if (The.Player?.CurrentZone is not Zone zone
                 || Instance is not AnnounceLunarRegentEvent E)
             {
-                Utils.Error($"Attempted to send {nameof(AnnounceLunarRegentEvent)} for null Zone, Player, or event Instance", new InvalidOperationException("Must have a player object, zone it's in, and instance of event."));
+                Utils.Error(
+                    Context: $"Attempted to send {nameof(AnnounceLunarRegentEvent)} for null Zone, Player, or event Instance",
+                    X: new InvalidOperationException("Must have a player object, zone it's in, and instance of event."));
                 return;
             }
 

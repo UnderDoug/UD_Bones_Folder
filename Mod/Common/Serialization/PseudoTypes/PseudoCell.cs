@@ -168,6 +168,9 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     || !Cell.ShouldWrite(gameObject))
                     continue;
 
+                if (gameObject.HasPropertyOrTag(Const.NO_SAVE_BONES_PROP))
+                    continue;
+
                 pseudoCell.Objects ??= new();
                 pseudoCell.Objects.Add(new(pseudoCell, gameObject, objectCounter++));
             }

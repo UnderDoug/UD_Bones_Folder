@@ -10,6 +10,7 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.Events;
 using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.UI;
 
 using XRL;
 using XRL.Collections;
@@ -935,14 +936,14 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         private bool ApplyTypeBubbleInternal(
             Zone Zone,
             SaveBonesInfo BonesInfo,
+            int Radius,
             ref GameObject LunarRegent,
             Dictionary<string, LunarParty> LunarParties,
             ScopeDisposedList<CrossGameObject> CrossGameObjects,
             Predicate<GameObject> AddWhenNot = null,
             bool IgnoreLocationMismatch = false)
         {
-            int radius = 4;
-            using var bubble = ScopeDisposedList<PseudoCell>.GetFromPoolFilledWith(GetRegentBubble(radius));
+            using var bubble = ScopeDisposedList<PseudoCell>.GetFromPoolFilledWith(GetRegentBubble(Radius));
 
             using var availableZoneCells = ScopeDisposedList<Cell>.GetFromPoolFilledWith(Zone.LoopCells());
 
@@ -954,7 +955,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     protectedObjects.Add(zoneObject);
                     if (!availableZoneCells.IsNullOrEmpty())
                     {
-                        var cellsNearObject = zoneObject.CurrentCell.GetCellsInACosmeticCircleSilent(radius);
+                        var cellsNearObject = zoneObject.CurrentCell.GetCellsInACosmeticCircleSilent(Radius);
                         availableZoneCells.RemoveAll(c => cellsNearObject.Contains(c));
                     }
                 }
@@ -962,10 +963,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             availableZoneCells.RemoveAll(delegate (Cell cell)
             {
-                return cell.X < radius - 1
-                    || cell.X > cell.ParentZone.Width - radius
-                    || cell.Y < radius - 1
-                    || cell.Y > cell.ParentZone.Height - radius
+                return cell.X < Radius - 1
+                    || cell.X > cell.ParentZone.Width - Radius
+                    || cell.Y < Radius - 1
+                    || cell.Y > cell.ParentZone.Height - Radius
                     ;
             });
 
@@ -977,10 +978,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 availableZoneCells.AddRange(Zone.LoopCells());
                 availableZoneCells.RemoveAll(delegate (Cell cell)
                 {
-                    return cell.X < radius
-                        || cell.X >= cell.ParentZone.Width - radius
-                        || cell.Y < radius
-                        || cell.Y >= cell.ParentZone.Height - radius
+                    return cell.X < Radius
+                        || cell.X >= cell.ParentZone.Width - Radius
+                        || cell.Y < Radius
+                        || cell.Y >= cell.ParentZone.Height - Radius
                         ;
                 });
                 targetCell = availableZoneCells.GetRandomElement(Stat.GetSeededRandomGenerator($"{Const.MOD_PREFIX}{Zone.ZoneID}"));
@@ -992,7 +993,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return false;
             }
 
-            using var targetBubble = ScopeDisposedList<Cell>.GetFromPoolFilledWith(targetCell.GetCellsInACosmeticCircleSilent(radius));
+            using var targetBubble = ScopeDisposedList<Cell>.GetFromPoolFilledWith(targetCell.GetCellsInACosmeticCircleSilent(Radius));
 
             if (targetBubble.Count != bubble.Count)
             {
@@ -1222,6 +1223,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 ZoneBonesAllocation.AllocationTypes.Bubble => ApplyTypeBubbleInternal(
                     Zone: Zone,
                     BonesInfo: BonesInfo,
+                    Radius: Stat.SeededRandom($"{nameof(ApplyTypeBubbleInternal)}::{BonesID}:Radius", 4, 8),
                     LunarRegent: ref LunarRegent,
                     LunarParties: lunarParties,
                     CrossGameObjects: crossGameObjects,

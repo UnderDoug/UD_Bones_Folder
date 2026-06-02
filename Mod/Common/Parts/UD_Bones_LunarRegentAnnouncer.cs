@@ -11,11 +11,12 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 
 using Options = UD_Bones_Folder.Mod.Options;
+using SerializeField = UnityEngine.SerializeField;
 
 namespace XRL.World.Parts
 {
     [Serializable]
-    public class UD_Bones_MoonKingAnnouncer
+    public class UD_Bones_LunarRegentAnnouncer
         : UD_Bones_BaseLunarSubject
         , IModEventHandler<AnnounceLunarRegentEvent>
     {
@@ -52,15 +53,18 @@ namespace XRL.World.Parts
 
         public bool IsMad;
 
-        public GameObject MoonKing => ParentObject.CurrentZone.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
+        [SerializeField]
+        private bool LoggedNotFound;
 
-        public UD_Bones_MoonKingAnnouncer()
+        public override GameObject LunarRegent => ParentObject?.CurrentZone?.GetFirstObject(go => go.GetPart<UD_Bones_LunarRegent>()?.BonesID == BonesID);
+
+        public UD_Bones_LunarRegentAnnouncer()
             : base()
         {
             Persists = true;
         }
 
-        public UD_Bones_MoonKingAnnouncer(
+        public UD_Bones_LunarRegentAnnouncer(
             string BonesID,
             string Title,
             string Message)
@@ -71,28 +75,34 @@ namespace XRL.World.Parts
             this.Message = Message;
         }
 
-        public void Announce()
+        public bool Announce()
         {
             if (!GameObject.Validate(ParentObject))
-                return;
+                return false;
 
-            if (MoonKing == null)
-                Utils.Error($"Failed to find moon king with BonesID {BonesID}.");
+            if (LunarRegent == null)
+            {
+                if (!LoggedNotFound)
+                {
+                    LoggedNotFound = true;
+                    Utils.Error($"Failed to find Lunar Regent with BonesID {BonesID}.");
+                }
+            }
 
             if (ParentObject.CurrentZone == The.Player.CurrentZone
                 && !Title.IsNullOrEmpty()
                 && !Message.IsNullOrEmpty()
-                && MoonKing != null)
+                && LunarRegent != null)
             {
                 try
                 {
-                    var render = new BonesRender(MoonKing.RenderForUI("SaveBonesInfo", true));
+                    var render = new BonesRender(LunarRegent.RenderForUI("SaveBonesInfo", true));
 
                     string message;
 
                     string title;
 
-                    if (!MoonKing.IsMad())
+                    if (!LunarRegent.IsMad())
                     {
                         message = Message;
                         title = Title;
@@ -105,13 +115,13 @@ namespace XRL.World.Parts
 
                     title = title
                         .StartReplace()
-                        .AddObject(MoonKing)
+                        .AddObject(LunarRegent)
                         .AddObject(The.Player)
                         .ToString();
 
                     message = message
                         .StartReplace()
-                        .AddObject(MoonKing)
+                        .AddObject(LunarRegent)
                         .AddObject(The.Player)
                         .ToString();
 
@@ -124,13 +134,15 @@ namespace XRL.World.Parts
                             afterRender: new FlippableRender(render, false),
                             PopupID: $"{nameof(BonesZoneBuilder)}::{BonesManager.BonesFileName}");
                     }
-                    $"{title} {message}".StartReplace().AddObject(MoonKing).EmitMessage(AlwaysVisible: true);
+                    $"{title} {message}".StartReplace().AddObject(LunarRegent).EmitMessage(AlwaysVisible: true);
+                    return true;
                 }
                 finally
                 {
                     ParentObject?.Obliterate();
                 }
             }
+            return false;
         }
 
         public override bool WantEvent(int ID, int Cascade)
@@ -147,27 +159,37 @@ namespace XRL.World.Parts
         {
             if (E.Context.StartsWith($"{nameof(BonesID)}::"))
             {
-                Utils.Log($"{nameof(UD_Bones_MoonKingAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context})");
-                OverrideBonesIDTyped<UD_Bones_MoonKingAnnouncer>(E.Context.Split("::")[1]);
+                Utils.Log($"{nameof(UD_Bones_LunarRegentAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context})");
+                OverrideBonesIDTyped<UD_Bones_LunarRegentAnnouncer>(E.Context.Split("::")[1]);
             }
             return base.HandleEvent(E);
         }
 
         public virtual bool HandleEvent(AnnounceLunarRegentEvent E)
         {
-            Announce();
+            if (Announce())
+                return true;
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(ZoneActivatedEvent E)
+        {
+            if (Announce())
+                return true;
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(EndTurnEvent E)
         {
-            Announce();
+            if (Announce())
+                return true;
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(EarlyBeforeBeginTakeActionEvent E)
         {
-            Announce();
+            if (Announce())
+                return true;
             return base.HandleEvent(E);
         }
 

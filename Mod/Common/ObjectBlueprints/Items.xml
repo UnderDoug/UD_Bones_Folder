@@ -36,6 +36,7 @@
     <part Name="UD_Bones_LunarReliquary" IsProtected="true" WantsToBeDropped="true" WantsRemoveOnDamage="false" />
     <part Name="UD_Bones_LunarColors" />
     <part Name="Unreplicable" />
+    <part Name="Interesting" />
     <removepart Name="AICryptHelpBroadcaster" />
     <tag Name="UD_Bones_Folder_IsMad" Value="true" />
     <tag Name="Tier" Value="8" />

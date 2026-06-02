@@ -74,7 +74,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public void UnsetCellForSerialization()
         {
             OriginalCell = GameObject?.CurrentCell;
-            OriginalCell?.RemoveObject(GameObject, System: true, Silent: true, Repaint: false, FlushTransient: false);
+            //OriginalCell?.RemoveObject(GameObject, System: true, Silent: true, Repaint: false, FlushTransient: false);
 
             if (GameObject?.Physics is Physics physics)
                 physics._CurrentCell = null;
@@ -82,7 +82,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
         public void ResetCellForSerialization()
         {
-            OriginalCell?.AddObject(GameObject, System: true, Silent: true, Repaint: false, FlushTransient: false);
+            //OriginalCell?.AddObject(GameObject, System: true, Silent: true, Repaint: false, FlushTransient: false);
 
             if (GameObject?.Physics is Physics physics)
                 physics._CurrentCell = OriginalCell;

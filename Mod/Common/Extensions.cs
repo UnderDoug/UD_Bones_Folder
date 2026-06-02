@@ -2033,16 +2033,20 @@ namespace UD_Bones_Folder.Mod
             return count == trueCount;
         }
 
-        public static Location2D PeekLocationOfTier(this JoppaWorldBuilder Builder, int tier)
+        public static Location2D PeekLocationOfTier(
+            this JoppaWorldBuilder Builder,
+            int Tier,
+            bool MutableOnly = true
+            )
         {
-            List<Location2D> locations;
+            List<Location2D> parasangs;
             int attempts = 0;
-            while (!Builder.worldInfo.tierLocations.TryGetValue(tier, out locations))
+            while (!Builder.worldInfo.tierLocations.TryGetValue(Tier, out parasangs))
             {
-                Utils.Warn($"Couldn't find location of tier {tier}");
-                tier--;
-                if (tier < 1)
-                    tier = 8;
+                Utils.Warn($"Couldn't find location of tier {Tier}");
+                Tier--;
+                if (Tier < 1)
+                    Tier = 8;
 
                 attempts++;
                 if (attempts > 9)
@@ -2050,28 +2054,15 @@ namespace UD_Bones_Folder.Mod
             }
 
             using var locationZones = ScopeDisposedList<Location2D>.GetFromPool();
-            foreach (var location in locations)
+            foreach (var parasang in parasangs)
             {
-                for (int i = 0; i < 3; i++)
-                {
-                    for (int j = 0; j < 3; j++)
-                    {
-                        int xOffset = i - 1;
-                        int yOffset = j - 1;
-                        int offsetX = location.X + xOffset;
-                        int offsetY = location.Y + yOffset;
-
-                        if (offsetX != Math.Clamp(offsetX, 0, Const.MAX_ZONE_X)
-                            || offsetY != Math.Clamp(offsetY, 0, Const.MAX_ZONE_Y))
-                            continue;
-
-                        locationZones.Add(Location2D.Get(offsetX, offsetY));
-                    }
-                }
+                foreach (var location in parasang.YieldParasangZoneLocations())
+                    locationZones.Add(location);
             }
             locationZones.ShuffleInPlace();
             foreach (var location in locationZones.IteratorSafe())
-                if (Builder.mutableMap.GetMutable(location) > 0)
+                if (!MutableOnly
+                    || Builder.mutableMap.GetMutable(location) > 0)
                     return location;
 
             return null;

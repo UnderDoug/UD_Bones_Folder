@@ -79,7 +79,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
 
             foreach (var zonePart in ZoneParts.IteratorSafe())
             {
-                if (!Allocation.ZoneParts.IteratorSafe().Any(p => p.Name == zonePart))
+                if (Allocation.ZoneParts.IteratorSafe().Any(p => p.Name == zonePart))
                 {
                     Utils.Log($"{2.Indent()}{nameof(Zone)} {Zone} {nameof(HasMatchingZonePart)}: {zonePart}");
                     return true;

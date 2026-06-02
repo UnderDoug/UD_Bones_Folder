@@ -24,7 +24,7 @@ using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World.Parts;
 
-using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
+using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.UI.Framework.Event;
 

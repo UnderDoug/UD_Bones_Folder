@@ -444,13 +444,13 @@ namespace UD_Bones_Folder.Mod
         public static explicit operator Renderable(BonesRender BonesRender)
             => new(BonesRender);
 
-        public static explicit operator UD_Bones_MoonKingAnnouncer.FlippableRender(BonesRender BonesRender)
+        public static explicit operator UD_Bones_LunarRegentAnnouncer.FlippableRender(BonesRender BonesRender)
             => new(BonesRender, BonesRender.HFlip);
 
         public static explicit operator BonesRender(Renderable Renderable)
             => new(Renderable, HFlip: false);
 
-        public static explicit operator BonesRender(UD_Bones_MoonKingAnnouncer.FlippableRender FlippableRender)
+        public static explicit operator BonesRender(UD_Bones_LunarRegentAnnouncer.FlippableRender FlippableRender)
             => new(FlippableRender, HFlip: FlippableRender.HFlip);
     }
 }

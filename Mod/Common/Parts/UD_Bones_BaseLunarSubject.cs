@@ -24,7 +24,7 @@ namespace XRL.World.Parts
         protected GameObjectReference LunarRegentReference => _LunarRegentReference ??= new();
 
         public int LunarRegentBaseID => LunarRegent?.BaseID ?? -1;
-        public GameObject LunarRegent
+        public virtual GameObject LunarRegent
             => LunarRegentReference.TryEnsureObject(out GameObject lunarRegent)
             ? lunarRegent
             : null

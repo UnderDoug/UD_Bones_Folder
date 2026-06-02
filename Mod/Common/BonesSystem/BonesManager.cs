@@ -1320,7 +1320,7 @@ namespace UD_Bones_Folder.Mod
                     return false;
                 }
 
-                Z.GetCell(0, 0).AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_MoonKingAnnouncer.BonesID)}::{bonesID}");
+                Z.GetCell(0, 0).AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_LunarRegentAnnouncer.BonesID)}::{bonesID}");
                 EncounteredBones(bonesID);
 
                 try

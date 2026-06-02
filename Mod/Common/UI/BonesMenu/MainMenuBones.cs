@@ -22,7 +22,7 @@ using XRL.UI;
 using XRL.UI.Framework;
 using XRL.Wish;
 
-using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
+using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using KeyCode = UnityEngine.KeyCode;
 

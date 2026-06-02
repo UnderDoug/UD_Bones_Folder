@@ -38,6 +38,7 @@ namespace UD_Bones_Folder.Mod
         public const string IS_MAD_PROP = MOD_PREFIX + "IsMad";
         public const string IS_BROKEN_PROP = MOD_PREFIX + "LunarRegent_Broken";
         public const string LOADED_BONES_PROP = MOD_PREFIX + "Loaded_BonesID";
+        public const string NO_SAVE_BONES_PROP = MOD_PREFIX + "No_Save_Bones";
 
         public const string REPORT_LOADED_BONES_COMMAND = "Cmd_" + MOD_PREFIX + "ReportLoadedBonesID";
 

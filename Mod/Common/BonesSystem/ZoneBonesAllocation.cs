@@ -140,6 +140,9 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 {
                     nameof(IsCheckpoint),
                     nameof(MapBuilder),
+                    nameof(AddLocationFinder),
+                    nameof(InteractWithAnObjectDynamicQuestTemplate_FabricateQuestGiver),
+                    nameof(FindASpecificSiteDynamicQuestTemplate_FabricateQuestGiver),
                     nameof(Waterway),
                     nameof(IdolFight),
                     nameof(MinorRazedGoatfolkVillage),

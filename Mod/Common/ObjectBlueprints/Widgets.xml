@@ -2,7 +2,7 @@
 <objects>
   <object Name="UD_Bones_Folder Lunar Announcer" Inherits="Widget">
     <part Name="Render" DisplayName="[Lunar Announcer Widget]" />
-    <part Name="UD_Bones_MoonKingAnnouncer"
+    <part Name="UD_Bones_LunarRegentAnnouncer"
           Title="=subject.A.RegalTitle= =subject.verb:Persist:afterpronoun=!"
           Message="=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
           MadTitle="=subject.A.RegalTitle:Mad= =subject.verb:Persist:afterpronoun=!"

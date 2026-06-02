@@ -1481,7 +1481,13 @@ namespace UD_Bones_Folder.Mod.UI
                 while (randomZone == null
                     && zoneTries++ < 25
                     && maxTier > 0)
-                    randomZone = WorldBuilder.PeekLocationOfTier(Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 3, zoneTries)));
+                {
+                    int zoneTier = Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 3, zoneTries));
+                    randomZone = WorldBuilder
+                        .PeekLocationOfTier(
+                            Tier: zoneTier,
+                            MutableOnly: false);
+                }
 
                 randomZone ??= Location2D.Get(
                     X: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_X, 1),

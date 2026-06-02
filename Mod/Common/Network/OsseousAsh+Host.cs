@@ -29,7 +29,7 @@ using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
 
 using static UD_Bones_Folder.Mod.Const;
-using static XRL.World.Parts.UD_Bones_MoonKingAnnouncer;
+using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.World.Event;
 

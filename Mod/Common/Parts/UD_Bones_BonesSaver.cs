@@ -100,10 +100,18 @@ namespace XRL.World.Parts
             GameObject lunarRegent = null;
             try
             {
+                lunarRegent = Player.DeepCopy(CopyEffects: true, CopyID: false);
+                lunarRegent.RemoveIntProperty("Renamed");
+                lunarRegent.RemoveStringProperty("OriginalPlayerBody");
+                lunarRegent.SetStringProperty("CloneOfGenes", Player.GeneID);
+
+                WasReplicatedEvent.Send(Player, Player, lunarRegent, nameof(AscendLunarRegent));
+                ReplicaCreatedEvent.Send(lunarRegent, Player, Player, nameof(AscendLunarRegent));
+
                 lunarRegent = GetLunarRegentEvent.GetFor(
                     Player: Player,
                     TargetCell: TargetCell,
-                    LunarRegent: Player.DeepCopy(),
+                    LunarRegent: lunarRegent,
                     Context: nameof(AscendLunarRegent));
             }
             catch (Exception x)
@@ -296,8 +304,6 @@ namespace XRL.World.Parts
             if (E.LunarObject is GameObject lunarRegent)
             {
                 lunarRegent.GiveProperName(E.Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
-
-                lunarRegent.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
 
                 lunarRegent.RestorePristineHealth();
 
