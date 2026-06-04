@@ -276,6 +276,12 @@ namespace UD_Bones_Folder.Mod
             && FileLocationData.Exists()
             ;
 
+        public bool IsDownloaded
+            => /*!IsYou
+            && */GetBonesJSON() is SaveBonesJSON bonesJSON
+            && bonesJSON.Downloaded.GetValueOrDefault()
+            ;
+
         protected bool? _IsBlocked;
         public bool IsBlocked => _IsBlocked ??= OsseousAsh.IsBonesBlocked(ID);
 

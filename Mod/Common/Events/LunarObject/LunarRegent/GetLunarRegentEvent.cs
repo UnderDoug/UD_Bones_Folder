@@ -61,15 +61,17 @@ namespace UD_Bones_Folder.Mod.Events
             return true;
         }
 
-        protected static GetLunarRegentEvent FromPool(
+        protected static GetLunarRegentEvent Configure(
             GameObject Player,
             Cell TargetCell,
             GameObject LunarRegent,
             string Context
             )
         {
-            if (FromPool() is not GetLunarRegentEvent E)
+            if (Instance is not GetLunarRegentEvent E)
                 return null;
+
+            Instance.Reset();
 
             E.Player = Player;
             E.TargetCell = TargetCell;
@@ -89,7 +91,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (FromPool(
+            if (Configure(
                 Player: Player,
                 TargetCell: TargetCell,
                 LunarRegent: LunarRegent,

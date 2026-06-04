@@ -45,6 +45,9 @@ namespace UD_Bones_Folder.Mod
         [JsonProperty]
         public BonesSpec BonesSpec;
 
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public bool? Downloaded;
+
         [JsonProperty]
         public FileLocationData.LocationType FileLocationType;
 

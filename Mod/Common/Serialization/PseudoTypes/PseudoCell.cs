@@ -291,7 +291,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     continue;
 
                 if (Objects[i].PerformExtraction(
-                    BonesID: BonesID,
+                    BonesInfo: BonesInfo,
                     OriginObjects: ParentZone.YieldObjects(),
                     DestinationObjects: Cell.ParentZone.YieldObjects(),
                     CrossGameObject: out var crossGameObject) is GameObject bonesObject)

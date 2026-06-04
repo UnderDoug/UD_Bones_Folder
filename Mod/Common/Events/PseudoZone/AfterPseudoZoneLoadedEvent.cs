@@ -23,14 +23,14 @@ namespace UD_Bones_Folder.Mod.Events
             LunarRegent = null;
         }
 
-        public static AfterPseudoZoneLoadedEvent FromPool(
+        public static AfterPseudoZoneLoadedEvent Configure(
             string BonesID,
             GameObject LunarRegent,
             PseudoZone PseudoZone,
             string Context = null
             )
         {
-            if (FromPool(
+            if (Configure(
                 BonesID: BonesID,
                 PseudoZone: PseudoZone,
                 Context: Context) is not AfterPseudoZoneLoadedEvent E)
@@ -94,7 +94,7 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null
             )
         {
-            if (FromPool(
+            if (Configure(
                 BonesID: BonesID,
                 PseudoZone: PseudoZone,
                 LunarRegent: LunarRegent,

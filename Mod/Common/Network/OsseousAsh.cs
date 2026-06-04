@@ -1448,6 +1448,8 @@ namespace UD_Bones_Folder.Mod
             if (Report == null)
                 return false;
 
+            // Report.SeverityLevelOption = Options.ModerationMinimumSeverityLevel;
+
             try
             {
                 bool any = false;

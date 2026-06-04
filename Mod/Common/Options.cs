@@ -10,6 +10,7 @@ using Platform.IO;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.UI;
 
 using UnityEngine;
@@ -41,6 +42,30 @@ namespace UD_Bones_Folder.Mod
         // General Settings
         [OptionFlag] public static bool EnableFlashingLightEffects;
         [OptionFlag] public static bool EnableBonesFromEarlierModVersions;
+
+        public static BadWord.SeverityLevel ModerationMinimumSeverityLevel;
+        [OptionFlag(nameof(ModerationMinimumSeverityLevel))] private static int _ModerationMinimumSeverityLevel
+        {
+            set
+            {
+                var originalOption = ModerationMinimumSeverityLevel;
+                ModerationMinimumSeverityLevel = Math.Clamp(value, (int)BadWord.SeverityLevel.All, (int)BadWord.SeverityLevel.None) switch
+                {
+                    0 => BadWord.SeverityLevel.All,
+                    1 => BadWord.SeverityLevel.Mild,
+                    2 => BadWord.SeverityLevel.Medium,
+                    3 => BadWord.SeverityLevel.Strong,
+                    4 => BadWord.SeverityLevel.Severe,
+                    5 => BadWord.SeverityLevel.None,
+                    _ => BadWord.DefaultSeverity,
+                };
+                if (originalOption != ModerationMinimumSeverityLevel)
+                {
+                    BadWord.FilterResultCache?.Clear();
+                    BadWord.FilterResultCache ??= new();
+                }
+            }
+        }
 
         private static int _ChosenPermyriadChance;
         [OptionFlag] public static int ChosenPermyriadChance

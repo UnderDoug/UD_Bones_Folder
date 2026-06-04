@@ -1479,7 +1479,10 @@ namespace UD_Bones_Folder.Mod
                             {
                                 var saveBonesJSONs = JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
                                 foreach (var saveBonesJSON in saveBonesJSONs)
+                                {
+                                    saveBonesJSON.Downloaded = true;
                                     saveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
+                                }
 
                                 return saveBonesJSONs;
                             }

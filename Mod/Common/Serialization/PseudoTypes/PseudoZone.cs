@@ -73,7 +73,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public int Height;
 
         /// <summary>
-        /// [<see cref="Width"/>][<see cref="Height"/>]
+        /// Emulation of <see cref="Zone.Map"/> using <see cref="PseudoCell"/> instead, coords are [<see cref="Width"/> (<see cref="PseudoCell.X"/>)][<see cref="Height"/> (<see cref="PseudoCell.Y"/>)]
         /// </summary>
         public PseudoCell[][] Map;
 
@@ -592,6 +592,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public GameObject GetAtAddress(
             PseudoAddress Address,
             bool Extract = false,
+            SaveBonesInfo BonesInfo = null,
             IEnumerable<GameObject> DestinationObjects = null
             )
         {
@@ -619,12 +620,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             if (!Extract)
                 return pseudoGameObject.GameObject;
             else
-                return pseudoGameObject.PerformExtraction(BonesID, YieldObjects(), DestinationObjects.IteratorSafe(), out _);
+            if (BonesInfo != null)
+                return pseudoGameObject.PerformExtraction(BonesInfo, YieldObjects(), DestinationObjects.IteratorSafe(), out _);
+            else
+                return null;
         }
 
         public HashSet<GameObject> GetAtAddresses(
             IEnumerable<PseudoAddress> Addresses,
-            bool Extract = false
+            bool Extract = false,
+            SaveBonesInfo BonesInfo = null
             )
         {
             if (Addresses.IsNullOrEmpty())
@@ -634,7 +639,11 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             foreach (var address in Addresses)
             {
-                if (GetAtAddress(address, Extract, gameObjectSet) is GameObject gameObject)
+                if (GetAtAddress(
+                    Address: address,
+                    Extract: Extract,
+                    BonesInfo: BonesInfo,
+                    DestinationObjects: gameObjectSet) is GameObject gameObject)
                 {
                     gameObjectSet ??= new();
                     gameObjectSet.Add(gameObject);
@@ -657,8 +666,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             var lunarParty = new LunarParty
             {
-                LunarRegent = GetAtAddress(LunarParty.LunarRegent, Extract: true),
-                LunarCourtiers = GetAtAddresses(LunarParty.LunarCourtiers, Extract: true),
+                LunarRegent = GetAtAddress(LunarParty.LunarRegent, Extract: true, BonesInfo),
+                LunarCourtiers = GetAtAddresses(LunarParty.LunarCourtiers, Extract: true, BonesInfo),
             };
 
             if (lunarParty.LunarRegent == null)

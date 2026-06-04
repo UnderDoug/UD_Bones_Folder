@@ -101,7 +101,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         }
 
         public GameObject PerformExtraction(
-            string BonesID,
+            SaveBonesInfo BonesInfo,
             IEnumerable<GameObject> OriginObjects,
             IEnumerable<GameObject> DestinationObjects,
             out CrossGameObject CrossGameObject
@@ -125,7 +125,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
                         go.AddPart(new UD_Bones_ReportBones
                         {
-                            LoadedBonesID = BonesID,
+                            LoadedBonesID = BonesInfo.ID,
                             SerializedBaseID = serializedBaseID,
                         });
                     }
@@ -135,7 +135,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 ;
             CrossGameObject.Clone.ApplyRegistrar();
 
-            CrossGameObject.Clone.TryFeverWarp(BonesID);
+            CrossGameObject.Clone.TryFeverWarp(BonesInfo);
 
             if (CrossGameObject.Clone.TryGetPart(out GivesRep givesRep))
                 givesRep.wasParleyed = false;

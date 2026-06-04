@@ -227,6 +227,30 @@
     </helptext>
   </option>
   <option
+        ID="UD_Bones_Folder_ModerationMinimumSeverityLevel"
+        DisplayText="Choose profanity filter minimum severity level for {{Y|online}} bones files."
+        Category="Mod: Bones"
+        Type="Combo"
+        Default="3"
+        Values="0|everything,1|mild,2|medium,3|strong,4|severe,5|no filter">
+    <helptext>
+      Sets the minimum severity of the profanity filter used when deserializing bones files from online locations. Any text components which have &quot;bad words&quot; will cause the object to be &quot;fever warped&quot; (the same process as when it is missing integral components from unenabled mods), and the offending text component to be replaced with an alternative from the base game.
+
+      {{c|&#x7;}} everything - all deserialized objects will be treated as though they contain &quot;bad words&quot;*.
+      {{c|&#x7;}} mild - even the least offensive profanity will be filtered.
+      {{c|&#x7;}} medium - most profanity will be filtered.
+      {{c|&#x7;}} strong - default, as recommended by the compiler of the list.
+      {{c|&#x7;}} severe - only the most offensive words will be filtered.
+      {{c|&#x7;}} no filter - objects will be untouched by the profanity filter.
+
+      *these won't be entirely &quot;fever warped&quot;, unless they would otherwise have been.
+
+      If you find an online bones file that contains content that you believe the filter has missed, please use the ingame &quot;report bones&quot; inventory action (same place you'd [{{W|l}}]ook at something) to report the bones file to the server admin of any server it's avaialble on, and don't hesitate to reach out to the mod author on the {{b-b-b-y-b sequence|steam}} workshop.
+
+      The default is {{W|strong}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_EnableFlashingLightEffects"
         DisplayText="Enable flashing light effects."
         Category="Mod: Bones"

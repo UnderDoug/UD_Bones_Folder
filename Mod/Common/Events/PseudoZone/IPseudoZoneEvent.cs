@@ -9,7 +9,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod.Events
 {
-    public abstract class IPseudoZoneEvent<T> : ModPooledEvent<T>
+    public abstract class IPseudoZoneEvent<T> : ModSingletonEvent<T>
         where T : IPseudoZoneEvent<T>, new()
     {
         public new static readonly int CascadeLevel = CASCADE_ALL;
@@ -64,6 +64,9 @@ namespace UD_Bones_Folder.Mod.Events
             StringyEvent.SetParameter(nameof(PseudoZone), PseudoZone);
             StringyEvent.SetParameter(nameof(Context), Context);
 
+            if (InterfaceExitRequested())
+                StringyEvent.RequestInterfaceExit();
+
             return true;
         }
 
@@ -76,17 +79,22 @@ namespace UD_Bones_Folder.Mod.Events
             PseudoZone = StringyEvent.GetParameter<PseudoZone>(nameof(PseudoZone));
             Context = StringyEvent.GetStringParameter(nameof(Context));
 
+            if (StringyEvent.InterfaceExitRequested())
+                RequestInterfaceExit();
+
             return true;
         }
 
-        public static T FromPool(
+        public static T Configure(
             string BonesID,
             PseudoZone PseudoZone,
             string Context = null
             )
         {
-            if (FromPool() is not T E)
+            if (Instance is not T E)
                 return null;
+
+            Instance.Reset();
 
             E.BonesID = BonesID;
             E.PseudoZone = PseudoZone;
@@ -215,7 +223,7 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null
             )
         {
-            if (FromPool(
+            if (Configure(
                 BonesID: BonesID,
                 PseudoZone: PseudoZone,
                 Context: Context) is not T E)
@@ -247,7 +255,7 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null
             )
         {
-            if (FromPool(
+            if (Configure(
                 BonesID: BonesID,
                 PseudoZone: PseudoZone,
                 Context: Context) is not T E)
@@ -287,7 +295,7 @@ namespace UD_Bones_Folder.Mod.Events
             if (The.Game is not XRLGame game)
                 return null;
 
-            if (FromPool(
+            if (Configure(
                 BonesID: BonesID ?? game.GameID,
                 PseudoZone: PseudoZone,
                 Context: Context) is not T E)

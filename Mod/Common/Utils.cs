@@ -58,6 +58,9 @@ namespace UD_Bones_Folder.Mod
 
         public const double FPS_MODULO = 8.0;
 
+        private static StringMap<exTextureInfo> _SpriteManagerPathMap;
+        public static StringMap<exTextureInfo> SpriteManagerPathMap => _SpriteManagerPathMap ??= GetSpriteManagerPathMapNaughty();
+
         public static double CurrentFrame => UD_Bones_LunarColors.GetCurrentAnimationFrame();
         public static double CurrentKeyframe => UD_Bones_LunarColors.GetCurrentAnimationKeyframe();
 
@@ -199,7 +202,7 @@ namespace UD_Bones_Folder.Mod
                 try
                 {
                     if ((GameObject?.HasIntProperty("Tier") is true)
-                        || (GameObject?.HasIntProperty("TechTIer") is true))
+                        || (GameObject?.HasIntProperty("TechTier") is true))
                     {
                         Tiers = new();
                         if (GameObject?.GetIntPropertyIfSet("Tier") is int tier)
@@ -962,7 +965,8 @@ namespace UD_Bones_Folder.Mod
         public static exTextureInfo GetSpriteManagerInvalidInfoNaughty(string DebugForTile = null)
         {
             string fieldName = "InvalidInfo";
-            exTextureInfo textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp"); // this is what it defaults to at the time this was written
+            var textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp"); // this is what it defaults to at the time this was written
+            var invalidTextureInfo = textureInfo;
             // Log($"{nameof(GetSpriteManagerInvalidInfoNaughty)}({nameof(DebugForTile)}: {DebugForTile ?? "NO_TILE"})");
             try
             {
@@ -977,14 +981,44 @@ namespace UD_Bones_Folder.Mod
             catch (ArgumentOutOfRangeException x)
             {
                 Error(nameof(GetSpriteManagerInvalidInfoNaughty), x);
-                textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp");
+                textureInfo = invalidTextureInfo;
             }
             catch (InvalidCastException x)
             {
                 Error(nameof(GetSpriteManagerInvalidInfoNaughty), x);
-                textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp");
+                textureInfo = invalidTextureInfo;
             }
             return textureInfo;
+        }
+
+        public static StringMap<exTextureInfo> GetSpriteManagerPathMapNaughty()
+        {
+            string fieldName = "PathMap";
+            StringMap<exTextureInfo> pathMap = null;
+            // Log($"{nameof(GetSpriteManagerPathMapNaughty)}");
+            try
+            {
+                var field = typeof(SpriteManager).GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+                    ?? throw new ArgumentOutOfRangeException("name", $"Field \"{fieldName}\" was not found in {nameof(Type)} {typeof(SpriteManager)}");
+
+                if (!typeof(StringMap<exTextureInfo>).IsAssignableFrom(field.FieldType))
+                    throw new InvalidCastException($"{fieldName} field in {nameof(Type)} {typeof(SpriteManager)} is {field.FieldType.Name} which cannot be cast to {typeof(StringMap<exTextureInfo>)}");
+
+                pathMap = field.GetValue(null) as StringMap<exTextureInfo>;
+                if (pathMap != null)
+                    Log($"{nameof(GetSpriteManagerPathMapNaughty)}: retrieved.");
+            }
+            catch (ArgumentOutOfRangeException x)
+            {
+                Error(nameof(GetSpriteManagerPathMapNaughty), x);
+                pathMap = null;
+            }
+            catch (InvalidCastException x)
+            {
+                Error(nameof(GetSpriteManagerPathMapNaughty), x);
+                pathMap = null;
+            }
+            return pathMap;
         }
 
         public static bool TileExists(string Tile)
@@ -1018,11 +1052,19 @@ namespace UD_Bones_Folder.Mod
             var previousContext = The.CurrentContext;
 
             if (isGameInValidState)
-                await The.UiContext;
+                await The.GameContext;
 
             try
             {
-                if (SpriteManager.GetTextureInfo(Tile, false) == null)
+
+                if (isGameInValidState)
+                    if (SpriteManagerPathMap is StringMap<exTextureInfo> pathMap)
+                    return pathMap.TryGetValue(Tile, out var textureInfo)
+                        && textureInfo is not null
+                        && textureInfo != GetSpriteManagerInvalidInfoNaughty(Tile)
+                        ;
+
+                if (SpriteManager.GetTextureInfo(Tile, false) is null)
                     return false;
 
                 if (SpriteManager.GetTextureInfo(Tile) == GetSpriteManagerInvalidInfoNaughty(Tile))
@@ -1030,9 +1072,9 @@ namespace UD_Bones_Folder.Mod
             }
             finally
             {
-                if (isGameInValidState
-                    && The.CurrentContext != previousContext)
-                    await previousContext;
+                if (isGameInValidState)
+                    if (The.CurrentContext != previousContext)
+                        await previousContext;
             }
             return true;
         }

@@ -45,14 +45,14 @@ namespace UD_Bones_Folder.Mod.Events
             return true;
         }
 
-        protected static T FromPool(
+        protected static T Configure(
             SaveBonesInfo BonesInfo,
             GameObject LunarObject,
             GameObject LunarRegent,
             string Context
             )
         {
-            if (FromPool(
+            if (Configure(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Context: Context) is not T E)
@@ -74,7 +74,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (FromPool(
+            if (Configure(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 LunarRegent: LunarRegent,

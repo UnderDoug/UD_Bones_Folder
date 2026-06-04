@@ -654,8 +654,10 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void ClearHasSaveBones()
-            => _HasSaveBones = null
-            ;
+        {
+            _HasSaveBones = null;
+            UD_Bones_BrokenLunarRegent.ClearCachedSaveBonesInfo();
+        }
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfoAsync(bool IncludeVersionIncompatible = false)
             => await GetSaveBonesInfoAsync(null, IncludeVersionIncompatible: IncludeVersionIncompatible)

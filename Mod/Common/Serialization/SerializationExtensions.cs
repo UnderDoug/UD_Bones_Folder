@@ -150,10 +150,11 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Reader.ReadGameObjectMetricsOff() is GameObject gameObject)
                 {
-                    if (gameObject.NeedsFeverWarped(out bool tileOnly))
+                    if (gameObject.NeedsFeverWarped(out bool tileOnly, out bool hasBadWord, out _, out _))
                     {
                         gameObject.SetStringProperty(nameof(UD_Bones_FeverWarped), $"{true}");
                         gameObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", $"{tileOnly}");
+                        gameObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::HasBadWord", $"{hasBadWord}");
                     }
                     cell.Objects.Add(gameObject);
                     Reader.Locations[gameObject] = cell;

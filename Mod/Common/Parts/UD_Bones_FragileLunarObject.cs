@@ -429,12 +429,17 @@ namespace XRL.World.Parts
             return base.HandleEvent(E);
         }
 
-        public virtual bool HandleEvent(AfterPseudoZoneLoadedEvent E)
+        public override bool HandleEvent(AfterPseudoZoneLoadedEvent E)
         {
-            if (!TryBeDropped())
-                AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterPseudoZoneLoadedEvent)}");
+            if (base.HandleEvent(E))
+            {
+                if (!TryBeDropped())
+                    AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterPseudoZoneLoadedEvent)}");
 
-            return base.HandleEvent(E);
+                return true;
+            }
+
+            return false;
         }
 
         public override bool HandleEvent(GetDebugInternalsEvent E)

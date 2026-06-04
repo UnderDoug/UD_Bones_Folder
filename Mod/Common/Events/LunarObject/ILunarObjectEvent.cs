@@ -7,7 +7,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod.Events
 {
-    public abstract class ILunarObjectEvent<T> : ModPooledEvent<T>
+    public abstract class ILunarObjectEvent<T> : ModSingletonEvent<T>
         where T : ILunarObjectEvent<T>, new()
     {
         public new static readonly int CascadeLevel = CASCADE_ALL;
@@ -82,6 +82,9 @@ namespace UD_Bones_Folder.Mod.Events
             StringyEvent.SetParameter(nameof(LunarObject), LunarObject);
             StringyEvent.SetParameter(nameof(Context), Context);
 
+            if (InterfaceExitRequested())
+                StringyEvent.RequestInterfaceExit();
+
             return true;
         }
 
@@ -94,17 +97,22 @@ namespace UD_Bones_Folder.Mod.Events
             LunarObject = StringyEvent.GetGameObjectParameter(nameof(LunarObject));
             Context = StringyEvent.GetStringParameter(nameof(Context));
 
+            if (StringyEvent.InterfaceExitRequested())
+                RequestInterfaceExit();
+
             return true;
         }
 
-        protected static T FromPool(
+        protected static T Configure(
             SaveBonesInfo BonesInfo,
             GameObject LunarObject,
             string Context
             )
         {
-            if (FromPool() is not T E)
+            if (Instance is not T E)
                 return null;
+
+            Instance.Reset();
 
             E.BonesInfo = BonesInfo;
             E.LunarObject = LunarObject;
@@ -229,7 +237,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (FromPool(
+            if (Configure(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Context: Context) is not T E)

@@ -367,6 +367,7 @@ namespace XRL.World.Parts
                 FrameDuration = AnimationFrameDuration,
                 LengthInFrames = AnimationLengthInFrames,
             };
+
             if (TryGetLunarColorPair(
                 E: ref animationEvent,
                 TileColor: out TileColor,

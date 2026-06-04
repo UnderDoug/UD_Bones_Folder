@@ -16,6 +16,8 @@ using UD_Bones_Folder.Mod.Events;
 using SerializeField = UnityEngine.SerializeField;
 using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
+using UD_Bones_Folder.Mod.Moderation;
+using XRL.Names;
 
 namespace XRL.World.Parts
 {
@@ -36,14 +38,25 @@ namespace XRL.World.Parts
         protected string DisplayNameCache;
         protected string AdjectiveCache;
 
+        public bool HasBadWord;
+        public BadWord.SeverityLevel BadWordSeverityOption;
+        public BadDisplayName BadWordName;
+        public bool BadWordDesc;
+
+        public bool NoTileColorEffects => HasBadWord
+            && BadWordSeverityOption >= BadWord.SeverityLevel.All
+            ;
+
         public UD_Bones_FeverWarped()
         {
+            BadWordSeverityOption = Options.ModerationMinimumSeverityLevel;
         }
 
-        public UD_Bones_FeverWarped(bool TileOnly)
+        public UD_Bones_FeverWarped(bool TileOnly, bool HasBadWord)
             : this()
         {
-            this.TileOnly = TileOnly;
+            this.TileOnly = !HasBadWord && TileOnly;
+            this.HasBadWord = HasBadWord;
         }
 
         public static UD_Bones_FeverWarped NewCosmeticOnly()
@@ -114,6 +127,66 @@ namespace XRL.World.Parts
 
                 if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
                     render.VFlip = true;
+            }
+
+            if (HasBadWord)
+            {
+                if (BadWordName != null)
+                {
+                    if (BadWordName.IsBase)
+                    {
+                        string replacementName = ParentObject.GetBlueprint()?.DisplayName();
+                        if (ParentObject.IsLunarRegent()
+                            || replacementName.IsNullOrEmpty())
+                            replacementName = NameMaker.MakeName(ParentObject);
+
+                        ParentObject.DisplayName = replacementName;
+                    }
+
+                    if (BadWordName.IsAdjective)
+                        ParentObject?.RemovePart<DisplayNameAdjectives>();
+
+                    if (BadWordName.IsSizeAdjective)
+                        ParentObject?.RemovePart<SizeAdjective>();
+
+                    if (BadWordName.IsFactionAdjective)
+                        ParentObject?.RemovePart<DisplayNameFactionAdjective>();
+
+                    if (BadWordName.IsHonorific)
+                    {
+                        ParentObject.RemovePart<Honorifics>();
+                        if (ParentObject?.RequirePart<Honorifics>() is Honorifics honorifics)
+                            honorifics.Primary = NameMaker.MakeHonorific(ParentObject);
+                    }
+
+                    if (BadWordName.IsTitle)
+                    {
+                        ParentObject.RemovePart<Titles>();
+                        if (ParentObject?.RequirePart<Titles>() is Titles titles)
+                            titles.Primary = NameMaker.MakeTitle(ParentObject);
+                    }
+
+                    if (BadWordName.IsEpithet)
+                    {
+                        ParentObject.RemovePart<Epithets>();
+                        if (ParentObject?.RequirePart<Epithets>() is Epithets epithets)
+                            epithets.Primary = NameMaker.MakeEpithet(ParentObject);
+                    }
+                }
+
+                if (BadWordDesc
+                    && ParentObject != null
+                    && ParentObject.TryGetPart(out Description description))
+                {
+                    OriginalShortDesc = ParentObject.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description._Short));
+
+                    string bakedDescription = OriginalShortDesc
+                        .StartReplace()
+                        .AddObject(ParentObject)
+                        .ToString();
+
+                    description._Short = FeverWarpText(bakedDescription);
+                }
             }
         }
 
@@ -352,14 +425,17 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
         {
-            if (Options.EnableFlashingLightEffects
-                || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
+            if (!NoTileColorEffects)
             {
-                DisplayNameCache = null;
-                AdjectiveCache = null;
+                if (Options.EnableFlashingLightEffects
+                    || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
+                {
+                    DisplayNameCache = null;
+                    AdjectiveCache = null;
+                }
+                TileColor = E.TileColor;
+                DetailColor = E.DetailColor;
             }
-            TileColor = E.TileColor;
-            DetailColor = E.DetailColor;
             return base.HandleEvent(E);
         }
 
@@ -367,6 +443,12 @@ namespace XRL.World.Parts
         {
             E.AddEntry(this, "Adjective", GetAdjective());
             E.AddEntry(this, "Description", GetDescription());
+            E.AddEntry(this, nameof(TileOnly), TileOnly);
+            E.AddEntry(this, nameof(CosmeticOnly), CosmeticOnly);
+            E.AddEntry(this, nameof(HasBadWord), HasBadWord);
+            E.AddEntry(this, nameof(BadWordSeverityOption), $"{(int)BadWordSeverityOption} ({BadWordSeverityOption})");
+            E.AddEntry(this, nameof(BadWordName), BadWordName.DebugStrings().IteratorSafe().Aggregate("", Utils.NewLineDelimitedAggregator));
+            E.AddEntry(this, nameof(BadWordDesc), BadWordDesc);
             return base.HandleEvent(E);
         }
 

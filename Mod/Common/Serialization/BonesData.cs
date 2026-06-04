@@ -179,7 +179,7 @@ namespace UD_Bones_Folder.Mod
                             bonesObject.ApplyRegistrar();
 
                             catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.TryFeverWarp(BonesID);
+                            bonesObject.TryFeverWarp(BonesInfo);
 
                             if (bonesObject.TryGetPart(out GivesRep givesRep))
                                 givesRep.wasParleyed = false;
@@ -329,7 +329,7 @@ namespace UD_Bones_Folder.Mod
                 return ApplyPseudoZone(Zone, BonesInfo, Type, out LunarRegent, out Blocked);
 
             if (BonesZone != null)
-                return ApplyZone(Zone, Type, out LunarRegent, BonesInfo.IsMad);
+                return ApplyZone(Zone, BonesInfo, Type, out LunarRegent, BonesInfo.IsMad);
 
             return false;
         }
@@ -360,7 +360,9 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-        public bool ApplyZone(Zone Zone,
+        public bool ApplyZone(
+            Zone Zone,
+            SaveBonesInfo BonesInfo,
             ZoneBonesAllocation.AllocationTypes Type,
             out GameObject LunarRegent,
             bool IsMad
@@ -429,7 +431,7 @@ namespace UD_Bones_Folder.Mod
                             bonesObject.ApplyRegistrar();
 
                             catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.TryFeverWarp(BonesID);
+                            bonesObject.TryFeverWarp(BonesInfo);
 
                             if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
                             {

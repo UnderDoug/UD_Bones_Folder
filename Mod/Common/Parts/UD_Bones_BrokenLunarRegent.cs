@@ -49,6 +49,14 @@ namespace XRL.World.Parts
 
         private AllegianceSet OriginalAllegience;
 
+        public UD_Bones_BrokenLunarRegent()
+        { }
+
+        public static void ClearCachedSaveBonesInfo()
+        {
+            CachedSaveBonesInfo = null;
+        }
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_LATE);

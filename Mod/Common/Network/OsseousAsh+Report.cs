@@ -12,6 +12,8 @@ using Newtonsoft.Json.Converters;
 
 using Platform.IO;
 
+using UD_Bones_Folder.Mod.Moderation;
+
 using UnityEngine;
 
 using XRL;
@@ -103,6 +105,9 @@ namespace UD_Bones_Folder.Mod
             public int ID;
 
             public Guid OsseousAshID;
+
+            // [JsonConverter(typeof(StringEnumConverter))]
+            // public BadWord.SeverityLevel SeverityLevelOption = Options.ModerationMinimumSeverityLevel;
 
             public string BonesID;
 
