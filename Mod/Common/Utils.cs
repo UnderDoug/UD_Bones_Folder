@@ -91,6 +91,9 @@ namespace UD_Bones_Folder.Mod
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static HashSet<string> CachedBlueprints = new();
 
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        public static Dictionary<string, Mod.BlueprintSpec> CachedBlueprintSpecs = new();
+
         [ModSensitiveCacheInit]
         public static void CacheBlueprintsBySpec()
         {
@@ -98,6 +101,13 @@ namespace UD_Bones_Folder.Mod
 
             foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom("PhysicalObject"))
             {
+                CachedBlueprintSpecs ??= new();
+                if (!CachedBlueprintSpecs.TryGetValue(blueprint.Name, out var cachedSpec))
+                {
+                    if (Mod.BlueprintSpec.TryCreateFrom(blueprint, out cachedSpec))
+                        CachedBlueprintSpecs[blueprint.Name] = cachedSpec;
+                }
+
                 string catchFlag = "0 - Top";
                 try
                 {

@@ -271,7 +271,7 @@ namespace UD_Bones_Folder.Mod
 
             if (SaveRow.imageTinyFrame.ThreeColor)
                 SaveRow.imageTinyFrame.ThreeColor.SetHFlip(Value: false);
-            
+
             SaveRow.imageTinyFrame.Sync(force: true);
         }
 
@@ -2211,5 +2211,25 @@ namespace UD_Bones_Folder.Mod
 
             return false;
         }
+
+        public static bool TryGetPartBlueprint<T>(this GameObjectBlueprint Model, out GamePartBlueprint Result)
+            where T : IPart
+        {
+            Result = null;
+            if (Model.Parts.IsNullOrEmpty())
+                return false;
+
+            return Model.Parts.TryGetValue(typeof(T).Name, out Result)
+                ;
+        }
+
+        public static bool IsNullOrDefault([NotNullWhen(false)] this int? value)
+            => value == null
+            || value == (int)default
+            ;
+
+        public static string NameOrMissing(this GameObjectBlueprint Blueprint)
+            => Blueprint?.Name ?? "MISSING_BLUEPRINT"
+            ;
     }
 }

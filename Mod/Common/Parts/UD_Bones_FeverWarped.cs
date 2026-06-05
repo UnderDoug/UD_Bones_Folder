@@ -115,18 +115,31 @@ namespace XRL.World.Parts
                     Blueprint: out string altBlueprint,
                     Tile: out string altTile);
 
-                if (!TileOnly)
-                    ParentObject.Blueprint = altBlueprint;
+                BlueprintSpec blueprintSpec = null;
+                if (!ParentObject.TryGetPart(out UD_Bones_BlueprintSpec blueprintSpecPart))
+                    blueprintSpec = blueprintSpecPart.BlueprintSpec;
+                else
+                    blueprintSpec = new BlueprintSpec(ParentObject);
 
-                render.Tile = altTile;
+                if (BonesManager.System.RequireReplacementEntryForGameObject(blueprintSpec) is ReplacementEntry replacementEntry)
+                {
+                    replacementEntry.ApplyTo(ParentObject, true, !TileOnly);
+                }
+                else
+                {
+                    if (!TileOnly)
+                        ParentObject.Blueprint = altBlueprint;
 
-                string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
+                    render.Tile = altTile;
 
-                if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
-                    render.HFlip = true;
+                    string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
 
-                if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
-                    render.VFlip = true;
+                    if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
+                        render.HFlip = true;
+
+                    if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
+                        render.VFlip = true;
+                }
             }
 
             if (HasBadWord)

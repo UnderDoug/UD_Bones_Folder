@@ -33,23 +33,18 @@ namespace UD_Bones_Folder.Mod.Serialization
 
         public override void Write(SerializationWriter Writer)
         {
-            Writer.WriteOptimized(Amount);
-            for (int i = 0; i < Length; i++)
-            {
-                if (Slots[i].Key != null)
-                {
-                    Writer.WriteOptimized(Slots[i].Key);
-                    Writer.WriteComposite(Slots[i].Value);
-                }
-            }
+            Writer.WriteComposite(this as IDictionary<string, T>);
         }
 
         public override void Read(SerializationReader Reader)
         {
-            int amount = Reader.ReadOptimizedInt32();
-            Resize(amount);
-            for (int i = 0; i < amount; i++)
-                InsertInternal(Reader.ReadOptimizedString(), Reader.ReadComposite<T>());
+            var dictionary = Reader.ReadCompositeValues<string, T>();
+            if (dictionary != null)
+            {
+                Resize(dictionary.Count);
+                foreach ((string key, T value) in dictionary)
+                    InsertInternal(key, value);
+            }
         }
     }
 }

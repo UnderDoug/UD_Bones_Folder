@@ -1,7 +1,10 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+
+using FuzzySharp;
 
 using XRL;
 using XRL.Collections;
@@ -11,13 +14,398 @@ using XRL.World.Parts;
 
 namespace UD_Bones_Folder.Mod
 {
+    [HasModSensitiveStaticCache]
     [Serializable]
     public class BlueprintSpec : IComposite, IDisposable
     {
+        [Serializable]
+        public class DistanceRecord : IComposite, IDisposable
+        {
+            [Serializable]
+            public class EqualityComparer
+                : EqualityComparer<DistanceRecord>
+                , IComposite
+                , IDisposable
+            {
+                public virtual bool WantFieldReflection => false;
+
+                protected bool Strict;
+
+                public EqualityComparer()
+                { }
+
+                public EqualityComparer(bool Strict)
+                    : this()
+                {
+                    this.Strict = Strict;
+                }
+
+                public virtual void Write(SerializationWriter Writer)
+                {
+                    Writer.Write(Strict);
+                }
+
+                public virtual void Read(SerializationReader Reader)
+                {
+                    Strict = Reader.ReadBoolean();
+                }
+
+                public bool IsStrict()
+                    => Strict
+                    ;
+
+                public override bool Equals(DistanceRecord x, DistanceRecord y)
+                    => x is null
+                        || y is null
+                    ? (x is null) == (y is null)
+                    : x.SameAs(y, Strict)
+                    ;
+
+                public override int GetHashCode(DistanceRecord obj)
+                    => obj?.ToString()?.GetHashCode()
+                    ?? 0
+                    ;
+
+                public void Dispose()
+                {
+                    Strict = default;
+                }
+            }
+
+            [Serializable]
+            public class Comparer
+                : Comparer<DistanceRecord>
+                , IComposite
+                , IDisposable
+            {
+                public virtual bool WantFieldReflection => false;
+
+                protected bool LeastSimilarFirst;
+
+                protected int Multi => GetMulti(LeastSimilarFirst);
+
+                public Comparer()
+                { }
+
+                public Comparer(bool LeastSimilarFirst)
+                    : this()
+                {
+                    this.LeastSimilarFirst = LeastSimilarFirst;
+                }
+
+                public virtual void Write(SerializationWriter Writer)
+                {
+                    Writer.Write(LeastSimilarFirst);
+                }
+
+                public virtual void Read(SerializationReader Reader)
+                {
+                    LeastSimilarFirst = Reader.ReadBoolean();
+                }
+
+                public bool IsLeastSimilarFirst()
+                    => LeastSimilarFirst
+                    ;
+
+                protected static int GetMulti(bool LeastSimilarFirst)
+                    => LeastSimilarFirst
+                    ? 1
+                    : -1
+                    ;
+
+                protected static int FilterValue(int Value, int Multi)
+                    => Value * Multi
+                    ;
+
+                protected int FilterValue(int Value)
+                    => FilterValue(Value, Multi)
+                    ;
+
+                public static int Compare(DistanceRecord x, DistanceRecord y, bool LeastSimilarFirst)
+                    => x is null
+                        || y is null
+                    ? (x is null).CompareTo(y is null)
+                    : FilterValue(x.Distance.CompareTo(y.Distance), GetMulti(LeastSimilarFirst))
+                    ;
+
+                public override int Compare(DistanceRecord x, DistanceRecord y)
+                    => Compare(x, y, LeastSimilarFirst)
+                    ;
+
+                public void Dispose()
+                {
+                    LeastSimilarFirst = default;
+                }
+            }
+
+            public static DistanceRecord Empty => new DistanceRecord
+            {
+                Other = null,
+                Distance = MAX_DIST,
+            };
+
+            public BlueprintSpec Other;
+            public int Distance;
+
+            public bool IsEmpty()
+                => ToString() == Empty.ToString()
+                ;
+
+            public static string GetKey(BlueprintSpec BlueprintSpec)
+                => $"{BlueprintSpec?.Blueprint ?? "NULL"}"
+                ;
+
+            public override string ToString()
+                => GetKey(Other)
+                ;
+
+            public string DebugString()
+                => $"{this}@{Distance}"
+                ;
+
+            public bool Matches(string Key)
+                => (Key.IsNullOrEmpty() 
+                    && IsEmpty())
+                || Key == ToString()
+                ;
+
+            public bool SameAs(DistanceRecord Other, bool Strict = false)
+                => (!Strict
+                    && Matches(Other?.ToString()))
+                || DebugString() == Other?.DebugString();
+
+            public bool Matches(BlueprintSpec Other)
+                => Matches(Other.ToString())
+                ;
+
+            public static DistanceRecord MakeFor(BlueprintSpec Primary, BlueprintSpec Other)
+                => Primary != null
+                ? new DistanceRecord
+                {
+                    Other = Other,
+                    Distance = Primary.GetDistanceFrom(Other),
+                }
+                : Empty
+                ;
+
+            public static bool TryMakeFor(BlueprintSpec Primary, BlueprintSpec Other, out DistanceRecord Result)
+                => !(Result = MakeFor(Primary, Other)).IsEmpty()
+                ;
+
+            public static bool TryGetFor(BlueprintSpec Primary, BlueprintSpec Other, out DistanceRecord Result)
+            {
+                // Key needs to be a bit more complex than just the blueprint name so that conflicts of blueprint name don't result in
+                // the functional merging of the conflicting blueprints.
+
+                Result = Empty;
+                if (Primary == null)
+                    return false;
+
+                DistanceCache ??= new();
+                string primaryKey = Primary.Blueprint;
+                string otherKey = GetKey(Other);
+                if (!DistanceCache.TryGetValue(primaryKey, out var results))
+                {
+                    results = new();
+                    DistanceCache[primaryKey] = results;
+                }
+                if (!results.TryGetValue(otherKey, out Result))
+                {
+                    Result = MakeFor(Primary, Other);
+                    results[otherKey] = Result;
+                }
+                return !results[otherKey].IsEmpty();
+            }
+
+            public static DistanceRecord RentFor(BlueprintSpec Primary, BlueprintSpec Other)
+            {
+                if (TryGetFor(Primary, Other, out var Result))
+                    return Result.Clone();
+
+                return Empty;
+            }
+
+            public DistanceRecord Clone()
+                => new DistanceRecord
+                {
+                    Other = new(Other),
+                    Distance = Distance,
+                };
+
+            public DistanceRecord CopyFrom(DistanceRecord Source)
+            {
+                Other = new(Source.Other);
+                Distance = Source.Distance;
+                return this;
+            }
+
+            public int GetWeight(int MaxDistance)
+                => Distance != MAX_DIST
+                ? Math.Clamp(MaxDistance - Distance, 0, MaxDistance)
+                : 0
+                ;
+
+            public void Clear()
+            {
+                Other = null;
+                Distance = 0;
+            }
+
+            public void Dispose()
+            {
+                Clear();
+            }
+
+            public static implicit operator KeyValuePair<string, int>(DistanceRecord Operand)
+                => new(GetKey(Operand?.Other), Operand?.Distance ?? MAX_DIST)
+                ;
+        }
+
+        [Serializable]
+        public class EqualityComparer
+            : EqualityComparer<BlueprintSpec>
+            , IComposite
+            , IDisposable
+        {
+            public virtual bool WantFieldReflection => false;
+
+            protected bool BlueprintOnly;
+
+            public EqualityComparer()
+            { }
+
+            public EqualityComparer(bool BlueprintOnly)
+                : this()
+            {
+                this.BlueprintOnly = BlueprintOnly;
+            }
+
+            public virtual void Write(SerializationWriter Writer)
+            {
+                Writer.Write(BlueprintOnly);
+            }
+
+            public virtual void Read(SerializationReader Reader)
+            {
+                BlueprintOnly = Reader.ReadBoolean();
+            }
+
+            public override bool Equals(BlueprintSpec x, BlueprintSpec y)
+            {
+                if (x is null
+                    || y is null)
+                    return (x is null) == (y is null);
+
+                if (BlueprintOnly)
+                    return x.Blueprint == y.Blueprint;
+
+                return x.SameAs(y);
+            }
+
+            public override int GetHashCode(BlueprintSpec obj)
+                => obj?.ToString()?.GetHashCode()
+                ?? 0
+                ;
+
+            public void Dispose()
+            {
+                BlueprintOnly = default;
+            }
+        }
+
+        [Serializable]
+        public class Comparer
+            : Comparer<BlueprintSpec>
+            , IComposite
+            , IDisposable
+        {
+            public virtual bool WantFieldReflection => false;
+
+            protected static DistanceRecord.Comparer DistanceComparer = BlueprintSpec.DistanceComparer;
+
+            protected BlueprintSpec Primary;
+            protected bool LeastSimilarFirst;
+
+            public Comparer(BlueprintSpec Primary)
+            {
+                this.Primary = Primary;
+            }
+
+            public Comparer(BlueprintSpec Primary, bool LeastSimilarFirst)
+                : this(Primary)
+            {
+                this.LeastSimilarFirst = LeastSimilarFirst;
+            }
+
+            public virtual void Write(SerializationWriter Writer)
+            {
+                Writer.WriteComposite(Primary);
+                Writer.Write(LeastSimilarFirst);
+            }
+
+            public virtual void Read(SerializationReader Reader)
+            {
+                Primary = Reader.ReadComposite<BlueprintSpec>();
+                LeastSimilarFirst = Reader.ReadBoolean();
+            }
+
+            public BlueprintSpec GetPrimary()
+                => Primary
+                ;
+
+            public bool IsLeastSimilarFirst()
+                => LeastSimilarFirst
+                ;
+
+            public static int Compare(BlueprintSpec x, BlueprintSpec y, BlueprintSpec Primary, bool LeastSimilarFirst)
+            {
+                if (x is null
+                    || y is null)
+                    return (x is null).CompareTo(y is null);
+
+                if (!DistanceRecord.TryGetFor(Primary, x, out var xSpecDistance))
+                    xSpecDistance = DistanceRecord.Empty;
+
+                if (!DistanceRecord.TryGetFor(Primary, y, out var ySpecDistance))
+                    ySpecDistance = DistanceRecord.Empty;
+
+                return DistanceRecord.Comparer.Compare(xSpecDistance, ySpecDistance, LeastSimilarFirst);
+            }
+
+            public int Compare(BlueprintSpec x, BlueprintSpec y, BlueprintSpec Primary)
+                => Compare(x, y, Primary, LeastSimilarFirst)
+                ;
+
+            public int Compare(BlueprintSpec x, BlueprintSpec y, bool LeastSimilarFirst)
+                => Compare(x, y, Primary, LeastSimilarFirst)
+                ;
+
+            public override int Compare(BlueprintSpec x, BlueprintSpec y)
+                => Compare(x, y, Primary, LeastSimilarFirst)
+                ;
+
+            public void Dispose()
+            {
+                LeastSimilarFirst = default;
+            }
+        }
+
+        public static DistanceRecord.EqualityComparer DistanceEqualityComparer => new(Strict: false);
+
+        public static DistanceRecord.Comparer DistanceComparer => new(LeastSimilarFirst: false);
+
+        public static EqualityComparer DefaultEqualityComparer => new(BlueprintOnly: false);
+
+
         public const string IMPROVISED_WEAPON = "ImprovisedWeapon";
 
         public static string TRUE => $"{true}";
         public static string FALSE => $"{false}";
+
+        public const int MAX_DIST = 9999;
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        public static Dictionary<string, Dictionary<string, DistanceRecord>> DistanceCache = new();
 
         public string DebugName;
         public string Blueprint;
@@ -40,6 +428,45 @@ namespace UD_Bones_Folder.Mod
         public string PaintedWall;
         public string PaintedFence;
 
+        public bool IsEmpty
+            => Category == null
+            && Tier == null
+            && TechTier == null
+            && WeaponSkills == null
+            && EquipmentSlots == null
+            && Species == null
+            && Class == null
+            && Role == null
+            && PaintedWall == null
+            && PaintedFence == null
+            ;
+
+        public bool IsWildCard
+            => IsFieldWildCard(ref Category)
+            && IsFieldWildCard(ref Tier)
+            && IsFieldWildCard(ref TechTier)
+            && IsFieldWildCard(ref WeaponSkills)
+            && IsFieldWildCard(ref EquipmentSlots)
+            && IsFieldWildCard(ref Species)
+            && IsFieldWildCard(ref Class)
+            && IsFieldWildCard(ref Role)
+            && IsFieldWildCard(ref PaintedWall)
+            && IsFieldWildCard(ref PaintedFence)
+            ;
+
+        public bool IsAll
+            => !Category.IsNullOrEmpty()
+            && !Tier.IsNullOrDefault()
+            && !TechTier.IsNullOrDefault()
+            && !WeaponSkills.IsNullOrEmpty()
+            && !EquipmentSlots.IsNullOrEmpty()
+            && !Species.IsNullOrEmpty()
+            && !Class.IsNullOrEmpty()
+            && !Role.IsNullOrEmpty()
+            && !PaintedWall.IsNullOrEmpty()
+            && !PaintedFence.IsNullOrEmpty()
+            ;
+
         public BlueprintSpec()
         { }
 
@@ -56,19 +483,21 @@ namespace UD_Bones_Folder.Mod
             var parentBlueprint = GameObject.GetBlueprint();
             while (parentBlueprint.Inherits != null)
             {
+                string debugPostText = $"{nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, " +
+                    $"{BlueprintTree.Count.Things("blueprint")} in";
                 try
                 {
                     parentBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(parentBlueprint.Inherits);
                     if (parentBlueprint?.Name is not string blueprintName)
                     {
-                        Utils.Warn($"Strange, nameless {nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, {BlueprintTree.Count.Things("blueprint")} in");
+                        Utils.Warn($"Strange, nameless {debugPostText}");
                         break;
                     }
                     BlueprintTree.Add(blueprintName);
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Issue retreiving {nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, {BlueprintTree.Count.Things("blueprint")} in", x);
+                    Utils.Error($"Issue retreiving {debugPostText}", x);
                     break;
                 }
             }
@@ -208,22 +637,24 @@ namespace UD_Bones_Folder.Mod
             Blueprint = Model.Name;
 
             BlueprintTree ??= new();
-            var parentBlueprint = GameObject.GetBlueprint();
+            var parentBlueprint = Model;
             while (parentBlueprint.Inherits != null)
             {
+                string debugPostText = $"{nameof(GameObjectBlueprint)} in {Model.Name} inheritance tree, " +
+                    $"{BlueprintTree.Count.Things("blueprint")} in";
                 try
                 {
                     parentBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(parentBlueprint.Inherits);
                     if (parentBlueprint?.Name is not string blueprintName)
                     {
-                        Utils.Warn($"Strange, nameless {nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, {BlueprintTree.Count.Things("blueprint")} in");
+                        Utils.Warn($"Strange, nameless {debugPostText}");
                         break;
                     }
                     BlueprintTree.Add(blueprintName);
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Issue retreiving {nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, {BlueprintTree.Count.Things("blueprint")} in", x);
+                    Utils.Error($"Issue retreiving {debugPostText}", x);
                     break;
                 }
             }
@@ -232,8 +663,13 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                Tier = Model.GetTag("Tier");
-                TechTier = GameObject.GetTechTier();
+                if (Model.GetTag(nameof(Tier), null) is string tierString
+                    && int.TryParse(tierString, out int tier))
+                    Tier = tier;
+
+                if (Model.GetTag(nameof(TechTier), null) is string techTierString
+                    && int.TryParse(techTierString, out int techTier))
+                    TechTier = techTier;
             }
             catch (Exception x)
             {
@@ -242,7 +678,7 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                foreach (var slot in GameObject.UsesSlots.CachedCommaExpansion().IteratorSafe())
+                foreach (var slot in Model.GetStringPropertyOrTag(nameof(GameObject.UsesSlots)).CachedCommaExpansion().IteratorSafe())
                 {
                     EquipmentSlots ??= new();
                     EquipmentSlots.Add(slot);
@@ -250,14 +686,14 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(BlueprintSpec)} {nameof(GameObject)}.{nameof(GameObject.UsesSlots)}", x);
+                Utils.Error($"{nameof(BlueprintSpec)} {nameof(GameObject.UsesSlots)}", x);
             }
 
             try
             {
-                if (GameObject.TryGetPart(out CyberneticsBaseItem cyberneticsBaseItem))
+                if (Model.TryGetPartParameter(nameof(CyberneticsBaseItem), nameof(CyberneticsBaseItem.Slots), out string cyberneticsSlots))
                 {
-                    foreach (var slot in cyberneticsBaseItem.Slots.CachedCommaExpansion().IteratorSafe())
+                    foreach (var slot in cyberneticsSlots.CachedCommaExpansion().IteratorSafe())
                     {
                         EquipmentSlots ??= new();
                         EquipmentSlots.Add(slot);
@@ -271,15 +707,20 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (GameObject.TryGetPart(out MissileWeapon missileWeapon))
+                if (Model.TryGetPartBlueprint<MissileWeapon>(out var missileWeaponModel))
                 {
-                    WeaponSkills ??= new();
-                    WeaponSkills.Add(missileWeapon.Skill);
-
-                    foreach (var slot in missileWeapon.SlotType.CachedCommaExpansion().IteratorSafe())
+                    if (missileWeaponModel.TryGetParameter(nameof(MissileWeapon.Skill), out string missileWeaponSkill))
                     {
-                        EquipmentSlots ??= new();
-                        EquipmentSlots.Add(slot);
+                        WeaponSkills ??= new();
+                        WeaponSkills.Add(missileWeaponSkill);
+                    }
+                    if (missileWeaponModel.TryGetParameter(nameof(MissileWeapon.SlotType), out string missileWeaponSlotType))
+                    {
+                        foreach (var slot in missileWeaponSlotType.CachedCommaExpansion().IteratorSafe())
+                        {
+                            EquipmentSlots ??= new();
+                            EquipmentSlots.Add(slot);
+                        }
                     }
                 }
             }
@@ -290,16 +731,20 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (GameObject.TryGetPart(out MeleeWeapon meleeWeapon)
-                    && !meleeWeapon.IsImprovisedWeapon())
+                if (Model.TryGetPartBlueprint<MeleeWeapon>(out var meleeWeaponModel))
                 {
-                    WeaponSkills ??= new();
-                    WeaponSkills.Add(meleeWeapon.Skill);
-
-                    foreach (var slot in meleeWeapon.Slot.CachedCommaExpansion().IteratorSafe())
+                    if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
                     {
-                        EquipmentSlots ??= new();
-                        EquipmentSlots.Add(slot);
+                        WeaponSkills ??= new();
+                        WeaponSkills.Add(meleeWeaponSkill);
+                    }
+                    if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
+                    {
+                        foreach (var slot in meleeWeaponSlot.CachedCommaExpansion().IteratorSafe())
+                        {
+                            EquipmentSlots ??= new();
+                            EquipmentSlots.Add(slot);
+                        }
                     }
                 }
             }
@@ -310,12 +755,15 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (GameObject.TryGetPart(out Armor armor))
+                if (Model.TryGetPartBlueprint<Armor>(out var armorModel))
                 {
-                    foreach (var slot in armor.WornOn.CachedCommaExpansion().IteratorSafe())
+                    if (armorModel.TryGetParameter(nameof(Armor.WornOn), out string armorWornOn))
                     {
-                        EquipmentSlots ??= new();
-                        EquipmentSlots.Add(slot);
+                        foreach (var slot in armorWornOn.CachedCommaExpansion().IteratorSafe())
+                        {
+                            EquipmentSlots ??= new();
+                            EquipmentSlots.Add(slot);
+                        }
                     }
                 }
             }
@@ -326,7 +774,7 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (GameObject.GetSpecies() is string species
+                if (Model.TryGetStringPropertyOrTag(nameof(Species), out string species)
                     && !species.IsNullOrEmpty())
                 {
                     Species = species;
@@ -339,206 +787,357 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                Class = GameObject.GetClass();
-
-                Role = GameObject.GetPropertyOrTag(nameof(Role));
-
-                PaintedWall = GameObject.GetPropertyOrTag(nameof(PaintedWall));
-
-                PaintedFence = GameObject.GetPropertyOrTag(nameof(PaintedFence));
+                if (Model.TryGetStringPropertyOrTag(nameof(Class), out string @class)
+                    && !@class.IsNullOrEmpty())
+                {
+                    Class = @class;
+                }
+                if (Model.TryGetStringPropertyOrTag(nameof(Role), out string role)
+                    && !role.IsNullOrEmpty())
+                {
+                    Role = role;
+                }
+                if (Model.TryGetStringPropertyOrTag(nameof(PaintedWall), out string paintedWall)
+                    && !paintedWall.IsNullOrEmpty())
+                {
+                    PaintedWall = paintedWall;
+                }
+                if (Model.TryGetStringPropertyOrTag(nameof(PaintedFence), out string paintedFence)
+                    && !paintedFence.IsNullOrEmpty())
+                {
+                    PaintedFence = paintedFence;
+                }
             }
             catch (Exception x)
             {
                 Utils.Error($"{nameof(BlueprintSpec)} {nameof(Class)},  {nameof(Role)}, {nameof(PaintedWall)}, {nameof(PaintedFence)}", x);
             }
+
+            if (PaintedWall != null
+                || PaintedFence != null)
+            {
+                Tier ??= 0;
+                TechTier ??= 0;
+                Species ??= string.Empty;
+                Class ??= string.Empty;
+                Role ??= string.Empty;
+            }
         }
 
         public BlueprintSpec(BlueprintSpec Source)
         {
-            DebugName = Source?.DebugName;
-            Blueprint = Source?.Blueprint;
+            if (Source == null)
+                return;
 
-            Category = Source?.Category;
-            Tiers = Source?.Tiers;
-            WeaponSkill = Source?.WeaponSkill;
-            EquipmentSlot = Source?.Category;
-            Species = Source?.Species;
-            Class = Source?.Class;
-            PaintedWall = Source?.PaintedWall;
-            PaintedFence = Source?.PaintedFence;
+            DebugName = Source.DebugName;
+
+            Blueprint = Source.Blueprint;
+            if (Source.BlueprintTree != null)
+            {
+                BlueprintTree = new();
+                if (Source.BlueprintTree.Count > 0)
+                    BlueprintTree.AddRange(Source.BlueprintTree);
+            }
+
+            Category = Source.Category;
+
+            Tier = Source.Tier;
+            TechTier = Source.TechTier;
+
+            if (Source.WeaponSkills != null)
+            {
+                WeaponSkills = new();
+                if (Source.WeaponSkills.Count > 0)
+                    WeaponSkills.AddRange(Source.WeaponSkills);
+            }
+
+            if (Source.EquipmentSlots != null)
+            {
+                EquipmentSlots = new();
+                if (Source.EquipmentSlots.Count > 0)
+                    EquipmentSlots.AddRange(Source.EquipmentSlots);
+            }
+
+            Species = Source.Species;
+            Class = Source.Class;
+            Role = Source.Role;
+            PaintedWall = Source.PaintedWall;
+            PaintedFence = Source.PaintedFence;
         }
 
-        public bool IsEmpty
-            => Category == null
-            && Tiers == null
-            && WeaponSkill == null
-            && EquipmentSlot == null
-            && Species == null
-            && Class == null
-            && PaintedWall == null
-            && PaintedFence == null
+        #region Serialization
+
+        public virtual void Write(SerializationWriter Writer)
+        {
+            Writer.WriteStringHashSet(WeaponSkills);
+            Writer.WriteStringHashSet(EquipmentSlots);
+        }
+
+        public virtual void Read(SerializationReader Reader)
+        {
+            WeaponSkills = Reader.ReadStringHashSet();
+            EquipmentSlots = Reader.ReadStringHashSet();
+        }
+
+        #endregion
+
+        public static Comparer GetComparer(BlueprintSpec Primary)
+            => new Comparer(
+                Primary: Primary,
+                LeastSimilarFirst: false)
             ;
 
-        public bool IsAll
-            => Category.IsNullOrEmpty()
-            && Tiers.IsNullOrEmpty()
-            && WeaponSkill.IsNullOrEmpty()
-            && EquipmentSlot.IsNullOrEmpty()
-            && Species.IsNullOrEmpty()
-            && Class.IsNullOrEmpty()
-            && PaintedWall.IsNullOrEmpty()
-            && PaintedFence.IsNullOrEmpty()
+        public bool SameAs(BlueprintSpec Other)
+        {
+            if (Other == null)
+                return false;
+
+            if (Blueprint != Other.Blueprint)
+                return false;
+
+            if ((BlueprintTree?.Count ?? -1) != (Other.BlueprintTree?.Count ?? -1))
+                return false;
+            if (!BlueprintTree.IteratorSafe().All(s => Other.BlueprintTree.IteratorSafe().Contains(s))
+                || !Other.BlueprintTree.IteratorSafe().All(s => BlueprintTree.IteratorSafe().Contains(s)))
+                return false;
+
+            if (Category != Other.Category)
+                return false;
+
+            if (Tier != Other.Tier)
+                return false;
+
+            if (TechTier != Other.TechTier)
+                return false;
+
+            if ((WeaponSkills?.Count ?? -1) != (Other.WeaponSkills?.Count ?? -1))
+                return false;
+            if (!WeaponSkills.IteratorSafe().All(s => Other.WeaponSkills.IteratorSafe().Contains(s))
+                || !Other.WeaponSkills.IteratorSafe().All(s => WeaponSkills.IteratorSafe().Contains(s)))
+                return false;
+
+            if ((EquipmentSlots?.Count ?? -1) != (Other.EquipmentSlots?.Count ?? -1))
+                return false;
+            if (!EquipmentSlots.IteratorSafe().All(s => Other.EquipmentSlots.IteratorSafe().Contains(s))
+                || !Other.EquipmentSlots.IteratorSafe().All(s => EquipmentSlots.IteratorSafe().Contains(s)))
+                return false;
+
+            if (Species != Other.Species)
+                return false;
+
+            if (Class != Other.Class)
+                return false;
+
+            if (Role != Other.Role)
+                return false;
+
+            if (PaintedWall != Other.PaintedWall)
+                return false;
+
+            if (PaintedFence != Other.PaintedFence)
+                return false;
+
+            return true;
+        }
+
+        public static BlueprintSpec CreateFrom(GameObjectBlueprint Blueprint)
+        {
+            string catchFlag = "Top";
+            try
+            {
+                catchFlag = "Checking Texture";
+                if (!Blueprint.GetRenderable().Tile.IsTile())
+                    return null;
+
+                catchFlag = "Check Excluded";
+                if (Blueprint.IsExcludedFromDynamicEncounters())
+                    return null;
+
+                return new(Blueprint);
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed to create {nameof(BlueprintSpec)} for {Blueprint.NameOrMissing()} at {nameof(catchFlag)} {catchFlag}", x);
+                return null;
+            }
+        }
+
+        public static bool TryCreateFrom(GameObjectBlueprint Blueprint, out BlueprintSpec Result)
+            => (Result = CreateFrom(Blueprint)) != null
             ;
+
+        protected static bool IsFieldWildCard<T>(ref T Field)
+        {
+            if (Field == null)
+                return false;
+
+            if (Field is string stringField)
+                return stringField == string.Empty;
+
+            if (Field is Array arrayField)
+                return arrayField.Length == 0;
+
+            if (Field is ICollection collectionField)
+                return collectionField.Count == 0;
+
+            if (Field is int intField)
+                return intField == 0;
+
+            return false;
+        }
 
         public IEnumerable<string> GetDebugLines(int Indent = 0)
         {
             yield return $"{Indent.Indent()}{nameof(DebugName)}: {DebugName ?? "NONE"}";
             yield return $"{Indent.Indent()}{nameof(Blueprint)}: {Blueprint ?? "NONE"}";
 
-            if (AlreadyExists)
-            {
-                yield return $"{nameof(AlreadyExists)}: {AlreadyExists}";
-                yield break;
-            }
-            yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(Tiers)}: {Tiers?.Count ?? -1}";
-            if (Tiers.IsNullOrEmpty())
-                yield return $"{(Indent + 1).Indent()}: Empty";
-            else
-                foreach (var tier in Tiers)
-                    yield return $"{(Indent + 1).Indent()}: {tier}";
+            yield return $"{Indent.Indent()}{nameof(BlueprintTree)}: {(BlueprintTree.IsNullOrEmpty() ? "NONE" : null)}";
+            foreach (var blueprint in BlueprintTree.IteratorSafe())
+                yield return $"{(Indent + 1).Indent()}: {blueprint}";
 
-            yield return $"{Indent.Indent()}{nameof(WeaponSkill)}: {WeaponSkill ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(EquipmentSlot)}: {EquipmentSlot ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(Tier)}: {Tier?.ToString() ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(TechTier)}: {TechTier?.ToString() ?? "NONE"}";
+
+            yield return $"{Indent.Indent()}{nameof(WeaponSkills)}: {(WeaponSkills.IsNullOrEmpty() ? "NONE" : null)}";
+            foreach (var weaponSkill in WeaponSkills.IteratorSafe())
+                yield return $"{(Indent + 1).Indent()}: {weaponSkill}";
+
+            yield return $"{Indent.Indent()}{nameof(EquipmentSlots)}: {(EquipmentSlots.IsNullOrEmpty() ? "NONE" : null)}";
+            foreach (var equipmentSlot in EquipmentSlots.IteratorSafe())
+                yield return $"{(Indent + 1).Indent()}: {equipmentSlot}";
+
             yield return $"{Indent.Indent()}{nameof(Species)}: {Species ?? "NONE"}";
             yield return $"{Indent.Indent()}{nameof(Class)}: {Class ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(Role)}: {Role ?? "NONE"}";
             yield return $"{Indent.Indent()}{nameof(PaintedWall)}: {PaintedWall ?? "NONE"}";
             yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {PaintedFence ?? "NONE"}";
         }
 
-        private static void ProcessWorkingList(out string Field, IEnumerable<string> WorkingList)
+        protected static int GetCollectionDistance(
+            IEnumerable<string> Primary,
+            IEnumerable<string> Other,
+            int MaxUnitDistance,
+            int MinUnitDistance = 0,
+            int? MaxTotalDistance = null
+            )
         {
-            Field = "";
-            if (!WorkingList.IsNullOrEmpty())
-                Field = WorkingList.Aggregate(Field, Utils.CommaDelimitedAggregator);
-        }
-
-        protected IEnumerable<string> GetMatching<T>(Dictionary<T, HashSet<string>> Cache, T Key, T NoValue, T AllValue)
-        {
-            if (Equals(Key, NoValue))
-                return Enumerable.Empty<string>();
-
-            if (Equals(Key, AllValue))
-                return Cache.Values.GetUnionOfSets().IteratorSafe();
-            else
-                return Cache.GetValue(Key).IteratorSafe();
-        }
-
-        public IEnumerable<string> GetMatchingStringKey(Dictionary<string, HashSet<string>> Cache, string Key)
-        {
-            var output = new HashSet<string>();
-            if (Key.IsNullOrEmpty())
-                return output;
-
-            if (Key?.CachedCommaExpansion().ToList() is List<string> keys
-                && !keys.IsNullOrEmpty())
+            int distance = 0;
+            var safePrimary = Primary.IteratorSafe();
+            var safeOther = Other.IteratorSafe();
+            int blueprintTreeCountDiff = Math.Abs(safePrimary.Count() - safeOther.Count());
+            foreach (var blueprint in safePrimary)
             {
-                foreach (var key in keys)
-                    output.UnionWith(GetMatching(Cache, key, null, string.Empty));
-            }
-            else
-                output.UnionWith(GetMatching(Cache, Key, null, string.Empty));
-
-            return output;
-        }
-
-        public IEnumerable<string> GetMatchingCategory()
-            => GetMatchingStringKey(Utils.BlueprintsByCategory, Category)
-            ;
-
-        public IEnumerable<string> GetMatchingTier()
-        {
-            if (Tiers == null)
-                return Enumerable.Empty<string>();
-
-            if (Tiers.IsNullOrEmpty())
-                return Utils.BlueprintsByTier.Values.GetUnionOfSets();
-            else
-            {
-                var output = new HashSet<string>();
-                foreach (int tier in Tiers)
-                    output.UnionWith(GetMatching(Utils.BlueprintsByTier, tier, -1, 9));
-
-                return output;
-            }
-        }
-
-        public IEnumerable<string> GetMatchingWeaponSkill()
-            => GetMatchingStringKey(Utils.BlueprintsByWeaponSkill, WeaponSkill)
-            ;
-
-        public IEnumerable<string> GetMatchingEquipmentSlot()
-            => GetMatchingStringKey(Utils.BlueprintsByEquipmentSlot, EquipmentSlot)
-            ;
-
-        public IEnumerable<string> GetMatchingSpecies()
-            => GetMatchingStringKey(Utils.BlueprintsBySpecies, Species)
-            ;
-
-        public IEnumerable<string> GetMatchingClass()
-            => GetMatchingStringKey(Utils.BlueprintsByClass, Class)
-            ;
-
-        public IEnumerable<string> GetMatchingPaintedWall()
-            => GetMatchingStringKey(Utils.BlueprintsByPaintedWall, PaintedWall)
-            ;
-
-        public IEnumerable<string> GetMatchingPaintedFence()
-            => GetMatchingStringKey(Utils.BlueprintsByPaintedFence, PaintedFence)
-            ;
-
-        public IEnumerable<string> GetMatchingSpec()
-        {
-            if (IsEmpty)
-                return Enumerable.Empty<string>();
-
-            var output = new HashSet<string>(Utils.CachedBlueprints);
-
-            if (IsAll)
-                return output;
-
-            if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingTier())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingSpecies())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingClass())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                    .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                .IsNullOrEmpty())
-            {
-                output.Clear();
-                output.UnionWith(Utils.CachedBlueprints);
-                if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                    .IsNullOrEmpty())
+                if (MaxTotalDistance.HasValue
+                    && distance <= MaxTotalDistance.GetValueOrDefault())
                 {
-                    output.Clear();
-                    output.UnionWith(Utils.CachedBlueprints);
-                    if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                        .IsNullOrEmpty())
-                        return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                            ;
-                    return output;
+                    distance = MaxTotalDistance.GetValueOrDefault();
+                    break;
                 }
-                return output;
+                if (!safeOther.Contains(blueprint))
+                {
+                    distance += Math.Clamp(blueprintTreeCountDiff, MinUnitDistance, MaxUnitDistance);
+                    continue;
+                }
             }
-            return output;
+            return distance;
+        }
+
+        protected static int GetFieldDistance<T>(ref T Primary, T Other, int DistanceWhenIncomparable)
+            where T : IEquatable<T>
+        {
+            try
+            {
+                if (IsFieldWildCard(ref Primary))
+                    return 0;
+
+                if (Primary is null
+                    || Other is null)
+                    return DistanceWhenIncomparable;
+
+                if (!EqualityComparer<T>.Default.Equals(Primary, Other))
+                {
+                    if (Primary is string stringPrimary
+                        && Other is string stringOther)
+                        return Levenshtein.EditDistance(stringPrimary, stringOther);
+
+                    return DistanceWhenIncomparable;
+                }
+                return 0;
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"Failed getting distance between {nameof(Primary)} {Primary} and {nameof(Other)} {Other}", x);
+                return DistanceWhenIncomparable;
+            }
+        }
+
+        public int GetDistanceFrom(BlueprintSpec Other)
+        {
+            if (Other == null)
+                return MAX_DIST;
+
+            int distance = 0;
+
+            distance += GetCollectionDistance(
+                Primary: BlueprintTree,
+                Other: Other.BlueprintTree,
+                MaxUnitDistance: 10);
+
+            distance += GetFieldDistance(ref Category, Other.Category, 15);
+
+            if (!IsFieldWildCard(ref Tier))
+                distance += 8 * Math.Abs(Tier.GetValueOrDefault() - Other.Tier.GetValueOrDefault());
+
+            if (!IsFieldWildCard(ref TechTier))
+                distance += 4 * Math.Abs(TechTier.GetValueOrDefault() - Other.TechTier.GetValueOrDefault());
+
+            if (!IsFieldWildCard(ref WeaponSkills))
+            {
+                distance += GetCollectionDistance(
+                    Primary: WeaponSkills,
+                    Other: Other.WeaponSkills,
+                    MaxUnitDistance: 10,
+                    MinUnitDistance: 10);
+            }
+
+            if (!IsFieldWildCard(ref EquipmentSlots))
+            {
+                distance += GetCollectionDistance(
+                    Primary: EquipmentSlots,
+                    Other: Other.EquipmentSlots,
+                    MaxUnitDistance: 10,
+                    MinUnitDistance: 10);
+            }
+
+            distance += GetFieldDistance(ref Species, Other.Species, 15);
+
+            distance += GetFieldDistance(ref Class, Other.Class, 5);
+            distance += GetFieldDistance(ref Role, Other.Role, 5);
+
+            distance += GetFieldDistance(ref PaintedWall, Other.PaintedWall, 25);
+            distance += GetFieldDistance(ref PaintedFence, Other.PaintedFence, 25);
+
+            return Math.Clamp(distance, 0, MAX_DIST);
+        }
+
+        public IEnumerable<DistanceRecord> GetOrderedDistanceRecords()
+        {
+            List<DistanceRecord> list = null;
+            foreach (var validSpec in (Utils.CachedBlueprintSpecs?.Values).IteratorSafe())
+            {
+                if (DistanceRecord.TryGetFor(this, validSpec, out var distanceRecord)
+                    && !distanceRecord.IsEmpty())
+                {
+                    list ??= new();
+                    list.Add(distanceRecord);
+                }
+            }
+            if (list.IsNullOrEmpty())
+                return list.IteratorSafe();
+
+            list.StableSortInPlace(DistanceComparer);
+            return list;
         }
 
         public void Dispose()
@@ -557,6 +1156,7 @@ namespace UD_Bones_Folder.Mod
 
             Species = null;
             Class = null;
+            Role = null;
             PaintedWall = null;
             PaintedFence = null;
         }

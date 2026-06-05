@@ -117,8 +117,13 @@ namespace UD_Bones_Folder.Mod
         #endregion
         #region Instance Caches
 
+        [NonSerialized]
+        protected Dictionary<string, ReplacementEntry> MissingBlueprintReplacements = new();
+
+        [NonSerialized]
         protected Dictionary<string, string> TileReplacementsByMissingBlueprint = new();
 
+        [NonSerialized]
         protected Dictionary<string, string> BlueprintReplacementsByMissingBlueprint = new();
 
         #endregion
@@ -219,6 +224,9 @@ namespace UD_Bones_Folder.Mod
 
         public override void Write(SerializationWriter Writer)
         {
+            Writer.WriteCompositeValues(MissingBlueprintReplacements);
+            Writer.WriteOptimized(TileReplacementsByMissingBlueprint);
+            Writer.WriteOptimized(BlueprintReplacementsByMissingBlueprint);
             Writer.WriteComposite(ZoneBones);
             Writer.Write(Alerted);
             Writer.Write(Encountered);
@@ -228,6 +236,9 @@ namespace UD_Bones_Folder.Mod
 
         public override void Read(SerializationReader Reader)
         {
+            MissingBlueprintReplacements = Reader.ReadCompositeValues<string, ReplacementEntry>();
+            TileReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
+            BlueprintReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
             ZoneBones = Reader.ReadComposite<CompositeStringMap<ZoneBonesAllocation>>();
             Alerted = Reader.ReadDictionary<string, bool>();
             Encountered = Reader.ReadList<string>();
@@ -1095,7 +1106,8 @@ namespace UD_Bones_Folder.Mod
 
                         if (!altBlueprints.IsNullOrEmpty())
                         {
-                            altBlueprint = altBlueprints.GetRandomElementCosmetic();
+                            var rnd = Stat.GetSeededRandomGenerator($"{nameof(Mod.BlueprintSpec)}::{BlueprintSpec.Blueprint}");
+                            altBlueprint = altBlueprints.GetRandomElement(rnd);
                             var altModel = GameObjectFactory.Factory.GetBlueprintIfExists(altBlueprint);
                             altTile = altModel?.GetRenderable()?.Tile;
                         }
@@ -1116,6 +1128,87 @@ namespace UD_Bones_Folder.Mod
                 BlueprintReplacementsByMissingBlueprint.TryGetValue(key, out Blueprint);
                 TileReplacementsByMissingBlueprint.TryGetValue(key, out Tile);
                 //Utils.Log($"{1.Indent()}{BlueprintSpec.Blueprint} -> {nameof(Blueprint)}: {Blueprint}, {nameof(Tile)}: {Tile}");
+            }
+        }
+
+        public ReplacementEntry RequireReplacementEntryForGameObject(BlueprintSpec BlueprintSpec)
+        {
+            if (BlueprintSpec.Blueprint is not string key)
+                return null;
+
+            // Key needs to be a bit more complex than just the blueprint name so that conflicts of blueprint name don't result in
+            // the functional merging of the conflicting blueprints.
+
+            MissingBlueprintReplacements ??= new();
+            try
+            {
+                if (!MissingBlueprintReplacements.TryGetValue(key, out var replacementEntry))
+                {
+                    if (BlueprintSpec.GetOrderedDistanceRecords() is not IEnumerable<BlueprintSpec.DistanceRecord> orderedDistanceRecords)
+                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+
+                    using var distanceRecords = ScopeDisposedList<BlueprintSpec.DistanceRecord>.GetFromPoolFilledWith(orderedDistanceRecords);
+                    
+                    if (distanceRecords.IsNullOrEmpty())
+                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+
+                    int maxDist = distanceRecords.LastOrDefault().Distance;
+
+                    var specsByWeight = new Dictionary<string, int>();
+                    foreach (var distanceRecord in distanceRecords)
+                        specsByWeight[distanceRecord.ToString()] = distanceRecord.GetWeight(maxDist);
+
+                    if (specsByWeight.IsNullOrEmpty())
+                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+
+                    string rndSeed = $"{nameof(Mod.BlueprintSpec)}::{BlueprintSpec.Blueprint}::{nameof(replacementEntry)}";
+                    var rnd = Stat.GetSeededRandomGenerator(rndSeed);
+
+                    GameObjectBlueprint alternativeBlueprint = null;
+                    var specsBag = specsByWeight.ToBallBag(rnd);
+                    while (!specsBag.IsNullOrEmpty()
+                        && alternativeBlueprint != null)
+                    {
+                        if (specsBag.PickOne() is not string pickedSpec)
+                            continue;
+
+                        alternativeBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(pickedSpec);
+
+                        if (alternativeBlueprint.GetRenderable()?.Tile == null)
+                            alternativeBlueprint = null;
+                    }
+
+                    if (alternativeBlueprint == null)
+                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+
+                    string tile = alternativeBlueprint.GetRenderable()?.Tile;
+                    if (rnd.Next(0, 7000) % 500 == 0)
+                    {
+                        GameObjectBlueprint alternativeForTile = null;
+                        while (!specsBag.IsNullOrEmpty()
+                            && alternativeForTile != null)
+                        {
+                            if (specsBag.PickOne() is not string pickedSpec)
+                                continue;
+
+                            alternativeForTile = GameObjectFactory.Factory.GetBlueprintIfExists(pickedSpec);
+
+                            if (alternativeForTile.GetRenderable()?.Tile == null)
+                                alternativeForTile = null;
+                        }
+
+                        if (alternativeForTile != null)
+                            tile = alternativeForTile.GetRenderable()?.Tile;
+                    }
+
+                    return MissingBlueprintReplacements[key] = ReplacementEntry.CreateFor(key, alternativeBlueprint.Name, tile);
+                }
+                return replacementEntry;
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(RequireReplacementEntryForGameObject)}({key}), find alternate", x);
+                return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
             }
         }
 
