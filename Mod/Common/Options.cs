@@ -33,6 +33,8 @@ namespace UD_Bones_Folder.Mod
     public static class Options
     {
         // Debug Settings
+        [OptionFlag] public static bool DebugEnableBadWordFilterLogging;
+        [OptionFlag] public static bool DebugEnableBadWordFilterForLocalBones;
         [OptionFlag] public static bool DebugEnableNoHoarding;
         [OptionFlag] public static bool DebugEnableNoExhuming;
         [OptionFlag] public static bool DebugEnablePickingBones;

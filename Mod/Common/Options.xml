@@ -18,6 +18,34 @@
     </helptext>
   </option-->
   <option
+        ID="UD_Bones_Folder_DebugEnableBadWordFilterLogging"
+        DisplayText="{{Y|Bones}}: Enable logging the bad word filter results to the log."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, the bad word filter will report to the log each of the matches it found in a given string, and the string itself.
+      
+      This is at the expense of performance, since it would otherwise cease the moment it found its first match.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableBadWordFilterForLocalBones"
+        DisplayText="{{Y|Bones}}: Enable the bad word filter for non-online bones files."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, the bad word filter will be applied to all bones files, including those that are saved to the local device.
+      
+      This option is primarily for testing the bad word filter without the need to flood a server with filter-triggering bones files.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_DebugEnableNoHoarding"
         DisplayText="{{Y|Bones}}: Pause hoarding bones (saving new bones files)."
         Category="Debug"

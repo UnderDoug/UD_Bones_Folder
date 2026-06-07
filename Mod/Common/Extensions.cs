@@ -40,6 +40,7 @@ using Genkit;
 using XRL.World.WorldBuilders;
 using System.Text.RegularExpressions;
 using UD_Bones_Folder.Mod.Moderation;
+using System.Diagnostics;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -305,9 +306,7 @@ namespace UD_Bones_Folder.Mod
                     if (locationBoxTextSkin.name == "tct"
                         || locationBoxTextSkin.gameObject.name == "tct")
                     {
-                        string typeColor = bonesInfo.FileLocationData.GetFileLocationDataTypeColor();
-                        string text = bonesInfo.FileLocationData.Type.ToString().ToLower().Colored(typeColor);
-                        locationBoxTextSkin.SetText(text);
+                        locationBoxTextSkin.SetText(bonesInfo.GetFileLocationTypeColorString());
                         break;
                     }
                 }
@@ -937,23 +936,31 @@ namespace UD_Bones_Folder.Mod
 
         public static bool IsTile(this string Tile)
         {
+            if (Tile == null)
+                return false;
+
+            if (Utils.IsTileCache.TryGetValue(Tile, out bool result))
+                return result;
+
             try
             {
-                return Utils.TileExistsAsync(Tile).WaitResult();
+                return Utils.IsTileCache[Tile] = Utils.TileExistsAsync(Tile).WaitResult();
             }
             catch (Exception x)
             {
                 Utils.Error(nameof(IsTile), x);
+                Utils.IsTileCache.Remove(Tile);
             }
             try
             {
-                return Utils.TileExists(Tile);
+                return Utils.IsTileCache[Tile] = Utils.TileExists(Tile);
             }
             catch (Exception x)
             {
                 Utils.Error(nameof(IsTile), x);
+                Utils.IsTileCache.Remove(Tile);
             }
-            return false;
+            return Utils.IsTileCache[Tile] = false;
         }
 
         public static string ThisThese(this GameObject Object)
@@ -1019,7 +1026,7 @@ namespace UD_Bones_Folder.Mod
 
         public static void PerformActionRecursively(this GameObject Object, Action<GameObject> Action, int Depth = 0)
         {
-            Action?.Invoke(Object);
+            Action.Invoke(Object);
 
             if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
                 for (int i = 0; i < inventoryObjects.Count; i++)
@@ -1032,6 +1039,26 @@ namespace UD_Bones_Folder.Mod
             if (Object.GetContents() is List<GameObject> contentsObject)
                 for (int i = 0; i < contentsObject.Count; i++)
                     contentsObject[i].PerformActionRecursively(Action, Depth + 1);
+        }
+
+        public static IEnumerable<T> PerformFunctionRecursively<T>(this GameObject Object, Func<GameObject, T> Func, int Depth = 0)
+        {
+            yield return Func.Invoke(Object);
+
+            if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
+                for (int i = 0; i < inventoryObjects.Count; i++)
+                    foreach (var output in inventoryObjects[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                        yield return output;
+
+            if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
+                for (int i = 0; i < installedCybernetics.Count; i++)
+                    foreach (var output in installedCybernetics[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                        yield return output;
+
+            if (Object.GetContents() is List<GameObject> contentsObject)
+                for (int i = 0; i < contentsObject.Count; i++)
+                    foreach (var output in contentsObject[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                        yield return output;
         }
 
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
@@ -1093,125 +1120,188 @@ namespace UD_Bones_Folder.Mod
                 || lunarCourtier.BonesID.EqualsNoCase(FromBonesID))
             ;
 
-        public static void TryFeverWarp(
+        public static bool TryModerate(
             this GameObject BonesObject,
-            SaveBonesInfo BonesInfo = null,
-            bool Recursive = true,
-            int Depth = 0
+            SaveBonesInfo BonesInfo,
+            out UD_Bones_Moderated ModeratedPart
             )
         {
-            //Utils.Log($"{Depth.Indent()}{nameof(FeverWarp)}: {BonesObject?.DebugName ?? "NO_OBJECT??"}");
+            ModeratedPart = null;
+            if (BonesInfo?.IsDownloaded is not true
+                && !Options.DebugEnableBadWordFilterForLocalBones)
+                return false;
 
-            if (Recursive)
+            //var sw = Stopwatch.StartNew();
+            try
             {
-                if (BonesObject.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
-                    for (int i = 0; i < inventoryObjects.Count; i++)
-                        inventoryObjects[i].TryFeverWarp(BonesInfo, Depth: Depth + 1);
-
-                if (BonesObject.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
-                    for (int i = 0; i < installedCybernetics.Count; i++)
-                        installedCybernetics[i].TryFeverWarp(BonesInfo, Depth: Depth + 1);
-
-                if (BonesObject.GetContents() is List<GameObject> contentsObject)
-                    for (int i = 0; i < contentsObject.Count; i++)
-                        contentsObject[i].TryFeverWarp(BonesInfo, Depth: Depth + 1);
-            }
-
-            if (BonesInfo != null)
-            {
-                if (BonesObject.NeedsFeverWarped(
-                    TileOnly: out bool tileOnly,
-                    HasBadWord: out bool hasBadWord,
-                    BadWordName: out BadDisplayName badWordName,
-                    BadWordDesc: out bool badWordDesc,
-                    BonesInfo: BonesInfo))
+                ModeratedPart = BonesObject.PerformFunctionRecursively(delegate (GameObject go)
                 {
-                    if (BonesObject?.HasPart<UD_Bones_FeverWarped>() is false)
-                        BonesObject.AddPart(
-                            P: new UD_Bones_FeverWarped(TileOnly: tileOnly, HasBadWord: hasBadWord)
-                            {
-                                BadWordName = badWordName,
-                                BadWordDesc = badWordDesc,
-                                Persists = true,
-                            }.OverrideBonesIDTyped<UD_Bones_FeverWarped>(BonesInfo?.ID));
-                }
-                else
-                {
+                    /*var sw2 = Stopwatch.StartNew();
                     try
                     {
-                        _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
+                        if (go.HasBadWord(out BadDisplayName badWordName, out bool badWordDesc, Options.ModerationMinimumSeverityLevel))
+                        {
+                            if (go.HasPart<UD_Bones_Moderated>())
+                                go.RemovePart<UD_Bones_Moderated>();
+
+                            go.AddPart(new UD_Bones_Moderated(badWordName, badWordDesc));
+                        }
                     }
-                    catch
+                    finally
                     {
-                        if (BonesObject?.HasPart<UD_Bones_FeverWarped>() is false)
-                            BonesObject.AddPart(
-                                P: new UD_Bones_FeverWarped(TileOnly: false, HasBadWord: false)
-                                {
-                                    Persists = true,
-                                }.OverrideBonesIDTyped<UD_Bones_FeverWarped>(BonesInfo?.ID));
+                        if (go != null)
+                            Utils.Log($"{nameof(TryModerate)}.{nameof(PerformActionRecursively)} for {go.DebugName.Strip()} took {sw2.Elapsed.ValueUnits()}");
+                        sw2.Stop();
+                    }*/
+
+                    if (go == null)
+                        return null;
+
+                    if (!go.HasPart<UD_Bones_Moderated>()
+                        || go.RemovePart<UD_Bones_Moderated>())
+                        return go.AddPart<UD_Bones_Moderated>();
+
+                    return go.GetPart<UD_Bones_Moderated>();
+                })
+                .IteratorSafe()
+                .FirstOrDefault(p => p.ParentObject == BonesObject);
+
+                return ModeratedPart != null;
+            }
+            finally
+            {
+                /*if (BonesObject != null)
+                    Utils.Log($"{nameof(TryModerate)} for {BonesObject.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+                sw.Stop();*/
+            }
+        }
+
+        public static bool TryModerate(
+            this GameObject BonesObject,
+            SaveBonesInfo BonesInfo
+            )
+        => TryModerate(BonesObject, BonesInfo, out _)
+        ;
+
+        public static void FeverWarp(
+            this GameObject BonesObject,
+            string BonesID,
+            bool Recursive = true
+            )
+        {
+            if (!BonesID.IsNullOrEmpty())
+            {
+                var sw = Stopwatch.StartNew();
+                try
+                {
+                    if (!Recursive)
+                    {
+                        BonesObject.TryFeverWarp(BonesID);
                     }
+                    else
+                    {
+                        BonesObject.PerformActionRecursively(delegate (GameObject go)
+                        {
+                            var sw2 = Stopwatch.StartNew();
+                            try
+                            {
+                                go.TryFeverWarp(BonesID);
+                            }
+                            finally
+                            {
+                                if (go != null)
+                                    Utils.Log($"{nameof(TryFeverWarp)}.{nameof(PerformActionRecursively)} for {go.DebugName.Strip()} took {sw2.Elapsed.ValueUnits()}");
+                                sw2.Stop();
+                            }
+                        });
+                    }
+                }
+                finally
+                {
+                    if (BonesObject != null)
+                        Utils.Log($"{nameof(TryFeverWarp)} for {BonesObject.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+                    sw.Stop();
                 }
             }
         }
 
-        public static bool NeedsFeverWarped(
+        public static bool TryFeverWarp(
             this GameObject BonesObject,
-            out bool TileOnly,
-            out bool HasBadWord,
-            out BadDisplayName BadWordName,
-            out bool BadWordDesc,
-            SaveBonesInfo BonesInfo = null
+            string BonesID
             )
         {
-            TileOnly = false;
-            BadWordName = null;
-            BadWordDesc = false;
-            HasBadWord = false;
+            if (BonesObject == null)
+                return false;
+
+            if (BonesObject.NeedsFeverWarped(
+                WarpFlags: out UD_Bones_FeverWarped.WarpFlags warpFlags,
+                BonesID: BonesID))
+            {
+                if (!BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
+                    BonesObject.AddPart(UD_Bones_FeverWarped.NewWithBonesID(BonesID, warpFlags));
+                else
+                {
+                    feverWarped.Flags = warpFlags;
+                    feverWarped.Initialize();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        public static bool NeedsFeverWarped(
+            this GameObject BonesObject,
+            out UD_Bones_FeverWarped.WarpFlags WarpFlags,
+            string BonesID = null
+            )
+        {
+            WarpFlags = UD_Bones_FeverWarped.WarpFlags.None;
 
             if (BonesObject == null)
                 return false;
 
-            HasBadWord = (BonesInfo?.IsDownloaded is true)
-                && (BonesObject.HasBadWord(out BadWordName, out BadWordDesc, Options.ModerationMinimumSeverityLevel)
-                    || BonesObject.GetStringProperty(
-                            Name: $"{nameof(UD_Bones_FeverWarped)}::{nameof(HasBadWord)}",
-                            Default: $"{false}")
-                        .EqualsNoCase($"{true}"));
-
-            if (!BonesObject.IsLunarRegent(BonesInfo?.ID)
-                || HasBadWord)
+            if (!BonesObject.IsLunarRegent(BonesID))
             {
-                if (BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
-                {
-                    feverWarped.HasBadWord = HasBadWord;
-                    feverWarped.BadWordName = BadWordName;
-                    feverWarped.BadWordDesc = BadWordDesc;
-                    feverWarped.BadWordSeverityOption = Options.ModerationMinimumSeverityLevel;
-                    TileOnly = !HasBadWord && feverWarped.IsTileOnly();
+                if (BonesObject.HasPart< UD_Bones_FeverWarped>())
                     return false;
-                }
 
                 if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
                 {
-                    TileOnly = !HasBadWord && BonesObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::{nameof(TileOnly)}", $"{false}").EqualsNoCase($"{true}");
+                    WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+                    if (BonesObject.GetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{false}").EqualsNoCase($"{true}"))
+                        WarpFlags = UD_Bones_FeverWarped.WarpFlags.Tile;
+
                     return true;
                 }
 
                 bool blueprintExists = true;
 
-                SerializationExtensions.OptionallyPerformWithoutMetrics(() => blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint));
+                SerializationExtensions.OptionallyPerformWithoutMetrics(delegate()
+                {
+                    try
+                    {
+                        blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
+
+                        if (blueprintExists)
+                            _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
+                    }
+                    catch
+                    {
+                        blueprintExists = false;
+                    }
+                });
 
                 if (BonesObject.GetTile() is string bonesTile
                     && !bonesTile.IsTile())
                 {
-                    TileOnly = !HasBadWord && blueprintExists;
+                    WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+
+                    if (blueprintExists)
+                        WarpFlags &= ~ UD_Bones_FeverWarped.WarpFlags.Blueprint;
                     return true;
                 }
 
                 if (!blueprintExists)
-                    return true;
-
-                if (HasBadWord)
                     return true;
             }
             return false;
@@ -1358,9 +1448,23 @@ namespace UD_Bones_Folder.Mod
             && ((IncludeSelf
                     && Type == OtherType)
                 || OtherType.IsSubclassOf(Type)
-                || Type.IsAssignableFrom(OtherType)
+                || OtherType.IsAssignableFrom(Type)
                 || (Type.YieldInheritedTypes().ToList() is List<Type> inheritedTypes
-                    && inheritedTypes.Contains(OtherType)));
+                    && inheritedTypes.Any((t, i) => i > 0 && t == OtherType)));
+
+        public static bool Any<T>(this IList<T> Source, Func<T, int, bool> Where)
+        {
+            if (Source.IsNullOrEmpty())
+                return false;
+
+            int count = Source.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (Where?.Invoke(Source[i], i) is not false)
+                    return true;
+            }
+            return false;
+        }
 
         public static bool TryFindLunarRegent(this Zone Z, string BonesID, out GameObject LunarRegent, out UD_Bones_LunarRegent LunarRegentPart)
         {
@@ -1749,7 +1853,7 @@ namespace UD_Bones_Folder.Mod
             )
         {
             List<GameObjectBlueprint> outputList = new();
-            foreach (GameObjectBlueprint blueprint in Factory.BlueprintList)
+            foreach (GameObjectBlueprint blueprint in Factory.BlueprintList.IteratorSafe())
                 if (blueprint.InheritsFromSafe(Name, IncludeSelf)
                     && (!ExcludeBase
                         || !blueprint.IsBaseBlueprint()))
@@ -1757,25 +1861,27 @@ namespace UD_Bones_Folder.Mod
 
             return outputList;
         }
+
         public static List<string> InheritanceRoots => new()
         {
             nameof(Object),
             "SultanMuralController",
         };
+
         public static bool InheritsFromSafe(
             this GameObjectBlueprint GameObjectBlueprint,
-            string what,
+            string What,
             bool IncludeSelf = true
             )
         {
             if (IncludeSelf
-                && GameObjectBlueprint?.Name == what)
+                && GameObjectBlueprint?.Name == What)
                 return true;
 
             string parentBlueprint = GameObjectBlueprint.Inherits;
             while (!parentBlueprint.IsNullOrEmpty())
             {
-                if (parentBlueprint == what)
+                if (parentBlueprint == What)
                     return true;
 
                 string inherits = parentBlueprint;
@@ -1783,7 +1889,7 @@ namespace UD_Bones_Folder.Mod
                 if (parentBlueprint.IsNullOrEmpty()
                     && !InheritanceRoots.Contains(inherits))
                 {
-                    Utils.Warn($"{nameof(Extensions)}.{nameof(InheritsFromSafe)}(\"{what}\"):" +
+                    Utils.Warn($"{nameof(Extensions)}.{nameof(InheritsFromSafe)}(\"{What}\"):" +
                         $" bluprint ancestor \"{inherits}\" does not exist in blueprint list." +
                         $" The first mention of this blueprint in this log should reveal the mod with this inheritance issue.");
                 }
@@ -2166,7 +2272,13 @@ namespace UD_Bones_Folder.Mod
             => Cell.ParentZone.GetCellsInACosmeticCircle(Cell.X, Cell.Y, Radius)
             ;
 
-        public static bool MatchesCaptureGroups(this string Pattern, string Text, RegexOptions Options, bool MegaPattern = false)
+        public static bool MatchesCaptureGroups(
+            this string Pattern,
+            string Text,
+            RegexOptions Options,
+            bool MegaPattern = false,
+            bool Silent = false
+            )
         {
             if (Text.IsNullOrEmpty())
                 return false;
@@ -2190,17 +2302,83 @@ namespace UD_Bones_Folder.Mod
                                 && group.Captures is CaptureCollection captures
                                 && !captures.IsNullOrEmpty())
                             {
+                                if (Silent)
+                                    return true;
+
                                 captureList.AddRange(captures.Select(c => c.Value));
                                 any = true;
                             }
                         }
                     }
                 }
+
+                if (Silent)
+                    return false;
+
                 if (any)
                 {
                     Utils.Warn($"Found the following {nameof(BadWord)}:");
                     Utils.Log($"{nameof(Text)}: {Text}");
                     Utils.Log($"{nameof(Pattern)}: {(!MegaPattern ? Pattern : nameof(MegaPattern))}");
+                    captureList.IteratorSafe().Loggregate(
+                        Proc: c => $": {c}",
+                        Empty: ": none",
+                        PostProc: s => $"{1.Indent()}{s}");
+                }
+                return any;
+            }
+
+            return false;
+        }
+
+        public static bool MatchesCaptureGroups(this Regex Regex, string Text, bool Silent = false)
+        {
+            if (Text.IsNullOrEmpty())
+                return false;
+
+            if (Regex == null)
+                return false;
+
+            if (Regex.Matches(Text) is MatchCollection matches)
+            {
+                bool any = false;
+                using var captureList = ScopeDisposedList<string>.GetFromPool();
+                for (int i = 0; i < matches.Count; i++)
+                {
+                    if (matches[i] is Match match
+                        && match.Groups is GroupCollection matchGroups
+                        && matchGroups.Count > 1)
+                    {
+                        for (int j = 1; j < matchGroups.Count; j++)
+                        {
+                            if (matchGroups[j] is Group group
+                                && group.Captures is CaptureCollection captures
+                                && !captures.IsNullOrEmpty())
+                            {
+                                if (Silent)
+                                    return true;
+
+                                captureList.AddRange(captures.Select(c => c.Value));
+                                any = true;
+                            }
+                        }
+                    }
+                }
+
+                if (Silent)
+                    return false;
+
+                if (any)
+                {
+                    Utils.Warn($"Found the following {nameof(BadWord)}:");
+                    Utils.Log($"{nameof(Text)}: {Text}");
+                    string regexString = "sundry";
+                    if (BadWord.RegexCache?.FirstOrDefault(kvp => kvp.Value == Regex) is (BadWord.SeverityLevel severity, Regex regex))
+                    {
+                        regexString = $"{(int)severity} ({severity})";
+                    }
+
+                    Utils.Log($"{nameof(Regex)}: {regexString}");
                     captureList.IteratorSafe().Loggregate(
                         Proc: c => $": {c}",
                         Empty: ": none",
@@ -2230,6 +2408,16 @@ namespace UD_Bones_Folder.Mod
 
         public static string NameOrMissing(this GameObjectBlueprint Blueprint)
             => Blueprint?.Name ?? "MISSING_BLUEPRINT"
+            ;
+
+        public static BlueprintSpec RequireBlueprintSpec(this GameObject GameObject)
+            => GameObject
+                ?.RequirePart<UD_Bones_BlueprintSpec>()
+                ?.BlueprintSpec
+            ;
+
+        public static bool TryRequireBlueprintSpec(this GameObject GameObject, out BlueprintSpec BlueprintSpec)
+            => (BlueprintSpec = GameObject.RequireBlueprintSpec()) != null
             ;
     }
 }

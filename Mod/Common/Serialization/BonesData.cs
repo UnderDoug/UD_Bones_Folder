@@ -23,6 +23,7 @@ using XRL.World.Parts.Skill;
 using XRL.World.Parts.Mutation;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using UD_Bones_Folder.Mod.BonesSystem;
+using XRL.UI;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -58,7 +59,6 @@ namespace UD_Bones_Folder.Mod
             => BonesManager?.ExhumeLunarRegent(SaveBonesInfo, NoStatus)
             ;
 
-
         public GameObject ExtractLunarRegent(
             SaveBonesInfo BonesInfo,
             out LunarPartyIDs CachedLunarCourtiers,
@@ -69,6 +69,8 @@ namespace UD_Bones_Folder.Mod
         {
             CachedLunarCourtiers = null;
             Blocked = false;
+
+            using var status = Loading.StartTask($"Materializing Lunar Regent", Visible: false);
 
             if (PseudoZone != null)
             {
@@ -178,11 +180,14 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(Extensions.ApplyRegistrar);
                             bonesObject.ApplyRegistrar();
 
-                            catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.TryFeverWarp(BonesInfo);
-
                             if (bonesObject.TryGetPart(out GivesRep givesRep))
                                 givesRep.wasParleyed = false;
+
+                            catchFlag = nameof(Extensions.TryModerate);
+                            bonesObject.TryModerate(BonesInfo);
+
+                            catchFlag = nameof(Extensions.TryFeverWarp);
+                            bonesObject.FeverWarp(BonesInfo.ID);
 
                             if (bonesObject.IsLunarRegent(BonesID))
                             {
@@ -325,6 +330,8 @@ namespace UD_Bones_Folder.Mod
             }
 
             Zone.SetZoneProperty(nameof(BonesID), BonesID);
+
+            using var status = Loading.StartTask($"Materializing Lunar Regent", Visible: false);
             if (PseudoZone != null)
                 return ApplyPseudoZone(Zone, BonesInfo, Type, out LunarRegent, out Blocked);
 
@@ -430,8 +437,11 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(Extensions.ApplyRegistrar);
                             bonesObject.ApplyRegistrar();
 
+                            catchFlag = nameof(Extensions.TryModerate);
+                            bonesObject.TryModerate(BonesInfo);
+
                             catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.TryFeverWarp(BonesInfo);
+                            bonesObject.FeverWarp(BonesInfo.ID);
 
                             if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
                             {

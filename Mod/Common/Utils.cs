@@ -58,549 +58,86 @@ namespace UD_Bones_Folder.Mod
 
         public const double FPS_MODULO = 8.0;
 
+        private static int LastSpriteManagerPathMapCount = 0;
+        [ModSensitiveStaticCache(CreateEmptyInstance = false)]
         private static StringMap<exTextureInfo> _SpriteManagerPathMap;
         public static StringMap<exTextureInfo> SpriteManagerPathMap => _SpriteManagerPathMap ??= GetSpriteManagerPathMapNaughty();
 
         public static double CurrentFrame => UD_Bones_LunarColors.GetCurrentAnimationFrame();
         public static double CurrentKeyframe => UD_Bones_LunarColors.GetCurrentAnimationKeyframe();
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByCategory = new();
+        [ModSensitiveStaticCache(CreateEmptyInstance = false)]
+        private static exTextureInfo _InvalidTextureInfo;
+        public static exTextureInfo InvalidTextureInfo => _InvalidTextureInfo ??= GetSpriteManagerInvalidInfoNaughty();
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<int, HashSet<string>> BlueprintsByTier = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByWeaponSkill = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByEquipmentSlot = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsBySpecies = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByClass = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByPaintedWall = new();
-
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static Dictionary<string, HashSet<string>> BlueprintsByPaintedFence = new();
+        #region Blueprint Specs
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static HashSet<string> CachedBlueprints = new();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        public static Dictionary<string, Mod.BlueprintSpec> CachedBlueprintSpecs = new();
+        public static Dictionary<string, BlueprintSpec> CachedBlueprintSpecs = new();
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        public static Dictionary<string, bool> IsTileCache = new();
 
         [ModSensitiveCacheInit]
         public static void CacheBlueprintsBySpec()
         {
-            using var status = Loading.StartTask("Converting Lunar Regents");
-
-            foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom("PhysicalObject"))
+            using (var status = Loading.StartTask("Converting Lunar Regents"))
             {
-                CachedBlueprintSpecs ??= new();
-                if (!CachedBlueprintSpecs.TryGetValue(blueprint.Name, out var cachedSpec))
+                foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom(Mod.BlueprintSpec.BASE_BLUEPRINT))
                 {
-                    if (Mod.BlueprintSpec.TryCreateFrom(blueprint, out cachedSpec))
-                        CachedBlueprintSpecs[blueprint.Name] = cachedSpec;
-                }
-
-                string catchFlag = "0 - Top";
-                try
-                {
-                    catchFlag = "1 - Checking Texture";
-                    if (!blueprint.GetRenderable().Tile.IsTile())
-                        continue;
-
-                    catchFlag = "2 - Check Excluded";
-                    if (blueprint.IsExcludedFromDynamicEncounters())
-                        continue;
-
-                    catchFlag = "3 - Physics Category";
-                    if (blueprint.TryGetPartParameter(nameof(Physics), nameof(Physics.Category), out string physicsCategory))
-                        CacheValue(ref BlueprintsByCategory, physicsCategory, blueprint.Name);
-
-                    catchFlag = "4 - Tier";
-                    CacheValue(ref BlueprintsByTier, blueprint.Tier, blueprint.Name);
-
-                    catchFlag = "5 - TechTier";
-                    CacheValue(ref BlueprintsByTier, blueprint.TechTier, blueprint.Name);
-
-                    catchFlag = "6 - MeleeWeapon.Skill";
-                    if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
-                        CacheValue(ref BlueprintsByWeaponSkill, meleeWeaponSkill, blueprint.Name);
-
-                    catchFlag = "7 - MeleeWeapon.Slot";
-                    if (blueprint.TryGetPartParameter(nameof(MeleeWeapon), nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
-                        CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
-
-                    catchFlag = "8 - MissileWeapon.Skill";
-                    if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.Skill), out string missileWeaponSkill))
-                        CacheValue(ref BlueprintsByWeaponSkill, missileWeaponSkill, blueprint.Name);
-
-                    catchFlag = "9 - MissileWeapon.SlotType";
-                    if (blueprint.TryGetPartParameter(nameof(MissileWeapon), nameof(MissileWeapon.SlotType), out string missileWeaponSlot))
-                        CacheValue(ref BlueprintsByEquipmentSlot, meleeWeaponSlot, blueprint.Name);
-
-                    catchFlag = "10 - Armor.WornOn";
-                    if (blueprint.TryGetPartParameter(nameof(Armor), nameof(Armor.WornOn), out string armorSlot))
-                        CacheValue(ref BlueprintsByEquipmentSlot, armorSlot, blueprint.Name);
-
-                    catchFlag = "11 - Species";
-                    if (blueprint.TryGetStringPropertyOrTag("Species", out string speciesTag))
-                        CacheValue(ref BlueprintsBySpecies, speciesTag, blueprint.Name);
-
-                    catchFlag = "12 - Class";
-                    if (blueprint.TryGetStringPropertyOrTag("Class", out string classTag))
-                        CacheValue(ref BlueprintsByClass, classTag, blueprint.Name);
-
-                    catchFlag = "13 - PaintedWall";
-                    if (blueprint.TryGetStringPropertyOrTag("PaintedWall", out string paintedWallTag))
-                        CacheValue(ref BlueprintsByPaintedWall, paintedWallTag, blueprint.Name);
-
-                    catchFlag = "14 - PaintedFence";
-                    if (blueprint.TryGetStringPropertyOrTag("PaintedFence", out string paintedFenceTag))
-                        CacheValue(ref BlueprintsByPaintedFence, paintedFenceTag, blueprint.Name);
-                }
-                catch (Exception x)
-                {
-                    Error($"Failed to cache blueprint specs for {blueprint?.Name ?? "MISSING_BLUEPRINT"} at {nameof(catchFlag)} {catchFlag}", x);
-                    continue;
-                }
-            }
-        }
-
-        public class BlueprintSpec
-        {
-            public string DebugName;
-            public string Blueprint;
-
-            public bool AlreadyExists;
-
-            public string Category = "";
-            public HashSet<int> Tiers = new();
-            public string WeaponSkill = "";
-            public string EquipmentSlot = "";
-            public string Species = "";
-            public string Class = "";
-            public string PaintedWall = "";
-            public string PaintedFence = "";
-
-            public BlueprintSpec()
-            {
-            }
-
-            public BlueprintSpec(GameObject GameObject)
-                : this()
-            {
-                DebugName = GameObject.DebugName;
-                Blueprint = GameObject.Blueprint;
-
-                if (BonesManager.System.HasBlueprintReplacement(Blueprint)
-                    && BonesManager.System.HasTileReplacement(Blueprint))
-                {
-                    //Log($"{nameof(BlueprintSpec)}: Already have entry for {Blueprint}");
-                    AlreadyExists = true;
-                    return;
-                }
-
-                Category = GameObject?.Physics?.Category;
-
-                try
-                {
-                    if ((GameObject?.HasIntProperty("Tier") is true)
-                        || (GameObject?.HasIntProperty("TechTier") is true))
-                    {
-                        Tiers = new();
-                        if (GameObject?.GetIntPropertyIfSet("Tier") is int tier)
-                            Tiers.Add(tier);
-
-                        if (GameObject?.GetIntPropertyIfSet("TechTier") is int techTier)
-                            Tiers.Add(techTier);
-                    }
-                }
-                catch (Exception x)
-                {
-                    Error($"{nameof(BlueprintSpec)} Tiers", x);
-                }
-
-                using var workingList = ScopeDisposedList<string>.GetFromPool();
-                try
-                {
-                    if (GameObject?.GetPart<MissileWeapon>()?.Skill is string missileSkill)
-                    {
-                        //Log($"{1.Indent()}{nameof(MissileWeapon)}: {missileSkill}");
-                        workingList.Add(missileSkill);
-                    }
-                    if (!GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
-                        && GameObject?.GetPart<MeleeWeapon>()?.Skill is string meleeSkill)
-                    {
-                        //Log($"{1.Indent()}{nameof(MeleeWeapon)}: {meleeSkill}");
-                        workingList.Add(meleeSkill);
-                    }
-                    ProcessWorkingList(out WeaponSkill, workingList.AsEnumerable());
-                    workingList.Clear();
-                }
-                catch (Exception x)
-                {
-                    Error($"{nameof(BlueprintSpec)} Skills", x);
-                    workingList.Clear();
-                }
-
-                try
-                {
-                    if (GameObject?.GetPart<MissileWeapon>()?.SlotType is string missileSlotRaw
-                        && !missileSlotRaw.IsNullOrEmpty())
-                    {
-                        //Log($"{1.Indent()}{nameof(MissileWeapon)}");
-                        if (missileSlotRaw.CachedCommaExpansion() is IEnumerable<string> missileSlots
-                            && !missileSlots.IsNullOrEmpty())
-                        {
-                            /*missileSlots.Loggregate(
-                                Proc: s => s,
-                                Empty: "empty",
-                                PostProc: e => $"{2.Indent()}: {e}");*/
-                            workingList.AddRange(missileSlots);
-                        }
-                        else
-                        {
-                            //Log($"{2.Indent()}: {missileSlotRaw}");
-                            workingList.Add(missileSlotRaw);
-                        }
-                    }
-                    if (GameObject?.GetPart<Armor>()?.WornOn is string armorSlotRaw
-                        && !armorSlotRaw.IsNullOrEmpty())
-                    {
-                        //Log($"{1.Indent()}{nameof(Armor)}");
-                        if (armorSlotRaw.CachedCommaExpansion() is IEnumerable<string> armorSlots
-                            && !armorSlots.IsNullOrEmpty())
-                        {
-                            /*armorSlots.Loggregate(
-                                Proc: s => s,
-                                Empty: "empty",
-                                PostProc: e => $"{2.Indent()}: {e}");*/
-                            workingList.AddRange(armorSlots);
-                        }
-                        else
-                        {
-                            //Log($"{2.Indent()}: {armorSlotRaw}");
-                            workingList.Add(armorSlotRaw);
-                        }
-                    }
-                    if (!GameObject.GetStringProperty("ImprovisedWeapon", "false").EqualsNoCase("true")
-                        && GameObject?.GetPart<MeleeWeapon>()?.Slot is string meleeSlotRaw
-                            && !meleeSlotRaw.IsNullOrEmpty())
-                    {
-                        //Log($"{1.Indent()}{nameof(MeleeWeapon)}");
-                        if (meleeSlotRaw.CachedCommaExpansion() is IEnumerable<string> meleeSlots
-                            && !meleeSlots.IsNullOrEmpty())
-                        {
-                            /*meleeSlots.Loggregate(
-                                Proc: s => s,
-                                Empty: "empty",
-                                PostProc: e => $"{2.Indent()}: {e}");*/
-                            workingList.AddRange(meleeSlots);
-                        }
-                        else
-                        {
-                            //Log($"{2.Indent()}: {meleeSlotRaw}");
-                            workingList.Add(meleeSlotRaw);
-                        }
-                    }
-                    if (GameObject?.GetStringProperty("UsesSlots") is string usesSlotRaw
-                        && !usesSlotRaw.IsNullOrEmpty())
-                    {
-                        //Log($"{1.Indent()}UsesSlots");
-                        if (usesSlotRaw.CachedCommaExpansion() is IEnumerable<string> usesSlots
-                            && !usesSlots.IsNullOrEmpty())
-                        {
-                            /*usesSlots.Loggregate(
-                                Proc: s => s,
-                                Empty: "empty",
-                                PostProc: e => $"{2.Indent()}: {e}");*/
-                            workingList.AddRange(usesSlots);
-                        }
-                        else
-                        {
-                            //Log($"{2.Indent()}: {usesSlotRaw}");
-                            workingList.Add(usesSlotRaw);
-                        }
-                    }
-                    ProcessWorkingList(out EquipmentSlot, workingList.AsEnumerable());
-                    workingList.Clear();
-                }
-                catch (Exception x)
-                {
-                    Error($"{nameof(BlueprintSpec)} Slots", x);
-                    workingList.Clear();
-                }
-
-                try
-                {
-                    //Log($"{1.Indent()}Species");
-                    if (GameObject?.GetStringProperty("Species") is string speciesProp
-                        && !speciesProp.IsNullOrEmpty())
-                    {
-                        //Log($"{2.Indent()}: {speciesProp}");
-                        workingList.Add(speciesProp);
-                    }
-                    ProcessWorkingList(out Species, workingList.AsEnumerable());
-                    workingList.Clear();
-                }
-                catch (Exception x)
-                {
-                    Error($"{nameof(BlueprintSpec)} Species", x);
-                    workingList.Clear();
-                }
-
-                try
-                {
-                    if (GameObject?.GetStringProperty(nameof(Class)) is string classProp)
-                        Class = classProp;
-
-                    if (GameObject?.GetStringProperty(nameof(PaintedWall)) is string paintedWallProp)
-                        PaintedWall = paintedWallProp;
-
-                    if (GameObject?.GetStringProperty(nameof(PaintedFence)) is string paintedFenceProp)
-                        PaintedFence = paintedFenceProp;
-                }
-                catch (Exception x)
-                {
-                    Error($"{nameof(BlueprintSpec)} Class, PaintedWall, PintedFence", x);
-                }
-            }
-
-            public BlueprintSpec(BlueprintSpec Source)
-            {
-                DebugName = Source?.DebugName;
-                Blueprint = Source?.Blueprint;
-
-                Category = Source?.Category;
-                Tiers = Source?.Tiers;
-                WeaponSkill = Source?.WeaponSkill;
-                EquipmentSlot = Source?.Category;
-                Species = Source?.Species;
-                Class = Source?.Class;
-                PaintedWall = Source?.PaintedWall;
-                PaintedFence = Source?.PaintedFence;
-            }
-
-            public bool IsEmpty
-                => Category == null
-                && Tiers == null
-                && WeaponSkill == null
-                && EquipmentSlot == null
-                && Species == null
-                && Class == null
-                && PaintedWall == null
-                && PaintedFence == null
-                ;
-
-            public bool IsAll
-                => Category.IsNullOrEmpty()
-                && Tiers.IsNullOrEmpty()
-                && WeaponSkill.IsNullOrEmpty()
-                && EquipmentSlot.IsNullOrEmpty()
-                && Species.IsNullOrEmpty()
-                && Class.IsNullOrEmpty()
-                && PaintedWall.IsNullOrEmpty()
-                && PaintedFence.IsNullOrEmpty()
-                ;
-
-            public IEnumerable<string> GetDebugLines(int Indent = 0)
-            {
-                yield return $"{Indent.Indent()}{nameof(DebugName)}: {DebugName ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(Blueprint)}: {Blueprint ?? "NONE"}";
-
-                if (AlreadyExists)
-                {
-                    yield return $"{nameof(AlreadyExists)}: {AlreadyExists}";
-                    yield break;
-                }
-                yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(Tiers)}: {Tiers?.Count ?? -1}";
-                if (Tiers.IsNullOrEmpty())
-                    yield return $"{(Indent + 1).Indent()}: Empty";
-                else
-                    foreach (var tier in Tiers)
-                        yield return $"{(Indent + 1).Indent()}: {tier}";
-
-                yield return $"{Indent.Indent()}{nameof(WeaponSkill)}: {WeaponSkill ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(EquipmentSlot)}: {EquipmentSlot ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(Species)}: {Species ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(Class)}: {Class ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(PaintedWall)}: {PaintedWall ?? "NONE"}";
-                yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {PaintedFence ?? "NONE"}";
-            }
-
-            private static void ProcessWorkingList(out string Field, IEnumerable<string> WorkingList)
-            {
-                Field = "";
-                if (!WorkingList.IsNullOrEmpty())
-                    Field = WorkingList.Aggregate(Field, CommaDelimitedAggregator);
-            }
-
-            protected IEnumerable<string> GetMatching<T>(Dictionary<T, HashSet<string>> Cache, T Key, T NoValue, T AllValue)
-            {
-                if (Equals(Key, NoValue))
-                    return Enumerable.Empty<string>();
-
-                if (Equals(Key, AllValue))
-                    return Cache.Values.GetUnionOfSets().IteratorSafe();
-                else
-                    return Cache.GetValue(Key).IteratorSafe();
-            }
-
-            public IEnumerable<string> GetMatchingStringKey(Dictionary<string, HashSet<string>> Cache, string Key)
-            {
-                var output = new HashSet<string>();
-                if (Key.IsNullOrEmpty())
-                    return output;
-
-                if (Key?.CachedCommaExpansion().ToList() is List<string> keys
-                    && !keys.IsNullOrEmpty())
-                {
-                    foreach (var key in keys)
-                        output.UnionWith(GetMatching(Cache, key, null, string.Empty));
-                }
-                else
-                    output.UnionWith(GetMatching(Cache, Key, null, string.Empty));
-
-                return output;
-            }
-
-            public IEnumerable<string> GetMatchingCategory()
-                => GetMatchingStringKey(BlueprintsByCategory, Category)
-                ;
-
-            public IEnumerable<string> GetMatchingTier()
-            {
-                if (Tiers == null)
-                    return Enumerable.Empty<string>();
-
-                if (Tiers.IsNullOrEmpty())
-                    return BlueprintsByTier.Values.GetUnionOfSets();
-                else
-                {
-                    var output = new HashSet<string>();
-                    foreach (int tier in Tiers)
-                        output.UnionWith(GetMatching(BlueprintsByTier, tier, -1, 9));
-
-                    return output;
-                }
-            }
-
-            public IEnumerable<string> GetMatchingWeaponSkill()
-                => GetMatchingStringKey(BlueprintsByWeaponSkill, WeaponSkill)
-                ;
-
-            public IEnumerable<string> GetMatchingEquipmentSlot()
-                => GetMatchingStringKey(BlueprintsByEquipmentSlot, EquipmentSlot)
-                ;
-
-            public IEnumerable<string> GetMatchingSpecies()
-                => GetMatchingStringKey(BlueprintsBySpecies, Species)
-                ;
-
-            public IEnumerable<string> GetMatchingClass()
-                => GetMatchingStringKey(BlueprintsByClass, Class)
-                ;
-
-            public IEnumerable<string> GetMatchingPaintedWall()
-                => GetMatchingStringKey(BlueprintsByPaintedWall, PaintedWall)
-                ;
-
-            public IEnumerable<string> GetMatchingPaintedFence()
-                => GetMatchingStringKey(BlueprintsByPaintedFence, PaintedFence)
-                ;
-
-            public IEnumerable<string> GetMatchingSpec()
-            {
-                if (IsEmpty)
-                    return Enumerable.Empty<string>();
-
-                var output = new HashSet<string>(CachedBlueprints);
-
-                if (IsAll)
-                    return output;
-
-                if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingTier())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingSpecies())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingClass())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                        .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                    .IsNullOrEmpty())
-                {
-                    output.Clear();
-                    output.UnionWith(CachedBlueprints);
-                    if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingWeaponSkill())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingEquipmentSlot())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                            .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                        .IsNullOrEmpty())
-                    {
-                        output.Clear();
-                        output.UnionWith(CachedBlueprints);
-                        if (output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                                .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedWall())
-                                .IntersectWithUnlessEmptyOrNull(GetMatchingPaintedFence())
-                            .IsNullOrEmpty())
-                            return output.IntersectWithUnlessEmptyOrNull(GetMatchingCategory())
-                                ;
-                        return output;
-                    }
-                    return output;
-                }
-                return output;
-            }
-        }
-
-        public static HashSet<string> GetAlternativeBlueprintsBySpec(BlueprintSpec Spec)
-            => new (Spec.GetMatchingSpec())
-            ;
-
-        private static void CacheValue<T>(ref Dictionary<T, HashSet<string>> Cache, T Key, string Value)
-        {
-            try
-            {
-                Cache ??= new();
-                if (Key is not null)
-                {
-                    if (!Cache.ContainsKey(Key))
-                        Cache[Key] = new();
-                    Cache[Key].Add(Value);
+                    CachedBlueprintSpecs ??= new();
+                    CachedBlueprintSpecs.Clear();
 
                     CachedBlueprints ??= new();
-                    CachedBlueprints.Add(Value);
+                    CachedBlueprints.Clear();
+
+                    if (!CachedBlueprintSpecs.ContainsKey(blueprint.Name))
+                    {
+                        if (BlueprintSpec.TryCreateFrom(blueprint, out var cachedSpec))
+                        {
+                            CachedBlueprints.Add(blueprint.Name);
+                            CachedBlueprintSpecs[blueprint.Name] = cachedSpec;
+                        }
+                    }
                 }
-            }
-            catch (Exception x)
-            {
-                Warn($"Failed to cache [{Key?.ToString() ?? "MISSING_KEY"}: {Value}]: {x}");
             }
         }
 
+        #endregion
+        #region Pseudo-Debug
+
+        public static void Error(ModInfo ModInfo, object Message)
+            => (ModInfo ?? ThisMod).Error(Message)
+            ;
+
         public static void Error(object Message)
-            => ThisMod.Error(Message)
+            => Error(ModInfo: null, Message)
+            ;
+
+        public static void Error(ModInfo ModInfo, object Context, Exception X)
+            => Error(ModInfo, $"{Context}: {X}")
             ;
 
         public static void Error(object Context, Exception X)
-            => Error($"{Context}: {X}")
+            => Error(ModInfo: null, Context, X)
             ;
 
+        public static void Warn(ModInfo ModInfo, object Message)
+            => (ModInfo ?? ThisMod).Warn(Message)
+            ;
         public static void Warn(object Message)
-            => ThisMod.Warn(Message)
+            => Warn(ModInfo: null, Message)
+            ;
+
+        public static void Warn(ModInfo ModInfo, object Context, Exception X)
+            => Warn(ModInfo, $"{Context}: {X}")
             ;
 
         public static void Warn(object Context, Exception X)
-            => Warn($"{Context}: {X}")
+            => Warn(ModInfo: null, Context, X)
             ;
 
         public static void Info(object Message)
@@ -616,6 +153,36 @@ namespace UD_Bones_Folder.Mod
             Log(Message);
             return Return;
         }
+
+        private static string SafeInvoke<T>(this Func<string, string> PostProc, Func<T, string> Proc, T Element, string NoArg)
+        {
+            string proc = Proc?.Invoke(Element) ?? Element?.ToString() ?? NoArg;
+            if (PostProc != null)
+                proc = PostProc(proc);
+            return proc;
+        }
+
+        public static IEnumerable<T> Log<T>(IEnumerable<T> Source, object Message)
+        {
+            Log(Message);
+            return Source;
+        }
+
+        public static IEnumerable<T> Loggregate<T>(
+            IEnumerable<T> Source,
+            Func<T, string> Proc = null,
+            string Empty = null,
+            Func<string, string> PostProc = null
+            )
+            => Source.IsNullOrEmpty()
+            ? Log(Source, PostProc?.Invoke(Empty) ?? Empty)
+            : Source.Aggregate(
+                seed: Source,
+                func: (a, n) => Log(a, PostProc.SafeInvoke(Proc, n, "NO_ELEMENT")))
+            ;
+
+        #endregion
+        #region Variable Replacers
 
         [VariableReplacer]
         public static string ud_nbsp(ReplacerContext Context)
@@ -781,6 +348,9 @@ namespace UD_Bones_Folder.Mod
                 ;
         }
 
+        #endregion
+        #region Conversation Delegates
+
         [ConversationDelegate]
         public static bool IfLastChoiceAny(ConversationContext Context)
             => (ConversationUI.LastChoice?.ID).IsNullOrEmpty() == Context.Value.IsNullOrEmpty()
@@ -840,6 +410,8 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
+        #endregion
+
         public static void GetMinMax<T>(T Operand1, T Operand2, out T Min, out T Max)
             where T : IConvertible
         {
@@ -896,9 +468,11 @@ namespace UD_Bones_Folder.Mod
             return max;
         }
 
+        #region Aggregator Functions
+
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
-            => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
-            ;
+           => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
+           ;
 
         public static string CommaDelimitedAggregator<T>(string Accumulator, T Next)
             => DelimitedAggregator(Accumulator, Next, ",")
@@ -924,32 +498,8 @@ namespace UD_Bones_Folder.Mod
             => Strings?.Aggregate("", PeriodDelimitedAggregator)
             ;
 
-        private static string SafeInvoke<T>(this Func<string, string> PostProc, Func<T, string> Proc, T Element, string NoArg)
-        {
-            string proc = Proc?.Invoke(Element) ?? Element?.ToString() ?? NoArg;
-            if (PostProc != null)
-                proc = PostProc(proc);
-            return proc;
-        }
 
-        public static IEnumerable<T> Log<T>(IEnumerable<T> Source, object Message)
-        {
-            Log(Message);
-            return Source;
-        }
-
-        public static IEnumerable<T> Loggregate<T>(
-            IEnumerable<T> Source,
-            Func<T, string> Proc = null,
-            string Empty = null,
-            Func<string, string> PostProc = null
-            )
-            => Source.IsNullOrEmpty()
-            ? Log(Source, PostProc?.Invoke(Empty) ?? Empty)
-            : Source.Aggregate(
-                seed: Source,
-                func: (a, n) => Log(a, PostProc.SafeInvoke(Proc, n, "NO_ELEMENT")))
-            ;
+        #endregion
 
         public static async Task PopupShowAsync(
             string Message,
@@ -972,7 +522,7 @@ namespace UD_Bones_Folder.Mod
                 PopupLocation: PopupLocation);
         }
 
-        public static exTextureInfo GetSpriteManagerInvalidInfoNaughty(string DebugForTile = null)
+        private static exTextureInfo GetSpriteManagerInvalidInfoNaughty(string DebugForTile = null)
         {
             string fieldName = "InvalidInfo";
             var textureInfo = SpriteManager.GetTextureInfo("Text_32.bmp"); // this is what it defaults to at the time this was written
@@ -1001,7 +551,7 @@ namespace UD_Bones_Folder.Mod
             return textureInfo;
         }
 
-        public static StringMap<exTextureInfo> GetSpriteManagerPathMapNaughty()
+        private static StringMap<exTextureInfo> GetSpriteManagerPathMapNaughty()
         {
             string fieldName = "PathMap";
             StringMap<exTextureInfo> pathMap = null;
@@ -1037,12 +587,18 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             bool textureNull = false;
-            SerializationExtensions.PerformSilently(() => textureNull = SpriteManager.GetTextureInfo(Tile, false) == null);
+            SerializationExtensions.PerformSilently(delegate()
+            {
+                textureNull = SpriteManager.GetTextureInfo(Tile, false) == null;
+            });
             if (textureNull)
                 return false;
 
             bool textureInvalid = false;
-            SerializationExtensions.PerformSilently(() => textureInvalid = SpriteManager.GetTextureInfo(Tile) == GetSpriteManagerInvalidInfoNaughty(Tile));
+            SerializationExtensions.PerformSilently(delegate()
+            {
+                textureInvalid = SpriteManager.GetTextureInfo(Tile) == InvalidTextureInfo;
+            });
             if (textureInvalid)
                 return false;
 
@@ -1059,31 +615,65 @@ namespace UD_Bones_Folder.Mod
                 && The.Game.Running
                 && The.GameContext != null;
 
+            string currentContextString = "UnknownContext";
+            if (The.CurrentContext == The.GameContext)
+                currentContextString = nameof(The.GameContext);
+            else
+            if (The.CurrentContext == The.UiContext)
+                currentContextString = nameof(The.UiContext);
+
+            Log($"{nameof(The.CurrentContext)} is {currentContextString} (" +
+                $"{nameof(isGameInValidState)}: {isGameInValidState}" +
+                (LastSpriteManagerPathMapCount != (SpriteManagerPathMap?.Count ?? 0)
+                    ? $", {nameof(SpriteManagerPathMap)}: {SpriteManagerPathMap?.Count ?? 0}"
+                    : null) +
+                $", {nameof(Tile)}: {Tile})");
+
+            LastSpriteManagerPathMapCount = SpriteManagerPathMap?.Count ?? 0;
             var previousContext = The.CurrentContext;
 
-            if (isGameInValidState)
+            /*if (previousContext != The.UiContext)
+                await The.UiContext;*/
+
+            if (isGameInValidState
+                && The.CurrentContext != The.GameContext)
                 await The.GameContext;
 
             try
             {
-
                 if (isGameInValidState)
+                {
                     if (SpriteManagerPathMap is StringMap<exTextureInfo> pathMap)
-                    return pathMap.TryGetValue(Tile, out var textureInfo)
-                        && textureInfo is not null
-                        && textureInfo != GetSpriteManagerInvalidInfoNaughty(Tile)
-                        ;
+                    {
+                        /*return pathMap.TryGetValue(Tile, out var textureInfo)
+                            && textureInfo is not null
+                            && textureInfo != InvalidTextureInfo
+                            ;*/
+                    }
+                }
 
-                if (SpriteManager.GetTextureInfo(Tile, false) is null)
+                bool textureNull = false;
+                SerializationExtensions.PerformSilently(delegate ()
+                {
+                    textureNull = SpriteManager.GetTextureInfo(Tile, false) == null;
+                });
+                if (textureNull)
                     return false;
 
-                if (SpriteManager.GetTextureInfo(Tile) == GetSpriteManagerInvalidInfoNaughty(Tile))
+                bool textureInvalid = false;
+                SerializationExtensions.PerformSilently(delegate ()
+                {
+                    textureInvalid = SpriteManager.GetTextureInfo(Tile) == InvalidTextureInfo;
+                });
+                if (textureInvalid)
                     return false;
             }
             finally
             {
                 if (isGameInValidState)
-                    if (The.CurrentContext != previousContext)
+                    if (The.CurrentContext != previousContext
+                        //&& false
+                        )
                         await previousContext;
             }
             return true;

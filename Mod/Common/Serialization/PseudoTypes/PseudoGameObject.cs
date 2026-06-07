@@ -135,13 +135,15 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 ;
             CrossGameObject.Clone.ApplyRegistrar();
 
-            CrossGameObject.Clone.TryFeverWarp(BonesInfo);
-
             if (CrossGameObject.Clone.TryGetPart(out GivesRep givesRep))
                 givesRep.wasParleyed = false;
 
             if (CrossGameObject.Clone.Energy is Statistic energy)
                 energy.BaseValue = 0;
+
+            CrossGameObject.Clone.TryModerate(BonesInfo);
+
+            CrossGameObject.Clone.TryFeverWarp(BonesInfo.ID);
 
             return CrossGameObject.Clone;
         }

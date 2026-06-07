@@ -25,38 +25,66 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_FeverWarped : UD_Bones_BaseLunarPart
     {
+        [Serializable]
+        [Flags]
+        public enum WarpFlags
+        {
+            None = 0,
+            Blueprint = 1,
+            Tile = 2,
+            Total = 3,
+        }
+
+        public static string TileOnlyProp => $"{nameof(UD_Bones_FeverWarped)}::{nameof(TileOnly)}";
+
         protected string TileColor;
         protected string DetailColor;
 
+        public WarpFlags Flags;
+
+        private bool TileOnly
+        {
+            get => Flags == WarpFlags.Tile;
+            set => Flags = WarpFlags.Tile;
+        }
+
+        public bool CosmeticOnly
+        {
+            get => Flags == WarpFlags.None;
+            set => Flags = WarpFlags.None;
+        }
+
+
         [SerializeField]
-        private bool TileOnly;
+        private string _OriginalShortDesc;
+        public string OriginalShortDesc
+        {
+            get => _OriginalShortDesc;
+            protected set => _OriginalShortDesc = value;
+        }
 
-        public bool CosmeticOnly;
-
-        protected string OriginalShortDesc;
-
-        protected string DisplayNameCache;
-        protected string AdjectiveCache;
+        private string DisplayNameCache;
+        private string AdjectiveCache;
 
         public bool HasBadWord;
         public BadWord.SeverityLevel BadWordSeverityOption;
         public BadDisplayName BadWordName;
         public bool BadWordDesc;
 
-        public bool NoTileColorEffects => HasBadWord
-            && BadWordSeverityOption >= BadWord.SeverityLevel.All
-            ;
-
         public UD_Bones_FeverWarped()
         {
-            BadWordSeverityOption = Options.ModerationMinimumSeverityLevel;
         }
 
-        public UD_Bones_FeverWarped(bool TileOnly, bool HasBadWord)
+        public UD_Bones_FeverWarped(WarpFlags Flags)
             : this()
         {
-            this.TileOnly = !HasBadWord && TileOnly;
-            this.HasBadWord = HasBadWord;
+            this.Flags = Flags;
+        }
+
+        public UD_Bones_FeverWarped(bool TileOnly)
+            : this()
+        {
+            this.TileOnly = TileOnly;
         }
 
         public static UD_Bones_FeverWarped NewCosmeticOnly()
@@ -68,6 +96,36 @@ namespace XRL.World.Parts
         public override void Attach()
         {
             base.Attach();
+        }
+
+        public override void Initialize()
+        {
+            base.Initialize();
+            ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
+            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::{nameof(TileOnly)}", null, true);
+            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
+            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{true}");
+
+            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
+                .OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
+            bonesColors.Persists = true;
+
+            if (ParentObject.IsEquipment())
+            {
+                if (!ParentObject.HasPart<Cursed>())
+                {
+                    // this was originally FAFO, but was maybe a little harsh.
+                    ParentObject.AddPart<Cursed>().RevealInDescription = true;
+                }
+            }
+
+            if (!CosmeticOnly
+                && ParentObject.TryRequireBlueprintSpec(out BlueprintSpec blueprintSpec)
+                && BonesManager.System.RequireReplacementEntryForGameObject(blueprintSpec) is ReplacementEntry replacementEntry)
+                replacementEntry.ApplyTo(ParentObject, Flags.HasFlag(WarpFlags.Tile), Flags.HasFlag(WarpFlags.Blueprint));
+
+            if (ParentObject.TryGetPart(out UD_Bones_Moderated moderatedPart))
+                moderatedPart.ModerateContent(ParentObject, Context: nameof(FeverWarped));
 
             if (ParentObject.TryGetPart(out Description description))
             {
@@ -85,123 +143,18 @@ namespace XRL.World.Parts
             }
         }
 
-        public override void Initialize()
-        {
-            base.Initialize();
-            ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
-            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", null, true);
-            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
-            ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{true}");
-
-            var bonesColors = ParentObject.RequirePart<UD_Bones_LunarColors>()
-                .OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
-            bonesColors.Persists = true;
-
-            if (ParentObject.IsEquipment())
+        public static UD_Bones_FeverWarped NewWithBonesID(
+            string BonesID,
+            WarpFlags Flags,
+            bool Persists = true
+            )
+            => new UD_Bones_FeverWarped
             {
-                if (ParentObject.RequirePart<Cursed>() is Cursed cursed)
-                {
-                    // this was originally FAFO, but was maybe a little harsh.
-                    cursed.RevealInDescription = true;
-                }
+                Flags = Flags,
+                Persists = Persists,
             }
-
-            if (!CosmeticOnly)
-            {
-                var render = ParentObject.RequirePart<Render>();
-
-                BonesManager.System.RequireAlternativeTileAndBlueprintForGameObject(
-                    BlueprintSpec: new Utils.BlueprintSpec(ParentObject),
-                    Blueprint: out string altBlueprint,
-                    Tile: out string altTile);
-
-                BlueprintSpec blueprintSpec = null;
-                if (!ParentObject.TryGetPart(out UD_Bones_BlueprintSpec blueprintSpecPart))
-                    blueprintSpec = blueprintSpecPart.BlueprintSpec;
-                else
-                    blueprintSpec = new BlueprintSpec(ParentObject);
-
-                if (BonesManager.System.RequireReplacementEntryForGameObject(blueprintSpec) is ReplacementEntry replacementEntry)
-                {
-                    replacementEntry.ApplyTo(ParentObject, true, !TileOnly);
-                }
-                else
-                {
-                    if (!TileOnly)
-                        ParentObject.Blueprint = altBlueprint;
-
-                    render.Tile = altTile;
-
-                    string flipSeed = ParentObject.GetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint");
-
-                    if (Stat.SeededRandom($"{flipSeed}:{nameof(render.HFlip)}", 0, 5) == 0)
-                        render.HFlip = true;
-
-                    if (Stat.SeededRandom($"{flipSeed}:{nameof(render.VFlip)}", 0, 25) == 0)
-                        render.VFlip = true;
-                }
-            }
-
-            if (HasBadWord)
-            {
-                if (BadWordName != null)
-                {
-                    if (BadWordName.IsBase)
-                    {
-                        string replacementName = ParentObject.GetBlueprint()?.DisplayName();
-                        if (ParentObject.IsLunarRegent()
-                            || replacementName.IsNullOrEmpty())
-                            replacementName = NameMaker.MakeName(ParentObject);
-
-                        ParentObject.DisplayName = replacementName;
-                    }
-
-                    if (BadWordName.IsAdjective)
-                        ParentObject?.RemovePart<DisplayNameAdjectives>();
-
-                    if (BadWordName.IsSizeAdjective)
-                        ParentObject?.RemovePart<SizeAdjective>();
-
-                    if (BadWordName.IsFactionAdjective)
-                        ParentObject?.RemovePart<DisplayNameFactionAdjective>();
-
-                    if (BadWordName.IsHonorific)
-                    {
-                        ParentObject.RemovePart<Honorifics>();
-                        if (ParentObject?.RequirePart<Honorifics>() is Honorifics honorifics)
-                            honorifics.Primary = NameMaker.MakeHonorific(ParentObject);
-                    }
-
-                    if (BadWordName.IsTitle)
-                    {
-                        ParentObject.RemovePart<Titles>();
-                        if (ParentObject?.RequirePart<Titles>() is Titles titles)
-                            titles.Primary = NameMaker.MakeTitle(ParentObject);
-                    }
-
-                    if (BadWordName.IsEpithet)
-                    {
-                        ParentObject.RemovePart<Epithets>();
-                        if (ParentObject?.RequirePart<Epithets>() is Epithets epithets)
-                            epithets.Primary = NameMaker.MakeEpithet(ParentObject);
-                    }
-                }
-
-                if (BadWordDesc
-                    && ParentObject != null
-                    && ParentObject.TryGetPart(out Description description))
-                {
-                    OriginalShortDesc = ParentObject.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description._Short));
-
-                    string bakedDescription = OriginalShortDesc
-                        .StartReplace()
-                        .AddObject(ParentObject)
-                        .ToString();
-
-                    description._Short = FeverWarpText(bakedDescription);
-                }
-            }
-        }
+            .OverrideBonesIDTyped< UD_Bones_FeverWarped>(BonesID)
+            ;
 
         public bool IsTileOnly()
             => TileOnly
@@ -438,17 +391,14 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(LunarObjectColorChangedEvent E)
         {
-            if (!NoTileColorEffects)
+            if (Options.EnableFlashingLightEffects
+                || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
             {
-                if (Options.EnableFlashingLightEffects
-                    || (E.LastFrame + ParentObject.BaseID).NegSafeModulo(UD_Bones_LunarColors.BaseAnimationLengthInFrames) == 0)
-                {
-                    DisplayNameCache = null;
-                    AdjectiveCache = null;
-                }
-                TileColor = E.TileColor;
-                DetailColor = E.DetailColor;
+                DisplayNameCache = null;
+                AdjectiveCache = null;
             }
+            TileColor = E.TileColor;
+            DetailColor = E.DetailColor;
             return base.HandleEvent(E);
         }
 
@@ -456,12 +406,21 @@ namespace XRL.World.Parts
         {
             E.AddEntry(this, "Adjective", GetAdjective());
             E.AddEntry(this, "Description", GetDescription());
+
+            using var flagStrings = ScopeDisposedList<string>.GetFromPool();
+            if (Flags == WarpFlags.None)
+                flagStrings.Add($"{WarpFlags.None} ({(int)WarpFlags.None})");
+            if (Flags.HasFlag(WarpFlags.Blueprint))
+                flagStrings.Add($"{WarpFlags.Blueprint} ({(int)WarpFlags.Blueprint})");
+            if (Flags.HasFlag(WarpFlags.Tile))
+                flagStrings.Add($"{WarpFlags.Tile} ({(int)WarpFlags.Tile})");
+            if (Flags.HasFlag(WarpFlags.Total))
+                flagStrings.Add($"{WarpFlags.Total} ({(int)WarpFlags.Total})");
+            E.AddEntry(this, $"{nameof(Flags)} ({(int)Flags})", flagStrings.Aggregate("", Utils.NewLineDelimitedAggregator));
+
             E.AddEntry(this, nameof(TileOnly), TileOnly);
             E.AddEntry(this, nameof(CosmeticOnly), CosmeticOnly);
-            E.AddEntry(this, nameof(HasBadWord), HasBadWord);
-            E.AddEntry(this, nameof(BadWordSeverityOption), $"{(int)BadWordSeverityOption} ({BadWordSeverityOption})");
-            E.AddEntry(this, nameof(BadWordName), BadWordName.DebugStrings().IteratorSafe().Aggregate("", Utils.NewLineDelimitedAggregator));
-            E.AddEntry(this, nameof(BadWordDesc), BadWordDesc);
+
             return base.HandleEvent(E);
         }
 

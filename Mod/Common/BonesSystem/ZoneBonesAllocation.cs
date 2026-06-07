@@ -89,8 +89,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         [ModSensitiveCacheInit]
         public static void Init()
         {
-            using var status = Loading.StartTask($"Caching Zone Bones Specs");
-            CacheZoneBonesSpecs();
+            Loading.LoadTask($"Caching Zone Bones Allocation Specs...", CacheZoneBonesSpecs);
         }
 
         public static bool CheckInit()

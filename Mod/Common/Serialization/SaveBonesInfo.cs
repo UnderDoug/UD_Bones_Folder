@@ -70,6 +70,7 @@ namespace UD_Bones_Folder.Mod
 
         public class ModsDifferInfo
         {
+            public bool IsDummy;
             public int UnavailableWhereBonesEnabled;
             public int EnabledWhereBonesDisabled;
             public int DisabledWhereBonesEnabled;
@@ -94,6 +95,9 @@ namespace UD_Bones_Folder.Mod
 
             public override string ToString()
             {
+                if (IsDummy)
+                    return "{{y|mods:}} {{K|N/A}}";
+
                 if (DifferLevel < 0)
                     return "{{y|mods:}} {{red|error}}";
 
@@ -221,6 +225,9 @@ namespace UD_Bones_Folder.Mod
         {
             get
             {
+                if (IsDummy)
+                    return FileLocationData.DummyFileLocationData;
+
                 if (FileLocationDataSet.IsNullOrEmpty()
                     && GetBonesJSON() is SaveBonesJSON bonesJSON
                     && !Directory.IsNullOrEmpty())
@@ -300,6 +307,18 @@ namespace UD_Bones_Folder.Mod
                 FileLocationData: LocationData,
                 SaveSize: 0L,
                 IsDummy: true)
+            ;
+
+        public string GetModsDifferString()
+            => ModsDiffer?.ToString()
+            ?? "{{y|mods:}} {{K|N/A}}"
+            ;
+
+        public string GetFileLocationTypeColorString()
+            => (FileLocationData?.Type ?? FileLocationData.LocationType.None)
+                .ToString()
+                .ToLower()
+                .Colored(FileLocationData?.GetFileLocationDataTypeColor() ?? "R")
             ;
 
         public string GetName()
@@ -1150,6 +1169,14 @@ namespace UD_Bones_Folder.Mod
 
         public ModsDifferInfo GetModsDifferInfo()
         {
+            if (IsDummy)
+            {
+                return new ModsDifferInfo
+                {
+                    IsDummy = true
+                };
+            }
+
             using var loadedMods = ScopeDisposedList<string>.GetFromPool();
 
             if (ModManager.GetRunningMods() is IEnumerable<string> runningMods)
@@ -1162,6 +1189,8 @@ namespace UD_Bones_Folder.Mod
                     UnavailableWhereBonesEnabled = -1,
                 };
             }
+
+            ModsEnabled ??= new();
 
             using var bonesHasButNotAvailable = ScopeDisposedList<string>.GetFromPoolFilledWith(ModsEnabled.Except(ModManager.GetAvailableMods()));
             using var loadedButBonesMissing = ScopeDisposedList<string>.GetFromPoolFilledWith(loadedMods.Except(ModsEnabled));

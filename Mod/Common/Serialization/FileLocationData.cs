@@ -39,6 +39,11 @@ namespace UD_Bones_Folder.Mod
 
         public static string MissingLocaitonShortDisplayName => $"a {"strange location".Colored(LocationType.None.TypeColor())}";
 
+        public static FileLocationData DummyFileLocationData = new FileLocationData
+        {
+            Type = LocationType.None,
+        };
+
         public LocationType Type;
         public string Path;
         public OsseousAsh.Host Host;

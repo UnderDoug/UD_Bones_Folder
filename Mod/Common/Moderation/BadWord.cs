@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -58,6 +59,7 @@ namespace UD_Bones_Folder.Mod.Moderation
         private static string _FilterFilePath;
         public static string FilterFilePath => _FilterFilePath ??= Utils.ThisMod.Files.FirstOrDefault(f => f.Name == FilterFileName).FullName;
 
+        [ModSensitiveStaticCache(CreateEmptyInstance = false)]
         private static HashSet<BadWord> _BadWordsSet;
         public static HashSet<BadWord> BadWordsSet
         {
@@ -65,25 +67,35 @@ namespace UD_Bones_Folder.Mod.Moderation
             {
                 if (_BadWordsSet == null)
                 {
-                    if (File.Exists(FilterFilePath)
-                        && File.ReadAllJson<BadWord[]>(FilterFilePath) is BadWord[] badWords)
+                    try
                     {
-                        _BadWordsSet = new(badWords, DefaultEqualityComparer);
-                        foreach (var badWord in _BadWordsSet)
-                            badWord.Init();
+                        if (File.Exists(FilterFilePath)
+                            && File.ReadAllJson<BadWord[]>(FilterFilePath) is BadWord[] badWords)
+                        {
+                            _BadWordsSet = new(badWords, DefaultEqualityComparer);
+                            foreach (var badWord in _BadWordsSet)
+                                badWord.Init();
+                        }
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Failed to initialize {nameof(BadWordsSet)}. There won't be a profanity filter until the mod sensitive static cache is refreshed", x);
+                        _BadWordsSet = new(DefaultEqualityComparer);
                     }
                 }
                 return _BadWordsSet;
             }
         }
 
-        [ModSensitiveStaticCache(createEmptyInstance: true)]
         public static Dictionary<SeverityLevel, string> MegaPatterns = new();
 
-        [ModSensitiveStaticCache(createEmptyInstance: true)]
+        public static Dictionary<SeverityLevel, Regex> RegexCache = new();
+
         public static Dictionary<string, bool> FilterResultCache = new();
 
         public static RegexOptions DefaultOptions => RegexOptions.IgnoreCase | RegexOptions.Multiline;
+
+        public static RegexOptions DefaultOptionsCompiled => DefaultOptions | RegexOptions.Compiled;
 
         public static string WildCard => "\\w*";
 
@@ -154,6 +166,14 @@ namespace UD_Bones_Folder.Mod.Moderation
         [ModSensitiveCacheInit]
         public static void InitCache()
         {
+            Loading.LoadTask($"Initializing bad word set...", InitializeBadWordSet);
+            Loading.LoadTask($"Caching bad word filter mega patterns...", CacheMegaPatterns);
+            Loading.LoadTask($"Caching compiled {nameof(Regex).Pluralize()} for bad word filter ...", CacheCompiledRegex);
+            Loading.LoadTask($"Caching blueprint strings for bad word filter ...", CacheMostObjectBlueprints);
+        }
+
+        public static void InitializeBadWordSet()
+        {
             _BadWordsSet?.Clear();
             _BadWordsSet = null;
             _ = BadWordsSet;
@@ -178,58 +198,102 @@ namespace UD_Bones_Folder.Mod.Moderation
                     }
                 }
 
-                Utils.Log($"{nameof(BadWord)} tag counts:");
-                tags.Loggregate(
-                    Proc: kvp => $"{kvp.Key}: {kvp.Value}",
-                    Empty: "none",
-                    PostProc: s => $"{1.Indent()}: {s}");
+                if (Options.DebugEnableBadWordFilterLogging)
+                {
+                    Utils.Log($"{nameof(BadWord)} tag counts:");
+                    tags.Loggregate(
+                        Proc: kvp => $"{kvp.Key}: {kvp.Value}",
+                        Empty: "none",
+                        PostProc: s => $"{1.Indent()}: {s}");
 
-                Utils.Log($"{nameof(BadWord)} severity counts:");
-                ratings.Loggregate(
-                    Proc: kvp => $"{kvp.Key} ({(int)kvp.Key}): {kvp.Value}",
-                    Empty: "none",
-                    PostProc: s => $"{1.Indent()}: {s}");
+                    Utils.Log($"{nameof(BadWord)} severity counts:");
+                    ratings.Loggregate(
+                        Proc: kvp => $"{kvp.Key} ({(int)kvp.Key}): {kvp.Value}",
+                        Empty: "none",
+                        PostProc: s => $"{1.Indent()}: {s}");
+                }
+            }
+        }
 
-                MegaPatterns ??= new();
-                MegaPatterns.Clear();
-
+        public static void CacheMegaPatterns()
+        {
+            MegaPatterns ??= new();
+            MegaPatterns.Clear();
+            if (BadWordsSet != null)
+            {
                 if (!MegaPatterns.TryGetValue(SeverityLevel.Mild, out string megaPattern))
                 {
                     megaPattern = BadWordsSet.ProduceMegaPattern(b => b.Severity >= SeverityLevel.Mild);
                     MegaPatterns[SeverityLevel.Mild] = megaPattern;
-                    Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Mild} ({(int)SeverityLevel.Mild}): {megaPattern.Length:#,##0} characters.");
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Mild} ({(int)SeverityLevel.Mild}): {megaPattern.Length:#,##0} characters.");
+                    }
                 }
 
                 if (!MegaPatterns.TryGetValue(SeverityLevel.Medium, out megaPattern))
                 {
                     megaPattern = BadWordsSet.ProduceMegaPattern(b => b.Severity >= SeverityLevel.Medium);
                     MegaPatterns[SeverityLevel.Medium] = megaPattern;
-                    Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Medium} ({(int)SeverityLevel.Medium}): {megaPattern.Length:#,##0} characters.");
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Medium} ({(int)SeverityLevel.Medium}): {megaPattern.Length:#,##0} characters.");
+                    }
                 }
 
                 if (!MegaPatterns.TryGetValue(SeverityLevel.Strong, out megaPattern))
                 {
                     megaPattern = BadWordsSet.ProduceMegaPattern(b => b.Severity >= SeverityLevel.Strong);
                     MegaPatterns[SeverityLevel.Strong] = megaPattern;
-                    Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Strong} ({(int)SeverityLevel.Strong}): {megaPattern.Length:#,##0} characters.");
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Strong} ({(int)SeverityLevel.Strong}): {megaPattern.Length:#,##0} characters.");
+                    }
                 }
 
                 if (!MegaPatterns.TryGetValue(SeverityLevel.Severe, out megaPattern))
                 {
                     megaPattern = BadWordsSet.ProduceMegaPattern(b => b.Severity >= SeverityLevel.Severe);
                     MegaPatterns[SeverityLevel.Severe] = megaPattern;
-                    Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Severe} ({(int)SeverityLevel.Severe}): {megaPattern.Length:#,##0} characters.");
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Severe} ({(int)SeverityLevel.Severe}): {megaPattern.Length:#,##0} characters.");
+                    }
                 }
-
-                Loading.LoadTask($"Caching profanity filter results...", CacheMostObjectBlueprints);
             }
+        }
 
-            FilterResultCache ??= new();
-            FilterResultCache.Clear();
+        public static void CacheCompiledRegex()
+        {
+            RegexCache ??= new();
+            RegexCache.Clear();
+            /*var regexInfos = new RegexCompilationInfo[MegaPatterns.Count];
+            var regexCompilationDictionary = new Dictionary<SeverityLevel, RegexCompilationInfo>();*/
+            foreach ((var severity, var pattern) in MegaPatterns.IteratorSafe())
+            {
+                /*regexCompilationDictionary[severity] = new RegexCompilationInfo(
+                    pattern: pattern,
+                    options: DefaultOptions,
+                    name: $"{nameof(BadWord)}_{severity}",
+                    fullnamespace: typeof(BadWord).Namespace,
+                    ispublic: true);
+
+                regexInfos[regexInfos.Length] = regexCompilationDictionary[severity];*/
+
+                // RegexCache[severity] = new Regex(pattern, DefaultOptionsCompiled);
+
+                _ = pattern.MatchesCaptureGroups("Text", DefaultOptions);
+
+                if (Options.DebugEnableBadWordFilterLogging)
+                    Utils.Info($"Compiled {nameof(Regex)} for minimum severity level {SeverityLevel.Severe} ({(int)SeverityLevel.Severe})");
+            }
         }
 
         public static void CacheMostObjectBlueprints()
         {
+            FilterResultCache ??= new();
+            FilterResultCache.Clear();
+
             var models = GameObjectFactory.Factory?.GetBlueprintsInheritingFrom("PhysicalObject");
 
             if (models.IsNullOrEmpty())
@@ -346,7 +410,7 @@ namespace UD_Bones_Folder.Mod.Moderation
                 Utils.Log($"{model.Name} ({model.DisplayName()}), {nameof(Options.ModerationMinimumSeverityLevel)}: {(int)severity} ({severity})");
                 if (GameObject.HasBadWord(out var badDisplayName, out bool inDescription, MinimumLevel: severity, IgnoreCache: true))
                 {
-                    badDisplayName.DebugStrings().Loggregate(
+                    badDisplayName.GetDebugLines().Loggregate(
                         Proc: s => $"] {s}",
                         Empty: "] empty",
                         PostProc: s => $"{2.Indent()}{s}");
@@ -415,7 +479,7 @@ namespace UD_Bones_Folder.Mod.Moderation
                     {
                         dummyObject.HasBadWord(out badDisplayName, out inDescription, MinimumLevel: severity, IgnoreCache: true);
                         Utils.Log($"^^^# {model.Name} ({model.DisplayName()})");
-                        badDisplayName.DebugStrings().Loggregate(
+                        badDisplayName.GetDebugLines().Loggregate(
                             Proc: s => $"] {s}",
                             Empty: "] empty",
                             PostProc: s => $"{2.Indent()}{s}");
@@ -480,14 +544,21 @@ namespace UD_Bones_Folder.Mod.Moderation
             if (exceptions.IsNullOrEmpty()
                 || exceptions.Aggregate("", (a, n) => Utils.DelimitedAggregator(a, n, "|")) is not string exceptionsString
                 || exceptionsString.IsNullOrEmpty())
-                return $"(?:{matchesString})+";
+                return $"\\b(?:{matchesString})+\\b";
 
-            return $"(?:{exceptionsString}|{matchesString})+";
+            return $"\\b(?:{exceptionsString}|{matchesString})+\\b";
         }
+
+        public static string ProduceMegaPattern(
+            this HashSet<BadWord> BadWordSet,
+            BadWord.SeverityLevel MinimumSeverity = BadWord.DefaultSeverity
+            )
+            => BadWordSet.ProduceMegaPattern(b => b.Severity >= MinimumSeverity)
+            ;
 
         public static bool HasBadWord(
             this string Text,
-            BadWord.SeverityLevel MinimumLevel = BadWord.DefaultSeverity,
+            BadWord.SeverityLevel MinimumSeverity = BadWord.DefaultSeverity,
             bool IgnoreCache = false
             )
         {
@@ -499,21 +570,36 @@ namespace UD_Bones_Folder.Mod.Moderation
             if (!BadWord.FilterResultCache.TryGetValue(text, out bool result)
                 || !IgnoreCache)
             {
-                result = MinimumLevel == BadWord.SeverityLevel.All;
+                result = MinimumSeverity == BadWord.SeverityLevel.All;
 
                 if (!result
-                    && MinimumLevel != BadWord.SeverityLevel.None)
+                    && MinimumSeverity != BadWord.SeverityLevel.None)
                 {
-                    if (!BadWord.MegaPatterns.TryGetValue(MinimumLevel, out string megaPattern))
+                    if (!BadWord.RegexCache.TryGetValue(MinimumSeverity, out var cachedRegex))
                     {
-                        megaPattern = BadWord.BadWordsSet.ProduceMegaPattern(b => b.Severity >= MinimumLevel);
-                        BadWord.MegaPatterns[MinimumLevel] = megaPattern;
-                        Utils.Info($"produced the following mega pattern for minimum severity level {MinimumLevel} ({(int)MinimumLevel}):\n{megaPattern}");
+                        if (!BadWord.MegaPatterns.TryGetValue(MinimumSeverity, out string megaPattern))
+                        {
+                            megaPattern = BadWord.BadWordsSet.ProduceMegaPattern(MinimumSeverity);
+                            BadWord.MegaPatterns[MinimumSeverity] = megaPattern;
+                            Utils.Info($"produced the following mega pattern for minimum severity level {MinimumSeverity} ({(int)MinimumSeverity}):\n{megaPattern}");
+                        }
+
+                        /*if (!megaPattern.IsNullOrEmpty())
+                            cachedRegex = BadWord.RegexCache[MinimumSeverity] = new Regex(megaPattern, BadWord.DefaultOptionsCompiled);*/
+
+                        if (cachedRegex != null)
+                            result = cachedRegex.MatchesCaptureGroups(Text, Silent: !Options.DebugEnableBadWordFilterLogging);
+                        else
+                        if (!megaPattern.IsNullOrEmpty())
+                            result = megaPattern.MatchesCaptureGroups(Text, BadWord.DefaultOptions);
+                        else
+                            result = BadWord.BadWordsSet.IteratorSafe().Any(b => b.Severity >= MinimumSeverity && b.Check(text));
                     }
-                    if (!megaPattern.IsNullOrEmpty())
-                        result = megaPattern.MatchesCaptureGroups(Text, BadWord.DefaultOptions);
+
+                    if (cachedRegex != null)
+                        result = cachedRegex.MatchesCaptureGroups(Text, Silent: !Options.DebugEnableBadWordFilterLogging);
                     else
-                        result = BadWord.BadWordsSet.IteratorSafe().Any(b => b.Severity >= MinimumLevel && b.Check(text));
+                        result = BadWord.BadWordsSet.IteratorSafe().Any(b => b.Severity >= MinimumSeverity && b.Check(text));
                 }
 
                 if (!IgnoreCache)
@@ -531,13 +617,14 @@ namespace UD_Bones_Folder.Mod.Moderation
         {
             try
             {
-                return Description?.GetShortDescription(AsIfKnown: true, NoConfusion: true) is string description
+                return Description?._Short is string description
                 && description.HasBadWord(MinimumLevel, IgnoreCache)
                 ;
             }
             catch (Exception x)
             {
-                // Utils.Warn($"Error while {nameof(BadWord)} checking description of {Description?.ParentObject?.DebugName ?? "NO_OBJECT"}", x);
+                if (Options.DebugEnableBadWordFilterLogging)
+                    Utils.Warn($"Error while {nameof(BadWord)} checking description of {Description?.ParentObject?.DebugName ?? "NO_OBJECT"}", x);
                 return false;
             }
         }
@@ -601,6 +688,111 @@ namespace UD_Bones_Folder.Mod.Moderation
             return true;
         }
 
+        public static bool HasBadDisplayName(
+            this GameObject Object,
+            out BadDisplayName BadDisplayName,
+            BadWord.SeverityLevel MinimumLevel = BadWord.DefaultSeverity,
+            bool IgnoreCache = false
+            )
+        {
+            BadDisplayName = null;
+
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                if (Object == null)
+                    return false;
+
+                if (Object.BaseDisplayName is string baseDisplayName
+                    && baseDisplayName.HasBadWord(MinimumLevel, IgnoreCache))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsBase = true;
+                }
+
+                if (Object.TryGetPart(out DisplayNameAdjectives adjectives)
+                    && adjectives.Adjectives.HasBadWord(MinimumLevel, IgnoreCache))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsAdjective = true;
+                }
+
+                if (Object.TryGetPart(out SizeAdjective sizeAdjective)
+                    && sizeAdjective.Adjective.HasBadWord(MinimumLevel, IgnoreCache))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsSizeAdjective = true;
+                }
+
+                if (Object.TryGetPart(out DisplayNameFactionAdjective factionAdjective)
+                    && (factionAdjective.FactionAdjective.HasBadWord(MinimumLevel, IgnoreCache)
+                        || factionAdjective.NonFactionAdjective.HasBadWord(MinimumLevel, IgnoreCache)))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsFactionAdjective = true;
+                }
+
+                if (Object.TryGetPart(out Honorifics honorifics)
+                    && (honorifics.HonorificList.HasBadWord(MinimumLevel, IgnoreCache)
+                        || honorifics.HonorificOrder.HasBadWord(MinimumLevel, IgnoreCache)))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsHonorific = true;
+                }
+
+                if (Object.TryGetPart(out Titles titles)
+                    && (titles.TitleList.HasBadWord(MinimumLevel, IgnoreCache)
+                        || titles.TitleOrder.HasBadWord(MinimumLevel, IgnoreCache)))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsTitle = true;
+                }
+
+                if (Object.TryGetPart(out Epithets epithets)
+                    && (epithets.EpithetList.HasBadWord(MinimumLevel, IgnoreCache)
+                        || epithets.EpithetOrder.HasBadWord(MinimumLevel, IgnoreCache)))
+                {
+                    BadDisplayName ??= new();
+                    BadDisplayName.IsEpithet = true;
+                }
+
+                if (!(bool)BadDisplayName)
+                    BadDisplayName = null;
+
+                return (bool)BadDisplayName;
+            }
+            finally
+            {
+                if (Object != null)
+                    Utils.Log($"{nameof(HasBadDisplayName)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+
+                sw.Stop();
+            }
+        }
+
+        public static bool HasBadDescription(
+            this GameObject Object,
+            out bool InDescription,
+            BadWord.SeverityLevel MinimumLevel = BadWord.DefaultSeverity,
+            bool IgnoreCache = false
+            )
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                return InDescription = Object.TryGetPart(out Description description)
+                    && description.HasBadWord(MinimumLevel, IgnoreCache)
+                    ;
+            }
+            finally
+            {
+                if (Object != null)
+                    Utils.Log($"{nameof(HasBadDescription)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+
+                sw.Stop();
+            }
+        }
+
         public static bool HasBadWord(
             this GameObject Object,
             out BadDisplayName BadDisplayName,
@@ -609,71 +801,29 @@ namespace UD_Bones_Folder.Mod.Moderation
             bool IgnoreCache = false
             )
         {
-            InDescription = false;
-            BadDisplayName = null;
-            if (Object == null)
-                return false;
-
-            if (Object.BaseDisplayName is string baseDisplayName
-                && baseDisplayName.HasBadWord(MinimumLevel, IgnoreCache))
+            var sw = Stopwatch.StartNew();
+            try
             {
-                BadDisplayName ??= new();
-                BadDisplayName.IsBase = true;
-            }
+                InDescription = false;
+                BadDisplayName = null;
+                if (Object == null)
+                    return false;
 
-            if (Object.TryGetPart(out DisplayNameAdjectives adjectives)
-                && adjectives.Adjectives.HasBadWord(MinimumLevel, IgnoreCache))
+                Object.HasBadDisplayName(out BadDisplayName, MinimumLevel, IgnoreCache);
+
+                Object.HasBadDescription(out InDescription, MinimumLevel, IgnoreCache);
+
+                return (bool)BadDisplayName
+                    || InDescription
+                    ;
+            }
+            finally
             {
-                BadDisplayName ??= new();
-                BadDisplayName.IsAdjective = true;
+                if (Object != null)
+                    Utils.Log($"{nameof(HasBadWord)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+                sw.Stop();
             }
-
-            if (Object.TryGetPart(out SizeAdjective sizeAdjective)
-                && sizeAdjective.Adjective.HasBadWord(MinimumLevel, IgnoreCache))
-            {
-                BadDisplayName ??= new();
-                BadDisplayName.IsSizeAdjective = true;
-            }
-
-            if (Object.TryGetPart(out DisplayNameFactionAdjective factionAdjective)
-                && (factionAdjective.FactionAdjective.HasBadWord(MinimumLevel, IgnoreCache)
-                    || factionAdjective.NonFactionAdjective.HasBadWord(MinimumLevel, IgnoreCache)))
-            {
-                BadDisplayName ??= new();
-                BadDisplayName.IsFactionAdjective = true;
-            }
-
-            if (Object.TryGetPart(out Honorifics honorifics)
-                && (honorifics.HonorificList.HasBadWord(MinimumLevel, IgnoreCache)
-                    || honorifics.HonorificOrder.HasBadWord(MinimumLevel, IgnoreCache)))
-            {
-                BadDisplayName ??= new();
-                BadDisplayName.IsHonorific = true;
-            }
-
-            if (Object.TryGetPart(out Titles titles)
-                && (titles.TitleList.HasBadWord(MinimumLevel, IgnoreCache)
-                    || titles.TitleOrder.HasBadWord(MinimumLevel, IgnoreCache)))
-            {
-                BadDisplayName ??= new();
-                BadDisplayName.IsTitle = true;
-            }
-
-            if (Object.TryGetPart(out Epithets epithets)
-                && (epithets.EpithetList.HasBadWord(MinimumLevel, IgnoreCache)
-                    || epithets.EpithetOrder.HasBadWord(MinimumLevel, IgnoreCache)))
-            {
-                BadDisplayName ??= new();
-                BadDisplayName.IsEpithet = true;
-            }
-
-            if (Object.TryGetPart(out Description description)
-                && description.HasBadWord(MinimumLevel, IgnoreCache))
-                InDescription = true;
-
-            return BadDisplayName != null
-                || InDescription
-                ;
+            
         }
     }
 }

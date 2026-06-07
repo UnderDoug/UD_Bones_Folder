@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 using Genkit;
@@ -29,8 +30,11 @@ using Event = XRL.World.Event;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    public class BonesModeModule : QudEmbarkBuilderModule<BonesModeModuleData>
+    [HasModSensitiveStaticCache]
+    public partial class BonesModeModule : QudEmbarkBuilderModule<BonesModeModuleData>
     {
+        public static Dictionary<string, List<Delegate>> BuilderModuleDelegates = new();
+
         public const string BONES_MODE = "UD_Bones_Bones";
 
         public static int MinimumLevelForBones => UD_Bones_BonesSaver.MinimumLevelForBones;
@@ -141,6 +145,180 @@ namespace UD_Bones_Folder.Mod.UI
             AdvanceToEnd();
         }
 
+        [ModSensitiveCacheInit]
+        public static void CacheBuilderModuleDelegates()
+        {
+            BuilderModuleDelegates ??= new();
+            BuilderModuleDelegates.Clear();
+
+            var methods = ModManager.GetMethodsWithAttribute(typeof(BonesModeModuleActionAttribute), typeof(HasBonesModeModuleActionAttribute));
+
+            Utils.Log($"{nameof(CacheBuilderModuleDelegates)}...");
+            foreach (var method in methods.IteratorSafe())
+            {
+                Utils.Log($"{1.Indent()}{method.Name}");
+                foreach (var attribute in method.GetCustomAttributes<BonesModeModuleActionAttribute>())
+                {
+                    var modInfo = ModManager.GetMod(method.DeclaringType.Assembly);
+                    if (!typeof(AbstractBuilderModuleWindowBase).IsAssignableFrom(attribute.TargetWindow))
+                    {
+                        Utils.Warn(
+                            ModInfo: modInfo,
+                            Message: $"{method.DeclaringType.Name}.{method.Name} has {attribute.GetType().Name} with invalid " +
+                                $"{nameof(attribute.TargetWindow)} argument: {attribute.TargetWindow.Name}, " +
+                                $"cannot be assigned to {nameof(Type)} {nameof(AbstractBuilderModuleWindowBase)} and will be skipped.");
+                        continue;
+                    }
+
+                    if (method.GetParameters() is ParameterInfo[] parameters)
+                    {
+                        if (parameters.Length != 2)
+                        {
+                            Utils.Log($"{2.Indent()}{nameof(parameters)}.{nameof(parameters.Length)}: {parameters.Length}");
+                            continue;
+                        }
+                        if (!typeof(AbstractBuilderModuleWindowBase).IsAssignableFrom(parameters[0].ParameterType))
+                        {
+                            Utils.Log($"{2.Indent()}{nameof(parameters)}[0].{nameof(ParameterInfo.ParameterType)}: {parameters[0].ParameterType.Name}");
+                            continue;
+                        }
+                        if (!typeof(AbstractQudEmbarkBuilderModule).IsAssignableFrom(parameters[1].ParameterType))
+                        {
+                            Utils.Log($"{2.Indent()}{nameof(parameters)}[1].{nameof(ParameterInfo.ParameterType)}: {parameters[1].ParameterType.Name}");
+                            continue;
+                        }
+                        if (method.ReturnType != typeof(void))
+                        {
+                            Utils.Warn(
+                                ModInfo: modInfo,
+                                Message: $"{method.DeclaringType.Name}.{method.Name} returns {method.ReturnType.Name} instead of {typeof(void)}. " +
+                                    $"This return value won't be utilised by the {Utils.ModTitle} mod.");
+                        }
+                        string key = attribute.TargetWindow?.Name ?? "All";
+                        if (!BuilderModuleDelegates.TryGetValue(key, out var delegates))
+                            delegates = BuilderModuleDelegates[key] = new();
+                        try
+                        {
+                            Type actionType = null;
+                            if (method.ReturnType == typeof(void))
+                            {
+                                actionType = typeof(Action<,>).MakeGenericType(
+                                    typeArguments: new Type[]
+                                    {
+                                        parameters[0].ParameterType,
+                                        parameters[1].ParameterType,
+                                    });
+                            }
+                            else
+                            {
+                                actionType = typeof(Func<,,>).MakeGenericType(
+                                    typeArguments: new Type[]
+                                    {
+                                        parameters[0].ParameterType,
+                                        parameters[1].ParameterType,
+                                        method.ReturnType,
+                                    });
+                            }
+                            delegates.Add(method.CreateDelegate(actionType));
+                            continue;
+                        }
+                        catch (Exception x)
+                        {
+                            Utils.Error($"Failed to create {nameof(Delegate)} for {method.DeclaringType.Name}.{method.Name}", x);
+                        }
+                    }
+                    Utils.Log($"{2.Indent()}Skipped");
+                }
+            }
+        }
+
+        public void AdvanceToEnd()
+        {
+            builder.info.GameSeed = Guid.NewGuid().ToString();
+            QudGameBootModule.SeedGame(The.Game, builder.info);
+            var activeWindow = builder.activeWindow;
+            do
+            {
+                try
+                {
+                    Utils.Log($"{nameof(BonesModeModule)}.{nameof(AdvanceToEnd)}, {activeWindow?.window?.GetType()?.Name ?? "NO_WINDOW"}");
+                    builder.SkippingUIUpdates = true;
+
+                    builder.advance();
+                    if (builder.activeWindow == null
+                        || builder.activeWindow == activeWindow)
+                        break;
+
+                    activeWindow = builder.activeWindow;
+
+                    try
+                    {
+                        if (activeWindow.window is QudCustomizeCharacterModuleWindow customizeCharacterModuleWindow
+                        && customizeCharacterModuleWindow.module is QudCustomizeCharacterModule customizeCharacterModule)
+                        {
+                            if (customizeCharacterModule.data == null)
+                                customizeCharacterModule.setData(new());
+
+                            if (SeededOddsIn10000(nameof(Gender), 5000))
+                                customizeCharacterModule.data.gender = Gender.GetAllGenericPersonal()
+                                    .GetRandomElement(SeededGenerator(nameof(Gender), 1));
+
+                            var scrollContext = customizeCharacterModuleWindow.prefabComponent.scrollContext;
+                            var scrollContextData = scrollContext?.data;
+                            if (!scrollContextData.IsNullOrEmpty())
+                            {
+                                for (int i = 0; i < scrollContextData.Count; i++)
+                                {
+                                    scrollContext.selectedPosition = i;
+                                    if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
+                                    {
+                                        customizeCharacterModuleWindow.RandomSelection();
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                string name = The.Core.GenerateRandomPlayerName(builder.GetModule<QudSubtypeModule>().data.Subtype);
+                                name = builder.info.fireBootEvent(QudGameBootModule.BOOTEVENT_GENERATERANDOMPLAYERNAME, null, name);
+                                customizeCharacterModule.setName(name);
+                                if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
+                                    customizeCharacterModule.setPet(customizeCharacterModuleWindow.GetPets().GetRandomElement().Id);
+                            }
+                        }
+
+                        if (activeWindow.window is QudChooseStartingLocationModuleWindow chooseStartingLocationModuleWindow
+                            && chooseStartingLocationModuleWindow.module is QudChooseStartingLocationModule chooseStartingLocationModule)
+                        {
+                            chooseStartingLocationModuleWindow.RandomSelectionNoUI();
+                            continue;
+                        }
+                    }
+                    finally
+                    {
+                        if (BuilderModuleDelegates.TryGetValue(activeWindow.window.GetType().Name, out var builderDelegates))
+                            foreach (var builderDelegate in builderDelegates.IteratorSafe())
+                                builderDelegate.DynamicInvoke(activeWindow.window, activeWindow.window._module);
+
+                        if (BuilderModuleDelegates.TryGetValue("All", out builderDelegates))
+                            foreach (var builderDelegate in builderDelegates.IteratorSafe())
+                                builderDelegate.DynamicInvoke(activeWindow.window, activeWindow.window._module);
+                    }
+
+                    activeWindow.window.DebugQuickstart(Mode);
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"{nameof(BonesModeModule)} Advancing to end, {activeWindow?.window?.GetType()?.Name ?? "NO_WINDOW"}", x);
+                    break;
+                }
+                finally
+                {
+                    builder.SkippingUIUpdates = false;
+                }
+            }
+            while (builder?.activeWindow != null);
+        }
+
         public override object handleBootEvent(string id, XRLGame game, EmbarkInfo info, object element = null)
         {
             if (BonesManager.System != null)
@@ -218,80 +396,6 @@ namespace UD_Bones_Folder.Mod.UI
         public static Random SeededGenerator(string Method, int? Iteration = null)
             => Stat.GetSeededRandomGenerator(GetSeedFor(Method, Iteration))
             ;
-
-        public void AdvanceToEnd()
-        {
-            builder.info.GameSeed = Guid.NewGuid().ToString();
-            QudGameBootModule.SeedGame(The.Game, builder.info);
-            var activeWindow = builder.activeWindow;
-            do
-            {
-                try
-                {
-                    Utils.Log($"{nameof(BonesModeModule)}.{nameof(AdvanceToEnd)}, {activeWindow?.window?.GetType()?.Name ?? "NO_WINDOW"}");
-                    builder.SkippingUIUpdates = true;
-
-                    builder.advance();
-                    if (builder.activeWindow == null
-                        || builder.activeWindow == activeWindow)
-                        break;
-
-                    activeWindow = builder.activeWindow;
-
-                    if (activeWindow.window is QudCustomizeCharacterModuleWindow customizeCharacterModuleWindow
-                        && customizeCharacterModuleWindow.module is QudCustomizeCharacterModule customizeCharacterModule)
-                    {
-                        if (customizeCharacterModule.data == null)
-                            customizeCharacterModule.setData(new());
-
-                        if (SeededOddsIn10000(nameof(Gender), 5000))
-                            customizeCharacterModule.data.gender = Gender.GetAllGenericPersonal()
-                                .GetRandomElement(SeededGenerator(nameof(Gender), 1));
-
-                        var scrollContext = customizeCharacterModuleWindow.prefabComponent.scrollContext;
-                        var scrollContextData = scrollContext?.data;
-                        if (!scrollContextData.IsNullOrEmpty())
-                        {
-                            for (int i = 0; i < scrollContextData.Count; i++)
-                            {
-                                scrollContext.selectedPosition = i;
-                                if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
-                                {
-                                    customizeCharacterModuleWindow.RandomSelection();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            string name = The.Core.GenerateRandomPlayerName(builder.GetModule<QudSubtypeModule>().data.Subtype);
-                            name = builder.info.fireBootEvent(QudGameBootModule.BOOTEVENT_GENERATERANDOMPLAYERNAME, null, name);
-                            customizeCharacterModule.setName(name);
-                            if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
-                                customizeCharacterModule.setPet(customizeCharacterModuleWindow.GetPets().GetRandomElement().Id);
-                        }
-                    }
-
-                    if (activeWindow.window is QudChooseStartingLocationModuleWindow chooseStartingLocationModuleWindow
-                        && chooseStartingLocationModuleWindow.module is QudChooseStartingLocationModule chooseStartingLocationModule)
-                    {
-                        chooseStartingLocationModuleWindow.RandomSelectionNoUI();
-                        continue;
-                    }
-
-                    activeWindow.window.DebugQuickstart(Mode);
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"{nameof(BonesModeModule)} Advancing to end, {activeWindow?.window?.GetType()?.Name ?? "NO_WINDOW"}", x);
-                    break;
-                }
-                finally
-                {
-                    builder.SkippingUIUpdates = false;
-                }
-            }
-            while (builder?.activeWindow != null);
-        }
 
         public static bool SimulateNormalRunProgress(GameObject Player)
         {

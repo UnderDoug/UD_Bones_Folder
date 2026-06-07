@@ -372,7 +372,7 @@ namespace XRL.World.Parts
                 if (enteringZone.HasZoneProperty("BonesID"))
                     CheckAnnounce = true;
 
-                if (BonesManager.ZoneBones[enteringZone.ZoneID] is ZoneBonesAllocation allocation
+                if (BonesManager.ZoneBones.TryGetValue(enteringZone.ZoneID, out var allocation)
                     && allocation.HasAssignedBones())
                     CheckAnnounce = true;
             }

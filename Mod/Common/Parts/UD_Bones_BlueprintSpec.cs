@@ -24,8 +24,6 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_BlueprintSpec : IScribedPart
     {
-        public bool AlreadyExists;
-
         public BlueprintSpec BlueprintSpec;
 
         public UD_Bones_BlueprintSpec()
@@ -39,6 +37,7 @@ namespace XRL.World.Parts
         public override void Initialize()
         {
             base.Initialize();
+            BlueprintSpec?.Dispose();
             BlueprintSpec = new BlueprintSpec(ParentObject);
         }
 
@@ -55,10 +54,27 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
-            string blueprintSpec = BlueprintSpec.GetDebugLines().IteratorSafe().Aggregate("", Utils.NewLineDelimitedAggregator);
-            if (blueprintSpec.IsNullOrEmpty())
-                blueprintSpec = "null";
-            E.AddEntry(this, nameof(BlueprintSpec), blueprintSpec);
+            try
+            {
+                /*string blueprintSpecString = BlueprintSpec?.DebugString(ForInternals: true);
+                if (blueprintSpecString.IsNullOrEmpty())
+                    blueprintSpecString = "null";
+                E.AddEntry(this, nameof(BlueprintSpec), blueprintSpecString);*/
+                if (BlueprintSpec == null)
+                    E.AddEntry(this, nameof(BlueprintSpec), "null");
+                else
+                {
+                    foreach ((var key, var value) in BlueprintSpec.GetDebugPairs().IteratorSafe())
+                    {
+                        E.AddEntry(this, key, value);
+                    }
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(UD_Bones_BlueprintSpec)}.{nameof(GetDebugInternalsEvent)}", x);
+                E.AddEntry(this, nameof(Exception), x.GetType().Name);
+            }
 
             return base.HandleEvent(E);
         }

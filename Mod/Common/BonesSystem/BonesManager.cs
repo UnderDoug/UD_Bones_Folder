@@ -142,7 +142,7 @@ namespace UD_Bones_Folder.Mod
         public int ChancePermyriadForBones => Options.GetPermyriadChanceForBones();
 
         [NonSerialized]
-        public CompositeStringMap<ZoneBonesAllocation> ZoneBones = new();
+        public Dictionary<string, ZoneBonesAllocation> ZoneBones = new();
         [NonSerialized]
         public Dictionary<string, bool> Alerted = new();
         [NonSerialized]
@@ -227,7 +227,7 @@ namespace UD_Bones_Folder.Mod
             Writer.WriteCompositeValues(MissingBlueprintReplacements);
             Writer.WriteOptimized(TileReplacementsByMissingBlueprint);
             Writer.WriteOptimized(BlueprintReplacementsByMissingBlueprint);
-            Writer.WriteComposite(ZoneBones);
+            Writer.WriteStringCompositeValues(ZoneBones);
             Writer.Write(Alerted);
             Writer.Write(Encountered);
             Writer.Write(FailedToLoadBones);
@@ -239,7 +239,7 @@ namespace UD_Bones_Folder.Mod
             MissingBlueprintReplacements = Reader.ReadCompositeValues<string, ReplacementEntry>();
             TileReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
             BlueprintReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
-            ZoneBones = Reader.ReadComposite<CompositeStringMap<ZoneBonesAllocation>>();
+            ZoneBones = Reader.ReadStringCompositeDictionary<ZoneBonesAllocation>();
             Alerted = Reader.ReadDictionary<string, bool>();
             Encountered = Reader.ReadList<string>();
             FailedToLoadBones = Reader.ReadList<string>();
@@ -316,14 +316,19 @@ namespace UD_Bones_Folder.Mod
                     if (go.TryGetPart(out Examiner examiner))
                         examiner.EpistemicStatus = Examiner.EPISTEMIC_STATUS_UNINITIALIZED;
 
-                    go.SetIntProperty("Tier", go.GetTier());
-                    go.SetIntProperty("TechTier", go.GetTechTier());
-                    go.SetStringProperty("UsesSlots", go.UsesSlots, true);
-                    go.SetStringProperty("Species", go.GetSpecies(), true);
-                    go.SetStringProperty("Class", go.GetClass(), true);
-                    go.SetStringProperty("PaintedWall", go.GetPropertyOrTag("PaintedWall"), true);
-                    go.SetStringProperty("PaintedFence", go.GetPropertyOrTag("PaintedFence"), true);
-                    go.SetStringProperty("ImprovisedWeapon", $"{go.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
+                    if (go.TryGetPart(out UD_Bones_BlueprintSpec blueprintSpecPart))
+                        blueprintSpecPart.Initialize();
+                    else
+                        blueprintSpecPart = go.RequirePart<UD_Bones_BlueprintSpec>();
+
+                    go.SetIntProperty(BlueprintSpec.TierProp, go.GetTier());
+                    go.SetIntProperty(BlueprintSpec.TechTierProp, go.GetTechTier());
+                    go.SetStringProperty(BlueprintSpec.SpeciesProp, go.GetSpecies(), true);
+                    go.SetStringProperty(BlueprintSpec.ClassProp, go.GetClass(), true);
+                    go.SetStringProperty(BlueprintSpec.RoleProp, go.GetPropertyOrTag("Role"), true);
+                    go.SetStringProperty(BlueprintSpec.PaintedWallProp, go.GetPropertyOrTag("PaintedWall"), true);
+                    go.SetStringProperty(BlueprintSpec.PaintedFenceProp, go.GetPropertyOrTag("PaintedFence"), true);
+                    go.SetStringProperty(BlueprintSpec.ImprovisedWeaponProp, $"{go.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
                 });
 
                 if (zoneGO.Brain is Brain brain)
@@ -1079,65 +1084,14 @@ namespace UD_Bones_Folder.Mod
         public bool HasTileReplacement(string Blueprint)
             => TileReplacementsByMissingBlueprint.ContainsKey(Blueprint);
 
-        public void RequireAlternativeTileAndBlueprintForGameObject(
-            Utils.BlueprintSpec BlueprintSpec,
-            out string Blueprint,
-            out string Tile
-            )
-        {
-            Blueprint = "Object";
-            Tile = "Creatures/sw_mimic.bmp";
-
-            // Utils.Log($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}: {BlueprintSpec?.DebugName}");
-            if (BlueprintSpec.Blueprint is string key)
-            {
-                if (!TileReplacementsByMissingBlueprint.ContainsKey(key))
-                {
-                    try
-                    {
-                        var altBlueprints = Utils.GetAlternativeBlueprintsBySpec(BlueprintSpec);
-                        /*altBlueprints.Loggregate(
-                            Proc: s => s,
-                            Empty: "empty",
-                            PostProc: e => $"{1.Indent()}: {e}");*/
-
-                        string altBlueprint = "Object";
-                        var altTile = "Creatures/sw_mimic.bmp";
-
-                        if (!altBlueprints.IsNullOrEmpty())
-                        {
-                            var rnd = Stat.GetSeededRandomGenerator($"{nameof(Mod.BlueprintSpec)}::{BlueprintSpec.Blueprint}");
-                            altBlueprint = altBlueprints.GetRandomElement(rnd);
-                            var altModel = GameObjectFactory.Factory.GetBlueprintIfExists(altBlueprint);
-                            altTile = altModel?.GetRenderable()?.Tile;
-                        }
-                        
-                        BlueprintReplacementsByMissingBlueprint[key] = altBlueprint;
-                        TileReplacementsByMissingBlueprint[key] = altTile;
-
-                        //Utils.Log($"{1.Indent()}{nameof(BlueprintSpec)}: {BlueprintSpec.Blueprint}");
-                        //BlueprintSpec.GetDebugLines(2).Loggregate(Empty: $"{2.Indent()}: empty");
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Error($"{nameof(RequireAlternativeTileAndBlueprintForGameObject)}({key}), find alternate", x);
-                        Blueprint = "Object";
-                        Tile = "Creatures/sw_mimic.bmp";
-                    }
-                }
-                BlueprintReplacementsByMissingBlueprint.TryGetValue(key, out Blueprint);
-                TileReplacementsByMissingBlueprint.TryGetValue(key, out Tile);
-                //Utils.Log($"{1.Indent()}{BlueprintSpec.Blueprint} -> {nameof(Blueprint)}: {Blueprint}, {nameof(Tile)}: {Tile}");
-            }
-        }
+        public ReplacementEntry CacheDefaultReplacementEntryForKey(string Key)
+            => MissingBlueprintReplacements[Key] = ReplacementEntry.CreateDefaultFor(Key)
+            ;
 
         public ReplacementEntry RequireReplacementEntryForGameObject(BlueprintSpec BlueprintSpec)
         {
             if (BlueprintSpec.Blueprint is not string key)
                 return null;
-
-            // Key needs to be a bit more complex than just the blueprint name so that conflicts of blueprint name don't result in
-            // the functional merging of the conflicting blueprints.
 
             MissingBlueprintReplacements ??= new();
             try
@@ -1145,12 +1099,12 @@ namespace UD_Bones_Folder.Mod
                 if (!MissingBlueprintReplacements.TryGetValue(key, out var replacementEntry))
                 {
                     if (BlueprintSpec.GetOrderedDistanceRecords() is not IEnumerable<BlueprintSpec.DistanceRecord> orderedDistanceRecords)
-                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+                        return CacheDefaultReplacementEntryForKey(key);
 
                     using var distanceRecords = ScopeDisposedList<BlueprintSpec.DistanceRecord>.GetFromPoolFilledWith(orderedDistanceRecords);
                     
                     if (distanceRecords.IsNullOrEmpty())
-                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+                        return CacheDefaultReplacementEntryForKey(key);
 
                     int maxDist = distanceRecords.LastOrDefault().Distance;
 
@@ -1159,7 +1113,7 @@ namespace UD_Bones_Folder.Mod
                         specsByWeight[distanceRecord.ToString()] = distanceRecord.GetWeight(maxDist);
 
                     if (specsByWeight.IsNullOrEmpty())
-                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+                        return CacheDefaultReplacementEntryForKey(key);
 
                     string rndSeed = $"{nameof(Mod.BlueprintSpec)}::{BlueprintSpec.Blueprint}::{nameof(replacementEntry)}";
                     var rnd = Stat.GetSeededRandomGenerator(rndSeed);
@@ -1179,7 +1133,7 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     if (alternativeBlueprint == null)
-                        return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+                        return CacheDefaultReplacementEntryForKey(key);
 
                     string tile = alternativeBlueprint.GetRenderable()?.Tile;
                     if (rnd.Next(0, 7000) % 500 == 0)
@@ -1208,7 +1162,7 @@ namespace UD_Bones_Folder.Mod
             catch (Exception x)
             {
                 Utils.Error($"{nameof(RequireReplacementEntryForGameObject)}({key}), find alternate", x);
-                return MissingBlueprintReplacements[key] = ReplacementEntry.CreateDefaultFor(key);
+                return CacheDefaultReplacementEntryForKey(key);
             }
         }
 
@@ -1306,8 +1260,8 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsWorldMapOrNoBones(Zone Z)
             => Z.IsWorldMap()
-            || (ZoneBones.ContainsKey(Z.ZoneID)
-                && ZoneBones[Z.ZoneID].Type == ZoneBonesAllocation.AllocationTypes.None)
+            || (ZoneBones.TryGetValue(Z.ZoneID, out var allocation)
+                && allocation.Type == ZoneBonesAllocation.AllocationTypes.None)
             ;
 
         public void EncounteredBones(string BonesID)
@@ -1553,10 +1507,8 @@ namespace UD_Bones_Folder.Mod
                 return;
 
             if (!ZoneBones.TryGetValue(Z.ZoneID, out ZoneBonesAllocation allocation))
-            {
-                ZoneBones[Z.ZoneID] = ZoneBonesAllocation.GetForZone(Z);
-                allocation = ZoneBones[Z.ZoneID];
-            }
+                allocation = ZoneBones[Z.ZoneID] = ZoneBonesAllocation.GetForZone(Z);
+
             if (allocation.IsBlocked())
                 return;
 

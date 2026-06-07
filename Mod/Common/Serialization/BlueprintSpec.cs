@@ -194,9 +194,6 @@ namespace UD_Bones_Folder.Mod
 
             public static bool TryGetFor(BlueprintSpec Primary, BlueprintSpec Other, out DistanceRecord Result)
             {
-                // Key needs to be a bit more complex than just the blueprint name so that conflicts of blueprint name don't result in
-                // the functional merging of the conflicting blueprints.
-
                 Result = Empty;
                 if (Primary == null)
                     return false;
@@ -240,10 +237,15 @@ namespace UD_Bones_Folder.Mod
             }
 
             public int GetWeight(int MaxDistance)
-                => Distance != MAX_DIST
-                ? Math.Clamp(MaxDistance - Distance, 0, MaxDistance)
-                : 0
-                ;
+            {
+                if (MaxDistance == 0)
+                    return 1;
+
+                return Distance != MAX_DIST
+                    ? Math.Clamp(MaxDistance - Distance, 0, MaxDistance)
+                    : 0
+                    ;
+            }
 
             public void Clear()
             {
@@ -390,14 +392,23 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public const string BASE_BLUEPRINT = "PhysicalObject";
+
         public static DistanceRecord.EqualityComparer DistanceEqualityComparer => new(Strict: false);
 
         public static DistanceRecord.Comparer DistanceComparer => new(LeastSimilarFirst: false);
 
         public static EqualityComparer DefaultEqualityComparer => new(BlueprintOnly: false);
 
-
-        public const string IMPROVISED_WEAPON = "ImprovisedWeapon";
+        public static string TierProp => GetPropName(nameof(Tier));
+        public static string TechTierProp => GetPropName(nameof(TechTier));
+        public static string UsesSlotsProp => GetPropName(nameof(GameObject.UsesSlots));
+        public static string SpeciesProp => GetPropName(nameof(Species));
+        public static string ClassProp => GetPropName(nameof(Class));
+        public static string RoleProp => GetPropName(nameof(Role));
+        public static string PaintedWallProp => GetPropName(nameof(PaintedWall));
+        public static string PaintedFenceProp => GetPropName(nameof(PaintedFence));
+        public static string ImprovisedWeaponProp => GetPropName("ImprovisedWeapon");
 
         public static string TRUE => $"{true}";
         public static string FALSE => $"{false}";
@@ -479,39 +490,32 @@ namespace UD_Bones_Folder.Mod
             DebugName = GameObject.DebugName;
             Blueprint = GameObject.Blueprint;
 
-            BlueprintTree ??= new();
-            var parentBlueprint = GameObject.GetBlueprint();
-            while (parentBlueprint.Inherits != null)
-            {
-                string debugPostText = $"{nameof(GameObjectBlueprint)} in {GameObject.DebugName} inheritance tree, " +
-                    $"{BlueprintTree.Count.Things("blueprint")} in";
-                try
-                {
-                    parentBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(parentBlueprint.Inherits);
-                    if (parentBlueprint?.Name is not string blueprintName)
-                    {
-                        Utils.Warn($"Strange, nameless {debugPostText}");
-                        break;
-                    }
-                    BlueprintTree.Add(blueprintName);
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Issue retreiving {debugPostText}", x);
-                    break;
-                }
-            }
+            BlueprintTree = GetBlueprintTree(GameObject);
 
             Category = GameObject?.Physics?.Category;
 
             try
             {
-                Tier = GameObject.GetTier();
-                TechTier = GameObject.GetTechTier();
+                if (GameObjectFactory.Factory.HasBlueprint(GameObject.Blueprint))
+                {
+                    Tier = GameObject.GetTier();
+                    TechTier = GameObject.GetTechTier();
+                }
+                else
+                {
+                    SetTierFromProps(GameObject);
+                    SetTechTierFromProps(GameObject);
+                }
             }
             catch (Exception x)
             {
                 Utils.Error($"{nameof(BlueprintSpec)} Tiers", x);
+
+                if (Tier.IsNullOrDefault())
+                    SetTierFromProps(GameObject);
+
+                if (TechTier.IsNullOrDefault())
+                    SetTechTierFromProps(GameObject);
             }
 
             try
@@ -600,30 +604,57 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (GameObject.GetSpecies() is string species
-                    && !species.IsNullOrEmpty())
-                {
-                    Species = species;
-                }
+                if (GameObjectFactory.Factory.HasBlueprint(GameObject.Blueprint))
+                    Species = GameObject.GetSpecies();
+                else
+                    SetSpeciesFromProps(GameObject);
             }
             catch (Exception x)
             {
                 Utils.Error($"{nameof(BlueprintSpec)} {nameof(Species)}", x);
+
+                if (Species.IsNullOrEmpty())
+                    SetSpeciesFromProps(GameObject);
             }
 
             try
             {
-                Class = GameObject.GetClass();
+                if (GameObjectFactory.Factory.HasBlueprint(GameObject.Blueprint))
+                {
+                    Class = GameObject.GetClass();
 
-                Role = GameObject.GetPropertyOrTag(nameof(Role));
+                    Role = GameObject.GetPropertyOrTag(nameof(Role));
 
-                PaintedWall = GameObject.GetPropertyOrTag(nameof(PaintedWall));
+                    PaintedWall = GameObject.GetPropertyOrTag(nameof(PaintedWall));
 
-                PaintedFence = GameObject.GetPropertyOrTag(nameof(PaintedFence));
+                    PaintedFence = GameObject.GetPropertyOrTag(nameof(PaintedFence));
+                }
+                else
+                {
+                    SetClassFromProps(GameObject);
+
+                    SetRoleFromProps(GameObject);
+
+                    SetPaintedWallFromProps(GameObject);
+
+                    SetPaintedFenceFromProps(GameObject);
+                }
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(BlueprintSpec)} {nameof(Class)},  {nameof(Role)}, {nameof(PaintedWall)}, {nameof(PaintedFence)}", x);
+                Utils.Error($"{nameof(BlueprintSpec)} {nameof(Class)}, {nameof(Role)}, {nameof(PaintedWall)}, {nameof(PaintedFence)}", x);
+
+                if (Class.IsNullOrEmpty())
+                    SetClassFromProps(GameObject);
+
+                if (Role.IsNullOrEmpty())
+                    SetRoleFromProps(GameObject);
+
+                if (PaintedWall.IsNullOrEmpty())
+                    SetPaintedWallFromProps(GameObject);
+
+                if (PaintedFence.IsNullOrEmpty())
+                    SetPaintedFenceFromProps(GameObject);
             }
         }
 
@@ -636,28 +667,7 @@ namespace UD_Bones_Folder.Mod
             DebugName = $"{Model.Name} ({nameof(GameObjectBlueprint)})";
             Blueprint = Model.Name;
 
-            BlueprintTree ??= new();
-            var parentBlueprint = Model;
-            while (parentBlueprint.Inherits != null)
-            {
-                string debugPostText = $"{nameof(GameObjectBlueprint)} in {Model.Name} inheritance tree, " +
-                    $"{BlueprintTree.Count.Things("blueprint")} in";
-                try
-                {
-                    parentBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(parentBlueprint.Inherits);
-                    if (parentBlueprint?.Name is not string blueprintName)
-                    {
-                        Utils.Warn($"Strange, nameless {debugPostText}");
-                        break;
-                    }
-                    BlueprintTree.Add(blueprintName);
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Issue retreiving {debugPostText}", x);
-                    break;
-                }
-            }
+            BlueprintTree = GetBlueprintTree(Model);
 
             Category = Model.GetPartParameter<string>(nameof(Physics), nameof(Physics.Category));
 
@@ -726,26 +736,36 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(BlueprintSpec)} {nameof(MissileWeapon)}", x);
+                Utils.Error($"{nameof(BlueprintSpec)} {nameof(CyberneticsBaseItem)}", x);
             }
 
             try
             {
                 if (Model.TryGetPartBlueprint<MeleeWeapon>(out var meleeWeaponModel))
                 {
-                    if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
+                    if ((meleeWeaponModel.Reflector?.GetInstance() as MeleeWeapon
+                        ?? Activator.CreateInstance(meleeWeaponModel.T) as MeleeWeapon) is MeleeWeapon meleeWeapon)
+                        meleeWeaponModel.InitializePartInstance(meleeWeapon);
+                    else
+                        meleeWeapon = null;
+
+                    if (meleeWeapon?.IsImprovisedWeapon() is not true)
                     {
-                        WeaponSkills ??= new();
-                        WeaponSkills.Add(meleeWeaponSkill);
-                    }
-                    if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
-                    {
-                        foreach (var slot in meleeWeaponSlot.CachedCommaExpansion().IteratorSafe())
+                        if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Skill), out string meleeWeaponSkill))
                         {
-                            EquipmentSlots ??= new();
-                            EquipmentSlots.Add(slot);
+                            WeaponSkills ??= new();
+                            WeaponSkills.Add(meleeWeaponSkill);
+                        }
+                        if (meleeWeaponModel.TryGetParameter(nameof(MeleeWeapon.Slot), out string meleeWeaponSlot))
+                        {
+                            foreach (var slot in meleeWeaponSlot.CachedCommaExpansion().IteratorSafe())
+                            {
+                                EquipmentSlots ??= new();
+                                EquipmentSlots.Add(slot);
+                            }
                         }
                     }
+                    meleeWeapon = null;
                 }
             }
             catch (Exception x)
@@ -881,11 +901,121 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
+        public static string GetPropName(string FieldName)
+            => !FieldName.IsNullOrEmpty()
+            ? Utils.CallChain(nameof(UD_Bones_BlueprintSpec), FieldName)
+            : null
+            ;
+
         public static Comparer GetComparer(BlueprintSpec Primary)
             => new Comparer(
                 Primary: Primary,
                 LeastSimilarFirst: false)
             ;
+
+        public static List<string> GetBlueprintTree(
+            GameObjectBlueprint Model,
+            string StopAfter = BASE_BLUEPRINT
+            )
+        {
+            List<string> blueprintTree = new();
+            var parentBlueprint = Model;
+            while (parentBlueprint.Inherits != null)
+            {
+                string debugPostText = $"{nameof(GameObjectBlueprint)} in {Model.Name} inheritance tree, " +
+                    $"{blueprintTree.Count.Things("blueprint")} in";
+
+                try
+                {
+                    parentBlueprint = GameObjectFactory.Factory.GetBlueprintIfExists(parentBlueprint.Inherits);
+                    if (parentBlueprint?.Name is not string blueprintName)
+                    {
+                        Utils.Warn($"Strange, nameless {debugPostText}");
+                        break;
+                    }
+                    blueprintTree.Add(blueprintName);
+
+                    if (blueprintName == StopAfter)
+                        break;
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"Issue retreiving {debugPostText}", x);
+                    break;
+                }
+            }
+            return blueprintTree;
+        }
+
+        public static List<string> GetBlueprintTree(GameObject GameObject)
+            => GameObject != null
+                && GameObjectFactory.Factory.HasBlueprint(GameObject.Blueprint)
+            ? GetBlueprintTree(GameObject.GetBlueprint())
+            : null
+            ;
+
+        private void SetTierFromProps(GameObject GameObject)
+        {
+            Tier = 0;
+            if (GameObject.HasIntProperty(nameof(Tier)))
+                Tier = GameObject.GetIntProperty(nameof(Tier));
+            if (GameObject.HasIntProperty(nameof(TierProp)))
+                Tier = GameObject.GetIntProperty(nameof(TierProp));
+        }
+
+        private void SetTechTierFromProps(GameObject GameObject)
+        {
+            TechTier = 0;
+            if (GameObject.HasIntProperty(nameof(TechTier)))
+                TechTier = GameObject.GetIntProperty(nameof(TechTier));
+            if (GameObject.HasIntProperty(nameof(TechTierProp)))
+                TechTier = GameObject.GetIntProperty(nameof(TechTierProp));
+        }
+
+        private void SetSpeciesFromProps(GameObject GameObject)
+        {
+            Species = GameObject.GetDisplayName(AsIfKnown: true, NoConfusion: true, NoColor: true, Stripped: true, BaseOnly: true);
+            if (GameObject.HasStringProperty(nameof(Species)))
+                Species = GameObject.GetStringProperty(nameof(Species));
+            if (GameObject.HasStringProperty(nameof(SpeciesProp)))
+                Species = GameObject.GetStringProperty(nameof(SpeciesProp));
+        }
+
+        private void SetClassFromProps(GameObject GameObject)
+        {
+            Class = GameObject.Blueprint;
+            if (GameObject.HasStringProperty(nameof(Class)))
+                Class = GameObject.GetStringProperty(nameof(Class));
+            if (GameObject.HasStringProperty(nameof(ClassProp)))
+                Class = GameObject.GetStringProperty(nameof(ClassProp));
+        }
+
+        private void SetRoleFromProps(GameObject GameObject)
+        {
+            Role = "";
+            if (GameObject.HasStringProperty(nameof(Role)))
+                Role = GameObject.GetStringProperty(nameof(Role));
+            if (GameObject.HasStringProperty(nameof(RoleProp)))
+                Role = GameObject.GetStringProperty(nameof(RoleProp));
+        }
+
+        private void SetPaintedWallFromProps(GameObject GameObject)
+        {
+            PaintedWall = "";
+            if (GameObject.HasStringProperty(nameof(PaintedWall)))
+                PaintedWall = GameObject.GetStringProperty(nameof(PaintedWall));
+            if (GameObject.HasStringProperty(nameof(PaintedWallProp)))
+                PaintedWall = GameObject.GetStringProperty(nameof(PaintedWallProp));
+        }
+
+        private void SetPaintedFenceFromProps(GameObject GameObject)
+        {
+            PaintedFence = "";
+            if (GameObject.HasStringProperty(nameof(PaintedFence)))
+                PaintedFence = GameObject.GetStringProperty(nameof(PaintedFence));
+            if (GameObject.HasStringProperty(nameof(PaintedFenceProp)))
+                PaintedFence = GameObject.GetStringProperty(nameof(PaintedFenceProp));
+        }
 
         public bool SameAs(BlueprintSpec Other)
         {
@@ -945,12 +1075,18 @@ namespace UD_Bones_Folder.Mod
             string catchFlag = "Top";
             try
             {
-                catchFlag = "Checking Texture";
-                if (!Blueprint.GetRenderable().Tile.IsTile())
-                    return null;
-
                 catchFlag = "Check Excluded";
                 if (Blueprint.IsExcludedFromDynamicEncounters())
+                    return null;
+
+                catchFlag = "Check Base";
+                if (Blueprint.IsBaseBlueprint())
+                    return null;
+
+                catchFlag = "Checking Texture";
+                if (Blueprint.GetPart("Render") is not GamePartBlueprint renderPartBlueprint
+                    || !renderPartBlueprint.TryGetParameter(nameof(Render.Tile), out string renderTile)
+                    || !renderTile.IsTile())
                     return null;
 
                 return new(Blueprint);
@@ -986,33 +1122,108 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public IEnumerable<string> GetDebugLines(int Indent = 0)
+        private static string GetDebugString<T>(ref T Field, Func<T, string> ToString = null)
         {
+            if (Field is null)
+                return "null";
+
+            if (IsFieldWildCard(ref Field))
+                return "*";
+
+            return ToString != null
+                ? ToString.Invoke(Field)
+                : Field.ToString()
+                ;
+        }
+
+        public IEnumerable<KeyValuePair<string, string>> GetDebugPairs()
+        {
+            yield return new(nameof(DebugName), DebugName ?? "NONE");
+            yield return new(nameof(Blueprint), Blueprint ?? "NONE");
+
+            yield return new(
+                key: nameof(BlueprintTree),
+                value: GetDebugString(
+                    Field: ref BlueprintTree,
+                    ToString: f => f.Aggregate((string)null, Utils.NewLineDelimitedAggregator))
+                );
+
+            yield return new(nameof(Category), GetDebugString(Field: ref Category));
+            yield return new(nameof(Tier), GetDebugString(Field: ref Tier));
+            yield return new(nameof(TechTier), GetDebugString(Field: ref TechTier));
+
+            yield return new(
+                key: nameof(WeaponSkills),
+                value: GetDebugString(
+                    Field: ref WeaponSkills,
+                    ToString: f => f.Aggregate((string)null, Utils.NewLineDelimitedAggregator))
+                );
+
+            yield return new(
+                key: nameof(EquipmentSlots),
+                value: GetDebugString(
+                    Field: ref EquipmentSlots,
+                    ToString: f => f.Aggregate((string)null, Utils.NewLineDelimitedAggregator))
+                );
+
+            yield return new(nameof(Species), GetDebugString(Field: ref Species));
+            yield return new(nameof(Class), GetDebugString(Field: ref Class));
+            yield return new(nameof(Role), GetDebugString(Field: ref Role));
+            yield return new(nameof(PaintedWall), GetDebugString(Field: ref PaintedWall));
+            yield return new(nameof(PaintedFence), GetDebugString(Field: ref PaintedFence));
+        }
+
+        public IEnumerable<string> GetDebugLines(int Indent = 0, bool ForInternals = false)
+        {
+            if (ForInternals)
+                Indent = 0;
+
             yield return $"{Indent.Indent()}{nameof(DebugName)}: {DebugName ?? "NONE"}";
             yield return $"{Indent.Indent()}{nameof(Blueprint)}: {Blueprint ?? "NONE"}";
 
-            yield return $"{Indent.Indent()}{nameof(BlueprintTree)}: {(BlueprintTree.IsNullOrEmpty() ? "NONE" : null)}";
+            yield return $"{Indent.Indent()}{nameof(BlueprintTree)}: {GetDebugString(Field: ref BlueprintTree, ToString: f => null)}";
             foreach (var blueprint in BlueprintTree.IteratorSafe())
-                yield return $"{(Indent + 1).Indent()}: {blueprint}";
+            {
+                if (!ForInternals)
+                    yield return $"{(Indent + 1).Indent()}: {blueprint}";
+                else
+                    yield return $"\n{blueprint}";
+            }
 
-            yield return $"{Indent.Indent()}{nameof(Category)}: {Category ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(Tier)}: {Tier?.ToString() ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(TechTier)}: {TechTier?.ToString() ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(Category)}: {GetDebugString(Field: ref Category)}";
+            yield return $"{Indent.Indent()}{nameof(Tier)}: {GetDebugString(Field: ref Tier)}";
+            yield return $"{Indent.Indent()}{nameof(TechTier)}: {GetDebugString(Field: ref TechTier)}";
 
-            yield return $"{Indent.Indent()}{nameof(WeaponSkills)}: {(WeaponSkills.IsNullOrEmpty() ? "NONE" : null)}";
+            yield return $"{Indent.Indent()}{nameof(WeaponSkills)}: {GetDebugString(Field: ref WeaponSkills, ToString: f => null)}";
             foreach (var weaponSkill in WeaponSkills.IteratorSafe())
-                yield return $"{(Indent + 1).Indent()}: {weaponSkill}";
+            {
+                if (!ForInternals)
+                    yield return $"{(Indent + 1).Indent()}: {weaponSkill}";
+                else
+                    yield return $"\n{weaponSkill}";
+            }
 
-            yield return $"{Indent.Indent()}{nameof(EquipmentSlots)}: {(EquipmentSlots.IsNullOrEmpty() ? "NONE" : null)}";
+            yield return $"{Indent.Indent()}{nameof(EquipmentSlots)}: {GetDebugString(Field: ref EquipmentSlots, ToString: f => null)}";
             foreach (var equipmentSlot in EquipmentSlots.IteratorSafe())
-                yield return $"{(Indent + 1).Indent()}: {equipmentSlot}";
+            {
+                if (!ForInternals)
+                    yield return $"{(Indent + 1).Indent()}: {equipmentSlot}";
+                else
+                    yield return $"\n{equipmentSlot}";
+            }
 
-            yield return $"{Indent.Indent()}{nameof(Species)}: {Species ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(Class)}: {Class ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(Role)}: {Role ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(PaintedWall)}: {PaintedWall ?? "NONE"}";
-            yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {PaintedFence ?? "NONE"}";
+            yield return $"{Indent.Indent()}{nameof(Species)}: {GetDebugString(Field: ref Species)}";
+            yield return $"{Indent.Indent()}{nameof(Class)}: {GetDebugString(Field: ref Class)}";
+            yield return $"{Indent.Indent()}{nameof(Role)}: {GetDebugString(Field: ref Role)}";
+            yield return $"{Indent.Indent()}{nameof(PaintedWall)}: {GetDebugString(Field: ref PaintedWall)}";
+            yield return $"{Indent.Indent()}{nameof(PaintedFence)}: {GetDebugString(Field: ref PaintedFence)}";
         }
+
+        public string DebugString(bool ForInternals = false)
+            => GetDebugLines(ForInternals: ForInternals)
+                .IteratorSafe()
+                .Aggregate((string)null, Utils.NewLineDelimitedAggregator)
+            ;
 
         protected static int GetCollectionDistance(
             IEnumerable<string> Primary,
@@ -1076,6 +1287,9 @@ namespace UD_Bones_Folder.Mod
         {
             if (Other == null)
                 return MAX_DIST;
+
+            if (IsWildCard)
+                return 0;
 
             int distance = 0;
 

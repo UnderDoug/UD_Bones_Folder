@@ -150,11 +150,10 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Reader.ReadGameObjectMetricsOff() is GameObject gameObject)
                 {
-                    if (gameObject.NeedsFeverWarped(out bool tileOnly, out bool hasBadWord, out _, out _))
+                    if (gameObject.NeedsFeverWarped(out UD_Bones_FeverWarped.WarpFlags warpFlags))
                     {
                         gameObject.SetStringProperty(nameof(UD_Bones_FeverWarped), $"{true}");
-                        gameObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::TileOnly", $"{tileOnly}");
-                        gameObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::HasBadWord", $"{hasBadWord}");
+                        gameObject.SetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{warpFlags == UD_Bones_FeverWarped.WarpFlags.Tile}");
                     }
                     cell.Objects.Add(gameObject);
                     Reader.Locations[gameObject] = cell;
@@ -570,51 +569,44 @@ namespace UD_Bones_Folder.Mod
 
         public static void WriteOptimized(this SerializationWriter Writer, IDictionary<string, string> Dictionary)
         {
-            if (Dictionary == null)
+            Writer.Write(Dictionary?.Count ?? -1);
+            foreach (KeyValuePair<string, string> entry in Dictionary.IteratorSafe())
             {
-                Writer.WriteOptimized(-1);
-                return;
-            }
-
-            Writer.Write(Dictionary.Keys.Count);
-            foreach (KeyValuePair<string, string> item in Dictionary)
-            {
-                Writer.WriteOptimized(item.Key);
-                Writer.WriteOptimized(item.Value);
+                Writer.WriteOptimized(entry.Key);
+                Writer.WriteOptimized(entry.Value);
             }
         }
 
-        public static void WriteCompositeValues<K, V>(this SerializationWriter Writer, IDictionary<K, V> Dictionary)
-            where V : IComposite, new()
+        public static void WriteCompositeValues<K, VComposite>(this SerializationWriter Writer, IDictionary<K, VComposite> Dictionary)
+            where VComposite : IComposite, new()
         {
-            if (Dictionary == null)
+            Writer.Write(Dictionary?.Count ?? -1);
+            foreach (KeyValuePair<K, VComposite> entry in Dictionary.IteratorSafe())
             {
-                Writer.WriteOptimized(-1);
-                return;
-            }
-
-            Writer.Write(Dictionary.Keys.Count);
-            foreach (KeyValuePair<K, V> item in Dictionary)
-            {
-                Writer.WriteObject(item.Key);
-                Writer.WriteComposite(item.Value);
+                Writer.WriteObject(entry.Key);
+                Writer.WriteComposite(entry.Value);
             }
         }
 
-        public static void WriteCompositeKeys<K, V>(this SerializationWriter Writer, IDictionary<K, V> Dictionary)
-            where K : IComposite, new()
+        public static void WriteStringCompositeValues<T>(this SerializationWriter Writer, IDictionary<string, T> Dictionary)
+            where T : IComposite, new()
         {
-            if (Dictionary == null)
+            Writer.Write(Dictionary?.Count ?? -1);
+            foreach (KeyValuePair<string, T> entry in Dictionary.IteratorSafe())
             {
-                Writer.WriteOptimized(-1);
-                return;
+                Writer.WriteObject(entry.Key);
+                Writer.WriteComposite(entry.Value);
             }
+        }
 
-            Writer.Write(Dictionary.Keys.Count);
-            foreach (KeyValuePair<K, V> item in Dictionary)
+        public static void WriteCompositeKeys<KComposite, V>(this SerializationWriter Writer, IDictionary<KComposite, V> Dictionary)
+            where KComposite : IComposite, new()
+        {
+            Writer.Write(Dictionary?.Count ?? -1);
+            foreach (KeyValuePair<KComposite, V> entry in Dictionary.IteratorSafe())
             {
-                Writer.WriteComposite(item.Key);
-                Writer.WriteObject(item.Value);
+                Writer.WriteComposite(entry.Key);
+                Writer.WriteObject(entry.Value);
             }
         }
 
@@ -622,44 +614,21 @@ namespace UD_Bones_Folder.Mod
             where K : IComposite, new()
             where V : IComposite, new()
         {
-            if (Dictionary == null)
+            Writer.Write(Dictionary?.Count ?? -1);
+            foreach (KeyValuePair<K, V> entry in Dictionary.IteratorSafe())
             {
-                Writer.WriteOptimized(-1);
-                return;
-            }
-
-            Writer.Write(Dictionary.Keys.Count);
-            foreach (KeyValuePair<K, V> item in Dictionary)
-            {
-                Writer.WriteComposite(item.Key);
-                Writer.WriteComposite(item.Value);
-            }
-        }
-
-        public static void WriteComposite<V>(this SerializationWriter Writer, IDictionary<string, V> Dictionary)
-            where V : IComposite, new()
-        {
-            if (Dictionary == null)
-            {
-                Writer.WriteOptimized(-1);
-                return;
-            }
-
-            Writer.Write(Dictionary.Keys.Count);
-            foreach (KeyValuePair<string, V> item in Dictionary)
-            {
-                Writer.WriteOptimized(item.Key);
-                Writer.WriteComposite(item.Value);
+                Writer.WriteComposite(entry.Key);
+                Writer.WriteComposite(entry.Value);
             }
         }
 
         public static Dictionary<string, string> ReadOptimizedStringDictionary(this SerializationReader Reader)
         {
-            int count = Reader.ReadOptimizedInt32();
+            int count = Reader.ReadInt32();
             if (count == -1)
                 return null;
 
-           var dictionary = new Dictionary<string, string>(count);
+            var dictionary = new Dictionary<string, string>(count);
             for (int i = 0; i < count; i++)
                 dictionary[Reader.ReadOptimizedString()] = Reader.ReadOptimizedString();
 
@@ -669,13 +638,27 @@ namespace UD_Bones_Folder.Mod
         public static Dictionary<K, V> ReadCompositeValues<K, V>(this SerializationReader Reader)
             where V : IComposite, new()
         {
-            int count = Reader.ReadOptimizedInt32();
+            int count = Reader.ReadInt32();
             if (count == -1)
                 return null;
 
-           var dictionary = new Dictionary<K, V>(count);
+            var dictionary = new Dictionary<K, V>(count);
             for (int i = 0; i < count; i++)
                 dictionary[(K)Reader.ReadObject()] = Reader.ReadComposite<V>();
+
+            return dictionary;
+        }
+
+        public static Dictionary<string, T> ReadStringCompositeDictionary<T>(this SerializationReader Reader)
+            where T : IComposite, new()
+        {
+            int count = Reader.ReadInt32();
+            if (count == -1)
+                return null;
+
+            var dictionary = new Dictionary<string, T>(count);
+            for (int i = 0; i < count; i++)
+                dictionary[Reader.ReadOptimizedString()] = Reader.ReadComposite<T>();
 
             return dictionary;
         }
@@ -683,7 +666,7 @@ namespace UD_Bones_Folder.Mod
         public static Dictionary<K, V> ReadCompositeKeys<K, V>(this SerializationReader Reader)
             where K : IComposite, new()
         {
-            int count = Reader.ReadOptimizedInt32();
+            int count = Reader.ReadInt32();
             if (count == -1)
                 return null;
 
@@ -698,27 +681,13 @@ namespace UD_Bones_Folder.Mod
             where K : IComposite, new()
             where V : IComposite, new()
         {
-            int count = Reader.ReadOptimizedInt32();
+            int count = Reader.ReadInt32();
             if (count == -1)
                 return null;
 
             var dictionary = new Dictionary<K, V>(count);
             for (int i = 0; i < count; i++)
                 dictionary[Reader.ReadComposite<K>()] = Reader.ReadComposite<V>();
-
-            return dictionary;
-        }
-
-        public static Dictionary<string, V> ReadComposite<V>(this SerializationReader Reader)
-            where V : IComposite, new()
-        {
-            int count = Reader.ReadOptimizedInt32();
-            if (count == -1)
-                return null;
-
-            var dictionary = new Dictionary<string, V>(count);
-            for (int i = 0; i < count; i++)
-                dictionary[Reader.ReadOptimizedString()] = Reader.ReadComposite<V>();
 
             return dictionary;
         }
