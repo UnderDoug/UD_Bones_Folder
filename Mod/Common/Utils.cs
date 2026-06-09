@@ -36,6 +36,8 @@ using ConversationContext = XRL.World.Conversations.DelegateContext;
 
 using static UD_Bones_Folder.Mod.Const;
 using XRL.CharacterBuilds;
+using UD_Bones_Folder.Mod.Moderation;
+using System.Diagnostics;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -471,7 +473,7 @@ namespace UD_Bones_Folder.Mod
         #region Aggregator Functions
 
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
-           => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
+           => $"{Accumulator}{(!Accumulator.IsNullOrEmpty() ? Delimiter : null)}{Next}"
            ;
 
         public static string CommaDelimitedAggregator<T>(string Accumulator, T Next)
@@ -492,6 +494,14 @@ namespace UD_Bones_Folder.Mod
 
         public static string PeriodSpaceDelimitedAggregator<T>(string Accumulator, T Next)
             => DelimitedAggregator(Accumulator, Next, ". ")
+            ;
+
+        public static string PipeDelimitedAggregator<T>(string Accumulator, T Next, Func<string, T, string> Proc)
+            => DelimitedAggregator(Accumulator, Proc?.Invoke(Accumulator, Next) ?? Next?.ToString(), "|")
+            ;
+
+        public static string PipeDelimitedAggregator<T>(string Accumulator, T Next)
+            => PipeDelimitedAggregator(Accumulator, Next, null)
             ;
 
         public static string CallChain(params string[] Strings)
@@ -747,6 +757,43 @@ namespace UD_Bones_Folder.Mod
                 return false;
             }
             return true;
+        }
+
+        public static void Benchmark(Action Action, string Description)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                Action.Invoke();
+            }
+            catch (Exception x)
+            {
+                Error($"{nameof(Benchmark)}ing, {Description}", x);
+            }
+            finally
+            {
+                Info($"{Description} took {sw.Elapsed.ValueUnits()}...");
+                sw.Stop();
+            }
+        }
+
+        public static T BenchmarkReturn<T>(Func<T> Func, string Description, T Default = default)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                return Func.Invoke();
+            }
+            catch (Exception x)
+            {
+                Error($"{nameof(Benchmark)}ing, {Description}", x);
+                return Default;
+            }
+            finally
+            {
+                Info($"{Description} took {sw.Elapsed.ValueUnits()}...");
+                sw.Stop();
+            }
         }
     }
 }

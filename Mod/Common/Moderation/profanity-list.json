@@ -63,18 +63,18 @@
     ],
     "severity": 3
   },
-    {
-      "id": "anal",
-      "match": "anal",
-      "tags": [
-        "sexual"
-      ],
+  {
+    "id": "anal",
+    "match": "anal",
+    "tags": [
+      "sexual"
+    ],
       "severity": 2,
       "exceptions": [
         "c*s",
         "artis*ly"
       ]
-    },
+  },
   {
     "id": "anal-assassin",
     "match": "anal assassin",
@@ -153,7 +153,15 @@
   },
   {
     "id": "arsehole",
-    "match": "arseho*le|ass*ho*le",
+    "match": "arseho*le",
+    "tags": [
+      "general"
+    ],
+    "severity": 3
+  },
+  {
+    "id": "asshole",
+    "match": "ass*ho*le",
     "tags": [
       "general"
     ],
@@ -1189,7 +1197,7 @@
   },
   {
     "id": "cum",
-    "match": "cum",
+    "match": "cu*m*",
     "tags": [
       "sexual"
     ],
@@ -1197,8 +1205,8 @@
     "exceptions": [
       "suc*b",
       "suc*bs",
-      "suc*bing",
-      "suc*bed"
+      "suc*bed",
+      "suc*bing"
     ]
   },
   {
@@ -1227,7 +1235,7 @@
   },
   {
     "id": "cunt",
-    "match": "cu*n*t|ku*nt|cunts|kunts",
+    "match": "cu*n*t",
     "tags": [
       "general"
     ],
@@ -1235,6 +1243,14 @@
     "exceptions": [
       "s*horpe"
     ]
+  },
+  {
+    "id": "cunt-alt",
+    "match": "ku*nt|cunts|kunts",
+    "tags": [
+      "general"
+    ],
+    "severity": 4
   },
   {
     "id": "cuntboy",
@@ -1693,7 +1709,7 @@
   },
   {
     "id": "fuck",
-    "match": "fu*c*k|fucks|fu*c*ken|fu*c*ker|fu*ckers|fu*c*kin|fu*c*king",
+    "match": "fu*c*k|fu*cks*|fu*c*ken|fu*c*ker|fu*ckers*|fu*c*kin|fu*c*king",
     "tags": [
       "general"
     ],
@@ -1701,7 +1717,7 @@
   },
   {
     "id": "fuckhead",
-    "match": "fuckhead|fuckheads",
+    "match": "fu*ckhead|fu*ck-head|fu*ckheads|fu*ck-heads|fu*ckhe*d|fu*ck-he*d|fu*ckhe*ds|fu*ck-he*ds",
     "tags": [
       "general"
     ],
@@ -1709,7 +1725,7 @@
   },
   {
     "id": "fucktard",
-    "match": "fucktard|fucktards",
+    "match": "fu*ckta*rd|fu*ck-ta*rd|fu*ckta*rds*|fu*ck-ta*rds*",
     "tags": [
       "general"
     ],
@@ -1717,7 +1733,7 @@
   },
   {
     "id": "fuckwad",
-    "match": "fuckwad|fuckwads",
+    "match": "fu*ckwa*d|fu*ck-wa*d|fu*ckwa*ds*|fu*ck-wa*ds*",
     "tags": [
       "general"
     ],
@@ -1725,7 +1741,7 @@
   },
   {
     "id": "fuckwit",
-    "match": "fuckwit|fuckwits|fuckwhit|fuck-wit",
+    "match": "fu*ckwi*t|fu*ckwi*ts*|fu*ckwhi*t|fu*ck-wi*t",
     "tags": [
       "general"
     ],
@@ -3145,7 +3161,7 @@
   },
   {
     "id": "retard",
-    "match": "retard|retarded",
+    "match": "re*ta*r*d|re*ta*rde*d",
     "tags": [
       "general"
     ],
@@ -3506,7 +3522,7 @@
   },
   {
     "id": "spic",
-    "match": "spic|spics|spick|spicks",
+    "match": "spic",
     "tags": [
       "racial"
     ],
@@ -3536,7 +3552,6 @@
       "*iness",
       "*inesses",
       "*ing",
-      "*ks",
       "*ula",
       "*ulae",
       "*ular",
@@ -3606,8 +3621,17 @@
     ]
   },
   {
+    "id": "spic-alt",
+    "match": "spics|spick|spicks",
+    "tags": [
+      "racial"
+    ],
+    "severity": 3
+  },
+  {
     "id": "spicy-gringo",
     "match": "spicy gringo",
+    "allow_partial":  false,
     "tags": [
       "sexual"
     ],

@@ -88,6 +88,7 @@ namespace UD_Bones_Folder.Mod.Moderation
         }
 
         public static Dictionary<SeverityLevel, string> MegaPatterns = new();
+        public static Dictionary<SeverityLevel, string> MegaPatterns2 = new();
 
         public static Dictionary<SeverityLevel, Regex> RegexCache = new();
 
@@ -260,6 +261,63 @@ namespace UD_Bones_Folder.Mod.Moderation
                         Utils.Info($"Produced a mega pattern for minimum severity level {SeverityLevel.Severe} ({(int)SeverityLevel.Severe}): {megaPattern.Length:#,##0} characters.");
                     }
                 }
+                Utils.Log($"Finished Normal Patterns");
+                // ##############################
+                if (!MegaPatterns2.TryGetValue(SeverityLevel.Mild, out megaPattern))
+                {
+                    megaPattern = BadWordsSet.ProduceTrieMegaPattern(
+                        Where: b => b.Severity >= SeverityLevel.Mild,
+                        Name: SeverityLevel.Mild);
+
+                    MegaPatterns[SeverityLevel.Mild] = megaPattern;
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a trie mega pattern for minimum severity level {SeverityLevel.Mild} ({(int)SeverityLevel.Mild}): {megaPattern.Length:#,##0} characters.");
+                    }
+                    // Utils.Log($"{nameof(megaPattern)} {(int)SeverityLevel.Mild} ({SeverityLevel.Mild}): {megaPattern ?? "failed"}");
+                }
+
+                if (!MegaPatterns2.TryGetValue(SeverityLevel.Medium, out megaPattern))
+                {
+                    megaPattern = BadWordsSet.ProduceTrieMegaPattern(
+                        Where: b => b.Severity >= SeverityLevel.Medium,
+                        Name: SeverityLevel.Medium);
+
+                    MegaPatterns[SeverityLevel.Medium] = megaPattern;
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a trie mega pattern for minimum severity level {SeverityLevel.Medium} ({(int)SeverityLevel.Medium}): {megaPattern.Length:#,##0} characters.");
+                    }
+                    // Utils.Log($"{nameof(megaPattern)} {(int)SeverityLevel.Medium} ({SeverityLevel.Medium}): {megaPattern ?? "failed"}");
+                }
+
+                if (!MegaPatterns2.TryGetValue(SeverityLevel.Strong, out megaPattern))
+                {
+                    megaPattern = BadWordsSet.ProduceTrieMegaPattern(
+                        Where: b => b.Severity >= SeverityLevel.Strong,
+                        Name: SeverityLevel.Strong);
+
+                    MegaPatterns[SeverityLevel.Strong] = megaPattern;
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a trie mega pattern for minimum severity level {SeverityLevel.Strong} ({(int)SeverityLevel.Strong}): {megaPattern.Length:#,##0} characters.");
+                    }
+                    // Utils.Log($"{nameof(megaPattern)} {(int)SeverityLevel.Strong} ({SeverityLevel.Strong}): {megaPattern ?? "failed"}");
+                }
+
+                if (!MegaPatterns2.TryGetValue(SeverityLevel.Severe, out megaPattern))
+                {
+                    megaPattern = BadWordsSet.ProduceTrieMegaPattern(
+                        Where: b => b.Severity >= SeverityLevel.Severe,
+                        Name: SeverityLevel.Severe);
+
+                    MegaPatterns[SeverityLevel.Severe] = megaPattern;
+                    if (Options.DebugEnableBadWordFilterLogging)
+                    {
+                        Utils.Info($"Produced a trie mega pattern for minimum severity level {SeverityLevel.Severe} ({(int)SeverityLevel.Severe}): {megaPattern.Length:#,##0} characters.");
+                    }
+                    // Utils.Log($"{nameof(megaPattern)} {(int)SeverityLevel.Severe} ({SeverityLevel.Severe}): {megaPattern ?? "failed"}");
+                }
             }
         }
 
@@ -326,47 +384,66 @@ namespace UD_Bones_Folder.Mod.Moderation
             => Tags?.Contains(Tag) is true
             ;
 
-        public static string ProcessMatchException(string Match, string Exception, bool AllowPartial = true)
+        public static string ProcessMatchException(
+            string Match,
+            string Exception,
+            bool IncludeWildCard = true
+            )
         {
             if (Match.IsNullOrEmpty()
                 || Exception.IsNullOrEmpty()
                 || !Exception.Contains('*'))
                 return null;
 
-            string exception = Exception.Replace("*", Match);
+            string wildCard = IncludeWildCard
+                ? WildCard
+                : null
+                ;
 
-            if (!AllowPartial)
-                return $"\\b{exception}\\b";
-
-            return $"{WildCard}{exception}{WildCard}";
+            return $"{wildCard}{Exception.Replace("*", Match)}{wildCard}";
         }
 
-        public static string ProcessMatchString(string Match, bool AllowPartial = true)
+        public static string ProcessMatchString(
+            string Match,
+            bool AllowPartial = true,
+            bool IncludeWildCard = true
+            )
         {
             Match = Match.Replace('*', '+');
             string pattern = Match;
 
             if (!AllowPartial)
-                return $"(\\b{pattern}\\b)+";
+                return $"\\b{pattern}\\b";
 
-            return $"{WildCard}{pattern}{WildCard}";
+            string wildCard = IncludeWildCard
+                ? WildCard
+                : null
+                ;
+
+            return $"{wildCard}{pattern}{wildCard}";
         }
 
         public static string ProcessMatchExceptionString(string Match, string[] Exceptions = null)
+            => ProcessMatchExceptions(Match, Exceptions)
+                .Aggregate((string)null, Utils.PipeDelimitedAggregator)
+            ;
+
+        public static IEnumerable<string> ProcessMatchExceptions(string Match, string[] Exceptions = null, bool IncludeWildCard = true)
         {
-            return Exceptions.IteratorSafe().Aggregate(
-                seed: "",
-                func: delegate (string acc, string next)
-                {
-                    if (ProcessMatchException(Match, next) is not string exception)
-                        return acc;
-                    return Utils.DelimitedAggregator(acc, exception, "|");
-                });
+            string match = ProcessMatchString(Match, AllowPartial: !Exceptions.IsNullOrEmpty(), IncludeWildCard: false);
+            foreach (var exception in Exceptions.IteratorSafe())
+                if (ProcessMatchException(match, exception, IncludeWildCard: IncludeWildCard) is string exceptionString)
+                    yield return exceptionString;
         }
 
-        public static string ProducePattern(string Match, bool AllowPartial = true, string[] Exceptions = null)
+        public static string ProducePattern(
+            string Match,
+            bool AllowPartial = true,
+            string[] Exceptions = null
+            )
         {
-            Match = Match.Replace('*', '+');
+            Match = ProcessMatchString(Match, AllowPartial: true, IncludeWildCard: false);
+
             string pattern = Match;
 
             if (!AllowPartial)
@@ -513,6 +590,32 @@ namespace UD_Bones_Folder.Mod.Moderation
 
     public static class BadWordExtensions
     {
+        public static IEnumerable<string> GetProcessedBadWordMatches(this HashSet<BadWord> BadWordSet, Predicate<BadWord> Where)
+        {
+            foreach (var badWord in BadWordSet)
+            {
+                if (Where?.Invoke(badWord) is false)
+                    continue;
+
+                foreach (var match in badWord.Matches.IteratorSafe())
+                    if (BadWord.ProcessMatchString(match, AllowPartial: true, IncludeWildCard: false) is string processedMatch)
+                        yield return processedMatch;
+            }
+        }
+
+        public static IEnumerable<string> GetProcessedBadWordExceptions(this HashSet<BadWord> BadWordSet, Predicate<BadWord> Where)
+        {
+            foreach (var badWord in BadWordSet)
+            {
+                if (Where?.Invoke(badWord) is false)
+                    continue;
+
+                foreach (var match in badWord.Matches.IteratorSafe())
+                    foreach (var exception in BadWord.ProcessMatchExceptions(match, badWord.Exceptions, IncludeWildCard: false).IteratorSafe())
+                        yield return exception;
+            }
+        }
+
         public static string ProduceMegaPattern(this HashSet<BadWord> BadWordSet, Predicate<BadWord> Where)
         {
             using var matches = ScopeDisposedList<string>.GetFromPool();
@@ -549,11 +652,184 @@ namespace UD_Bones_Folder.Mod.Moderation
             return $"\\b(?:{exceptionsString}|{matchesString})+\\b";
         }
 
+        private static void BenchmarkMatches(
+            object Name,
+            string Description,
+            string FullPattern,
+            string WordsString,
+            bool MatchPositive = true
+            )
+        {
+            bool regexMatchTest = Utils.BenchmarkReturn(() => FullPattern.MatchesCaptureGroups(WordsString, BadWord.DefaultOptionsCompiled, Silent: true),
+                Description: $"{Description} {nameof(Extensions.MatchesCaptureGroups)} full word string");
+            Utils.Log($"{Name} Match Test: {(MatchPositive == regexMatchTest ? "success" : "failure")}");
+        }
+
+        private static void BenchmarkIndividualMatches(
+            string Descrition,
+            string DescriptionInner,
+            string FullPattern,
+            IEnumerable<string> Words,
+            bool MatchPositive = true
+            )
+        {
+            int wordsCount = Words.Count();
+            var results = new List<string>();
+            Utils.Benchmark(
+                Action: delegate ()
+                {
+                    foreach (var word in Words)
+                    {
+                        bool result = FullPattern.MatchesCaptureGroups(word.Replace("+", "").Replace("*", ""), BadWord.DefaultOptionsCompiled, Silent: true);
+                        /*bool result = Utils.BenchmarkReturn(() => FullPattern.MatchesCaptureGroups(word.Replace("+", ""), BadWord.DefaultOptions, Silent: true),
+                            Description: $"{DescriptionInner} {nameof(Extensions.MatchesCaptureGroups)} for {word}");*/
+
+                        if (MatchPositive != result)
+                            results.Add(word);
+                    }
+                },
+                Description: Descrition);
+
+            Utils.Log($"Individual word results ({results.Count}/{wordsCount}):");
+            results.Loggregate(
+                Proc: s => $"{s}: {(MatchPositive ? "match missed" : "exception caught")}",
+                Empty: "none",
+                PostProc: s => $"{1.Indent()}: {s}");
+        }
+
         public static string ProduceMegaPattern(
             this HashSet<BadWord> BadWordSet,
             BadWord.SeverityLevel MinimumSeverity = BadWord.DefaultSeverity
             )
             => BadWordSet.ProduceMegaPattern(b => b.Severity >= MinimumSeverity)
+            ;
+
+        public static string ProduceTrieMegaPattern(
+            this HashSet<BadWord> BadWordSet,
+            Predicate<BadWord> Where,
+            object Name = null
+            )
+        {
+            bool doBenchmark = false;
+            using var matches = ScopeDisposedList<string>.GetFromPool();
+            using var exceptions = ScopeDisposedList<string>.GetFromPool();
+            foreach (var badWord in BadWordSet.IteratorSafe())
+            {
+                if (Where?.Invoke(badWord) is false)
+                    continue;
+
+                foreach (var match in badWord.Matches.IteratorSafe())
+                {
+                    if (BadWord.ProcessMatchString(match, badWord.AllowPartial, IncludeWildCard: false) is string matchPattern
+                        && !matches.Contains(matchPattern))
+                    {
+                        matches.Add(matchPattern);
+                    }
+                    foreach (var exception in BadWord.ProcessMatchExceptions(match, badWord.Exceptions, IncludeWildCard: false).IteratorSafe())
+                        if (!exceptions.Contains(exception))
+                            exceptions.Add(exception);
+                }
+            }
+            if (matches.IsNullOrEmpty())
+                return null;
+
+            using var matchTrie = new Trie($"{Name}:Matches", matches);
+
+            if ((matchTrie.IsEnd
+                    && matchTrie.IsRoot)
+                || matchTrie.GetUnboundRegexPattern(Capturing: true) is not string matchPatternString)
+                return null;
+
+            string fullPattern = $"\\b{matchPatternString}+\\b";
+
+            if (exceptions.IsNullOrEmpty())
+            {
+                if (doBenchmark)
+                {
+                    var matchWords = matchTrie.GetWordStrings();
+                    string matchWordsString = matchWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
+                    //Utils.Log($"{nameof(matchWordsString)}: {matchWordsString}");
+                    //Utils.Log($"{nameof(matchPatternString)}: {matchPatternString}");
+
+                    BenchmarkMatches(Name, $"{Name}:Matches", fullPattern, matchWordsString);
+                    BenchmarkIndividualMatches($"{Name} Match Test for individual words", $"{Name}:Matches", fullPattern, BadWordSet.GetProcessedBadWordMatches(Where));
+                    BenchmarkIndividualMatches($"{Name} Match Test for individual generated words", $"{Name}:Matches", fullPattern, matchWords);
+
+                    /*string regexReplaceTest = Utils.BenchmarkReturn(() => Regex.Replace(matchWordsString, fullPattern, "****"),
+                        Description: $"{Name}:Matches {nameof(Regex)}.{nameof(Regex.Replace)}",
+                        Default: "ERROR");
+                    Utils.Log($"{Name} Replace Test: {regexReplaceTest}");*/
+                }
+                return fullPattern;
+            }
+
+            using var exceptionTrie = new Trie($"{Name}:Exceptions", exceptions);
+
+            if ((exceptionTrie.IsEnd
+                    && exceptionTrie.IsRoot)
+                || exceptionTrie.GetUnboundRegexPattern(Capturing: false) is not string exceptionPatternString)
+            {
+                if (doBenchmark)
+                {
+                    var matchWords = matchTrie.GetWordStrings();
+                    string matchWordsString = matchWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
+                    //Utils.Log($"{nameof(matchWordsString)}: {matchWordsString}");
+                    //Utils.Log($"{nameof(matchPatternString)}: {matchPatternString}");
+
+                    BenchmarkMatches(Name, $"{Name}:Matches", fullPattern, matchWordsString);
+                    BenchmarkIndividualMatches($"{Name} Match Test for individual words", $"{Name}:Matches", fullPattern, BadWordSet.GetProcessedBadWordMatches(Where));
+                    BenchmarkIndividualMatches($"{Name} Match Test for individual generated words", $"{Name}:Matches", fullPattern, matchWords);
+
+                    /*string regexReplaceTest = Utils.BenchmarkReturn(() => Regex.Replace(matchWordsString, fullPattern, "****"),
+                        Description: $"{Name}:Matches {nameof(Regex)}.{nameof(Regex.Replace)}",
+                        Default: "ERROR");
+                    Utils.Log($"{Name} Replace Test: {regexReplaceTest}");*/
+                }
+                return fullPattern;
+            }
+
+            fullPattern = $"\\b(?:{exceptionPatternString}|{matchPatternString})+\\b";
+
+            if (doBenchmark)
+            {
+                var matchWords = matchTrie.GetWordStrings();
+                string matchWordsString = matchWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
+                //Utils.Log($"{nameof(matchWordsString)}: {matchWordsString}");
+                //Utils.Log($"{nameof(matchPatternString)}: {matchPatternString}");
+
+                var exceptionWords = exceptionTrie.GetWordStrings();
+                string exceptionWordsString = exceptionWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
+                //Utils.Log($"{nameof(exceptionWordsString)}: {exceptionWordsString}");
+                //Utils.Log($"{nameof(exceptionPatternString)}: {exceptionPatternString}");
+
+                // string fullTrieWords = $"{matchWordsString}\n{1.Indent()}##############################\n{exceptionWordsString}";
+
+                /*bool regexExceptionMatchTest = Utils.BenchmarkReturn(() => fullPattern.MatchesCaptureGroups(exceptionWordsString, BadWord.DefaultOptions, Silent: true),
+                    Description: $"{Name}:Exception {nameof(Extensions.MatchesCaptureGroups)} full words");
+                Utils.Log($"{Name} Exception Match Test: {regexExceptionMatchTest}");*/
+
+            
+                BenchmarkMatches(Name, $"{Name}:Matches", fullPattern, matchWordsString);
+                BenchmarkIndividualMatches($"{Name} Match Test for individual words", $"{Name}:Matches", fullPattern, BadWordSet.GetProcessedBadWordMatches(Where));
+                BenchmarkIndividualMatches($"{Name} Match Test for individual generated words", $"{Name}:Matches", fullPattern, matchWords);
+                BenchmarkIndividualMatches($"{Name} Exception Match Test for individual words", $"{Name}:Exceptions", fullPattern, BadWordSet.GetProcessedBadWordExceptions(Where), MatchPositive: false);
+                BenchmarkIndividualMatches($"{Name} Exception Match Test for individual generated words", $"{Name}:Exceptions", fullPattern, exceptionWords, MatchPositive: false);
+
+                /*string regexTest = Utils.BenchmarkReturn(() => Regex.Replace(fullTrieWords, fullPattern, "****"),
+                    Description: $"{Name} Full {nameof(Regex)}.{nameof(Regex.Replace)}",
+                    Default: "ERROR");
+                Utils.Log($"{Name} Full Replace Test: {regexTest}");*/
+
+            }
+
+            return fullPattern;
+        }
+
+        public static string ProduceTrieMegaPattern(
+            this HashSet<BadWord> BadWordSet,
+            BadWord.SeverityLevel MinimumSeverity = BadWord.DefaultSeverity
+            )
+            => BadWordSet.ProduceTrieMegaPattern(b => b.Severity >= MinimumSeverity, MinimumSeverity)
             ;
 
         public static bool HasBadWord(
@@ -577,11 +853,11 @@ namespace UD_Bones_Folder.Mod.Moderation
                 {
                     if (!BadWord.RegexCache.TryGetValue(MinimumSeverity, out var cachedRegex))
                     {
-                        if (!BadWord.MegaPatterns.TryGetValue(MinimumSeverity, out string megaPattern))
+                        if (!BadWord.MegaPatterns2.TryGetValue(MinimumSeverity, out string megaPattern))
                         {
-                            megaPattern = BadWord.BadWordsSet.ProduceMegaPattern(MinimumSeverity);
-                            BadWord.MegaPatterns[MinimumSeverity] = megaPattern;
-                            Utils.Info($"produced the following mega pattern for minimum severity level {MinimumSeverity} ({(int)MinimumSeverity}):\n{megaPattern}");
+                            megaPattern = BadWord.BadWordsSet.ProduceTrieMegaPattern(MinimumSeverity);
+                            BadWord.MegaPatterns2[MinimumSeverity] = megaPattern;
+                            //Utils.Info($"produced the following mega pattern for minimum severity level {MinimumSeverity} ({(int)MinimumSeverity}):\n{megaPattern}");
                         }
 
                         /*if (!megaPattern.IsNullOrEmpty())

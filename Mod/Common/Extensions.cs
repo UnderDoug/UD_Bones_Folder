@@ -2419,5 +2419,33 @@ namespace UD_Bones_Folder.Mod
         public static bool TryRequireBlueprintSpec(this GameObject GameObject, out BlueprintSpec BlueprintSpec)
             => (BlueprintSpec = GameObject.RequireBlueprintSpec()) != null
             ;
+
+        public static void Adjust<T>(this Dictionary<T, int> Dictionary, T Key, int Amount, bool RemoveLTEZero = false)
+        {
+            if (Dictionary != null)
+            {
+                if (!Dictionary.ContainsKey(Key))
+                {
+                    if (RemoveLTEZero
+                        && Amount <= 0)
+                        return;
+
+                    Dictionary[Key] = 0;
+                }
+                Dictionary[Key] += Amount;
+
+                if (RemoveLTEZero
+                    && Dictionary[Key] <= 0)
+                    Dictionary.Remove(Key);
+            }
+        }
+
+        public static void Increment<T>(this Dictionary<T, int> Dictionary, T Key)
+            => Dictionary.Adjust(Key, 1)
+            ;
+
+        public static void Decrement<T>(this Dictionary<T, int> Dictionary, T Key, bool RemoveLTEZero = true)
+            => Dictionary.Adjust(Key, -1, RemoveLTEZero)
+            ;
     }
 }
