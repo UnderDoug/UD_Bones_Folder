@@ -41,7 +41,7 @@ namespace UD_Bones_Folder.Mod.UI
             Utils.Log($"{nameof(BonesModeModule)}.{nameof(RandomizeTileIfChooseYourFighter)} called.");
             try
             {
-                if (SeededOddsIn10000(nameof(RandomizeTileIfChooseYourFighter), 5000))
+                if (SeededPerMyriadChance(nameof(RandomizeTileIfChooseYourFighter), 5000))
                 {
                     if (TileFactory.Models is IEnumerable<PlayerModel> playerModels
                         && (Window.module.builder ?? Module.builder) is EmbarkBuilder builder)
@@ -65,7 +65,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                         modelData.defaultModel = defaultModel;
 
-                        if (SeededOddsIn10000(nameof(RandomizeTileIfChooseYourFighter), Odds: 1, Iteration: 1)
+                        if (SeededPerMyriadChance(nameof(RandomizeTileIfChooseYourFighter), Chance: 1, Iteration: 1)
                             && GameObjectFactory.Factory
                                 .BlueprintList
                                 .Where(b => b.GetRenderable()?.Tile != null) is IEnumerable<GameObjectBlueprint> renderableBlueprints

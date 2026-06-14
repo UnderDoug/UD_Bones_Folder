@@ -145,8 +145,8 @@ namespace UD_Bones_Folder.Mod
         private static Configuration _Config;
         public static Configuration Config => _Config ??= Configuration.ReadOrNewAsync()?.WaitResult();
 
-        private static Rack<HostCollection> _Hosts;
-        public static Rack<HostCollection> Hosts => _Hosts ??= ReadHostCollections()?.WaitResult();
+        private static Rack<HostSet> _Hosts;
+        public static Rack<HostSet> Hosts => _Hosts ??= ReadHostCollections()?.WaitResult();
 
         public static Renderable BlackAshCloudIcon = new(
             Tile: "Mutations/gas_generation.bmp",
@@ -500,7 +500,7 @@ namespace UD_Bones_Folder.Mod
             if (Options.EnableOsseousAshDownloads
                 || Options.EnableOsseousAshUploads)
             {
-                if (Hosts.FirstWithHostMatching(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is HostCollection defaultHostCollection
+                if (Hosts.FirstWithHostMatching(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is HostSet defaultHostCollection
                     && defaultHostCollection.FirstOrDefault(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is Host defaultHost)
                 {
                     defaultHost.Enabled = false;
@@ -538,35 +538,34 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static async Task<Rack<HostCollection>> ReadHostCollections()
+        public static async Task<Rack<HostSet>> ReadHostCollections()
         {
-            Rack<HostCollection> hosts = null;
-            foreach (var fileLocationData in GetOsseousAshFileLocationData(Ensure: true))
+            Rack<HostSet> hosts = null;
+            foreach (var fileLocationData in GetOsseousAshFileLocationData(Ensure: true).IteratorSafe())
             {
                 try
                 {
                     hosts ??= new();
                     if (fileLocationData.FileExists(HostsFileName)
-                        && await HostCollection.ReadFromFileAsync(fileLocationData, HostsFileName) is HostCollection loadedHostCollection)
+                        && (await HostSet.ReadFromFileAsync(fileLocationData, HostsFileName)) is HostSet loadedHostCollection)
                     {
                         loadedHostCollection.LocationData = fileLocationData;
-                        if (loadedHostCollection != null)
-                            hosts.Add(loadedHostCollection);
+                        hosts.Add(loadedHostCollection);
                     }
                     else
                     {
-                        var newHostCollection = new HostCollection(fileLocationData);
+                        var newHostCollection = new HostSet(fileLocationData);
                         newHostCollection.Write();
                         hosts.Add(newHostCollection);
                     }
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Finding {nameof(HostCollection).Pluralize()}", x);
+                    Utils.Error($"Finding {nameof(HostSet)}s", x);
                 }
             }
             if (hosts.All(hc => hc.IsNullOrEmpty())
-                && await HostCollection.ReadOrNewAsync() is HostCollection defaultHosts)
+                && (await HostSet.ReadOrNewAsync()) is HostSet defaultHosts)
             {
                 hosts ??= new();
                 hosts.Add(defaultHosts);
@@ -579,10 +578,10 @@ namespace UD_Bones_Folder.Mod
         }
 
         // This is a bit busted.
-        public static void ReadHostsTo(ref Rack<HostCollection> Hosts)
+        public static void ReadHostsTo(ref Rack<HostSet> Hosts)
         {
             Hosts ??= new();
-            if (ReadHostCollections().WaitResult() is not Rack<HostCollection> readHosts)
+            if (ReadHostCollections().WaitResult() is not Rack<HostSet> readHosts)
                 return;
 
             using var hostsToRemove = ScopeDisposedList<Host>.GetFromPool();
@@ -590,7 +589,7 @@ namespace UD_Bones_Folder.Mod
             foreach (var readHostCollection in readHosts)
             {
                 // if the read host doesn't have an existing equivalent, add it.
-                if (Hosts.FirstOrDefault(hc => hc.LocationData?.SameAs(readHostCollection.LocationData) is true) is not HostCollection existingHostCollection)
+                if (Hosts.FirstOrDefault(hc => hc.LocationData?.SameAs(readHostCollection.LocationData) is true) is not HostSet existingHostCollection)
                     Hosts.Add(readHostCollection);
                 else
                 {
@@ -788,7 +787,7 @@ namespace UD_Bones_Folder.Mod
                 if (confirmed.GetValueOrDefault())
                 {
                     (Hosts.FirstOrDefault(s => s.LocationData?.SameAs(chosenLocation) is true)
-                        ?? new HostCollection(chosenLocation))
+                        ?? new HostSet(chosenLocation))
                     .WriteAddHost(newHost);
                     break;
                 }
@@ -931,13 +930,13 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<UIUtils.CascadableResult> AskDoWhatWithHostAsync(
             Host Host,
-            HostCollection HostCollection
+            HostSet HostCollection
             )
         {
             var locationData = HostCollection.LocationData;
             var pair = (Host, HostCollection);
 
-            PickOptionDataSetAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult> options;
+            PickOptionDataSetAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult> options;
             UIUtils.CascadableResult result;
             var sB = Event.NewStringBuilder();
             do
@@ -951,28 +950,28 @@ namespace UD_Bones_Folder.Mod
                     .AppendLine().AppendPair("Server Status", Host.ServerStatusString)
                     .AppendLineEnd();
 
-                options = new PickOptionDataSetAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
+                options = new PickOptionDataSetAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
                     {
-                        new PickOptionDataAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
+                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
                         {
                             Element = pair,
                             Text = "modify",
                             Hotkey = 'm',
                             Callback = p => PerformModifyHostAsync(p.Host, p.Hosts)
                         },
-                        new PickOptionDataAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
+                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
                         {
                             Element = pair,
                             Text = "migrate",
                             Hotkey = 'M',
                             Callback = p => PerformMigrateHostAsync(p.Host, p.Hosts)
                         },
-                        new PickOptionDataAsync<(Host Host, HostCollection Hosts), UIUtils.CascadableResult>
+                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
                         {
                             Element = pair,
                             Text = "delete",
                             Hotkey = 'd',
-                            Callback = async delegate ((Host Host, HostCollection Hosts) p)
+                            Callback = async delegate ((Host Host, HostSet Hosts) p)
                             {
                                 string message = $"Are you sure you want to delete {p.Host.GetHostNameWithProtocol()} from {p.Hosts.DisplayName()}?";
                                 if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
@@ -1001,7 +1000,7 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformModifyHostAsync(Host Host, HostCollection HostCollection)
+        private static async Task<UIUtils.CascadableResult> PerformModifyHostAsync(Host Host, HostSet HostCollection)
         {
             using var oldHost = Host.Clone();
             Host.Unbuild();
@@ -1198,7 +1197,7 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformSaveHostAsync(Host Host, Host OldHost, HostCollection HostCollection)
+        private static async Task<UIUtils.CascadableResult> PerformSaveHostAsync(Host Host, Host OldHost, HostSet HostCollection)
         {
             var result = await ConfirmModifiedHostAsync(OldHost, Host);
 
@@ -1214,18 +1213,18 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformMigrateHostAsync(Host Host, HostCollection HostCollection)
+        private static async Task<UIUtils.CascadableResult> PerformMigrateHostAsync(Host Host, HostSet HostCollection)
         {
-            PickOptionDataSetAsync<HostCollection, UIUtils.CascadableResult> options = null;
+            PickOptionDataSetAsync<HostSet, UIUtils.CascadableResult> options = null;
             UIUtils.CascadableResult result;
             do
             {
-                using var hostCollections = ScopeDisposedList<HostCollection>.GetFromPoolFilledWith(Hosts);
+                using var hostCollections = ScopeDisposedList<HostSet>.GetFromPoolFilledWith(Hosts);
                 hostCollections.Remove(HostCollection);
 
-                options = new PickOptionDataSetAsync<HostCollection, UIUtils.CascadableResult>
+                options = new PickOptionDataSetAsync<HostSet, UIUtils.CascadableResult>
                     {
-                        new PickOptionDataAsync<HostCollection, UIUtils.CascadableResult>
+                        new PickOptionDataAsync<HostSet, UIUtils.CascadableResult>
                         {
                             Element = HostCollection,
                             Text = $"Leave in {HostCollection.TaggedDisplayName()}".Colored("black"),
@@ -1237,12 +1236,12 @@ namespace UD_Bones_Folder.Mod
                 using var excludedHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
                 foreach (var hostCollection in hostCollections)
                 {
-                    options.Add(new PickOptionDataAsync<HostCollection, UIUtils.CascadableResult>
+                    options.Add(new PickOptionDataAsync<HostSet, UIUtils.CascadableResult>
                     {
                         Element = hostCollection,
                         Text = hostCollection.TaggedDisplayName(),
                         Hotkey = options.GetHotkeys().GetNextHotKey(Excluding: excludedHotkeys),
-                        Callback = async delegate (HostCollection hc)
+                        Callback = async delegate (HostSet hc)
                         {
                             if ((await Popup.ShowYesNoCancelAsync(
                                 Message: $"Confirm migration of {Host.GetHostNameWithProtocol()}\n\n" +
@@ -1389,7 +1388,7 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 bool any = false;
-                foreach (var host in AllHosts(h => h.Enabled))
+                foreach (var host in AllHosts(h => h.Enabled).IteratorSafe())
                 {
                     try
                     {
@@ -1417,7 +1416,7 @@ namespace UD_Bones_Folder.Mod
         {
             //Utils.Log($"{1.Indent()}GetBonesInfos");
             List<SaveBonesInfo> saveBonesInfos = null;
-            foreach (var host in AllHosts(h => h.Enabled))
+            foreach (var host in AllHosts(h => h.Enabled).IteratorSafe())
             {
                 //Utils.Log($"{1.Indent()}{host} - GetSaveBonesInfos");
                 if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
@@ -1453,7 +1452,7 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 bool any = false;
-                foreach (var host in AllHosts(h => h.Enabled))
+                foreach (var host in AllHosts(h => h.Enabled).IteratorSafe())
                 {
                     try
                     {

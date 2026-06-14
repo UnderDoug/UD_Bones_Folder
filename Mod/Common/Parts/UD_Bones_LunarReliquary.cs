@@ -48,7 +48,7 @@ namespace XRL.World.Parts
             : base()
         { }
 
-        public static GameObject Create(string BonesID)
+        public static GameObject Create(string BonesID, bool IsDownloaded)
         {
             if (GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT) is not GameObject lunarReliquary)
                 return null;
@@ -62,11 +62,19 @@ namespace XRL.World.Parts
 
             reliquaryPart.OverrideBonesID(BonesID ?? The.Game?.GameID);
 
+            lunarReliquary.MakeReportable(BonesID);
+            lunarReliquary.TryModerate(IsDownloaded);
+            lunarReliquary.TryFeverWarp(BonesID);
+
             return lunarReliquary;
         }
 
-        public static GameObject Create()
-            => Create(null)
+        public static GameObject Create(SaveBonesInfo BonesInfo)
+            => Create(BonesInfo?.ID, BonesInfo?.IsDownloaded is true)
+            ;
+
+        public static GameObject Create(bool IsDownloaded = false)
+            => Create(null, IsDownloaded)
             ;
 
         public override void Attach()

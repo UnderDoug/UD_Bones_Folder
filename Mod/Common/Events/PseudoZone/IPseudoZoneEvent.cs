@@ -303,5 +303,47 @@ namespace UD_Bones_Folder.Mod.Events
 
             return E.GetFor(Zone);
         }
+
+        public bool CheckContext(string Value)
+        {
+            if (Context.IsNullOrEmpty())
+                return Value.IsNullOrEmpty();
+
+            return !Value.IsNullOrEmpty()
+                && Context.Contains(Value);
+        }
+
+        public bool CheckContextNot(string Value)
+        {
+            if (Context.IsNullOrEmpty())
+                return !Value.IsNullOrEmpty();
+
+            return Value.IsNullOrEmpty()
+                || !Context.Contains(Value);
+        }
+
+        public bool CheckContextAny(params string[] Values)
+        {
+            if (Values.IsNullOrEmpty())
+                return CheckContext(null);
+
+            foreach (var value in Values)
+                if (CheckContext(value))
+                    return true;
+
+            return false;
+        }
+
+        public bool CheckContextNotAny(params string[] Values)
+        {
+            if (Values.IsNullOrEmpty())
+                return CheckContextNot(null);
+
+            foreach (var value in Values)
+                if (CheckContext(value))
+                    return false;
+
+            return true;
+        }
     }
 }

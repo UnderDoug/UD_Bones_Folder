@@ -6,6 +6,8 @@ using System.Text;
 
 using Qud.API;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.World;
 
@@ -20,39 +22,38 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         public static string LoadTypeProp_Bubble => $"{PropPrefix}{ZoneBonesAllocation.AllocationTypes.Bubble}";
         public static string LoadTypeProp_Zone => $"{PropPrefix}{ZoneBonesAllocation.AllocationTypes.Zone}";
 
-        [NonSerialized]
-        public HashSet<string> ZoneProperties;
-        [NonSerialized]
-        public HashSet<string> ZoneParts;
-        [NonSerialized]
-        public HashSet<string> ZoneBuilders;
-        [NonSerialized]
-        public HashSet<string> MapNoteCategories;
-        [NonSerialized]
-        public HashSet<string> MapNoteAttributes;
+        public StringSet ZoneProperties;
+        public StringSet ZoneParts;
+        public StringSet ZoneBuilders;
+        public StringSet MapNoteCategories;
+        public StringSet MapNoteAttributes;
 
         [NonSerialized]
-        protected List<Predicate<Zone>> ConditionDelegates;
+        protected Dictionary<string, Predicate<Zone>> ConditionDelegates;
 
         public ZoneBonesAllocationSpec()
         { }
 
         public virtual void Write(SerializationWriter Writer)
         {
-            Writer.WriteStringHashSet(ZoneProperties);
+            /*Writer.WriteStringHashSet(ZoneProperties);
             Writer.WriteStringHashSet(ZoneParts);
             Writer.WriteStringHashSet(ZoneBuilders);
             Writer.WriteStringHashSet(MapNoteCategories);
-            Writer.WriteStringHashSet(MapNoteAttributes);
+            Writer.WriteStringHashSet(MapNoteAttributes);*/
         }
 
         public virtual void Read(SerializationReader Reader)
         {
-            ZoneProperties = Reader.ReadStringHashSet();
-            ZoneParts = Reader.ReadStringHashSet();
-            ZoneBuilders = Reader.ReadStringHashSet();
-            MapNoteCategories = Reader.ReadStringHashSet();
-            MapNoteAttributes = Reader.ReadStringHashSet();
+            if (Reader.ModVersions.TryGetValue(Utils.ThisMod.ID, out XRL.Version modVersion)
+                && modVersion < StringSet.AddedIn)
+            {
+                ZoneProperties = (StringSet)Reader.ReadStringHashSet();
+                ZoneParts = (StringSet)Reader.ReadStringHashSet();
+                ZoneBuilders = (StringSet)Reader.ReadStringHashSet();
+                MapNoteCategories = (StringSet)Reader.ReadStringHashSet();
+                MapNoteAttributes = (StringSet)Reader.ReadStringHashSet();
+            }
         }
 
         public bool HasMatchingZoneProperty(Zone Zone, ZoneBonesAllocation Allocation)
@@ -167,11 +168,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             if (Zone == null)
                 return false;
 
-            foreach (var condition in ConditionDelegates.IteratorSafe())
+            foreach ((var name, var condition) in ConditionDelegates.IteratorSafe())
             {
                 if (condition?.Invoke(Zone) is not false)
                 {
-                    Utils.Log($"{2.Indent()}{nameof(Zone)} {Zone} {nameof(HasMatchingZoneCondition)}");
+                    Utils.Log($"{2.Indent()}{nameof(Zone)} {Zone} {nameof(HasMatchingZoneCondition)}: {name}");
                     return true;
                 }
             }
@@ -200,7 +201,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                         && method.GetParameters() is ParameterInfo[] parameters
                         && parameters.Length == 1
                         && parameters[0].ParameterType == typeof(Zone))
-                        conditionDelegates.Add((Predicate<Zone>)method.CreateDelegate(typeof(Predicate<Zone>)));
+                    {
+                        conditionDelegates.Add(
+                            key: $"{method.DeclaringType}.{method.Name}",
+                            value: (Predicate<Zone>)method.CreateDelegate(typeof(Predicate<Zone>)));
+                    }
                 }
             }
         }

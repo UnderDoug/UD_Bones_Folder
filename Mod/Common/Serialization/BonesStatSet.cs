@@ -5,12 +5,14 @@ using System.Text;
 
 using Newtonsoft.Json;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptIn)]
     [JsonConverter(typeof(SetArrayConverter))]
     [Serializable]
-    public class BonesStatSet : HashSet<BonesStat>
+    public class BonesStatSet : CoalescibleSet<BonesStat>
     {
         public class SetArrayConverter : JsonConverter<BonesStatSet>
         {
@@ -28,11 +30,16 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public class BonesStatEqualityComparer : IEqualityComparer<BonesStat>
+        [Serializable]
+        public class BonesStatEqualityComparer : CompositeEqualityComparer<BonesStat>
         {
-            public static BonesStatEqualityComparer Default => new();
+            public static BonesStatEqualityComparer DefaultComparer => new();
 
-            public bool Equals(BonesStat x, BonesStat y)
+            public BonesStatEqualityComparer()
+                : base()
+            { }
+
+            public override bool Equals(BonesStat x, BonesStat y)
             {
                 if (x == null
                     || y == null)
@@ -41,17 +48,17 @@ namespace UD_Bones_Folder.Mod
                 return x.SameAs(y);
             }
 
-            public int GetHashCode(BonesStat obj)
+            public override int GetHashCode(BonesStat obj)
                 => obj?.GetHashCode() ?? 0
                 ;
         }
 
         public BonesStatSet()
-            : base(BonesStatEqualityComparer.Default)
+            : base(BonesStatEqualityComparer.DefaultComparer)
         { }
 
         public BonesStatSet(IEnumerable<BonesStat> Source)
-            : base(Source, BonesStatEqualityComparer.Default)
+            : base(Source, BonesStatEqualityComparer.DefaultComparer)
         { }
 
         public BonesStat GetStat(Guid OsseousAshID)

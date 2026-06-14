@@ -7,6 +7,9 @@ using System.Text;
 
 using HarmonyLib;
 
+using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.Serialization.Delegates;
+
 using XRL;
 using XRL.Collections;
 using XRL.Core;
@@ -490,7 +493,7 @@ namespace UD_Bones_Folder.Mod
         public static void WriteSpecialHashSet<T>(
             this SerializationWriter Writer,
             HashSet<T> SpecialHashSet,
-            Action<SerializationWriter, T> WriteEach
+            WriteEach<T> WriteEach
             )
         {
             Writer.WriteOptimized(SpecialHashSet?.Count ?? -1);
@@ -566,6 +569,15 @@ namespace UD_Bones_Folder.Mod
 
             return output;
         }
+
+        public static CompositeSet<T> ReadCompositeSet<T>(this SerializationReader Reader)
+            where T : IComposite, new()
+            => Reader.ReadComposite<CompositeSet<T>>()
+            ;
+
+        public static SerializeableSet<T> ReadSerializeableSet<T>(this SerializationReader Reader)
+            => Reader.ReadComposite<SerializeableSet<T>>()
+            ;
 
         public static void WriteOptimized(this SerializationWriter Writer, IDictionary<string, string> Dictionary)
         {

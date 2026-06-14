@@ -240,7 +240,7 @@ namespace XRL.World.Parts
                 }
 
                 if (CachedCourtiers != null
-                    && CachedCourtiers.TryPullCachedLunarCourtiers(out HashSet<GameObject> lunarCourtiers))
+                    && CachedCourtiers.TryPullCachedLunarCourtiers(out CoalescibleSet<GameObject> lunarCourtiers))
                 {
                     var partyCount = lunarCourtiers.Count;
                     var cellsList = E.Cell.GetConnectedSpawnLocations(partyCount * 2);

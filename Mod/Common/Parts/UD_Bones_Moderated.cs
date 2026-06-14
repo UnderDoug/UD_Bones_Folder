@@ -16,7 +16,7 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 using UD_Bones_Folder.Mod.Moderation;
 
-using static UD_Bones_Folder.Mod.Moderation.OriginalDisplayName;
+using static UD_Bones_Folder.Mod.Moderation.DisplayNameData;
 
 using SerializeField = UnityEngine.SerializeField;
 using System.Diagnostics;
@@ -26,20 +26,24 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_Moderated : IScribedPart
     {
-        public static BadWord.SeverityLevel OptionSeverity => Options.ModerationMinimumSeverityLevel;
+        public static IBadWord.SeverityLevel OptionSeverity => Options.ModerationMinimumSeverityLevel;
 
         public BadDisplayName BadWordName;
         public bool BadWordDesc;
 
-        public OriginalDisplayName OriginalDisplayName;
+        public DisplayNameData OriginalDisplayName;
+        public DisplayNameData ModeratedDisplayName;
 
         public string OriginalShortDesc;
+        public string ModeratedShortDesc;
 
         [SerializeField]
         private int ModerationActions;
 
-        public BadWord.SeverityLevel? NameModerationProcessed;
-        public BadWord.SeverityLevel? DescModerationProcessed;
+        public IBadWord.SeverityLevel? NameModerationProcessed;
+        public IBadWord.SeverityLevel? DescModerationProcessed;
+
+        public bool IsModerationPaused;
 
         public UD_Bones_Moderated()
         {
@@ -72,7 +76,7 @@ namespace XRL.World.Parts
             Clear();
         }
 
-        public BadWord.SeverityLevel? ModerateDisplayName(GameObject Object = null)
+        public IBadWord.SeverityLevel? ModerateDisplayName(GameObject Object = null)
         {
             Object ??= ParentObject;
 
@@ -89,9 +93,19 @@ namespace XRL.World.Parts
                 Object: Object,
                 ModerationActions: ref ModerationActions,
                 AnyFailed: out bool anyFailed,
-                OriginalDisplayName: out OriginalDisplayName)
-                && anyFailed)
-                return null;
+                AnyModerated: out bool anyModerated,
+                OriginalDisplayName: out OriginalDisplayName,
+                PreconfiguredModeratedDisplayName: ModeratedDisplayName))
+            {
+                if (anyFailed)
+                    return null;
+
+                if (anyModerated)
+                {
+                    ModeratedDisplayName?.Clear();
+                    ModeratedDisplayName = GetFrom(Object, BadWordName, OriginalDisplayName);
+                }
+            }
 
             return OptionSeverity;
         }
@@ -121,7 +135,7 @@ namespace XRL.World.Parts
             }
         }
 
-        public BadWord.SeverityLevel? ModerateDescription(GameObject Object = null)
+        public IBadWord.SeverityLevel? ModerateDescription(GameObject Object = null)
         {
             Object ??= ParentObject;
 
@@ -147,7 +161,8 @@ namespace XRL.World.Parts
             }
 
             OriginalShortDesc = description._Short;
-            description._Short = Object.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description._Short));
+            ModeratedShortDesc ??= Object.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description._Short));
+            description._Short = ModeratedShortDesc;
             ModerationActions++;
             return OptionSeverity;
         }
@@ -181,18 +196,15 @@ namespace XRL.World.Parts
         {
             Object ??= ParentObject;
 
-            var sw = Stopwatch.StartNew();
-            bool silent = false;
-            try
+            if (NameModerationProcessed != OptionSeverity
+                || DescModerationProcessed != OptionSeverity)
             {
                 if (Object == null)
-                {
-                    silent = true;
                     return true;
-                }
 
-                if (NameModerationProcessed != OptionSeverity
-                    || DescModerationProcessed != OptionSeverity)
+                bool silent = false;
+                var sw = Stopwatch.StartNew();
+                try
                 {
                     if (NameModerationProcessed != null
                         && DescModerationProcessed != null)
@@ -210,24 +222,23 @@ namespace XRL.World.Parts
 
                     return true;
                 }
-
-                return false;
-            }
-            finally
-            {
-                if (!silent)
+                finally
                 {
-                    string contextString = $"{nameof(ModerateContent)} for {Object?.DebugName?.Strip() ?? "NO_OBJECT"}";
-                    if (!Context.IsNullOrEmpty())
-                        contextString = $"{Context}: {contextString}";
+                    if (!silent)
+                    {
+                        string contextString = $"{nameof(ModerateContent)} for {Object?.DebugName?.Strip() ?? "NO_OBJECT"}";
+                        if (!Context.IsNullOrEmpty())
+                            contextString = $"{Context}: {contextString}";
 
-                    Utils.Log($"{contextString} took {sw.Elapsed.ValueUnits()} to complete.");
+                        Utils.Log($"{contextString} took {sw.Elapsed.ValueUnits()} to complete.");
+                    }
+                    sw.Stop();
                 }
-                sw.Stop();
             }
+            return false;
         }
 
-        public BadWord.SeverityLevel? RestoreModeratedDisplayName(GameObject Object = null, bool ClearAfter = false)
+        public IBadWord.SeverityLevel? RestoreModeratedDisplayName(GameObject Object = null, bool ClearAfter = false)
         {
             Object ??= ParentObject;
 
@@ -245,6 +256,9 @@ namespace XRL.World.Parts
 
             try
             {
+                if (!ClearAfter)
+                    ModeratedDisplayName ??= GetFrom(Object, OriginalDisplayName);
+
                 OriginalDisplayName.RestoreDisplayName(
                     Object: Object,
                     ModerationActions: ref ModerationActions,
@@ -254,7 +268,10 @@ namespace XRL.World.Parts
                 if (ClearAfter)
                 {
                     if (!anyFailed)
+                    {
+                        ModeratedDisplayName?.Clear();
                         BadWordName?.Clear();
+                    }
                     else
                         BadWordName.AlignWith(OriginalDisplayName);
                 }
@@ -271,7 +288,7 @@ namespace XRL.World.Parts
             }
         }
 
-        public BadWord.SeverityLevel? RestoreModeratedDescription(GameObject Object = null, bool ClearAfter = false)
+        public IBadWord.SeverityLevel? RestoreModeratedDescription(GameObject Object = null, bool ClearAfter = false)
         {
             Object ??= ParentObject;
 
@@ -292,6 +309,7 @@ namespace XRL.World.Parts
 
             try
             {
+                ModeratedShortDesc ??= description._Short;
                 description._Short = OriginalShortDesc;
                 ModerationActions--;
 
@@ -301,6 +319,7 @@ namespace XRL.World.Parts
                 if (ClearAfter)
                 {
                     OriginalShortDesc = null;
+                    ModeratedShortDesc = null;
                     BadWordDesc = false;
                 }
                 return OptionSeverity;
@@ -358,14 +377,17 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetDisplayNameEvent E)
         {
-            if (E.Object == ParentObject)
+            if (E.Object == ParentObject
+                && !IsModerationPaused
+                && E.Context != BadWord.DisplayNameContext)
                 ModerateContent(ParentObject, nameof(GetDisplayNameEvent));
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(GetShortDescriptionEvent E)
         {
-            if (E.Object == ParentObject)
+            if (E.Object == ParentObject
+                && !IsModerationPaused)
                 ModerateContent(ParentObject, nameof(GetDisplayNameEvent));
             return base.HandleEvent(E);
         }
@@ -391,7 +413,7 @@ namespace XRL.World.Parts
 
                 string badWordName = BadWordName?.DebugString();
                 if (badWordName.IsNullOrEmpty())
-                    badWordName = "null";
+                    badWordName = $"{(bool)BadWordName}";
                 E.AddEntry(this, nameof(BadWordName), badWordName);
                 E.AddEntry(this, nameof(BadWordDesc), BadWordDesc);
                 

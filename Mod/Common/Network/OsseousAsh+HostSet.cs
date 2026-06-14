@@ -14,6 +14,8 @@ using Platform.IO;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using UnityEngine;
 
 using XRL;
@@ -33,13 +35,18 @@ namespace UD_Bones_Folder.Mod
     {
         [JsonObject(MemberSerialization.OptIn)]
         [Serializable]
-        public class HostCollection : HashSet<Host>, IDisposable
+        public class HostSet : CompositeSet<Host>, IDisposable
         {
-            public class HostEqualityComparer : IEqualityComparer<Host>
+            [Serializable]
+            public class HostEqualityComparer : CompositeEqualityComparer<Host>
             {
-                public static HostEqualityComparer Default => new();
+                public static HostEqualityComparer DefaultComparer => new();
 
-                public bool Equals(Host x, Host y)
+                public HostEqualityComparer()
+                    : base()
+                { }
+
+                public override bool Equals(Host x, Host y)
                 {
                     if (x == null
                         || y == null)
@@ -48,7 +55,7 @@ namespace UD_Bones_Folder.Mod
                     return x.SameAs(y);
                 }
 
-                public int GetHashCode(Host obj)
+                public override int GetHashCode(Host obj)
                     => obj?.GetHashCode() ?? 0
                     ;
             }
@@ -63,53 +70,53 @@ namespace UD_Bones_Folder.Mod
                 {
                 }
 
-                public HostCollectionJSON(HostCollection Source)
+                public HostCollectionJSON(HostSet Source)
                     : this()
                 {
                     Source.RemoveWhere(h => h == null);
                     Hosts = Source.ToArray();
                 }
 
-                public HostCollection FromJSON(FileLocationData LocationData = null)
+                public HostSet ToHostSet(FileLocationData LocationData)
                     => new(Hosts, LocationData)
                     ;
             }
 
-            public static HostEqualityComparer DefaultEqualityComparer => HostEqualityComparer.Default;
+            public static HostEqualityComparer DefaultEqualityComparer => HostEqualityComparer.DefaultComparer;
 
-            public static HostCollection DefaultHosts => new(SyncedFileLocation)
+            public static HostSet DefaultHosts => new(SyncedFileLocation)
             {
                 Host.DefaultHost,
             };
 
             public FileLocationData LocationData;
 
-            public HostCollection()
+            public HostSet()
                 : base(DefaultEqualityComparer)
             { }
 
-            public HostCollection(FileLocationData LocationData)
+            public HostSet(FileLocationData LocationData)
                 : this()
             {
                 this.LocationData = LocationData;
             }
 
-            public HostCollection(IEnumerable<Host> Source, FileLocationData LocationData)
+            public HostSet(IEnumerable<Host> Source, FileLocationData LocationData)
                 : base(Source, DefaultEqualityComparer)
             {
                 this.LocationData = LocationData;
             }
 
-            public static async Task<HostCollection> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
+            public static async Task<HostSet> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
             {
                 if ((await FileLocationData?.ReadFromFileAsync<HostCollectionJSON>(FileName)) is HostCollectionJSON hostCollectionJSON
                     && !hostCollectionJSON.Hosts.IsNullOrEmpty())
-                    return hostCollectionJSON.FromJSON(FileLocationData);
+                    return hostCollectionJSON.ToHostSet(FileLocationData);
 
                 return null;
             }
 
-            public static async Task<HostCollection> ReadAsync()
+            public static async Task<HostSet> ReadAsync()
             {
                 if (TryFindBestOsseousAshPath(out FileLocationData fileLocationData, HostsFileName))
                     return await ReadFromFileAsync(fileLocationData, HostsFileName);
@@ -117,11 +124,11 @@ namespace UD_Bones_Folder.Mod
                 return null;
             }
 
-            public static async Task<HostCollection> ReadOrNewAsync()
+            public static async Task<HostSet> ReadOrNewAsync()
             {
                 if (TryFindBestOsseousAshPath(out var fileLocationData, HostsFileName))
                 {
-                    if ((await ReadFromFileAsync(fileLocationData, HostsFileName)) is not HostCollection hosts)
+                    if ((await ReadFromFileAsync(fileLocationData, HostsFileName)) is not HostSet hosts)
                     {
                         hosts = new(DefaultHosts, fileLocationData);
                         hosts.Write();
@@ -252,7 +259,7 @@ namespace UD_Bones_Folder.Mod
                 => DisposeClear(null)
                 ;
 
-            public void Dispose()
+            public override void Dispose()
             {
                 LocationData = null;
                 DisposeClear();
@@ -261,22 +268,22 @@ namespace UD_Bones_Folder.Mod
     }
     public static class OsseousAshHostCollectionExtensions
     {
-        public static int TotalCount(this Rack<OsseousAsh.HostCollection> Hosts)
+        public static int TotalCount(this Rack<OsseousAsh.HostSet> Hosts)
             => Hosts?.Aggregate(0, (a, n) => a + n.Count)
             ?? 0
             ;
 
-        public static void BuildHosts(this Rack<OsseousAsh.HostCollection> Hosts, bool Ping = false)
+        public static void BuildHosts(this Rack<OsseousAsh.HostSet> Hosts, bool Ping = false)
         {
             foreach (var hostCollection in Hosts.IteratorSafe())
                 hostCollection.BuildHosts(Ping);
         }
 
-        public static void PingHosts(this Rack<OsseousAsh.HostCollection> Hosts)
+        public static void PingHosts(this Rack<OsseousAsh.HostSet> Hosts)
             => Hosts?.Aggregate((IEnumerable<int>)null, (a, n) => n.PingHosts())
             ;
 
-        public static Renderable GetAshCloudIcon(this OsseousAsh.HostCollection HostCollection)
+        public static Renderable GetAshCloudIcon(this OsseousAsh.HostSet HostCollection)
             => new Renderable(
                 Tile: "Mutations/gas_generation.bmp",
                 ColorString: $"&K",
@@ -284,7 +291,7 @@ namespace UD_Bones_Folder.Mod
                 DetailColor: HostCollection?.LocationData?.GetFileLocationDataTypeColor()?[0] ?? 'y')
             ;
 
-        public static IEnumerable<OsseousAsh.Report> CacheReports(this Rack<OsseousAsh.HostCollection> Hosts)
+        public static IEnumerable<OsseousAsh.Report> CacheReports(this Rack<OsseousAsh.HostSet> Hosts)
         {
             if (Hosts.IsNullOrEmpty())
                 yield break;
@@ -304,7 +311,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static IEnumerable<OsseousAsh.Report> GetReports(
-            this Rack<OsseousAsh.HostCollection> Hosts,
+            this Rack<OsseousAsh.HostSet> Hosts,
             Predicate<OsseousAsh.Report> Filter
             )
         {
@@ -318,7 +325,7 @@ namespace UD_Bones_Folder.Mod
                     yield return report;
         }
 
-        public static IEnumerable<OsseousAsh.Report> GetReports(this Rack<OsseousAsh.HostCollection> Hosts)
+        public static IEnumerable<OsseousAsh.Report> GetReports(this Rack<OsseousAsh.HostSet> Hosts)
             => Hosts.GetReports(null)
             ;
 
@@ -348,7 +355,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static IEnumerable<OsseousAsh.Report> GetReportsMatchingSpec(
-            this Rack<OsseousAsh.HostCollection> Hosts,
+            this Rack<OsseousAsh.HostSet> Hosts,
             Guid OAID = default,
             string BonesID = null,
             bool? Blocked = null

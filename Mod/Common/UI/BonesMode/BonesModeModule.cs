@@ -20,6 +20,8 @@ using XRL.World;
 using XRL.World.AI.Pathfinding;
 using XRL.World.Anatomy;
 using XRL.World.Capabilities;
+using XRL.World.Conversations.Parts;
+using XRL.World.Effects;
 using XRL.World.Parts;
 using XRL.World.Parts.Skill;
 using XRL.World.Skills;
@@ -41,6 +43,9 @@ namespace UD_Bones_Folder.Mod.UI
         public static int MaximumLevelForBonesMode => 80;
 
         public string Mode => builder?.GetModule<QudGamemodeModule>()?.data?.Mode;
+
+
+        #region XML Parsing
 
         public class GameTypeDescriptor
         {
@@ -112,6 +117,8 @@ namespace UD_Bones_Folder.Mod.UI
             CurrentReadingGameTypeDescriptor.Description = xml.GetTextNode();
         }
 
+        #endregion
+        
         public override bool shouldBeEditable()
             => builder?.IsEditableGameMode() is true;
 
@@ -259,7 +266,7 @@ namespace UD_Bones_Folder.Mod.UI
                             if (customizeCharacterModule.data == null)
                                 customizeCharacterModule.setData(new());
 
-                            if (SeededOddsIn10000(nameof(Gender), 5000))
+                            if (SeededPerMyriadChance(nameof(Gender), 5000))
                                 customizeCharacterModule.data.gender = Gender.GetAllGenericPersonal()
                                     .GetRandomElement(SeededGenerator(nameof(Gender), 1));
 
@@ -270,7 +277,7 @@ namespace UD_Bones_Folder.Mod.UI
                                 for (int i = 0; i < scrollContextData.Count; i++)
                                 {
                                     scrollContext.selectedPosition = i;
-                                    if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
+                                    if (SeededPerMyriadChance(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
                                     {
                                         customizeCharacterModuleWindow.RandomSelection();
                                     }
@@ -281,7 +288,7 @@ namespace UD_Bones_Folder.Mod.UI
                                 string name = The.Core.GenerateRandomPlayerName(builder.GetModule<QudSubtypeModule>().data.Subtype);
                                 name = builder.info.fireBootEvent(QudGameBootModule.BOOTEVENT_GENERATERANDOMPLAYERNAME, null, name);
                                 customizeCharacterModule.setName(name);
-                                if (SeededOddsIn10000(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
+                                if (SeededPerMyriadChance(activeWindow?.window?.GetType()?.Name ?? nameof(RandomSelection), 7000, 1))
                                     customizeCharacterModule.setPet(customizeCharacterModuleWindow.GetPets().GetRandomElement().Id);
                             }
                         }
@@ -351,7 +358,7 @@ namespace UD_Bones_Folder.Mod.UI
         public static int GetNDisadvantage(string Method, int Low, int High, int N, int? Iteration = null)
         {
             using var values = ScopeDisposedList<int>.GetFromPool();
-            for (int i = 0; i < N; i++)
+            for (int i = 0; i <= Math.Max(0, N); i++)
                 values.Add(SeededRandom(Method, Low, High, i + Iteration.GetValueOrDefault()));
 
             return Utils.GetDisadvantage(values.ToArray());
@@ -360,7 +367,7 @@ namespace UD_Bones_Folder.Mod.UI
         public static int GetNAdvantage(string Method, int Low, int High, int N, int? Iteration = null)
         {
             using var values = ScopeDisposedList<int>.GetFromPool();
-            for (int i = 0; i < N; i++)
+            for (int i = 0; i <= Math.Max(0, N); i++)
                 values.Add(SeededRandom(Method, Low, High, i + Iteration.GetValueOrDefault()));
 
             return Utils.GetAdvantage(values.ToArray());
@@ -389,8 +396,8 @@ namespace UD_Bones_Folder.Mod.UI
             => SeededRandom(Method, 1, ChanceIn, Iteration) <= Odds
             ;
 
-        public static bool SeededOddsIn10000(string Method, int Odds, int? Iteration = null)
-            => SeededOdds(Method, Odds, 10000, Iteration)
+        public static bool SeededPerMyriadChance(string Method, int Chance, int? Iteration = null)
+            => SeededOdds(Method, Chance, 10000, Iteration)
             ;
 
         public static Random SeededGenerator(string Method, int? Iteration = null)
@@ -412,6 +419,8 @@ namespace UD_Bones_Folder.Mod.UI
                 GiveOverTierStuff(Player, ref virtualCreditWedges);
 
                 GiveTierStuff(Player, ref virtualCreditWedges);
+
+                RecoverRelics(Player, ref virtualCreditWedges);
 
                 GiveExoticStuff(Player, ref virtualCreditWedges);
 
@@ -455,22 +464,68 @@ namespace UD_Bones_Folder.Mod.UI
                 OverTier.Add(XRL.World.Capabilities.Tier.MAXIMUM);
         }
 
+        private static bool GetIntimateWithPaxKlanq(GameObject Player, int PerMyriadChance)
+        {
+            if (!SeededPerMyriadChance(nameof(GetIntimateWithPaxKlanq), Chance: PerMyriadChance))
+                return true;
+
+            if (Player.Body.GetBody() is BodyPart playerBody)
+            {
+                BodyPart target = null;
+                if (Player.Body.LoopParts().Where(limb => FungalSporeInfection.BodyPartSuitableForFungalInfection(limb)) is IEnumerable<BodyPart> infectableLimbs
+                    && !infectableLimbs.IsNullOrEmpty())
+                {
+                    using var randomBodyParts = ScopeDisposedList<BodyPart>.GetFromPoolFilledWith(infectableLimbs);
+                    randomBodyParts.ShuffleInPlace(SeededGenerator(nameof(PaxInfectLimb)));
+                    Utils.SuppressPopupsWhile(delegate ()
+                    {
+                        foreach (var bodyPart in randomBodyParts.IteratorSafe())
+                        {
+                            if (PaxInfectLimb.InfectLimb(Player.Body.GetParts(), bodyPart, bodyPart.GetOrdinalName()))
+                            {
+                                target = bodyPart;
+                                break;
+                            }
+                        }
+                    });
+                }
+                return target.Equipped?.Blueprint == "PaxInfection";
+            }
+            return false;
+        }
+
         public static bool ReceiveStageSpecificStuff(GameObject Player)
         {
             try
             {
                 GetTierAndOverTier(Player, out int tier, out _);
 
+                if (SeededPerMyriadChance(nameof(ReceiveStageSpecificStuff), 500, 1))
+                    tier = Tier.Constrain(++tier);
+                else
+                if (SeededPerMyriadChance(nameof(ReceiveStageSpecificStuff), 1000, 2))
+                    tier = Tier.Constrain(--tier);
+
                 if (tier == 8)
                     Player.ReceivePopulation("UD_Bones_BonesMode_Final");
                 else
-                    if (tier >= 7)
+                if (tier >= 7)
                     Player.ReceivePopulation("UD_Bones_BonesMode_Reef");
                 else
-                    if (tier >= 6)
+                if (tier >= 6)
+                {
                     Player.ReceivePopulation("UD_Bones_BonesMode_Tomb");
+                    Player?.Body?.GetBody()?.AddPart("Floating Nearby", Dynamic: true);
+                    GetIntimateWithPaxKlanq(Player, 8000);
+                }
                 else
+                {
+                    if (tier >= 5)
+                    {
+                        GetIntimateWithPaxKlanq(Player, 2000);
+                    }
                     Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(tier - 1)}");
+                }
             }
             catch (Exception x)
             {
@@ -506,36 +561,27 @@ namespace UD_Bones_Folder.Mod.UI
 
                 for (int i = 0; i < overTier.Count; i++)
                 {
-                    if (SeededOddsIn10000(nameof(GiveOverTierStuff), 3000, i))
+                    if (SeededPerMyriadChance(nameof(GiveOverTierStuff), 3000, i))
                     {
                         int wares = overTier[i] - 1;
-                        if (SeededOddsIn10000($"{nameof(GiveOverTierStuff)}:{nameof(wares)}", 2000, i))
+                        if (SeededPerMyriadChance($"{nameof(GiveOverTierStuff)}:{nameof(wares)}", 2000, i))
                             wares = overTier[i];
                         Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(wares)}");
                     }
 
-                    int relicCount = SeededRandom(Utils.CallChain(nameof(GiveOverTierStuff), nameof(RelicGenerator)), -2, 2, i);
-                    for (int j = 0; j < relicCount; j++)
-                    {
-                        string relicSeed = $"{Utils.CallChain(nameof(RelicGenerator), nameof(RelicGenerator.GetPeriodFromRelicTier))}:{i}";
-                        int relicTier = SeededRandom(relicSeed, 1, 5, j);
+                    int additionalCredits = GetNAdvantage(
+                            Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(overTier)}:{i}",
+                            Low: -2,
+                            High: 8,
+                            N: Math.Clamp(i, 1, 5));
 
-                        var relic = RelicGenerator.GenerateRelic(RelicGenerator.GetPeriodFromRelicTier(relicTier));
-                        if (Player.ReceiveObject(relic))
-                            relic.SetImportant(true, player: true);
-
+                    if (additionalCredits > 0)
                         Player.AdjustCyberneticsLicensePointsFromWedges(
-                            Amount: VirtualCreditWedges + GetNAdvantage(
-                                Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(overTier)}:{i}",
-                                Low: 2,
-                                High: 4,
-                                N: 2,
-                                Iteration: j),
+                            Amount: VirtualCreditWedges + additionalCredits,
                             Remaining: out VirtualCreditWedges);
-                        // Utils.Log($"{nameof(VirtualCreditWedges)}: {VirtualCreditWedges} ({nameof(overTier)} [{i},{j}])");
-                    }
+
                     int cyberTier = overTier[i] - 1;
-                    if (SeededOddsIn10000($"{nameof(GiveOverTierStuff)}:{nameof(cyberTier)}", 2000, i))
+                    if (SeededPerMyriadChance($"{nameof(GiveOverTierStuff)}:{nameof(cyberTier)}", 2000, i))
                         cyberTier = overTier[i];
                     Player.ReceiveObjectFromPopulation($"Cybernetics{cyberTier}");
                 }
@@ -560,39 +606,35 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
+                var tieredRelics = new Dictionary<int, List<GameObject>>();
+                foreach (var cachedObject in (The.ZoneManager?.CachedObjects?.Values).IteratorSafe())
+                {
+                    if (!cachedObject.HasStringProperty("RelicName"))
+                        continue;
+
+                    if (!cachedObject.TryGetPart(out TakenAchievement takenAch)
+                        || takenAch.AchievementID != Achievement.RECOVER_RELIC?.ID)
+                        continue;
+
+                    int tierKey = cachedObject.GetTier();
+                    if (!tieredRelics.ContainsKey(tierKey))
+                        tieredRelics[tierKey] = Event.NewGameObjectList();
+
+                    tieredRelics[tierKey].Add(cachedObject);
+                }
+
                 Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(tier - 1)}");
                 for (int i = tier; i > 0; i--)
                 {
-                    if (SeededOddsIn10000(nameof(GiveTierStuff), 5000, i))
+                    if (SeededPerMyriadChance(nameof(GiveTierStuff), 5000, i))
                     {
                         int wares = i - 1;
-                        if (SeededOddsIn10000($"{nameof(GiveTierStuff)}:{nameof(wares)}", 2000, i))
+                        if (SeededPerMyriadChance($"{nameof(GiveTierStuff)}:{nameof(wares)}", 2000, i))
                             wares = i;
                         Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(wares)}");
                     }
 
                     int cyberTicker = 0;
-                    if (i > 2
-                        || SeededOddsIn10000($"{Utils.CallChain(nameof(GiveTierStuff), nameof(RelicGenerator))}:{nameof(tier)}", 2000, i))
-                    {
-                        int relicCount = SeededRandom(Utils.CallChain(nameof(GiveTierStuff), nameof(RelicGenerator)), -2, 2, i);
-                        for (int j = 0; j < relicCount; j++)
-                        {
-                            var relic = RelicGenerator.GenerateRelic(RelicGenerator.GetPeriodFromRelicTier(i));
-                            if (Player.ReceiveObject(relic))
-                                relic.SetImportant(true, player: true);
-
-                            Player.AdjustCyberneticsLicensePointsFromWedges(
-                                Amount: VirtualCreditWedges + GetNAdvantage(
-                                    Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(tier)}:{i}",
-                                    Low: Math.Clamp(i / 2, 0, 2),
-                                    High: Math.Clamp(i, 2, 3),
-                                    N: 2,
-                                    Iteration: cyberTicker++),
-                                Remaining: out VirtualCreditWedges);
-                            // Utils.Log($"{nameof(VirtualCreditWedges)}: {VirtualCreditWedges} ({nameof(tier)} [{i},{j}])");
-                        }
-                    }
                     Player.AdjustCyberneticsLicensePointsFromWedges(
                         Amount: VirtualCreditWedges + GetNAdvantage(
                             Method: $"{nameof(Extensions.AdjustCyberneticsLicensePointsFromWedges)}:{nameof(tier)}:{i}",
@@ -603,13 +645,13 @@ namespace UD_Bones_Folder.Mod.UI
                         Remaining: out VirtualCreditWedges);
 
                     int cyberTier = i - 1;
-                    if (SeededOddsIn10000($"{nameof(GiveTierStuff)}:{nameof(cyberTier)}", 2000, i))
+                    if (SeededPerMyriadChance($"{nameof(GiveTierStuff)}:{nameof(cyberTier)}", 2000, i))
                         cyberTier = i;
                     Player.ReceiveObjectFromPopulation($"Cybernetics{Tier.Constrain(cyberTier)}");
-                    if (SeededOddsIn10000($"{Utils.CallChain(nameof(GiveTierStuff), "Cybernetics")}", i * 750, i))
+                    if (SeededPerMyriadChance($"{Utils.CallChain(nameof(GiveTierStuff), "Cybernetics")}", i * 750, i))
                     {
                         cyberTier = i - 1;
-                        if (SeededOddsIn10000($"{nameof(GiveTierStuff)}:{nameof(cyberTier)}:2", 2000, i))
+                        if (SeededPerMyriadChance($"{nameof(GiveTierStuff)}:{nameof(cyberTier)}:2", 2000, i))
                             cyberTier = i;
                         Player.ReceiveObjectFromPopulation($"Cybernetics{Tier.Constrain(cyberTier)}");
                     }
@@ -629,6 +671,128 @@ namespace UD_Bones_Folder.Mod.UI
             return GiveTierStuff(Player, ref discard);
         }
 
+        public static int GetCreditWedgeTotalFromRelic(GameObject Relic)
+            => Tier.Constrain(Relic.GetTier()) switch
+            {
+                >= 8 => 7,
+                >= 6 => 6,
+                >= 4 => 4,
+                >= 3 => 3,
+                _ => 2,
+            }
+            ;
+
+        public static bool RecoverRelics(GameObject Player, ref int VirtualCreditWedges)
+        {
+            try
+            {
+                GetTierAndOverTier(Player, out int tier, out List<int> overTier);
+
+                var tieredRelics = new Dictionary<int, ScopeDisposedList<GameObject>>();
+                foreach (var cachedObject in (The.ZoneManager?.CachedObjects?.Values).IteratorSafe())
+                {
+                    if (!cachedObject.HasStringProperty("RelicName"))
+                        continue;
+
+                    if (!cachedObject.TryGetPart(out TakenAchievement takenAch)
+                        || takenAch.AchievementID != Achievement.RECOVER_RELIC?.ID)
+                        continue;
+
+                    int tierKey = Tier.Constrain(cachedObject.GetTier());
+                    if (!tieredRelics.ContainsKey(tierKey))
+                        tieredRelics[tierKey] = ScopeDisposedList<GameObject>.GetFromPool();
+
+                    tieredRelics[tierKey].Add(cachedObject);
+                }
+
+                foreach (var cachedRelicsList in tieredRelics.Values.IteratorSafe())
+                    cachedRelicsList.StableSortInPlace((x, y) => x.BaseID.CompareTo(y.BaseID));
+
+                using var leftoverRelics = ScopeDisposedList<GameObject>.GetFromPool();
+                Random relicRnd = null;
+                for (int i = tier; i > 0; i--)
+                {
+                    if (tieredRelics.TryGetValue(i, out var relics)
+                        && !relics.IsNullOrEmpty())
+                    {
+                        int relicCount = SeededRandom(Utils.CallChain(nameof(RecoverRelics), nameof(relicCount)), Math.Min(i - 2, 1), relics.Count, i);
+
+                        relicRnd = SeededGenerator($"{Utils.CallChain(nameof(RecoverRelics), nameof(RelicGenerator))}:{nameof(tier)}", i);
+
+                        for (int j = 0; j < relicCount; j++)
+                        {
+                            if (relics.IsNullOrEmpty())
+                                break;
+
+                            relics.ShuffleInPlace(relicRnd);
+                            if (relics.TakeAt(0) is GameObject relic)
+                            {
+                                relic = The.ZoneManager.GetCachedObjects(relic.ID);
+
+                                relic.RemovePart<TakenAchievement>();
+
+                                if (Player.ReceiveObject(relic))
+                                    relic.SetImportant(true, player: true);
+
+                                Player.AdjustCyberneticsLicensePointsFromWedges(
+                                    Amount: VirtualCreditWedges + GetCreditWedgeTotalFromRelic(relic),
+                                    Remaining: out VirtualCreditWedges);
+                            }
+                        }
+                        while (!relics.IsNullOrEmpty()
+                            && relics.TakeAt(0) is GameObject leftoverRelic)
+                            leftoverRelics.Add(leftoverRelic);
+
+                        relics.Dispose();
+                    }
+                }
+
+                leftoverRelics.StableSortInPlace((x, y) => x.BaseID.CompareTo(y.BaseID));
+
+                for (int i = 0; i < overTier.Count; i++)
+                {
+                    int relicCount = leftoverRelics.Count;
+                    if (Math.Max(i, 1) < leftoverRelics.Count)
+                        relicCount = SeededRandom(Utils.CallChain(nameof(RecoverRelics), nameof(relicCount)), Math.Max(i, 1), leftoverRelics.Count, i);
+
+                    relicRnd = SeededGenerator($"{Utils.CallChain(nameof(RecoverRelics), nameof(RelicGenerator))}:{nameof(overTier)}", i);
+                    for (int j = 0; j < relicCount; j++)
+                    {
+                        if (leftoverRelics.IsNullOrEmpty())
+                            break;
+
+                        leftoverRelics.ShuffleInPlace(relicRnd);
+                        if (leftoverRelics.TakeAt(0) is GameObject relic)
+                        {
+                            relic = The.ZoneManager.GetCachedObjects(relic.ID);
+
+                            relic.RemovePart<TakenAchievement>();
+
+                            if (!Player.ReceiveObject(relic))
+                            {
+                                relic.AddPart(new TakenAchievement { AchievementID = "ACH_RECOVER_RELIC" });
+
+                                The.ZoneManager.CacheObject(relic, cacheTwiceOk: true);
+                                continue;
+                            }
+
+                            relic.SetImportant(true, player: true);
+
+                            Player.AdjustCyberneticsLicensePointsFromWedges(
+                                Amount: VirtualCreditWedges + GetCreditWedgeTotalFromRelic(relic),
+                                Remaining: out VirtualCreditWedges);
+                        }
+                    }
+                }
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(RecoverRelics)} for {Player?.DebugName ?? "MISSING_PLAYER"}", x);
+                return false;
+            }
+            return true;
+        }
+
         public static bool GiveExoticStuff(GameObject Player, ref int VirtualCreditWedges)
         {
             try
@@ -640,7 +804,7 @@ namespace UD_Bones_Folder.Mod.UI
                     if (Player.Inventory.GetFirstObject(go => go.GetBlueprint().InheritsFromSafe("Otherpearl")) != null)
                         break;
 
-                    if (SeededOddsIn10000($"{nameof(GiveExoticStuff)}:Otherpearl", 4000, i)
+                    if (SeededPerMyriadChance($"{nameof(GiveExoticStuff)}:Otherpearl", 4000, i)
                         && Player.ReceiveObject("Otherpearl"))
                         break;
                 }
@@ -650,7 +814,7 @@ namespace UD_Bones_Folder.Mod.UI
                     if (Player.Inventory.GetFirstObject(go => go.GetBlueprint().InheritsFromSafe("Fist of the Ape God")) != null)
                         break;
 
-                    if (SeededOddsIn10000($"{nameof(GiveExoticStuff)}:Fist of the Ape God", 4000, i)
+                    if (SeededPerMyriadChance($"{nameof(GiveExoticStuff)}:Fist of the Ape God", 4000, i)
                         && Player.ReceiveObject("Fist of the Ape God"))
                         break;
                 }
@@ -672,6 +836,8 @@ namespace UD_Bones_Folder.Mod.UI
             if (MaxToSpend.HasValue)
                 maxPointsToSpend = Math.Min(MaxToSpend.Value, Player.Stat("MP"));
 
+
+            int maxAttempts = 200;
             if (maxPointsToSpend > 0)
             {
                 var sB = Event.NewStringBuilder().AppendLine();
@@ -684,12 +850,13 @@ namespace UD_Bones_Folder.Mod.UI
                     && Player.Stat("MP") != lastRemainingPoints
                     && totalSpent < maxPointsToSpend
                     && !stuck
-                    && ++attempts < 200)
+                    && ++attempts < maxAttempts)
                 {
                     int maxPointSpend = Math.Max(1, Math.Min(Player.Stat("MP"), 4));
                     int pointsToSpend = SeededRandom(nameof(GameObject.RandomlySpendPoints), 1, maxPointSpend, attempts);
 
-                    if (lastRemainingPoints != Player.Stat("MP"))
+                    int stuckPoints = Player.Stat("MP");
+                    if (lastRemainingPoints != stuckPoints)
                         stuck = false;
                     else
                     {
@@ -701,6 +868,9 @@ namespace UD_Bones_Folder.Mod.UI
                     lastRemainingPoints = Player.Stat("MP");
                     totalSpent += pointsToSpend;
                     Player.RandomlySpendPoints(maxAPtospend: 0, maxSPtospend: 0, maxMPtospend: pointsToSpend, result: sB);
+
+                    if (stuckPoints != lastRemainingPoints)
+                        stuck = false;
                 }
 
                 var resultString = sB.ToString().Strip().Trim();
@@ -709,11 +879,19 @@ namespace UD_Bones_Folder.Mod.UI
                     && Player.IsPlayer())
                 {
                     using var resultStrings = ScopeDisposedList<string>.GetFromPoolFilledWith(resultString.Split("! ").IteratorSafe());
+
                     for (int i = 0; i < resultStrings.Count; i++)
-                    {
                         resultStrings[i] = resultStrings[i].Replace("base rank in ", "").Trim();
-                    }
+
                     Utils.Log(resultStrings.Aggregate("Spending Mutation Points...", Utils.NewLineDelimitedAggregator));
+
+                    if (attempts >= 200)
+                        Utils.Log($"Mutation point spend aborted early due to {nameof(attempts)} exceeding {maxAttempts}.");
+                    else
+                    if (stuck)
+                        Utils.Log($"Mutation point spend aborted early due to being {nameof(stuck)}.");
+                    if (Player.Stat("MP") == lastRemainingPoints)
+                        Utils.Log($"Mutation point spend aborted early due to {nameof(lastRemainingPoints)} being equal to the current remaining points.");
                 }
             }
         }
@@ -762,7 +940,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (Player.HasPart(Entry.Class))
             {
-                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Already Know {Entry.Class}");
+                Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Already Know {Entry.Class}");
                 SkillsList.Remove(Entry);
                 UnlearnedSkills.Remove(Entry);
                 return false;
@@ -772,7 +950,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (!Player.HasPart(Entry.Class))
             {
-                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Issue Learning {Entry.Class}");
+                Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Issue Learning {Entry.Class}");
                 return false;
             }
 
@@ -799,8 +977,81 @@ namespace UD_Bones_Folder.Mod.UI
             Player.Statistics["SP"].Penalty += Entry.Cost;
             TotalSpent += Entry.Cost;
 
-            //Utils.Log($"{(Depth + 2).Indent()}[{Const.TICK}] Learned {Entry.Class}");
+            Utils.Log($"{(Depth + 2).Indent()}[{Const.TICK}] Learned {Entry.Class}");
             return true;
+        }
+
+        private static readonly List<string> FightingStyles = new()
+        {
+            nameof(SingleWeaponFighting),
+            nameof(Multiweapon_Fighting),
+        };
+
+        private static readonly List<string> WeaponSkills = new()
+        {
+            nameof(Axe),
+            nameof(Cudgel),
+            nameof(LongBlades),
+            nameof(ShortBlades),
+        };
+
+        private static readonly List<string> MissileSkills = new()
+        {
+            nameof(Pistol),
+            nameof(Rifles),
+            nameof(HeavyWeapons),
+        };
+
+        private static readonly List<List<string>> NegativePreferences = new()
+        {
+            FightingStyles,
+            WeaponSkills,
+            MissileSkills,
+        };
+
+        public static bool IsSkillOrPowerOfSkill(IBaseSkillEntry BaseSkillEntry, string SkillName)
+        {
+            if (SkillName == BaseSkillEntry.Name)
+                return true;
+
+            if (BaseSkillEntry is PowerEntry powerEntry
+                && SkillName == powerEntry.ParentSkill.Name)
+                return true;
+
+            return false;
+        }
+
+        public static bool HasNegativePreference(IBaseSkillEntry BaseSkillEntry, GameObject Player, bool? PreferSingleWeaponFighting)
+        {
+            if (!WeaponSkills.Any(e => Player.HasPart(e))
+                && !WeaponSkills.Contains(BaseSkillEntry.Name))
+                return true;
+
+            if (!MissileSkills.Any(e => Player.HasPart(e))
+                && !MissileSkills.Contains(BaseSkillEntry.Name))
+                return true;
+
+            if (!FightingStyles.Any(e => Player.HasPart(e)))
+            {
+                if (!FightingStyles.Contains(BaseSkillEntry.Name))
+                    return true;
+                else
+                if (PreferSingleWeaponFighting.HasValue)
+                    return PreferSingleWeaponFighting.GetValueOrDefault()
+                        ? BaseSkillEntry.Name != nameof(SingleWeaponFighting)
+                        : BaseSkillEntry.Name != nameof(Multiweapon_Fighting)
+                        ;
+                else
+                    return false;
+            }
+
+            foreach (var negativePrefList in NegativePreferences.IteratorSafe())
+                foreach (var negPref in negativePrefList)
+                    if (Player.HasPart(negPref))
+                        if (negativePrefList.Any(skillName => negPref != BaseSkillEntry.Name && IsSkillOrPowerOfSkill(BaseSkillEntry, skillName)))
+                            return true;
+
+            return false;
         }
 
         public static void SpendSkillPointsRandomly(GameObject Player, int? MaxToSpend = null)
@@ -817,11 +1068,23 @@ namespace UD_Bones_Folder.Mod.UI
             skillsList.OrderBy(entry => entry.Name);
             skillsList.RemoveAll(entry => Player.HasSkill(entry.Class));
 
+            if (SeededPerMyriadChance($"{nameof(SpendSkillPointsRandomly)}.{nameof(Nonlinearity_Tomorrowful)}", 9500))
+                skillsList.RemoveAll(entry => entry.Name.StartsWith(nameof(Nonlinearity)));
+
+            bool? preferSingleWeaponFighting = null;
+            if (Player.IsTrueKin())
+                preferSingleWeaponFighting = true;
+            else
+            if (Player.IsChimera())
+                preferSingleWeaponFighting = false;
+
+            using var skillsShortList = ScopeDisposedList<IBaseSkillEntry>.GetFromPool();
+
             int totalSpent = 0;
             int remainingPoints = maxPointsToSpend;
             int attempts = 0;
 
-            //Utils.Log($"{nameof(SpendSkillPointsRandomly)}(For: {Player?.DebugName ?? "NO_OBJECT"}, {nameof(maxPointsToSpend)}: {maxPointsToSpend})");
+            Utils.Log($"{nameof(SpendSkillPointsRandomly)}(For: {Player?.DebugName ?? "NO_OBJECT"}, {nameof(maxPointsToSpend)}: {maxPointsToSpend})");
             while (Player.Stat("SP") > 0
                 && remainingPoints > 0
                 && totalSpent < maxPointsToSpend
@@ -832,20 +1095,33 @@ namespace UD_Bones_Folder.Mod.UI
 
                 var eligibleSkills = skillsList.Where(entry => entry.MeetsRequirements(Player));
 
+                skillsShortList.Clear();
+                skillsShortList.AddRange(eligibleSkills);
+                skillsShortList.RemoveAll(entry => HasNegativePreference(entry, Player, preferSingleWeaponFighting));
+
+                Utils.Log($"{2.Indent()}{nameof(skillsShortList)}: {skillsShortList.Count()}");
+
+                if (!skillsShortList.IsNullOrEmpty())
+                {
+                    foreach (var shortListSkill in skillsShortList)
+                        Utils.Log($"{3.Indent()}{nameof(shortListSkill)}: {shortListSkill.Class}, {nameof(shortListSkill.Cost)}: {shortListSkill.Cost}");
+                    eligibleSkills = skillsShortList.IteratorSafe();
+                }
+
                 if (eligibleSkills.IsNullOrEmpty())
                 {
-                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                    Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
                         $"{nameof(attempts)}: {attempts}, " +
-                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
+                        $"{nameof(remainingPoints)}: {remainingPoints}");
                     break;
                 }
 
                 if (!eligibleSkills.Any(entry => entry.Cost <= remainingPoints))
                 {
-                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                    Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
                         $"{nameof(attempts)}: {attempts}, " +
                         $"{nameof(remainingPoints)}: {remainingPoints}, " +
-                        $"lowest cost: {eligibleSkills.Aggregate(int.MaxValue, (a, n) => Math.Min(a, n.Cost))}");*/
+                        $"lowest cost: {eligibleSkills.Aggregate(int.MaxValue, (a, n) => Math.Min(a, n.Cost))}");
                     break;
                 }
 
@@ -854,33 +1130,33 @@ namespace UD_Bones_Folder.Mod.UI
                 int index = SeededRandom(nameof(SpendSkillPointsRandomly), 0, unlearnedSkills.Count - 1, attempts);
                 if (unlearnedSkills.TakeAt(index) is not IBaseSkillEntry skill)
                 {
-                    /*Utils.Log($"{1.Indent()}{Const.UNCHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                    Utils.Log($"{1.Indent()}{Const.UNCHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
                         $"{nameof(index)}: {index}, " +
                         $"{nameof(attempts)}: {attempts}, " +
-                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
+                        $"{nameof(remainingPoints)}: {remainingPoints}");
                     continue;
                 }
-                /*Utils.Log($"{1.Indent()}{Const.CHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                Utils.Log($"{1.Indent()}{Const.CHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
                     $"{nameof(index)}: {index}, " +
                     $"{nameof(attempts)}: {attempts}, " +
-                    $"{nameof(remainingPoints)}: {remainingPoints}");*/
-                //Utils.Log($"{2.Indent()}{nameof(skill)}: {skill.Class}, {nameof(skill.Cost)}: {skill.Cost}");
+                    $"{nameof(remainingPoints)}: {remainingPoints}");
+                Utils.Log($"{2.Indent()}{nameof(skill)}: {skill.Class}, {nameof(skill.Cost)}: {skill.Cost}");
 
                 if (skill is PowerEntry power
                     && !Player.HasPart(power.ParentSkill.Class))
                 {
-                    //Utils.Log($"{2.Indent()}[/] Missing Parent Skill: {power.ParentSkill.Class}");
+                    Utils.Log($"{2.Indent()}[/] Missing Parent Skill: {power.ParentSkill.Class}");
                     unlearnedSkills.Add(skill);
                     if (unlearnedSkills.Contains(power.ParentSkill)
                         || (power.ParentSkill.MeetsRequirements(Player)
                             && power.ParentSkill.Cost <= remainingPoints))
                     {
-                        //Utils.Log($"{3.Indent()}{nameof(skill)} set to Parent: {power.ParentSkill.Class}");
+                        Utils.Log($"{3.Indent()}{nameof(skill)} set to Parent: {power.ParentSkill.Class}");
                         skill = power.ParentSkill;
                     }
                     else
                     {
-                        //Utils.Log($"{2.Indent()}[{Const.CROSS}] Unable to learn Parent: {power.ParentSkill.Class}");
+                        Utils.Log($"{2.Indent()}[{Const.CROSS}] Unable to learn Parent: {power.ParentSkill.Class}");
                         continue;
                     }
                 }
@@ -894,6 +1170,26 @@ namespace UD_Bones_Folder.Mod.UI
 
                 remainingPoints = Math.Min(Player.Stat("SP"), maxPointsToSpend - totalSpent);
             }
+        }
+
+        public static Dictionary<string, int> GetAbilityStats(GameObject Player)
+        {
+            var abilityStats = new Dictionary<string, int>();
+            foreach ((var name, var stat) in Player.Statistics.IteratorSafe())
+            {
+                if (name.EqualsNoCase("Strength")
+                    || name.EqualsNoCase("Agility")
+                    || name.EqualsNoCase("Toughness")
+                    || name.EqualsNoCase("Intelligence")
+                    || name.EqualsNoCase("Willpower")
+                    || name.EqualsNoCase("Ego"))
+                    abilityStats.Add(name, stat.Value);
+
+                if (abilityStats.Count >= 6)
+                    break;
+            }
+
+            return abilityStats;
         }
 
         public static void SpendAbilityPointsWeighted(GameObject Player, int? MaxToSpend = null)
@@ -913,22 +1209,7 @@ namespace UD_Bones_Folder.Mod.UI
                 && totalSpent < maxPointsToSpend
                 && ++attempts < 200)
             {
-                var abilityStats = new Dictionary<string, int>();
-                foreach ((var name, var stat) in Player.Statistics.IteratorSafe())
-                {
-                    if (name.EqualsNoCase("Strength")
-                        || name.EqualsNoCase("Agility")
-                        || name.EqualsNoCase("Toughness")
-                        || name.EqualsNoCase("Intelligence")
-                        || name.EqualsNoCase("Willpower")
-                        || name.EqualsNoCase("Ego"))
-                        abilityStats.Add(name, stat.Value);
-
-                    if (abilityStats.Count >= 6)
-                        break;
-                }
-
-                var abilityBag = abilityStats.ToBallBag(SeededGenerator(nameof(SpendAbilityPointsWeighted), attempts));
+                var abilityBag = GetAbilityStats(Player).ToBallBag(SeededGenerator(nameof(SpendAbilityPointsWeighted), attempts));
 
                 var abilityStat = Player.Statistics[abilityBag.PluckOne()];
 
@@ -948,13 +1229,33 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
+                int low = (Math.Max(tier - 2, 1) + overTier.Count) - 2;
+                int high = low + 3 + (int)Math.Floor(overTier.Count / 2.0);
+                int amount = SeededRandom($"{nameof(Nectar_Tonic_Applicator)}::Amount", low, high) * 2;
+
+                bool isMutant = Player.IsMutant();
+                var abilityStats = GetAbilityStats(Player).Keys.IteratorSafe().ToList();
+                int abilityStatsCount = abilityStats.Count;
                 if (Player.IsMutant())
                 {
-                    Player.GainMP(Math.Max(tier - 2, 1) + overTier.Count); // represents getting some eaters injectors.
-                    Player.GainAP(Math.Max(tier - 2, 1) + overTier.Count); // represents getting some eaters injectors.
+                    for (int i = 0; i < amount; i++)
+                    {
+                        int index = SeededRandom($"{nameof(Nectar_Tonic_Applicator)}::Apply", 0, abilityStatsCount * 1000, i) % (abilityStatsCount + 1);
+                        if (index >= abilityStatsCount)
+                            Player.GainMP(Math.Max(tier - 2, 1) + overTier.Count);
+                        else
+                        if (!Player.Statistics.TryGetValue(abilityStats[index], out var abilityStat))
+                            Player.GainAP(1);
+                        else
+                        {
+                            Player.GainAP(1);
+                            abilityStat.BaseValue++;
+                            Player.Statistics["AP"].Penalty++;
+                        }
+                    }
                 }
                 else
-                    Player.GainAP((Math.Max(tier - 2, 1) * 2) + (overTier.Count * 2)); // represents getting some eaters injectors.
+                    Player.GainAP(amount); // represents getting some eaters injectors.
 
                 SpendMutationPointsInSmallChunks(Player, Silent: false);
                 SpendAbilityPointsWeighted(Player);
@@ -1088,7 +1389,13 @@ namespace UD_Bones_Folder.Mod.UI
                         int implantLoops = 0;
                         bodyParts.ShuffleInPlace(SeededGenerator(Utils.CallChain(nameof(BodyPart), nameof(BodyPart.Implant)), implantLoops++));
 
-                        bool matchesSpec(GameObjectBlueprint Model, BodyPart NextPart, int AvailableLP)
+                        using var implantedList = ScopeDisposedList<GameObjectBlueprint>.GetFromPool();
+                        bool checkImplanted(GameObjectBlueprint Model, bool ExcludeInstalled)
+                            => !ExcludeInstalled
+                            || !implantedList.Contains(Model)
+                            ;
+
+                        bool matchesSpec(GameObjectBlueprint Model, BodyPart NextPart, int AvailableLP, bool ExcludeInstalled = false)
                             => Model.TryGetPartParameter(nameof(CyberneticsBaseItem), nameof(CyberneticsBaseItem.Slots), out string slots)
                             && slots.CachedCommaExpansion().Any(s => s.EqualsNoCase(NextPart.Type))
                             && Model.TryGetPartParameter(nameof(CyberneticsBaseItem), nameof(CyberneticsBaseItem.Cost), out int cost)
@@ -1096,6 +1403,7 @@ namespace UD_Bones_Folder.Mod.UI
                             && !Model.HasPart(nameof(LifeSaver))
                             //&& int.TryParse(Model.GetPropertyOrTag("Tier"), out var itemTier)
                             //&& itemTier <= (tier + 2)
+                            && checkImplanted(Model, ExcludeInstalled)
                             ;
 
                         int totalLP = Player.GetCyberneticsLicensePoints();
@@ -1107,15 +1415,57 @@ namespace UD_Bones_Folder.Mod.UI
                             && !bodyParts.IsNullOrEmpty()
                             && bodyParts.TakeAt(0) is BodyPart nextPart)
                         {
-                            if (EncountersAPI.GetAnItem(model => matchesSpec(model, nextPart, availableLP)) is GameObject cybernetic
-                                || (cybernetic = Player.GetInventoryAndEquipment(go => matchesSpec(go.GetBlueprint(), nextPart, availableLP)).GetRandomElement()) != null)
+                            var rnd = SeededGenerator(Utils.CallChain(nameof(BodyPart), nameof(BodyPart.Implant), nameof(matchesSpec)), implantLoops);
+                            GameObject implant = Player.GetInventoryAndEquipment(
+                                    Filter: delegate(GameObject go)
+                                    {
+                                        return !Player.GetInstalledCybernetics().Contains(go)
+                                            && matchesSpec(
+                                                Model: go.GetBlueprint(),
+                                                NextPart: nextPart,
+                                                AvailableLP: availableLP,
+                                                ExcludeInstalled: true);
+                                    }
+                                    ).GetRandomElement(rnd)
+                                ?? EncountersAPI.GetAnItem(
+                                    filter: model => matchesSpec(
+                                        Model: model,
+                                        NextPart: nextPart,
+                                        AvailableLP: availableLP,
+                                        ExcludeInstalled : true)
+                                    )
+                                ?? Player.GetInventoryAndEquipment(
+                                    Filter: delegate (GameObject go)
+                                    {
+                                        return !Player.GetInstalledCybernetics().Contains(go)
+                                            && matchesSpec(
+                                                Model: go.GetBlueprint(),
+                                                NextPart: nextPart,
+                                                AvailableLP: availableLP,
+                                                ExcludeInstalled: false);
+                                    }
+                                    ).GetRandomElement(rnd)
+                                ?? EncountersAPI.GetAnItem(
+                                    filter: model => matchesSpec(
+                                        Model: model,
+                                        NextPart: nextPart,
+                                        AvailableLP: availableLP,
+                                        ExcludeInstalled: false)
+                                    );
+
+                            if (implant != null)
                             {
-                                cybernetic.MakeUnderstood();
-                                nextPart.Implant(cybernetic);
-                                if (nextPart.Cybernetics != cybernetic)
+                                implant.RemoveFromContext();
+                                implant.MakeUnderstood();
+                                nextPart.Implant(implant);
+                                if (nextPart.Cybernetics != implant)
                                 {
                                     bodyParts.Add(nextPart);
-                                    Player.ReceiveObject(cybernetic);
+                                    Player.ReceiveObject(implant);
+
+                                    if (implant.GetBlueprint() is GameObjectBlueprint model
+                                        && !implantedList.Contains(model))
+                                        implantedList.Add(model);
                                 }
                             }
                             else
@@ -1493,7 +1843,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                     var droppableItem = playerInventoryWithWeightLowestValueRatioFirst.FirstOrDefault();
 
-                    if (SeededOddsIn10000(Utils.CallChain(nameof(ShedAFewPounds), nameof(IsDroppableItem)), 8000, ticker)
+                    if (SeededPerMyriadChance(Utils.CallChain(nameof(ShedAFewPounds), nameof(IsDroppableItem)), 8000, ticker)
                         && droppableItem != null)
                     {
                         droppableItem.SplitFromStack();
@@ -1506,7 +1856,7 @@ namespace UD_Bones_Folder.Mod.UI
                         playerInventoryWithWeightLowestValueRatioFirst.RemoveAll(isNotDroppable);
                     }
                     else
-                    if (SeededOddsIn10000(Utils.CallChain(nameof(ShedAFewPounds), nameof(IsSphereOfNegWeight)), 6000, ticker)
+                    if (SeededPerMyriadChance(Utils.CallChain(nameof(ShedAFewPounds), nameof(IsSphereOfNegWeight)), 6000, ticker)
                         || slimmableItem != null)
                     {
                         if (!atMaxSpheres)
@@ -1535,7 +1885,7 @@ namespace UD_Bones_Folder.Mod.UI
                     else
                     {
                         slimmableItem.SplitFromStack();
-                        if (SeededOddsIn10000(Utils.CallChain(nameof(ShedAFewPounds), nameof(ModWillowy)), 2000, ticker)
+                        if (SeededPerMyriadChance(Utils.CallChain(nameof(ShedAFewPounds), nameof(ModWillowy)), 2000, ticker)
                             || !slimmableItem.ApplyModification(new ModSlender()))
                             slimmableItem.ApplyModification(new ModWillowy());
                         //Utils.Log($"{1.Indent()}Slimming: {slimmableItem?.DebugName ?? "NO_ITEM"}, {nameof(ModWillowy)}: {slimmableItem.HasPart<ModWillowy>()}, {nameof(ModSlender)}: {slimmableItem.HasPart<ModSlender>()}");
@@ -1603,7 +1953,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                 int undergroundThreshold = 1500 + (overtierCount * 200);
 
-                if (SeededOddsIn10000(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), undergroundThreshold))
+                if (SeededPerMyriadChance(Utils.CallChain(nameof(Zone), nameof(Zone.Z)), undergroundThreshold))
                 {
                     int maxStrata = Math.Max(10 + tier * (tier + 4), 11);
 
@@ -1644,13 +1994,13 @@ namespace UD_Bones_Folder.Mod.UI
                             step.ForeachAdjacentCell(delegate (Cell c)
                             {
                                 if (step.IsSolidFor(Player)
-                                    && SeededOddsIn10000(nameof(FindPath), 1750, adjacentTicker++))
+                                    && SeededPerMyriadChance(nameof(FindPath), 1750, adjacentTicker++))
                                     c.Clear(Combat: true);
                             });
                         }
                     }
                     if (destintionCell != null)
-                        Player.SystemLongDistanceMoveTo(destintionCell);
+                        Player.SystemLongDistanceMoveTo(destintionCell, energyCost: 0);
                 }
             }
             catch (Exception x)

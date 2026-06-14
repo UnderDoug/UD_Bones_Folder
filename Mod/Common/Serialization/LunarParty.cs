@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.World;
 
@@ -12,7 +14,7 @@ namespace UD_Bones_Folder.Mod
     {
         public GameObject LunarRegent;
 
-        public HashSet<GameObject> LunarCourtiers;
+        public CoalescibleSet<GameObject> LunarCourtiers;
 
         public LunarParty()
         { }
@@ -25,7 +27,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static LunarParty UncacheLunarParty(LunarPartyIDs CachedLunarPartyIDs)
-            => CachedLunarPartyIDs.TryPullCachedLunarParty(out GameObject lunarRegent, out HashSet<GameObject> lunarCourtiers)
+            => CachedLunarPartyIDs.TryPullCachedLunarParty(out GameObject lunarRegent, out CoalescibleSet<GameObject> lunarCourtiers)
             ? new LunarParty
             {
                 LunarRegent = lunarRegent,
@@ -41,8 +43,8 @@ namespace UD_Bones_Folder.Mod
                 LunarRegent = The.ZoneManager.CacheObject(LunarRegent, cacheTwiceOk: true, replaceIfAlreadyCached: true),
                 LunarCourtiers = !LunarCourtiers.IsNullOrEmpty()
                     ? LunarCourtiers.Aggregate(
-                        seed: new HashSet<string>(),
-                        func: delegate (HashSet<string> a, GameObject n)
+                        seed: new StringSet(),
+                        func: delegate (StringSet a, GameObject n)
                         {
                             a.Add(The.ZoneManager.CacheObject(n, cacheTwiceOk: true, replaceIfAlreadyCached: true));
                             return a;
@@ -70,8 +72,8 @@ namespace UD_Bones_Folder.Mod
             ? new LunarPartyIDs
             {
                 LunarCourtiers = LunarCourtiers.Aggregate(
-                    seed: new HashSet<string>(),
-                    func: delegate (HashSet<string> a, GameObject n)
+                    seed: new StringSet(),
+                    func: delegate (StringSet a, GameObject n)
                     {
                         a.Add(The.ZoneManager.CacheObject(n, cacheTwiceOk: true, replaceIfAlreadyCached: true));
                         return a;

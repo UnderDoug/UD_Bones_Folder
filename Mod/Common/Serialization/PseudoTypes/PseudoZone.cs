@@ -626,7 +626,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return null;
         }
 
-        public HashSet<GameObject> GetAtAddresses(
+        public CoalescibleSet<GameObject> GetAtAddresses(
             IEnumerable<PseudoAddress> Addresses,
             bool Extract = false,
             SaveBonesInfo BonesInfo = null
@@ -635,7 +635,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             if (Addresses.IsNullOrEmpty())
                 return null;
 
-            HashSet<GameObject> gameObjectSet = null;
+            CoalescibleSet<GameObject> gameObjectSet = null;
 
             foreach (var address in Addresses)
             {
@@ -909,28 +909,36 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 Zone.AddPart(zonePart, true);
             }
 
+            Event.PinCurrentPool();
             foreach (var cell in Zone.LoopCells())
             {
-                if (!TryGetCell(cell, out PseudoCell pseudoCell))
+                Event.ResetPool();
+                try
                 {
-                    Utils.Warn($"Failed to get {nameof(PseudoCell)} for {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
-                    continue;
+                    if (!TryGetCell(cell, out PseudoCell pseudoCell))
+                    {
+                        Utils.Warn($"Failed to get {nameof(PseudoCell)} for {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
+                        continue;
+                    }
+                    if (!pseudoCell.TryApplyToCell(
+                        Cell: cell,
+                        BonesInfo: BonesInfo,
+                        LunarRegent: ref LunarRegent,
+                        LunarParties: ref LunarParties,
+                        CrossGameObjects: CrossGameObjects,
+                        AddWhenNot: AddWhenNot,
+                        RemovalExclusions: IsObjectSpecial,
+                        IgnoreLocationMismatch: IgnoreLocationMismatch))
+                    {
+                        Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
+                        continue;
+                    }
                 }
-                if (!pseudoCell.TryApplyToCell(
-                    Cell: cell,
-                    BonesInfo: BonesInfo,
-                    LunarRegent: ref LunarRegent,
-                    LunarParties: ref LunarParties,
-                    CrossGameObjects: CrossGameObjects,
-                    AddWhenNot: AddWhenNot,
-                    RemovalExclusions: IsObjectSpecial,
-                    IgnoreLocationMismatch: IgnoreLocationMismatch))
+                finally
                 {
-                    Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
-                    continue;
+                    Event.ResetToPin();
                 }
             }
-
             return LunarRegent != null;
         }
 
@@ -1012,24 +1020,33 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return false;
             }
 
+            Event.PinCurrentPool();
             for (int i = 0; i < bubble.Count; i++)
             {
-                if (targetBubble[i] is Cell cell
-                    && bubble[i] is PseudoCell pseudoCell)
+                Event.ResetPool();
+                try
                 {
-                    if (!pseudoCell.TryApplyToCell(
-                        Cell: cell,
-                        BonesInfo: BonesInfo,
-                        LunarRegent: ref LunarRegent,
-                        LunarParties: ref LunarParties,
-                        CrossGameObjects: CrossGameObjects,
-                        AddWhenNot: AddWhenNot,
-                        RemovalExclusions: IsObjectSpecial,
-                        IgnoreLocationMismatch: IgnoreLocationMismatch))
+                    if (targetBubble[i] is Cell cell
+                    && bubble[i] is PseudoCell pseudoCell)
                     {
-                        Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
-                        continue;
+                        if (!pseudoCell.TryApplyToCell(
+                            Cell: cell,
+                            BonesInfo: BonesInfo,
+                            LunarRegent: ref LunarRegent,
+                            LunarParties: ref LunarParties,
+                            CrossGameObjects: CrossGameObjects,
+                            AddWhenNot: AddWhenNot,
+                            RemovalExclusions: IsObjectSpecial,
+                            IgnoreLocationMismatch: IgnoreLocationMismatch))
+                        {
+                            Utils.Warn($"Failed to Apply {nameof(PseudoCell)} to {nameof(Cell)} for Zone {Zone.DebugName} @[{cell?.DebugName ?? "NO_CELL"}]");
+                            continue;
+                        }
                     }
+                }
+                finally
+                {
+                    Event.ResetToPin();
                 }
             }
 
@@ -1144,7 +1161,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 }
             }
 
-            if (LunarParty.LunarCourtiers is HashSet<PseudoAddress> lunarCourtiers)
+            if (LunarParty.LunarCourtiers is CoalescibleSet<PseudoAddress> lunarCourtiers)
             {
                 var partyCount = lunarCourtiers.Count;
                 var cellsList = destinationCell.GetConnectedSpawnLocations(partyCount * 2);
@@ -1197,6 +1214,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         {
             LunarRegent = null;
             Blocked = false;
+
             if (!BeforePseudoZoneLoadedEvent.Check(Zone, BonesID, this, RECLAIM_CONTEXT))
             {
                 Blocked = true;

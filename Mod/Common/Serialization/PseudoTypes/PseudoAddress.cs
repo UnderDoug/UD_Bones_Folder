@@ -15,9 +15,14 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
     [Serializable]
     public class PseudoAddress : IComposite
     {
-        public class PseudoAddressEqualityComparer : IEqualityComparer<PseudoAddress>
+        [Serializable]
+        public class PseudoAddressEqualityComparer : CompositeEqualityComparer<PseudoAddress>
         {
-            public bool Equals(PseudoAddress x, PseudoAddress y)
+            public PseudoAddressEqualityComparer()
+                : base()
+            { }
+
+            public override bool Equals(PseudoAddress x, PseudoAddress y)
             {
                 if (x == null
                     || y == null)
@@ -29,7 +34,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return x.SameAs(y);
             }
 
-            public int GetHashCode(PseudoAddress obj)
+            public override int GetHashCode(PseudoAddress obj)
                 => (obj?.ZoneID?.GetHashCode() ?? 0)
                 ^ (obj?.X ?? 0).GetHashCode()
                 ^ (obj?.Y ?? 0).GetHashCode()

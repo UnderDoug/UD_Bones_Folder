@@ -24,6 +24,11 @@ namespace UD_Bones_Folder.Mod.Moderation
         [SerializeField]
         private string CachedRegexPattern;
 
+        public bool IsValid
+            => IsRoot
+            && !IsEnd
+            ;
+
         public Trie()
             : base()
         {
@@ -137,6 +142,7 @@ namespace UD_Bones_Folder.Mod.Moderation
         public override void Clear()
         {
             base.Clear();
+            Name = null;
             ClearPatternCaches();
             InitialTokens.Clear();
             FinalTokens.Clear();

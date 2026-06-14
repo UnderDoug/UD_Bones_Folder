@@ -6,6 +6,7 @@ using System.Text;
 using Genkit;
 
 using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.Serialization;
 
 using XRL;
@@ -35,11 +36,15 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         // Not Serialized
         protected string OriginalGameID;
 
+        // Not Serialized
+        protected UD_Bones_Moderated ModeratedPart;
+
         public PseudoGameObject()
         { }
 
         public PseudoGameObject(PseudoCell Cell, GameObject GameObject, int Index)
         {
+            // Utils.Log($"{1.Indent()}{nameof(PseudoGameObject)}..ctor({nameof(GameObject)}: {GameObject?.DebugName ?? "NO_OBJECT"})");
             Address = new(Cell, GameObject, Index);
             this.GameObject = GameObject;
         }
@@ -62,6 +67,9 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
             OriginalGameID = GameObject.GetStringProperty(SerializationExtensions.GAME_ID_PROPERTY);
             GameObject.SetStringProperty(SerializationExtensions.GAME_ID_PROPERTY, The.Game.GameID);
+
+            if (GameObject.TryGetPart(out ModeratedPart))
+                GameObject.PartsList.Remove(ModeratedPart);
         }
 
         public void UnsetSerializationProps()
@@ -69,6 +77,9 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             GameObject.SetStringProperty(SerializationExtensions.ACTIVE_OBJECT_PROPERTY, OriginalActive, true);
             GameObject.SetStringProperty(SerializationExtensions.ABILITY_OBJECT_PROPERTY, OriginalAbility, true);
             GameObject.SetStringProperty(SerializationExtensions.GAME_ID_PROPERTY, OriginalGameID, true);
+
+            if (ModeratedPart != null)
+                GameObject.PartsList.Add(ModeratedPart);
         }
 
         public void UnsetCellForSerialization()
@@ -88,13 +99,13 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 physics._CurrentCell = OriginalCell;
         }
 
-        public virtual void Write(SerializationWriter Writer)
+        public void Write(SerializationWriter Writer)
         {
             Writer.WriteComposite(Address);
             Writer.WriteGameObject(GameObject);
         }
 
-        public virtual void Read(SerializationReader Reader)
+        public void Read(SerializationReader Reader)
         {
             Address = Reader.ReadComposite<PseudoAddress>();
             GameObject = Reader.ReadGameObject();
@@ -112,24 +123,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             // Anything you want to do to objects, do it AFTER here
             // ####################################################
 
-            int serializedBaseID = 0;
-            CrossGameObject.Clone.PerformActionRecursively(
-                Action: delegate (GameObject go)
-                {
-                    if (!go.HasPart<UD_Bones_ReportBones>())
-                    {
-                        if (serializedBaseID == 0)
-                            serializedBaseID = GameObject.BaseID;
-                        else
-                            serializedBaseID = go.BaseID;
-
-                        go.AddPart(new UD_Bones_ReportBones
-                        {
-                            LoadedBonesID = BonesInfo.ID,
-                            SerializedBaseID = serializedBaseID,
-                        });
-                    }
-                });
+            CrossGameObject.Clone.MakeReportable(BonesInfo);
 
             PseudoCell.TransmuteBrain(CrossGameObject.Original, CrossGameObject.Clone, OriginObjects, DestinationObjects);
 ;

@@ -66,11 +66,6 @@ namespace XRL.World.Parts
         private string DisplayNameCache;
         private string AdjectiveCache;
 
-        public bool HasBadWord;
-        public BadWord.SeverityLevel BadWordSeverityOption;
-        public BadDisplayName BadWordName;
-        public bool BadWordDesc;
-
         public UD_Bones_FeverWarped()
         {
         }

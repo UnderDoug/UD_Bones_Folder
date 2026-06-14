@@ -7,5 +7,6 @@
           Message="=subject.Subjective= will tolerate neither pretenders nor would-be-usurpers!"
           MadTitle="=subject.A.RegalTitle:Mad= =subject.verb:Persist:afterpronoun=!"
           MadMessage="=subject.Subjective==subject.verb:'ve:afterpronoun= =subject.verb:come:afterpronoun= from a world vastly different from this one, and =FeverWarped:will tolerate neither pretenders nor would-be-usurpers!=" />
+    <tag Name="UD_Bones_Folder_No_Save_Bones" Value="No bones save for me please!" />
   </object>
 </objects>

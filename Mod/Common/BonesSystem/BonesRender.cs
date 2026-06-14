@@ -2,6 +2,8 @@
 
 using ConsoleLib.Console;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL.Core;
 using XRL.Rules;
 using XRL.World;
@@ -13,8 +15,8 @@ namespace UD_Bones_Folder.Mod
 {
     [Serializable]
     public class BonesRender
-        : IRenderable
-        , IComposite
+        : IComposite
+        , IRenderable
         , IDisposable
     {
         private readonly int FrameOffset = Stat.RandomCosmetic(0, 6999);

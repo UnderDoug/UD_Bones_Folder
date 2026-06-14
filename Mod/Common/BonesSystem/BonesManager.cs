@@ -47,6 +47,7 @@ using GameObject = XRL.World.GameObject;
 using Event = XRL.World.Event;
 using HarmonyLib;
 using Genkit;
+using UD_Bones_Folder.Mod.Moderation;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -59,6 +60,7 @@ namespace UD_Bones_Folder.Mod
         : IScribedSystem
         , ILoadLunarRegentEventHandler
         , ILoadLunarCourtierEventHandler
+        , IPseudoZoneEventHandler
     {
         #region Consts & PsuedoConsts
 
@@ -112,7 +114,7 @@ namespace UD_Bones_Folder.Mod
         public EmbarkBuilder EmbarkBuilder;
 
         [NonSerialized]
-        public HashSet<Location2D> MutableLocations;
+        public SerializeableSet<Location2D> MutableLocations;
 
         #endregion
         #region Instance Caches
@@ -231,7 +233,7 @@ namespace UD_Bones_Folder.Mod
             Writer.Write(Alerted);
             Writer.Write(Encountered);
             Writer.Write(FailedToLoadBones);
-            Writer.WriteSpecialHashSet(MutableLocations, WriteEach: (w, e) => Writer.Write(e));
+            Writer.WriteComposite(MutableLocations);
         }
 
         public override void Read(SerializationReader Reader)
@@ -243,7 +245,7 @@ namespace UD_Bones_Folder.Mod
             Alerted = Reader.ReadDictionary<string, bool>();
             Encountered = Reader.ReadList<string>();
             FailedToLoadBones = Reader.ReadList<string>();
-            MutableLocations = Reader.ReadSpecialHashSet(ReadEach: r => Reader.ReadLocation2D());
+            MutableLocations = Reader.ReadComposite<SerializeableSet<Location2D>>();
         }
 
         #endregion
@@ -311,8 +313,20 @@ namespace UD_Bones_Folder.Mod
         {
             foreach (var zoneGO in Z.GetObjects())
             {
-                zoneGO.PerformActionRecursively(delegate (GameObject go)
+                zoneGO.PerformActionRecursively(delegate (GameObject go, int depth)
                 {
+                    bool moderationRestored = false;
+                    if (go.TryGetPart(out UD_Bones_Moderated moderated))
+                    {
+                        moderated.IsModerationPaused = true;
+                        if (moderated.NameModerationProcessed != null
+                            || moderated.DescModerationProcessed != null)
+                        {
+                            moderated.RestoreModeratedContent(go);
+                            moderationRestored = true;
+                        }
+                    }
+
                     if (go.TryGetPart(out Examiner examiner))
                         examiner.EpistemicStatus = Examiner.EPISTEMIC_STATUS_UNINITIALIZED;
 
@@ -329,6 +343,12 @@ namespace UD_Bones_Folder.Mod
                     go.SetStringProperty(BlueprintSpec.PaintedWallProp, go.GetPropertyOrTag("PaintedWall"), true);
                     go.SetStringProperty(BlueprintSpec.PaintedFenceProp, go.GetPropertyOrTag("PaintedFence"), true);
                     go.SetStringProperty(BlueprintSpec.ImprovisedWeaponProp, $"{go.GetPart<MeleeWeapon>()?.IsImprovisedWeapon() is true}", true);
+
+                    if (moderationRestored
+                        && go.TryGetPart(out moderated))
+                    {
+                        moderated.IsModerationPaused = false;
+                    }
                 });
 
                 if (zoneGO.Brain is Brain brain)
@@ -904,7 +924,13 @@ namespace UD_Bones_Folder.Mod
                     try
                     {
                         if (reader.ReadInt32() != BONES_FINALIZE_POS)
-                            throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing Finalization val-check.");
+                        {
+                            if (!reader.UnspoolTo(BONES_FINALIZE_POS, Prior: true)
+                                || reader.ReadInt32() != BONES_FINALIZE_POS)
+                                throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing Finalization val-check.");
+
+                            Utils.Warn($"BonesManager has finished reading bones file but has not arrived at Finalization val-check. This bones file may have incompletely deserialized: Finalization val-check found with Unspool.");
+                        }
 
                         reader.FinalizeReadMetricsOff();
                     }
@@ -1173,12 +1199,18 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static async Task<IEnumerable<SaveBonesInfo>> CremateAllLunarRegentsAsync(
+            Predicate<SaveBonesInfo> Where,
             Action BeforeDeletionLoop,
             Action AfterDeletionLoop
             )
         {
             var crematableBonesInfos = (await GetSaveBonesInfoAsync(
-                    Where: b => b.IsCrematable,
+                    Where: delegate (SaveBonesInfo b)
+                    {
+                        return b.IsCrematable
+                            && (Where?.Invoke(b) is not false)
+                            ;
+                    },
                     IncludeVersionIncompatible: true))
                 .IteratorSafe();
 
@@ -1206,7 +1238,7 @@ namespace UD_Bones_Folder.Mod
                 defaultValue = null;
             }
             if ((await Popup.AskStringAsync(
-                    Message: "Are you sure you want to cremate {{red|all}} bones?" + typeToConfirmText,
+                    Message: $"Are you sure you want to cremate {$"all {crematableBonesInfos.Count()}".Colored("red")} bones?" + typeToConfirmText,
                     Default: defaultValue,
                     WantsSpecificPrompt: confirmText,
                     MaxLength: confirmText.Length)
@@ -1255,7 +1287,10 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static async Task<IEnumerable<SaveBonesInfo>> CremateAllLunarRegentsAsync()
-            => await CremateAllLunarRegentsAsync(null, null)
+            => await CremateAllLunarRegentsAsync(
+                Where: null,
+                BeforeDeletionLoop: null,
+                AfterDeletionLoop: null)
             ;
 
         public bool IsWorldMapOrNoBones(Zone Z)
@@ -1369,7 +1404,6 @@ namespace UD_Bones_Folder.Mod
                     return false;
                 }
 
-                Z.GetCell(0, 0).AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(UD_Bones_LunarRegentAnnouncer.BonesID)}::{bonesID}");
                 EncounteredBones(bonesID);
 
                 try
@@ -1739,10 +1773,29 @@ namespace UD_Bones_Folder.Mod
             if (Utils.ModVersion < PseudoZone.MinVersion)
                 Registrar.Register(ZoneActivatedEvent.ID);
             else
+            {
+                Registrar.Register(AfterPseudoZoneLoadedEvent.ID);
                 Registrar.Register(ZoneBuiltEvent.ID);
+            }
 
             Registrar.Register(GetLunarRegentEvent.ID);
             base.Register(Game, Registrar);
+        }
+
+        public virtual bool HandleEvent(AfterPseudoZoneLoadedEvent E)
+        {
+            if (Utils.ModVersion >= PseudoZone.MinVersion)
+            {
+                if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT))
+                {
+                    if (E.LunarRegent?.CurrentZone?.GetCell(0, 0) is Cell widgetCell)
+                    {
+                        widgetCell.RemoveObjects(UD_Bones_LunarRegentAnnouncer.IsAnnouncerWidget);
+                        widgetCell.AddObject(ANNOUNCER_WIDGET, Context: $"{nameof(E.BonesID)}::{E.BonesID}");
+                    }
+                }
+            }
+            return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(ZoneActivatedEvent E)

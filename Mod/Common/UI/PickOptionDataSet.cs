@@ -10,19 +10,46 @@ namespace UD_Bones_Folder.Mod.UI
 {
     public class PickOptionDataSet<T, TResult> : Rack<PickOptionData<T, TResult>>
     {
+        public T SingleElement;
+
+        /// <summary>
+        /// When <see langword="true"/>, indicates that <see cref="SingleElement"/> should be overriden in the event an entry in this collection has an element assigned; otherwise,<br />
+        /// when <see langword="false"/>, indicates that <see cref="SingleElement"/> should override each entry's element, irrespective of whether one is assigned to it.
+        /// </summary>
+        public bool RequireElement = true;
+
         public PickOptionDataSet()
             : base()
-        { }
+        {
+            RequireElement = true;
+        }
         public PickOptionDataSet(PickOptionDataSet<T, TResult> Source)
             : base(Source)
-        { }
+        {
+            RequireElement = true;
+        }
+
+        public PickOptionDataSet(T SingleElement, bool RequireElement = true)
+            : this()
+        {
+            this.SingleElement = SingleElement;
+            this.RequireElement = RequireElement;
+        }
 
         public IReadOnlyList<T> GetElements()
         {
             var elements = new List<T>();
             for (int i = 0; i < Count; i++)
-                elements.Add(this.ElementAtOrDefault(i).Element);
-
+            {
+                if (RequireElement)
+                {
+                    var element = this.ElementAtOrDefault(i).Element;
+                    if (Equals(element, default))
+                        elements.Add(SingleElement);
+                }
+                else
+                    elements.Add(SingleElement);
+            }
             return elements;
         }
 

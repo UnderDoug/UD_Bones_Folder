@@ -82,8 +82,8 @@ namespace UD_Bones_Folder.Mod.Events
         {
             base.Send(Zone, out Proceed);
 
-            if (Proceed)
-                Proceed = ProcessForGameObject(LunarRegent);
+            /*if (Proceed)
+                Proceed = ProcessForGameObject(LunarRegent);*/
         }
 
         public static void Send(

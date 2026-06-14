@@ -14,6 +14,8 @@ using ConsoleLib.Console;
 using XRL.World.Effects;
 using XRL.Core;
 using Genkit;
+using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.Serialization.Delegates;
 
 namespace XRL.World.WorldBuilders
 {
@@ -61,9 +63,10 @@ namespace XRL.World.WorldBuilders
             BonesManager.MutableLocations = AllMutableLocations();
         }
 
-        public HashSet<Location2D> AllMutableLocations()
+        public SerializeableSet<Location2D> AllMutableLocations()
         {
-            var mutableLocations = new HashSet<Location2D>();
+            var mutableLocations = new SerializeableSet<Location2D>(SerializeEachLocation.Default);
+
             foreach (var parasangs in (Builder?.worldInfo?.terrainLocations?.Values).IteratorSafe())
                 foreach (var parasang in parasangs.IteratorSafe())
                     foreach (var location in parasang.YieldParasangZoneLocations().IteratorSafe())

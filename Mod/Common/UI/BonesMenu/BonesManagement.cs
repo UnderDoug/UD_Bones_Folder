@@ -846,7 +846,10 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         private async Task<IEnumerable<SaveBonesInfo>> BonesDeletionContext()
-            => await BonesManager.CremateAllLunarRegentsAsync(() => DisableNavContext(false), EnableNavContext)
+            => await BonesManager.CremateAllLunarRegentsAsync(
+                Where: IsBonesToShow, 
+                BeforeDeletionLoop: () => DisableNavContext(false),
+                AfterDeletionLoop: EnableNavContext)
             ;
 
         public async void HandleDeleteAll()

@@ -6,6 +6,8 @@ using System.Text;
 
 using FuzzySharp;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.Collections;
 using XRL.World;
@@ -23,11 +25,11 @@ namespace UD_Bones_Folder.Mod
         {
             [Serializable]
             public class EqualityComparer
-                : EqualityComparer<DistanceRecord>
+                : CompositeEqualityComparer<DistanceRecord>
                 , IComposite
                 , IDisposable
             {
-                public virtual bool WantFieldReflection => false;
+                public override bool WantFieldReflection => false;
 
                 protected bool Strict;
 
@@ -40,12 +42,12 @@ namespace UD_Bones_Folder.Mod
                     this.Strict = Strict;
                 }
 
-                public virtual void Write(SerializationWriter Writer)
+                public override void Write(SerializationWriter Writer)
                 {
                     Writer.Write(Strict);
                 }
 
-                public virtual void Read(SerializationReader Reader)
+                public override void Read(SerializationReader Reader)
                 {
                     Strict = Reader.ReadBoolean();
                 }
@@ -265,11 +267,11 @@ namespace UD_Bones_Folder.Mod
 
         [Serializable]
         public class EqualityComparer
-            : EqualityComparer<BlueprintSpec>
+            : CompositeEqualityComparer<BlueprintSpec>
             , IComposite
             , IDisposable
         {
-            public virtual bool WantFieldReflection => false;
+            public override bool WantFieldReflection => false;
 
             protected bool BlueprintOnly;
 
@@ -282,12 +284,12 @@ namespace UD_Bones_Folder.Mod
                 this.BlueprintOnly = BlueprintOnly;
             }
 
-            public virtual void Write(SerializationWriter Writer)
+            public override void Write(SerializationWriter Writer)
             {
                 Writer.Write(BlueprintOnly);
             }
 
-            public virtual void Read(SerializationReader Reader)
+            public override void Read(SerializationReader Reader)
             {
                 BlueprintOnly = Reader.ReadBoolean();
             }
@@ -427,11 +429,11 @@ namespace UD_Bones_Folder.Mod
         public int? Tier;
         public int? TechTier;
 
-        [NonSerialized]
-        public HashSet<string> WeaponSkills;
+        // [NonSerialized]
+        public StringSet WeaponSkills;
 
-        [NonSerialized]
-        public HashSet<string> EquipmentSlots;
+        // [NonSerialized]
+        public StringSet EquipmentSlots;
 
         public string Species;
         public string Class;
@@ -889,14 +891,18 @@ namespace UD_Bones_Folder.Mod
 
         public virtual void Write(SerializationWriter Writer)
         {
-            Writer.WriteStringHashSet(WeaponSkills);
-            Writer.WriteStringHashSet(EquipmentSlots);
+            /*Writer.WriteComposite(WeaponSkills);
+            Writer.WriteComposite(EquipmentSlots);*/
         }
 
         public virtual void Read(SerializationReader Reader)
         {
-            WeaponSkills = Reader.ReadStringHashSet();
-            EquipmentSlots = Reader.ReadStringHashSet();
+            if (Reader.ModVersions.TryGetValue(Utils.ThisMod.ID, out XRL.Version modVersion)
+                && modVersion < StringSet.AddedIn)
+            {
+                WeaponSkills = (StringSet)Reader.ReadStringHashSet();
+                EquipmentSlots = (StringSet)Reader.ReadStringHashSet();
+            }
         }
 
         #endregion

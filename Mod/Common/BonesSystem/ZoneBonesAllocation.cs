@@ -4,6 +4,8 @@ using System.Text;
 
 using Qud.API;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.Rules;
 using XRL.UI;
@@ -103,7 +105,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 || WantsPartySpec == null
                 || WantsBubbleSpec == null)
             {
-                Utils.Warn($"{nameof(ZoneBonesAllocation)}.{nameof(Init)} failed to init {nameof(ZoneBonesAllocationSpec).Pluralize()} during {nameof(CheckInit)}");
+                Utils.Warn($"{nameof(ZoneBonesAllocation)}.{nameof(Init)} failed to init {nameof(ZoneBonesAllocationSpec)}s during {nameof(CheckInit)}");
                 return false;
             }
 
@@ -113,27 +115,27 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         public static void CacheZoneBonesSpecs()
         {
             WantsNoneSpec ??= new ZoneBonesAllocationSpec();
-            WantsNoneSpec.ZoneProperties ??= new HashSet<string>();
+            WantsNoneSpec.ZoneProperties ??= new StringSet();
             WantsNoneSpec.ZoneProperties.AddRange(
                 Range: new string[]
                 {
                     ZoneBonesAllocationSpec.LoadTypeProp_None,
                 });
-            WantsNoneSpec.ZoneParts ??= new HashSet<string>();
-            WantsNoneSpec.ZoneBuilders ??= new HashSet<string>();
-            WantsNoneSpec.MapNoteAttributes ??= new HashSet<string>();
-            WantsNoneSpec.MapNoteCategories ??= new HashSet<string>();
+            WantsNoneSpec.ZoneParts ??= new StringSet();
+            WantsNoneSpec.ZoneBuilders ??= new StringSet();
+            WantsNoneSpec.MapNoteAttributes ??= new StringSet();
+            WantsNoneSpec.MapNoteCategories ??= new StringSet();
             WantsNoneSpec.InitConditionDelegates(AllocationTypes.None);
 
             WantsPartySpec ??= new ZoneBonesAllocationSpec();
-            WantsPartySpec.ZoneProperties ??= new HashSet<string>();
+            WantsPartySpec.ZoneProperties ??= new StringSet();
             WantsPartySpec.ZoneProperties.AddRange(
                 Range: new string[]
                 {
                     ZoneBonesAllocationSpec.LoadTypeProp_Party,
                 });
-            WantsPartySpec.ZoneParts ??= new HashSet<string>();
-            WantsPartySpec.ZoneBuilders ??= new HashSet<string>();
+            WantsPartySpec.ZoneParts ??= new StringSet();
+            WantsPartySpec.ZoneBuilders ??= new StringSet();
             WantsPartySpec.ZoneBuilders.AddRange(
                 Range: new string[]
                 {
@@ -155,7 +157,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                     nameof(PlaceAClam),
                     nameof(ShugBurrowBuilder),
                 });
-            WantsPartySpec.MapNoteAttributes ??= new HashSet<string>();
+            WantsPartySpec.MapNoteAttributes ??= new StringSet();
             WantsPartySpec.MapNoteAttributes.AddRange(
                 Range: new string[]
                 {
@@ -171,7 +173,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                     "agolgot",
                     "bethsaida",
                 });
-            WantsPartySpec.MapNoteCategories ??= new HashSet<string>();
+            WantsPartySpec.MapNoteCategories ??= new StringSet();
             WantsPartySpec.MapNoteCategories.AddRange(
                 Range: new string[]
                 {
@@ -183,20 +185,20 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             WantsPartySpec.InitConditionDelegates(AllocationTypes.Party);
 
             WantsBubbleSpec ??= new ZoneBonesAllocationSpec();
-            WantsBubbleSpec.ZoneProperties ??= new HashSet<string>();
+            WantsBubbleSpec.ZoneProperties ??= new StringSet();
             WantsBubbleSpec.ZoneProperties.AddRange(
                 Range: new string[]
                 {
                     "SkipTerrainBuilders",
                     ZoneBonesAllocationSpec.LoadTypeProp_Bubble,
                 });
-            WantsBubbleSpec.ZoneParts ??= new HashSet<string>();
+            WantsBubbleSpec.ZoneParts ??= new StringSet();
             WantsBubbleSpec.ZoneParts.AddRange(
                 Range: new string[]
                 {
                     nameof(AmbientStabilization),
                 });
-            WantsBubbleSpec.ZoneBuilders ??= new HashSet<string>();
+            WantsBubbleSpec.ZoneBuilders ??= new StringSet();
             WantsBubbleSpec.ZoneBuilders.AddRange(
                 Range: new string[]
                 {
@@ -210,14 +212,14 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                     nameof(CryptOfLandlords),
                     nameof(CryptOfWarriors),
                 });
-            WantsBubbleSpec.MapNoteAttributes ??= new HashSet<string>();
+            WantsBubbleSpec.MapNoteAttributes ??= new StringSet();
             WantsBubbleSpec.MapNoteAttributes.AddRange(
                 Range: new string[]
                 {
                     "historic",
                     "biome",
                 });
-            WantsBubbleSpec.MapNoteCategories ??= new HashSet<string>();
+            WantsBubbleSpec.MapNoteCategories ??= new StringSet();
             WantsBubbleSpec.MapNoteCategories.AddRange(
                 Range: new string[]
                 {

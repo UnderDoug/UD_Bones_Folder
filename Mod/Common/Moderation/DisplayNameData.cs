@@ -11,7 +11,7 @@ using XRL.World.Parts;
 namespace UD_Bones_Folder.Mod.Moderation
 {
     [Serializable]
-    public class OriginalDisplayName : IComposite
+    public class DisplayNameData : IComposite
     {
         public string BaseName;
         public string Adjectives;
@@ -20,6 +20,124 @@ namespace UD_Bones_Folder.Mod.Moderation
         public string[] Honorifics;
         public string[] Titles;
         public string[] Epithets;
+
+        public DisplayNameData()
+        { }
+
+        public static DisplayNameData GetFrom(
+            GameObject Object,
+            BadDisplayName OnBasis,
+            DisplayNameData Mirroring
+            )
+        {
+            DisplayNameData displayNameData = null;
+
+            if ((Mirroring == null
+                || !Mirroring.BaseName.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsBase))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.BaseName = Object.GetBaseDisplayNameForModeration();
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.Adjectives.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsAdjective)
+                && Object.TryGetPart(out DisplayNameAdjectives adjectives))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.Adjectives = adjectives.Adjectives;
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.SizeAdjective.Key.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsSizeAdjective)
+                && Object.TryGetPart(out SizeAdjective sizeAdjective))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.SizeAdjective = new(sizeAdjective.Adjective, sizeAdjective.OrderAdjust);
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.FactionAdjective.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsFactionAdjective)
+                && Object.TryGetPart(out DisplayNameFactionAdjective factionAdjective))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.FactionAdjective = new string[3]
+                {
+                        factionAdjective.Faction,
+                        factionAdjective.FactionAdjective,
+                        factionAdjective.NonFactionAdjective,
+                };
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.Honorifics.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsHonorific)
+                && Object.TryGetPart(out Honorifics honorifics))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.Honorifics = new string[2]
+                {
+                    honorifics.HonorificList,
+                    honorifics.HonorificOrder,
+                };
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.Titles.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsTitle)
+                && Object.TryGetPart(out Titles titles))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.Titles = new string[2]
+                {
+                    titles.TitleList,
+                    titles.TitleOrder,
+                };
+            }
+
+            if ((Mirroring == null
+                || !Mirroring.Epithets.IsNullOrEmpty())
+                && (OnBasis == null
+                    || OnBasis.IsEpithet)
+                && Object.TryGetPart(out Epithets epithets))
+            {
+                displayNameData ??= new DisplayNameData();
+                displayNameData.Epithets = new string[2]
+                {
+                    epithets.EpithetList,
+                    epithets.EpithetOrder,
+                };
+            }
+
+            return displayNameData;
+        }
+
+        public static DisplayNameData GetFrom(
+            GameObject Object,
+            BadDisplayName OnBasis
+            )
+            => GetFrom(Object: Object, OnBasis: OnBasis, Mirroring: null)
+            ;
+
+        public static DisplayNameData GetFrom(
+            GameObject Object,
+            DisplayNameData Mirroring
+            )
+            => GetFrom(Object: Object, OnBasis: null, Mirroring: Mirroring)
+            ;
+
+        public static DisplayNameData GetFrom(GameObject Object)
+            => GetFrom(Object: Object, OnBasis: null, Mirroring: null)
+            ;
 
         public IEnumerable<KeyValuePair<string, string>> GetDebugPairs()
         {

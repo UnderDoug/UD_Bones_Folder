@@ -184,10 +184,10 @@ namespace UD_Bones_Folder.Mod
             {
                 OsseousAshID = Config?.ID ?? Guid.Empty,
                 OsseousAshHandle = Config?.Handle ?? DefaultOsseousAshHandle,
-                SaveVersion = 400,
+                SaveVersion = XRLGame.SaveVersion,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
-                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(LunarRegent)}:*= {LunarRegent.GetDisplayName(BaseOnly: true)}",
+                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(LunarRegent)}:*= {LunarRegent.GetDisplayName(BaseOnly: true, AsIfKnown: true, NoConfusion: true)}",
                 Level = LunarRegent.Statistics["Level"].Value,
                 GenoSubType = genoSubType,
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
@@ -902,7 +902,7 @@ namespace UD_Bones_Folder.Mod
             return Message;
         }
 
-        public static HashSet<T> UnionWith<T>(this HashSet<T> Set, IEnumerable<IEnumerable<T>> Sets)
+        public static CoalescibleSet<T> UnionWith<T>(this CoalescibleSet<T> Set, IEnumerable<IEnumerable<T>> Sets)
         {
             foreach (var set in Sets)
                 Set.UnionWith(set);
@@ -910,12 +910,12 @@ namespace UD_Bones_Folder.Mod
             return Set;
         }
 
-        public static HashSet<T> GetUnionOfSets<T>(this IEnumerable<IEnumerable<T>> Sets)
-            => new HashSet<T>().UnionWith(Sets)
+        public static CoalescibleSet<T> GetUnionOfSets<T>(this IEnumerable<IEnumerable<T>> Sets)
+            => new CoalescibleSet<T>().UnionWith(Sets)
             ;
 
-        public static HashSet<T> IntersectWithUnless<T>(
-            this HashSet<T> Set,
+        public static CoalescibleSet<T> IntersectWithUnless<T>(
+            this CoalescibleSet<T> Set,
             IEnumerable<T> Other,
             Predicate<IEnumerable<T>> Case
             )
@@ -925,8 +925,8 @@ namespace UD_Bones_Folder.Mod
             return Set;
         }
 
-        public static HashSet<T> IntersectWithUnlessEmptyOrNull<T>(
-            this HashSet<T> Set,
+        public static CoalescibleSet<T> IntersectWithUnlessEmptyOrNull<T>(
+            this CoalescibleSet<T> Set,
             IEnumerable<T> Other
             )
             => Set.IntersectWithUnless(
@@ -1024,42 +1024,108 @@ namespace UD_Bones_Folder.Mod
             return indefiniteArticle;
         }
 
-        public static void PerformActionRecursively(this GameObject Object, Action<GameObject> Action, int Depth = 0)
+        public static void PerformActionRecursively(this GameObject Object, Action<GameObject, int> Action, int Depth = 0)
         {
-            Action.Invoke(Object);
+            Action.Invoke(Object, Depth);
 
-            if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
-                for (int i = 0; i < inventoryObjects.Count; i++)
-                    inventoryObjects[i].PerformActionRecursively(Action, Depth + 1);
+            foreach (var inventoryObject in Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe())
+                inventoryObject.PerformActionRecursively(Action, Depth + 1);
 
-            if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
-                for (int i = 0; i < installedCybernetics.Count; i++)
-                    installedCybernetics[i].PerformActionRecursively(Action, Depth + 1);
+            foreach (var installedCybernetic in Object.GetInstalledCybernetics().IteratorSafe())
+                installedCybernetic.PerformActionRecursively(Action, Depth + 1);
 
-            if (Object.GetContents() is List<GameObject> contentsObject)
-                for (int i = 0; i < contentsObject.Count; i++)
-                    contentsObject[i].PerformActionRecursively(Action, Depth + 1);
+            foreach (var contentsObject in Object.GetContents().IteratorSafe())
+                contentsObject.PerformActionRecursively(Action, Depth + 1);
+        }
+
+        public static void PerformActionRecursively(this GameObject Object, Action<GameObject> Action, int Depth = 0)
+            => Object.PerformActionRecursively(
+                Action: delegate(GameObject go, int depth)
+                {
+                    Action.Invoke(go);
+                },
+                Depth: Depth)
+            ;
+
+        public static IEnumerable<T> PerformFunctionRecursively<T>(this GameObject Object, Func<GameObject, int, T> Func, int Depth = 0)
+        {
+            //Utils.Log($"{Depth.Indent()}{nameof(PerformFunctionRecursively)}({nameof(Object)}: {Object?.DebugName ?? "NO_OBJECT"}, {nameof(Depth)}: {Depth})");
+
+            using var result = ScopeDisposedList<T>.GetFromPool();
+            result.Add(Func.Invoke(Object, Depth));
+
+            int newDepth = Depth + 1;
+            var inventoryObjects = Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe();
+            //Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {inventoryObjects.Count().Things("inventory object")}");
+            foreach (var inventoryObject in inventoryObjects)
+                foreach (var output in inventoryObject.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    result.Add(output);
+
+            var installedCybernetics = Object.GetInstalledCybernetics().IteratorSafe();
+            //Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {installedCybernetics.Count().Things("installed cybernetic")}");
+            foreach (var installedCybernetic in installedCybernetics)
+                foreach (var output in installedCybernetic.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    result.Add(output);
+
+            var contentsObjects = Object.GetContents().IteratorSafe();
+            //Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {contentsObjects.Count().Things("contents object")}");
+            foreach (var contentsObject in contentsObjects)
+                foreach (var output in contentsObject.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    result.Add(output);
+
+            while (!result.IsNullOrEmpty()
+                && result.TakeAt(0) is T output)
+                yield return output;
+
+            /*Utils.Log($"{Depth.Indent()}{nameof(PerformFunctionRecursively)}({nameof(Object)}: {Object?.DebugName ?? "NO_OBJECT"}, {nameof(Depth)}: {Depth})");
+            yield return Func.Invoke(Object, Depth);*/
+
+            /*foreach (var inventoryObject in Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe())
+                foreach (var output in inventoryObject.PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                    yield return output;
+
+            foreach (var installedCybernetic in Object.GetInstalledCybernetics().IteratorSafe())
+                foreach (var output in installedCybernetic.PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                    yield return output;
+
+            foreach (var contentsObject in Object.GetContents().IteratorSafe())
+                foreach (var output in contentsObject.PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
+                    yield return output;*/
+
+            /*int newDepth = Depth + 1;
+            var inventoryObjects = Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe();
+            Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {inventoryObjects.Count().Things("inventory object")}");
+            foreach (var inventoryObject in inventoryObjects)
+            {
+                foreach (var output in inventoryObject.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    yield return output;
+            }
+
+            var installedCybernetics = Object.GetInstalledCybernetics().IteratorSafe();
+            Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {installedCybernetics.Count().Things("installed cybernetic")}");
+            foreach (var installedCybernetic in installedCybernetics)
+            {
+                foreach (var output in installedCybernetic.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    yield return output;
+            }
+
+            var contentsObjects = Object.GetContents().IteratorSafe();
+            Utils.Log($"{newDepth.Indent()}{Object?.DebugName ?? "NO_OBJECT"} has {contentsObjects.Count().Things("contents object")}");
+            foreach (var contentsObject in contentsObjects)
+            {
+                foreach (var output in contentsObject.PerformFunctionRecursively(Func, newDepth).IteratorSafe())
+                    yield return output;
+            }*/
         }
 
         public static IEnumerable<T> PerformFunctionRecursively<T>(this GameObject Object, Func<GameObject, T> Func, int Depth = 0)
-        {
-            yield return Func.Invoke(Object);
-
-            if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
-                for (int i = 0; i < inventoryObjects.Count; i++)
-                    foreach (var output in inventoryObjects[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
-                        yield return output;
-
-            if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
-                for (int i = 0; i < installedCybernetics.Count; i++)
-                    foreach (var output in installedCybernetics[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
-                        yield return output;
-
-            if (Object.GetContents() is List<GameObject> contentsObject)
-                for (int i = 0; i < contentsObject.Count; i++)
-                    foreach (var output in contentsObject[i].PerformFunctionRecursively(Func, Depth + 1).IteratorSafe())
-                        yield return output;
-        }
+            => Object.PerformFunctionRecursively(
+                Func: delegate (GameObject go, int depth)
+                {
+                    return Func.Invoke(go);
+                },
+                Depth: Depth)
+            ;
 
         public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
         {
@@ -1122,40 +1188,29 @@ namespace UD_Bones_Folder.Mod
 
         public static bool TryModerate(
             this GameObject BonesObject,
-            SaveBonesInfo BonesInfo,
+            bool IsDownloaded,
             out UD_Bones_Moderated ModeratedPart
             )
         {
             ModeratedPart = null;
-            if (BonesInfo?.IsDownloaded is not true
+            if (!IsDownloaded
                 && !Options.DebugEnableBadWordFilterForLocalBones)
                 return false;
 
             //var sw = Stopwatch.StartNew();
             try
             {
-                ModeratedPart = BonesObject.PerformFunctionRecursively(delegate (GameObject go)
+                //Utils.Log($"{nameof(TryModerate)}({nameof(BonesObject)}: {BonesObject?.DebugName ?? "NO_OBJECT"})");
+                ModeratedPart = BonesObject.PerformFunctionRecursively(delegate (GameObject go, int depth)
                 {
-                    /*var sw2 = Stopwatch.StartNew();
-                    try
-                    {
-                        if (go.HasBadWord(out BadDisplayName badWordName, out bool badWordDesc, Options.ModerationMinimumSeverityLevel))
-                        {
-                            if (go.HasPart<UD_Bones_Moderated>())
-                                go.RemovePart<UD_Bones_Moderated>();
-
-                            go.AddPart(new UD_Bones_Moderated(badWordName, badWordDesc));
-                        }
-                    }
-                    finally
-                    {
-                        if (go != null)
-                            Utils.Log($"{nameof(TryModerate)}.{nameof(PerformActionRecursively)} for {go.DebugName.Strip()} took {sw2.Elapsed.ValueUnits()}");
-                        sw2.Stop();
-                    }*/
-
                     if (go == null)
                         return null;
+
+                    var holder = go.Holder;
+                    string heldByHolder = holder != null
+                        ? $" held by {holder.DebugName}"
+                        : null
+                        ;
 
                     if (!go.HasPart<UD_Bones_Moderated>()
                         || go.RemovePart<UD_Bones_Moderated>())
@@ -1164,7 +1219,7 @@ namespace UD_Bones_Folder.Mod
                     return go.GetPart<UD_Bones_Moderated>();
                 })
                 .IteratorSafe()
-                .FirstOrDefault(p => p.ParentObject == BonesObject);
+                .FirstOrDefault(p => p?.ParentObject == BonesObject);
 
                 return ModeratedPart != null;
             }
@@ -1178,9 +1233,16 @@ namespace UD_Bones_Folder.Mod
 
         public static bool TryModerate(
             this GameObject BonesObject,
+            bool IsDownloaded
+            )
+        => TryModerate(BonesObject, IsDownloaded, out _)
+        ;
+
+        public static bool TryModerate(
+            this GameObject BonesObject,
             SaveBonesInfo BonesInfo
             )
-        => TryModerate(BonesObject, BonesInfo, out _)
+        => TryModerate(BonesObject, BonesInfo?.IsDownloaded is true, out _)
         ;
 
         public static void FeverWarp(
@@ -1306,6 +1368,32 @@ namespace UD_Bones_Folder.Mod
             }
             return false;
         }
+
+        public static void MakeReportable(this GameObject Object, string BonesID)
+        {
+            int serializedBaseID = 0;
+            Object.PerformActionRecursively(
+                Action: delegate (GameObject go)
+                {
+                    if (!go.HasPart<UD_Bones_ReportBones>())
+                    {
+                        if (serializedBaseID == 0)
+                            serializedBaseID = Object.BaseID;
+                        else
+                            serializedBaseID = go.BaseID;
+
+                        go.AddPart(new UD_Bones_ReportBones
+                        {
+                            LoadedBonesID = BonesID,
+                            SerializedBaseID = serializedBaseID,
+                        });
+                    }
+                });
+        }
+
+        public static void MakeReportable(this GameObject Object, SaveBonesInfo BonesInfo)
+            => Object.MakeReportable(BonesInfo.ID)
+            ;
 
         public static void SetEquipmentFrameColors(this GameObject GameObject, string TopLeft_Left_Right_BottomRight = null)
             => GameObject.SetStringProperty(Const.EQ_FRAME_COLORS, TopLeft_Left_Right_BottomRight, RemoveIfNull: true)
@@ -1803,11 +1891,11 @@ namespace UD_Bones_Folder.Mod
             yield return "reflected";
         }
 
-        public static HostCollection FirstWithHostMatching(this Rack<HostCollection> Hosts, Predicate<Host> Condition)
+        public static HostSet FirstWithHostMatching(this Rack<HostSet> Hosts, Predicate<Host> Condition)
             => Hosts?.FirstOrDefault(hc => hc.Any(Condition.Invoke))
             ;
 
-        public static Host FirstHostMatching(this Rack<HostCollection> Hosts, Predicate<Host> Condition)
+        public static Host FirstHostMatching(this Rack<HostSet> Hosts, Predicate<Host> Condition)
             => Hosts?.FirstWithHostMatching(Condition.Invoke)?.FirstOrDefault(Condition.Invoke)
             ;
 
@@ -2331,65 +2419,6 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public static bool MatchesCaptureGroups(this Regex Regex, string Text, bool Silent = false)
-        {
-            if (Text.IsNullOrEmpty())
-                return false;
-
-            if (Regex == null)
-                return false;
-
-            if (Regex.Matches(Text) is MatchCollection matches)
-            {
-                bool any = false;
-                using var captureList = ScopeDisposedList<string>.GetFromPool();
-                for (int i = 0; i < matches.Count; i++)
-                {
-                    if (matches[i] is Match match
-                        && match.Groups is GroupCollection matchGroups
-                        && matchGroups.Count > 1)
-                    {
-                        for (int j = 1; j < matchGroups.Count; j++)
-                        {
-                            if (matchGroups[j] is Group group
-                                && group.Captures is CaptureCollection captures
-                                && !captures.IsNullOrEmpty())
-                            {
-                                if (Silent)
-                                    return true;
-
-                                captureList.AddRange(captures.Select(c => c.Value));
-                                any = true;
-                            }
-                        }
-                    }
-                }
-
-                if (Silent)
-                    return false;
-
-                if (any)
-                {
-                    Utils.Warn($"Found the following {nameof(BadWord)}:");
-                    Utils.Log($"{nameof(Text)}: {Text}");
-                    string regexString = "sundry";
-                    if (BadWord.RegexCache?.FirstOrDefault(kvp => kvp.Value == Regex) is (BadWord.SeverityLevel severity, Regex regex))
-                    {
-                        regexString = $"{(int)severity} ({severity})";
-                    }
-
-                    Utils.Log($"{nameof(Regex)}: {regexString}");
-                    captureList.IteratorSafe().Loggregate(
-                        Proc: c => $": {c}",
-                        Empty: ": none",
-                        PostProc: s => $"{1.Indent()}{s}");
-                }
-                return any;
-            }
-
-            return false;
-        }
-
         public static bool TryGetPartBlueprint<T>(this GameObjectBlueprint Model, out GamePartBlueprint Result)
             where T : IPart
         {
@@ -2446,6 +2475,198 @@ namespace UD_Bones_Folder.Mod
 
         public static void Decrement<T>(this Dictionary<T, int> Dictionary, T Key, bool RemoveLTEZero = true)
             => Dictionary.Adjust(Key, -1, RemoveLTEZero)
+            ;
+
+        public static string Join(this string Accumulator, string Next, string Delimiter = ", ")
+            => Accumulator + (!Accumulator.IsNullOrEmpty() ? Delimiter : null) + Next
+            ;
+
+        public static string Join(this IEnumerable<string> Strings, string Delimiter = ", ")
+            => Strings?.Aggregate("", (a, n) => a?.Join(n, Delimiter))
+            ;
+
+        public static string GenericsString(this IEnumerable<Type> Types, bool Short = false)
+            => !Types.IsNullOrEmpty()
+            ? "<" +
+                Types
+                    .ToList()
+                    .ConvertAll(t => t.ToStringWithGenerics(Short))
+                    .Join("," + (!Short ? " " : null)) +
+                ">"
+            : null
+            ;
+
+        public static string ToStringWithGenerics(this Type Type, bool Short = false)
+        {
+            if (Type == null)
+                return null;
+
+            if (Type.GetGenericArguments() is not IEnumerable<Type> typeGenerics)
+                return !Short
+                    ? Type.Name
+                    : Type.Name.Acronymize()
+                    ;
+
+            string name = Type.Name.Split('`')[0];
+
+            if (Short)
+                name = name.Acronymize();
+
+            return name + typeGenerics.GenericsString(Short);
+        }
+
+        public static string TypeStringWithGenerics<T>(this T Object, bool Short = false)
+            => (Object?.GetType() ?? typeof(T))?.ToStringWithGenerics(Short);
+
+        public static string Acronymize(this string String)
+        {
+            if (String.IsNullOrEmpty()
+                || String.ToLower() == String
+                || String.ToUpper() == String)
+                return String;
+
+            return String.Aggregate("", (a, n) => a + (char.IsLetter(n) && char.IsUpper(n) ? n : null));
+        }
+
+        public static T ConvertType<T>(this object Value)
+            => Convert.ChangeType(Value, typeof(T)) is T newValue
+            ? newValue
+            : default
+            ;
+
+        public static bool TryConvertType<T>(this object Value, out T NewValue)
+            => !(NewValue = Value.ConvertType<T>()).Equals(default)
+            ;
+
+        #region Comparison
+
+        [Serializable]
+        private class ComparisonComparer<T> : IComparer<T>
+        {
+            private readonly Comparison<T> Comparison;
+
+            public ComparisonComparer(Comparison<T> Comparison)
+                => this.Comparison = Comparison
+                ;
+
+            public int Compare(T x, T y)
+                => Comparison(x, y)
+                ;
+        }
+
+        public static IComparer<T> ToComparer<T>(this Comparison<T> Comparison)
+            => new ComparisonComparer<T>(Comparison)
+            ;
+
+        public static Comparison<T> ToComparison<T>(this IComparer<T> Comparer)
+            => Comparer.Compare
+            ;
+
+        #endregion
+
+        public static IEnumerable<T> OrderInPlace<T>(this IEnumerable<T> Enumerable, Comparison<T> Comparison)
+        {
+            using var scopeList = ScopeDisposedList<T>.GetFromPoolFilledWith(Enumerable);
+            scopeList.Sort(Comparison.ToComparer());
+            foreach (var item in scopeList)
+                yield return item;
+        }
+
+        public static void ForEach<T>(this IEnumerable<T> Items, Action<T> Proc)
+        {
+            foreach (T item in Items)
+                Proc(item);
+        }
+
+        public static void ForEach<K, V>(
+            this IDictionary<K, V> Dictionary,
+            Action<KeyValuePair<K, V>> Proc
+            )
+        {
+            if (Dictionary != null)
+                foreach (KeyValuePair<K, V> item in Dictionary)
+                    Proc(item);
+        }
+
+        public static void ForEach<K, V>(
+            this IDictionary<K, V> Dictionary,
+            Action<K, V> Proc
+            )
+        {
+            if (Dictionary != null)
+                foreach (KeyValuePair<K, V> item in Dictionary)
+                    Proc(item.Key, item.Value);
+        }
+
+        public static void ForEach<K, V>(
+            this IDictionary<K, V> Dictionary,
+            Action<K> KeyProc,
+            Action<V> ValueProc
+            )
+            => Dictionary.ForEach(
+                Proc: delegate (KeyValuePair<K, V> kvp)
+                {
+                    KeyProc?.Invoke(kvp.Key);
+                    ValueProc?.Invoke(kvp.Value);
+                })
+            ;
+
+        public static string ToStringWithNum<T>(this T Enum)
+            where T : struct, Enum
+            => (Enum is int intEnum)
+            ? Enum + "(" + intEnum + ")"
+            : Enum.ToString()
+            ;
+
+        public static V RequireEntry<K, V>(this Dictionary<K, V> Cache, K Key, out bool IsNew, Func<K, V> ProcNewEntry)
+            where V : new()
+        {
+            if (Cache == null)
+                throw new ArgumentNullException(nameof(Cache), "Must not be null");
+
+            if (Key is null)
+                throw new ArgumentNullException(nameof(Key), "Must not be null");
+
+            IsNew = false;
+            if (!Cache.TryGetValue(Key, out V value))
+            {
+                if (ProcNewEntry != null)
+                    value = ProcNewEntry.Invoke(Key);
+
+                value ??= new();
+
+                Cache[Key] = value;
+                IsNew = true;
+            }
+            return value;
+        }
+
+        public static V RequireEntry<K, V>(this Dictionary<K, V> Cache, K Key, Func<K, V> ProcNewEntry)
+            where V : new()
+            => Cache.RequireEntry(Key, out _, ProcNewEntry)
+            ;
+
+        public static V RequireEntry<K, V>(this Dictionary<K, V> Cache, K Key)
+            where V : new()
+            => Cache.RequireEntry(Key, out _, null)
+            ;
+
+        public static IEnumerable<string> FramesToStrings(this StackTrace StackTrace, int? Count = null, int SkipLines = 0)
+        {
+            StackTrace ??= new(SkipLines + 1);
+            var frames = StackTrace.GetFrames();
+            int count = frames?.Length ?? 0;
+            count = Math.Min(Count ?? count, count);
+            for (int i = 0; i < count; i++)
+                if (frames[i] is StackFrame frame)
+                    yield return frame.ToString();
+        }
+
+        public static string FramesToString(this StackTrace StackTrace, int? Count = null, int SkipLines = 0, string TextLineBefore = null)
+            => StackTrace.FramesToStrings(Count, SkipLines + 1)
+                .Aggregate(
+                    seed: TextLineBefore,
+                    func: Utils.NewLineDelimitedAggregator)
             ;
     }
 }

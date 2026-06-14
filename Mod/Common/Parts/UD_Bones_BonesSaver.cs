@@ -460,15 +460,15 @@ namespace XRL.World.Parts
             int objectSeedIterator = 0;
 
             if (Object.HasTag("Merchant")
-                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                && !BonesModeModule.SeededPerMyriadChance(objectSeed, 2500, objectSeedIterator++))
                 return false;
 
             if (model.InheritsFromSafe("Fungus")
-                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                && !BonesModeModule.SeededPerMyriadChance(objectSeed, 2500, objectSeedIterator++))
                 return false;
 
             if (Object.IsPlayerLed()
-                && !BonesModeModule.SeededOddsIn10000(objectSeed, 2500, objectSeedIterator++))
+                && !BonesModeModule.SeededPerMyriadChance(objectSeed, 2500, objectSeedIterator++))
                 return false;
 
             return true;
@@ -549,7 +549,7 @@ namespace XRL.World.Parts
                 {
                     string killerSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(killer));
                     var seededGenerator = BonesModeModule.SeededGenerator(killerSeed);
-                    if (BonesModeModule.SeededOddsIn10000(killerSeed, 8000))
+                    if (BonesModeModule.SeededPerMyriadChance(killerSeed, 8000))
                         killer = FuzzyFunctions.DoThisButRarelyDoThat(
                             Primary: () => The.Player.CurrentZone.GetObjects(go => go.IsCombatObject() && !go.IsPlayerLed())?.GetRandomElement(seededGenerator),
                             Secondary: () => The.Player.CurrentZone.GetObjects(go => go.IsCombatObject())?.GetRandomElement(seededGenerator),
@@ -619,7 +619,7 @@ namespace XRL.World.Parts
                 }
 
                 string accidentalSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(accidentalSeed));
-                bool isAccidental = BonesModeModule.SeededOddsIn10000(accidentalSeed, 2500);
+                bool isAccidental = BonesModeModule.SeededPerMyriadChance(accidentalSeed, 2500);
                 if (!willDie
                     || !The.Player.TakeDamage(
                         Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(135, 225) / 100f)),

@@ -29,6 +29,8 @@ namespace XRL.World.Parts
         public static int TitleHonorificOrderAdjust = 49;
         public static int TitleEpithetOrderAdjust = -600;
 
+        private Version? MigrateFrom = null;
+
         public FileLocationData LocationData;
 
         public bool Cremated;
@@ -107,7 +109,7 @@ namespace XRL.World.Parts
 
         public override bool CanBeFragile => false;
 
-        private Version? MigrateFrom = null;
+        private bool WantsThreePointLanding;
 
         public UD_Bones_LunarRegent()
             : base()
@@ -183,7 +185,7 @@ namespace XRL.World.Parts
             {
                 if (LocationData.Host is OsseousAsh.Host storedHost)
                 {
-                    if (OsseousAsh.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is OsseousAsh.HostCollection hostCollection
+                    if (OsseousAsh.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is OsseousAsh.HostSet hostCollection
                         && hostCollection.FirstOrDefault(h => h.SameAs(storedHost, true)) is OsseousAsh.Host actualHost)
                     {
                         if (actualHost.Enabled)
@@ -467,19 +469,19 @@ namespace XRL.World.Parts
                 //Utils.Log($"{1.Indent()}{nameof(MakeInventoryFragile)}::{item?.DebugName ?? "NO_ITEM"}, {nameof(item.Count)} {item?.Count ?? -1}");
                 var objectBlueprint = item.GetBlueprint();
 
+                UD_Bones_FragileLunarObject fragilePart = null;
                 item.PerformActionRecursively(delegate (GameObject go)
                 {
-                    var fragilePart = item.RequirePart<UD_Bones_FragileLunarObject>()
+                    var recursiveFragilePart = item.RequirePart<UD_Bones_FragileLunarObject>()
                         .OverrideBonesIDTyped<UD_Bones_FragileLunarObject>(bonesID);
 
-                    fragilePart.WantsRemoveOnDamage = true;
-                    if (!LunarCreature.IsLunarRegent())
-                        fragilePart.Persists = true;
-                });
+                    if (item == go)
+                        fragilePart = recursiveFragilePart;
 
-                var fragilePart = item.RequirePart<UD_Bones_FragileLunarObject>()
-                    .OverrideBonesIDTyped<UD_Bones_FragileLunarObject>(bonesID);
-                fragilePart.WantsRemoveOnDamage = true;
+                    recursiveFragilePart.WantsRemoveOnDamage = true;
+                    if (!LunarCreature.IsLunarRegent())
+                        recursiveFragilePart.Persists = true;
+                });
 
                 if (item.Equipped != null
                     || item.Implantee != null)
@@ -503,7 +505,8 @@ namespace XRL.World.Parts
                 if (LunarCreature.IsLunarRegent()
                     && Context == PseudoZone.RECLAIM_CONTEXT)
                 {
-                    fragilePart.WantsToBeDropped = true;
+                    if (fragilePart != null)
+                        fragilePart.WantsToBeDropped = true;
                 }
                 else
                 if (LunarCreature.IsLunarCourtier()
@@ -530,6 +533,28 @@ namespace XRL.World.Parts
             return true;
         }
 
+        public bool TryPerformThreePointLanding()
+        {
+            if (!WantsThreePointLanding)
+                return false;
+
+            WantsThreePointLanding = false;
+            int forceLevel = 4;
+            if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
+            {
+                if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
+                {
+                    currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
+                    /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                    forceLevel = 25;*/
+                }
+            }
+            Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+            forceLevel = 25;
+            StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
+            return true;
+        }
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_EARLY);
@@ -544,7 +569,8 @@ namespace XRL.World.Parts
             || ID == GetDisplayNameEvent.ID
             || ID == GetShortDescriptionEvent.ID
             || ID == EarlyBeforeBeginTakeActionEvent.ID
-            || ID == AfterBonesZoneLoadedEvent.ID
+            || ID == AfterPseudoZoneLoadedEvent.ID
+            || ID == ZoneActivatedEvent.ID
             || ID == AfterGameLoadedEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
@@ -702,7 +728,7 @@ namespace XRL.World.Parts
                             ApplyHostility(player, brain, 0);
                         }
 
-                        MakeInventoryFragile(E.LunarObject, UD_Bones_LunarReliquary.Create(E.BonesInfo.ID), E.Context);
+                        MakeInventoryFragile(E.LunarObject, UD_Bones_LunarReliquary.Create(E.BonesInfo), E.Context);
                     }
 
                     if (E.LunarObject.Render is Render render)
@@ -721,29 +747,31 @@ namespace XRL.World.Parts
             => base.HandleEvent(E)
             ;
 
-        public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
+        public override bool HandleEvent(AfterPseudoZoneLoadedEvent E)
         {
-            if (ParentObject.CurrentCell is Cell currentCell
+            if (E.LunarRegent == ParentObject
+                && ParentObject.CurrentCell is Cell currentCell
                 // && currentCell.GetObjectCountWithPart(nameof(Gas)) > 0
                 )
             {
-                int forceLevel = 4;
-                if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
+                if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT))
                 {
-                    if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
-                    {
-                        currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
-                        /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-                        forceLevel = 25;*/
-                    }
+                    WantsThreePointLanding = true;
                 }
-                Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-                forceLevel = 25;
-                StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
             }
 
             return base.HandleEvent(E);
         }
+
+        public override bool HandleEvent(ZoneActivatedEvent E)
+        {
+            if (WantsThreePointLanding
+                && !TryPerformThreePointLanding())
+                WantsThreePointLanding = false;
+
+            return base.HandleEvent(E);
+        }
+
         public override bool HandleEvent(AfterGameLoadedEvent E)
         {
             if (MigrateFrom != null

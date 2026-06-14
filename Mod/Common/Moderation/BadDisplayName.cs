@@ -33,7 +33,7 @@ namespace UD_Bones_Folder.Mod.Moderation
             || IsEpithet
             ;
 
-        public void AlignWith(OriginalDisplayName OriginalDisplayName)
+        public void AlignWith(DisplayNameData OriginalDisplayName)
         {
             IsBase = !(OriginalDisplayName?.BaseName).IsNullOrEmpty();
             IsAdjective = !(OriginalDisplayName?.Adjectives).IsNullOrEmpty();
@@ -47,7 +47,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateBaseName(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsBase
@@ -61,9 +62,9 @@ namespace UD_Bones_Folder.Mod.Moderation
                 else
                 {
                     OriginalDisplayName ??= new();
-                    OriginalDisplayName.BaseName = Object.BaseDisplayName;
+                    OriginalDisplayName.BaseName = Object.GetBaseDisplayNameForModeration();
 
-                    string replacementName = Object.GetBlueprint()?.DisplayName();
+                    string replacementName = PreconfiguredModeratedDisplayName?.BaseName ?? Object.GetBlueprint()?.DisplayName();
                     if (Object.IsLunarRegent()
                         || replacementName.IsNullOrEmpty())
                         replacementName = NameMaker.MakeName(Object);
@@ -79,7 +80,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateAdjectives(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsAdjective
@@ -89,6 +91,10 @@ namespace UD_Bones_Folder.Mod.Moderation
                 OriginalDisplayName ??= new();
                 OriginalDisplayName.Adjectives = adjectives.Adjectives;
                 Object?.RemovePart(adjectives);
+
+                if (!(PreconfiguredModeratedDisplayName?.Adjectives).IsNullOrEmpty())
+                    Object.AddPart<DisplayNameAdjectives>().Adjectives = PreconfiguredModeratedDisplayName?.Adjectives;
+
                 ModerationActions++;
                 return true;
             }
@@ -98,7 +104,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateSizeAdjective(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsSizeAdjective
@@ -108,6 +115,15 @@ namespace UD_Bones_Folder.Mod.Moderation
                 OriginalDisplayName ??= new();
                 OriginalDisplayName.SizeAdjective = new(sizeAdjective.Adjective, sizeAdjective.OrderAdjust);
                 Object?.RemovePart(sizeAdjective);
+
+                if (PreconfiguredModeratedDisplayName != null
+                    && !PreconfiguredModeratedDisplayName.SizeAdjective.Key.IsNullOrEmpty())
+                {
+                    sizeAdjective = Object.AddPart<SizeAdjective>();
+                    sizeAdjective.Adjective = PreconfiguredModeratedDisplayName.SizeAdjective.Key;
+                    sizeAdjective.OrderAdjust = PreconfiguredModeratedDisplayName.SizeAdjective.Value;
+                }
+
                 ModerationActions++;
                 return true;
             }
@@ -117,7 +133,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateFactionAdjective(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsFactionAdjective
@@ -132,6 +149,15 @@ namespace UD_Bones_Folder.Mod.Moderation
                     factionAdjective.NonFactionAdjective,
                 };
                 Object?.RemovePart(factionAdjective);
+
+                if (!(PreconfiguredModeratedDisplayName?.FactionAdjective).IsNullOrEmpty())
+                {
+                    factionAdjective = Object.AddPart<DisplayNameFactionAdjective>();
+                    factionAdjective.Faction = PreconfiguredModeratedDisplayName.FactionAdjective[0];
+                    factionAdjective.FactionAdjective = PreconfiguredModeratedDisplayName.FactionAdjective[1];
+                    factionAdjective.NonFactionAdjective = PreconfiguredModeratedDisplayName.FactionAdjective[2];
+                }
+
                 ModerationActions++;
                 return true;
             }
@@ -141,7 +167,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateHonorifics(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsHonorific
@@ -157,6 +184,13 @@ namespace UD_Bones_Folder.Mod.Moderation
 
                 Object.RemovePart(honorifics);
 
+                if (!(PreconfiguredModeratedDisplayName?.Honorifics).IsNullOrEmpty())
+                {
+                    honorifics = Object.AddPart<Honorifics>();
+                    honorifics.HonorificList = PreconfiguredModeratedDisplayName.Honorifics[0];
+                    honorifics.HonorificOrder = PreconfiguredModeratedDisplayName.Honorifics[1];
+                }
+                else
                 if (Object?.RequirePart<Honorifics>() is Honorifics newHonorifics)
                 {
                     foreach (var _ in OriginalDisplayName.Honorifics[0].CachedDoubleSemicolonExpansion().IteratorSafe())
@@ -175,7 +209,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateTitles(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsTitle
@@ -191,6 +226,13 @@ namespace UD_Bones_Folder.Mod.Moderation
 
                 Object.RemovePart(titles);
 
+                if (!(PreconfiguredModeratedDisplayName?.Titles).IsNullOrEmpty())
+                {
+                    titles = Object.AddPart<Titles>();
+                    titles.TitleList = PreconfiguredModeratedDisplayName.Titles[0];
+                    titles.TitleOrder = PreconfiguredModeratedDisplayName.Titles[1];
+                }
+                else
                 if (Object?.RequirePart<Titles>() is Titles newTitles)
                 {
                     foreach (var _ in OriginalDisplayName.Titles[0].CachedDoubleSemicolonExpansion().IteratorSafe())
@@ -209,7 +251,8 @@ namespace UD_Bones_Folder.Mod.Moderation
         public bool ModerateEpithets(
             GameObject Object,
             ref int ModerationActions,
-            ref OriginalDisplayName OriginalDisplayName
+            ref DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             if (IsEpithet
@@ -225,6 +268,13 @@ namespace UD_Bones_Folder.Mod.Moderation
 
                 Object.RemovePart(epithets);
 
+                if (!(PreconfiguredModeratedDisplayName?.Epithets).IsNullOrEmpty())
+                {
+                    epithets = Object.AddPart<Epithets>();
+                    epithets.EpithetList = PreconfiguredModeratedDisplayName.Epithets[0];
+                    epithets.EpithetOrder = PreconfiguredModeratedDisplayName.Epithets[1];
+                }
+                else
                 if (Object?.RequirePart<Epithets>() is Epithets newEpithets)
                 {
                     foreach (var _ in OriginalDisplayName.Epithets[0].CachedDoubleSemicolonExpansion().IteratorSafe())
@@ -246,10 +296,13 @@ namespace UD_Bones_Folder.Mod.Moderation
             GameObject Object,
             ref int ModerationActions,
             out bool AnyFailed,
-            out OriginalDisplayName OriginalDisplayName
+            out bool AnyModerated,
+            out DisplayNameData OriginalDisplayName,
+            DisplayNameData PreconfiguredModeratedDisplayName = null
             )
         {
             AnyFailed = false;
+            AnyModerated = false;
             OriginalDisplayName = null;
 
             if (Object == null)
@@ -258,7 +311,8 @@ namespace UD_Bones_Folder.Mod.Moderation
             var originalDisplayName = OriginalDisplayName;
             try
             {
-                ModerateBaseName(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateBaseName(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -268,7 +322,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateAdjectives(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateAdjectives(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -278,7 +333,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateSizeAdjective(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateSizeAdjective(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -288,7 +344,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateFactionAdjective(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateFactionAdjective(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -298,7 +355,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateHonorifics(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateHonorifics(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -308,7 +366,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateTitles(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateTitles(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {
@@ -318,7 +377,8 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             try
             {
-                ModerateEpithets(Object, ref ModerationActions, ref originalDisplayName);
+                if (ModerateEpithets(Object, ref ModerationActions, ref originalDisplayName, PreconfiguredModeratedDisplayName))
+                    AnyModerated = true;
             }
             catch (Exception x)
             {

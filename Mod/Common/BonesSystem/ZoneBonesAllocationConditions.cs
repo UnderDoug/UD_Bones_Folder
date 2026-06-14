@@ -78,6 +78,9 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             if (Z == null)
                 return false;
 
+            if (Z.Z != 10)
+                return false;
+
             if (!BonesManager.MutableLocations.IsNullOrEmpty()
                 && !BonesManager.MutableLocations.Contains(Z.ResolvedLocation))
                 return true;

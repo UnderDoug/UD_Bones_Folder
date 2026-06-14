@@ -212,7 +212,9 @@ namespace UD_Bones_Folder.Mod
                 }
             };
 
+            [JsonIgnore]
             private IEnumerable<Report> _ReportsCache;
+            [JsonIgnore]
             public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
             public Host()
@@ -220,7 +222,14 @@ namespace UD_Bones_Folder.Mod
                 Enabled = true;
             }
 
-            public Host(string Name, int? Port = null, bool Encrypted = false, string AuthToken = null, bool Enabled = true, int TimeoutMS = 2000)
+            public Host(
+                string Name,
+                int? Port = null,
+                bool Encrypted = false,
+                string AuthToken = null,
+                bool Enabled = true,
+                int TimeoutMS = DEFAULT_TIMEOUT
+                )
                 : this()
             {
                 this.Name = Name;
@@ -232,7 +241,11 @@ namespace UD_Bones_Folder.Mod
                 this.TimeoutMS = TimeoutMS;
             }
 
-            public Host(string HostName, string AuthToken = null, int TimeoutMS = 2000)
+            public Host(
+                string HostName,
+                string AuthToken = null,
+                int TimeoutMS = DEFAULT_TIMEOUT
+                )
                 : this()
             {
                 Parse(HostName, out Name, out Port, out Encrypted);

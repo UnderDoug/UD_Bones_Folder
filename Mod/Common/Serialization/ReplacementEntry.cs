@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL.Rules;
 using XRL.World;
 using XRL.World.Parts;
@@ -12,13 +14,14 @@ namespace UD_Bones_Folder.Mod
     public class ReplacementEntry : IComposite
     {
         [Serializable]
-        public class EqualityComparer : EqualityComparer<ReplacementEntry>, IComposite
+        public class EqualityComparer : CompositeEqualityComparer<ReplacementEntry>
         {
-            public virtual bool WantFieldReflection => false;
+            public override bool WantFieldReflection => false;
 
             protected bool NameOnly;
 
             public EqualityComparer()
+                : base()
             {
                 NameOnly = true;
             }
@@ -29,12 +32,12 @@ namespace UD_Bones_Folder.Mod
                 this.NameOnly = NameOnly;
             }
 
-            public virtual void Write(SerializationWriter Writer)
+            public override void Write(SerializationWriter Writer)
             {
                 Writer.Write(NameOnly);
             }
 
-            public virtual void Read(SerializationReader Reader)
+            public override void Read(SerializationReader Reader)
             {
                 NameOnly = Reader.ReadBoolean();
             }

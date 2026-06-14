@@ -17,7 +17,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public PseudoAddress LunarRegent;
 
         [NonSerialized]
-        public HashSet<PseudoAddress> LunarCourtiers;
+        public CompositeSet<PseudoAddress> LunarCourtiers;
 
         public LunarPartyPseudoAddresses()
         { }
@@ -25,34 +25,19 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public virtual void Write(SerializationWriter Writer)
         {
             Writer.WriteComposite(LunarRegent);
-
-            int count = LunarCourtiers != null
-                ? LunarCourtiers.Count
-                : -1
-                ;
-            Writer.WriteOptimized(count);
-
-            foreach (var lunarCourtier in LunarCourtiers.IteratorSafe())
-                Writer.WriteComposite(lunarCourtier);
+            Writer.WriteComposite(LunarCourtiers);
         }
 
         public virtual void Read(SerializationReader Reader)
         {
             LunarRegent = Reader.ReadComposite<PseudoAddress>();
-
-            int count = Reader.ReadOptimizedInt32();
-            if (count >= 0)
-            {
-                LunarCourtiers = new(PseudoAddress.EqualityComparer);
-                for (int i = 0; i < count; i++)
-                    LunarCourtiers.Add(Reader.ReadComposite<PseudoAddress>());
-            }
+            LunarCourtiers = Reader.ReadCompositeSet<PseudoAddress>();
         }
 
         public bool TryRetrieveLunarParty(
             PseudoZone Zone,
             out GameObject LunarRegent,
-            out HashSet<GameObject> LunarCourtiers
+            out CoalescibleSet<GameObject> LunarCourtiers
             )
         {
             LunarRegent = null;
@@ -71,7 +56,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         public bool TryRetrieveLunarParty(PseudoZone Zone, out LunarParty LunarParty)
         {
             LunarParty = null;
-            if (!TryRetrieveLunarParty(Zone, out GameObject LunarRegent, out HashSet<GameObject> LunarCourtiers))
+            if (!TryRetrieveLunarParty(Zone, out GameObject LunarRegent, out CoalescibleSet<GameObject> LunarCourtiers))
                 return false;
 
             LunarParty = new LunarParty
@@ -82,7 +67,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             return true;
         }
 
-        public bool TryRetrieveLunarCourtiers(PseudoZone Zone, out HashSet<GameObject> LunarCourtiers)
+        public bool TryRetrieveLunarCourtiers(PseudoZone Zone, out CoalescibleSet<GameObject> LunarCourtiers)
         {
             LunarCourtiers = null;
             if (this.LunarCourtiers != null)

@@ -45,26 +45,26 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool EnableFlashingLightEffects;
         [OptionFlag] public static bool EnableBonesFromEarlierModVersions;
 
-        public static BadWord.SeverityLevel ModerationMinimumSeverityLevel;
+        public static IBadWord.SeverityLevel ModerationMinimumSeverityLevel;
         [OptionFlag(nameof(ModerationMinimumSeverityLevel))] private static int _ModerationMinimumSeverityLevel
         {
             set
             {
                 var originalOption = ModerationMinimumSeverityLevel;
-                ModerationMinimumSeverityLevel = Math.Clamp(value, (int)BadWord.SeverityLevel.All, (int)BadWord.SeverityLevel.None) switch
+                ModerationMinimumSeverityLevel = Math.Clamp(value, (int)IBadWord.SeverityLevel.All, (int)IBadWord.SeverityLevel.None) switch
                 {
-                    0 => BadWord.SeverityLevel.All,
-                    1 => BadWord.SeverityLevel.Mild,
-                    2 => BadWord.SeverityLevel.Medium,
-                    3 => BadWord.SeverityLevel.Strong,
-                    4 => BadWord.SeverityLevel.Severe,
-                    5 => BadWord.SeverityLevel.None,
-                    _ => BadWord.DefaultSeverity,
+                    0 => IBadWord.SeverityLevel.All,
+                    1 => IBadWord.SeverityLevel.Mild,
+                    2 => IBadWord.SeverityLevel.Medium,
+                    3 => IBadWord.SeverityLevel.Strong,
+                    4 => IBadWord.SeverityLevel.Severe,
+                    5 => IBadWord.SeverityLevel.None,
+                    _ => IBadWord.DefaultSeverity,
                 };
                 if (originalOption != ModerationMinimumSeverityLevel)
                 {
-                    BadWord.FilterResultCache?.Clear();
-                    BadWord.FilterResultCache ??= new();
+                    BadWordSet.FilterResultCache?.Clear();
+                    BadWordSet.FilterResultCache ??= new();
                 }
             }
         }

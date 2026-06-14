@@ -38,6 +38,7 @@ using static UD_Bones_Folder.Mod.Const;
 using XRL.CharacterBuilds;
 using UD_Bones_Folder.Mod.Moderation;
 using System.Diagnostics;
+using UD_Bones_Folder.Mod.Serialization;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -75,7 +76,7 @@ namespace UD_Bones_Folder.Mod
         #region Blueprint Specs
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        private static HashSet<string> CachedBlueprints = new();
+        private static StringSet CachedBlueprints = new();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<string, BlueprintSpec> CachedBlueprintSpecs = new();
@@ -130,6 +131,7 @@ namespace UD_Bones_Folder.Mod
         public static void Warn(ModInfo ModInfo, object Message)
             => (ModInfo ?? ThisMod).Warn(Message)
             ;
+
         public static void Warn(object Message)
             => Warn(ModInfo: null, Message)
             ;
@@ -140,6 +142,14 @@ namespace UD_Bones_Folder.Mod
 
         public static void Warn(object Context, Exception X)
             => Warn(ModInfo: null, Context, X)
+            ;
+
+        public static void Warn(ModInfo ModInfo, object Message, StackTrace WithTrace)
+            => Warn(ModInfo: ModInfo, Message: (WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            ;
+
+        public static void Warn(object Message, StackTrace WithTrace)
+            => Warn(ModInfo: null, Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
             ;
 
         public static void Info(object Message)
@@ -182,6 +192,49 @@ namespace UD_Bones_Folder.Mod
                 seed: Source,
                 func: (a, n) => Log(a, PostProc.SafeInvoke(Proc, n, "NO_ELEMENT")))
             ;
+
+        #endregion
+        #region Exceptions
+
+        public class InnerArrayNullException : InvalidOperationException
+        {
+            public InnerArrayNullException(string ParamName)
+                : base(ParamName + " is null when it shouldn't be.")
+            {
+            }
+            public InnerArrayNullException()
+                : this("An inner array")
+            {
+            }
+        }
+
+        public class CollectionModifiedException : InvalidOperationException
+        {
+            public CollectionModifiedException(string ParamName)
+                : base(ParamName + " was modified; enumeration operation may not execute.")
+            {
+            }
+            public CollectionModifiedException(Type CollectionType)
+                : base(CollectionType.Name)
+            {
+            }
+            public CollectionModifiedException()
+                : base("Collection")
+            {
+            }
+        }
+
+        public class InvalidEnumValueException<T> : InvalidOperationException
+            where T : struct, Enum
+        {
+            private static string GetUnderlyingValue(T Value)
+                => Convert.ChangeType(Value, Enum.GetUnderlyingType(typeof(T))).ToString();
+
+            public InvalidEnumValueException(T Value)
+                : base(GetUnderlyingValue(Value) + " is not a valid value for " + typeof(T).ToStringWithGenerics() + ".")
+            {
+            }
+        }
 
         #endregion
         #region Variable Replacers
@@ -642,12 +695,13 @@ namespace UD_Bones_Folder.Mod
             LastSpriteManagerPathMapCount = SpriteManagerPathMap?.Count ?? 0;
             var previousContext = The.CurrentContext;
 
-            /*if (previousContext != The.UiContext)
-                await The.UiContext;*/
-
-            if (isGameInValidState
+            if (previousContext == The.GameContext
+                && The.UiContext != null)
+                await The.UiContext;
+            
+            /*if (isGameInValidState
                 && The.CurrentContext != The.GameContext)
-                await The.GameContext;
+                await The.GameContext;*/
 
             try
             {
@@ -794,6 +848,19 @@ namespace UD_Bones_Folder.Mod
                 Info($"{Description} took {sw.Elapsed.ValueUnits()}...");
                 sw.Stop();
             }
+        }
+
+        public static Dictionary<string, T> GetValuesDictionary<T>(ref Dictionary<string, T> CachedValues)
+            where T : struct, Enum
+        {
+            if (CachedValues.IsNullOrEmpty())
+            {
+                CachedValues ??= new();
+                if (Enum.GetValues(typeof(T)) is IEnumerable<T> values)
+                    foreach (T value in values)
+                        CachedValues[value.ToString()] = value;
+            }
+            return CachedValues;
         }
     }
 }

@@ -145,6 +145,12 @@ namespace XRL.World.Parts
             return false;
         }
 
+        public static bool IsAnnouncerWidget(GameObject Object)
+            => (Object.Blueprint == Const.ANNOUNCER_WIDGET
+                || Object.GetBlueprint().InheritsFromSafe(Const.ANNOUNCER_WIDGET))
+            && Object.HasPart<UD_Bones_LunarRegentAnnouncer>()
+            ;
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == AfterObjectCreatedEvent.ID
@@ -159,8 +165,8 @@ namespace XRL.World.Parts
         {
             if (E.Context.StartsWith($"{nameof(BonesID)}::"))
             {
-                Utils.Log($"{nameof(UD_Bones_LunarRegentAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context})");
                 OverrideBonesIDTyped<UD_Bones_LunarRegentAnnouncer>(E.Context.Split("::")[1]);
+                Utils.Log($"{nameof(UD_Bones_LunarRegentAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context}): {nameof(BonesID)}: {BonesID}");
             }
             return base.HandleEvent(E);
         }

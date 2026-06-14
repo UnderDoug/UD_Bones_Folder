@@ -140,6 +140,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 
         public static PseudoCell FromCell(Cell Cell)
         {
+            // Utils.Log($"{nameof(PseudoCell)}.{nameof(FromCell)} from [{Cell?.Location?.ToString() ?? ","}]");
             if (Cell == null)
                 return null;
 

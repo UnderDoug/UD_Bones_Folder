@@ -553,10 +553,9 @@ namespace UD_Bones_Folder.Mod
                     if (regentID != BonesID)
                         continue;
 
-                    if (lunarParty.LunarCourtiers is HashSet<GameObject> lunarCourtiers)
-                        foreach (var lunarCourtier in lunarCourtiers)
-                            if (lunarCourtier.TryGetPart(out UD_Bones_LunarCourtier lunarCourtierPart))
-                                lunarCourtierPart.PerformAllyship(lunarParty.LunarRegent, Force: true, Initial: true);
+                    foreach (var lunarCourtier in lunarParty.LunarCourtiers.IteratorSafe())
+                        if (lunarCourtier.TryGetPart(out UD_Bones_LunarCourtier lunarCourtierPart))
+                            lunarCourtierPart.PerformAllyship(lunarParty.LunarRegent, Force: true, Initial: true);
                 }
             }
 

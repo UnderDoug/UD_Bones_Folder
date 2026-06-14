@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.World;
 
@@ -14,7 +16,7 @@ namespace UD_Bones_Folder.Mod
         public string LunarRegent;
 
         [NonSerialized]
-        public HashSet<string> LunarCourtiers;
+        public StringSet LunarCourtiers;
 
         public LunarPartyIDs()
         { }
@@ -56,7 +58,7 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-        public bool TryPullCachedLunarParty(out GameObject LunarRegent, out HashSet<GameObject> LunarCourtiers)
+        public bool TryPullCachedLunarParty(out GameObject LunarRegent, out CoalescibleSet<GameObject> LunarCourtiers)
         {
             LunarRegent = null;
             LunarCourtiers = null;
@@ -74,7 +76,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     if (The.ZoneManager.PullCachedObject(lunarCourtierID, DeepCopy: false) is GameObject cachedLunarCourtier)
                     {
-                        LunarCourtiers ??= new();
+                        LunarCourtiers ??= new CoalescibleSet<GameObject>();
                         LunarCourtiers.Add(cachedLunarCourtier);
                     }
                 }
@@ -82,7 +84,7 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-        public bool TryPullCachedLunarCourtiers(out HashSet<GameObject> LunarCourtiers)
+        public bool TryPullCachedLunarCourtiers(out CoalescibleSet<GameObject> LunarCourtiers)
         {
             LunarCourtiers = null;
             if (!this.LunarCourtiers.IsNullOrEmpty())
@@ -100,7 +102,7 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public bool TryFindLunarParty(out GameObject LunarRegent, out HashSet<GameObject> LunarCourtiers)
+        public bool TryFindLunarParty(out GameObject LunarRegent, out CoalescibleSet<GameObject> LunarCourtiers)
         {
             LunarRegent = null;
             LunarCourtiers = null;
@@ -126,7 +128,7 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-        public bool TryGetLunarParty(out GameObject LunarRegent, out HashSet<GameObject> LunarCourtiers)
+        public bool TryGetLunarParty(out GameObject LunarRegent, out CoalescibleSet<GameObject> LunarCourtiers)
         {
             LunarRegent = null;
             LunarCourtiers = null;
@@ -139,7 +141,7 @@ namespace UD_Bones_Folder.Mod
             if (IsCached(Strict: true))
                 return retreivedFromCache;
 
-            if (TryFindLunarParty(out _, out HashSet<GameObject> foundLunarCourtiers))
+            if (TryFindLunarParty(out _, out CoalescibleSet<GameObject> foundLunarCourtiers))
             {
                 if (LunarCourtiers.IsNullOrEmpty())
                     LunarCourtiers = foundLunarCourtiers;

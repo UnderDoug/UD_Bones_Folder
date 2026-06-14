@@ -63,12 +63,8 @@ namespace XRL.World.Parts
                 if (BlueprintSpec == null)
                     E.AddEntry(this, nameof(BlueprintSpec), "null");
                 else
-                {
                     foreach ((var key, var value) in BlueprintSpec.GetDebugPairs().IteratorSafe())
-                    {
                         E.AddEntry(this, key, value);
-                    }
-                }
             }
             catch (Exception x)
             {
