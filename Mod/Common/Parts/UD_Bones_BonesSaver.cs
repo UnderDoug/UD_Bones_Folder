@@ -21,6 +21,7 @@ using XRL.Rules;
 using XRL.UI;
 using XRL.Wish;
 using XRL.World.AI;
+using XRL.World.Capabilities;
 using XRL.World.Effects;
 using XRL.World.WorldBuilders;
 
@@ -85,57 +86,69 @@ namespace XRL.World.Parts
 
             TargetCell ??= Player.CurrentCell;
 
-            if (!BeforeCreateLunarRegentEvent.Check(Player, out string blockedMessage, Context: nameof(AscendLunarRegent)))
-            {
-                string forReasons = null;
-                if (!blockedMessage.IsNullOrEmpty())
-                    forReasons = $" for the following reasons: {blockedMessage}";
-                Utils.Info($"Creation of Lunar Regent blocked{forReasons}.");
-                return null;
-            }
-
-            if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
-                return null;
-
-            GameObject lunarRegent = null;
+            var beforeEvent = BeforeCreateLunarRegentEvent.FromPool();
+            var getEvent = GetLunarRegentEvent.FromPool();
+            var afterEvent = AfterCreatedLunarRegentEvent.FromPool();
             try
             {
-                lunarRegent = Player.DeepCopy(CopyEffects: true, CopyID: false);
-                lunarRegent.RemoveIntProperty("Renamed");
-                lunarRegent.RemoveStringProperty("OriginalPlayerBody");
-                lunarRegent.SetStringProperty("CloneOfGenes", Player.GeneID);
+                if (!BeforeCreateLunarRegentEvent.Check(Player, out string blockedMessage, Context: nameof(AscendLunarRegent)))
+                {
+                    string forReasons = null;
+                    if (!blockedMessage.IsNullOrEmpty())
+                        forReasons = $" for the following reasons: {blockedMessage}";
+                    Utils.Info($"Creation of Lunar Regent blocked{forReasons}.");
+                    return null;
+                }
 
-                WasReplicatedEvent.Send(Player, Player, lunarRegent, nameof(AscendLunarRegent));
-                ReplicaCreatedEvent.Send(lunarRegent, Player, Player, nameof(AscendLunarRegent));
+                if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
+                    return null;
 
-                lunarRegent = GetLunarRegentEvent.GetFor(
-                    Player: Player,
-                    TargetCell: TargetCell,
-                    LunarRegent: lunarRegent,
-                    Context: nameof(AscendLunarRegent));
+                GameObject lunarRegent = null;
+                try
+                {
+                    lunarRegent = Player.DeepCopy(CopyEffects: true, CopyID: false);
+                    lunarRegent.RemoveIntProperty("Renamed");
+                    lunarRegent.RemoveStringProperty("OriginalPlayerBody");
+                    lunarRegent.SetStringProperty("CloneOfGenes", Player.GeneID);
+
+                    WasReplicatedEvent.Send(Player, Player, lunarRegent, nameof(AscendLunarRegent));
+                    ReplicaCreatedEvent.Send(lunarRegent, Player, Player, nameof(AscendLunarRegent));
+
+                    lunarRegent = GetLunarRegentEvent.GetFor(
+                        Player: Player,
+                        TargetCell: TargetCell,
+                        LunarRegent: lunarRegent,
+                        Context: nameof(AscendLunarRegent));
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
+                    return null;
+                }
+
+                if (lunarRegent == null)
+                    return null;
+
+                if (TargetCell == null)
+                {
+                    lunarRegent.Obliterate();
+                    return null;
+                }
+
+                TargetCell.AddObject(lunarRegent);
+
+                lunarRegent.MakeActive();
+
+                AfterCreatedLunarRegentEvent.Send(Player, lunarRegent, Context: nameof(AscendLunarRegent));
+
+                return lunarRegent;
             }
-            catch (Exception x)
+            finally
             {
-                Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
-                return null;
+                BeforeCreateLunarRegentEvent.ResetTo(ref beforeEvent);
+                GetLunarRegentEvent.ResetTo(ref getEvent);
+                AfterCreatedLunarRegentEvent.ResetTo(ref afterEvent);
             }
-
-            if (lunarRegent == null)
-                return null;
-
-            if (TargetCell == null)
-            {
-                lunarRegent.Obliterate();
-                return null;
-            }
-
-            TargetCell.AddObject(lunarRegent);
-
-            lunarRegent.MakeActive();
-
-            AfterCreatedLunarRegentEvent.Send(Player, lunarRegent, Context: nameof(AscendLunarRegent));
-
-            return lunarRegent;
         }
 
         public void mutate(GameObject player)
@@ -687,5 +700,10 @@ namespace XRL.World.Parts
             Popup.Show($"Ran into an issue creating bones. Check the player log for errors!");
             return false;
         }
+
+        [WishCommand(Command = "name something")]
+        public static bool NameSomething_WishHandler()
+            => ItemNaming.Opportunity(The.Player, Force: true)
+            ;
     }
 }

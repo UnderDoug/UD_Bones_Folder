@@ -538,20 +538,29 @@ namespace XRL.World.Parts
             if (!WantsThreePointLanding)
                 return false;
 
-            WantsThreePointLanding = false;
-            int forceLevel = 4;
-            if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
+            Event.PinCurrentPool();
+            try
             {
-                if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
+                Event.ResetPool();
+                WantsThreePointLanding = false;
+                int forceLevel = 4;
+                if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
                 {
-                    currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
-                    /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-                    forceLevel = 25;*/
+                    if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
+                    {
+                        currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
+                        /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                        forceLevel = 25;*/
+                    }
                 }
+                Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                forceLevel = 25;
+                StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
             }
-            Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-            forceLevel = 25;
-            StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
+            finally
+            {
+                Event.ResetToPin();
+            }
             return true;
         }
 

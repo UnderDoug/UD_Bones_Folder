@@ -45,14 +45,14 @@ namespace UD_Bones_Folder.Mod.Events
             return true;
         }
 
-        protected static T Configure(
+        protected static T FromPool(
             SaveBonesInfo BonesInfo,
             GameObject LunarObject,
             GameObject LunarRegent,
             string Context
             )
         {
-            if (Configure(
+            if (FromPool(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Context: Context) is not T E)
@@ -74,7 +74,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (Configure(
+            if (FromPool(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 LunarRegent: LunarRegent,
@@ -110,16 +110,21 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null,
             bool SendToRegent = false
             )
-            => Process(
+        {
+            if (Process(
                 Player: Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 LunarRegent: LunarRegent,
                 Success: out bool success,
                 Context: Context,
-                SendToRegent: SendToRegent) != null
-            && success
-            ;
+                SendToRegent: SendToRegent) is T E)
+            {
+                ResetTo(ref E);
+                return success;
+            }
+            return false;
+        }
 
         public static void Send(
             GameObject Player,
@@ -145,16 +150,21 @@ namespace UD_Bones_Folder.Mod.Events
             string Context = null,
             bool SendToRegent = false
             )
-            => Process(
+        {
+            if (Process(
                 Player: null,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 LunarRegent: LunarRegent,
                 Success: out bool success,
                 Context: Context,
-                SendToRegent: SendToRegent) != null
-            && success
-            ;
+                SendToRegent: SendToRegent) is T E)
+            {
+                ResetTo(ref E);
+                return success;
+            }
+            return false;
+        }
 
         public static void Send(
             SaveBonesInfo BonesInfo,

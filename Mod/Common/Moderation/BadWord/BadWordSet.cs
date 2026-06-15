@@ -361,10 +361,10 @@ namespace UD_Bones_Folder.Mod.Moderation
                 },
                 Description: Descrition);
 
-            Utils.Log($"Individual word results ({results.Count}/{wordsCount}):");
+            Utils.Log($"Individual word results, {(MatchPositive ? "missed" : "caught")} {results.Count}/{wordsCount} {(MatchPositive ? "match" : "exception")} words:");
             results.Loggregate(
-                Proc: s => $"{s}: {(MatchPositive ? "match missed" : "exception caught")}",
-                Empty: "none",
+                Proc: s => $"\"{s}\"; {(MatchPositive ? "match missed" : "exception caught")}",
+                Empty: $"none {Const.TICK}",
                 PostProc: s => $"{1.Indent()}: {s}");
         }
 
@@ -434,10 +434,10 @@ namespace UD_Bones_Folder.Mod.Moderation
 
         public string ProduceTrieMegaPattern(
             object TrieName,
-            bool DoStarTest = false
+            bool DoStarTest = false // temp true, normally false
             )
         {
-            bool doBenchmark = false;
+            bool doBenchmark = false; // temp true, normally false
             using var matches = ScopeDisposedList<string>.GetFromPool();
             using var exceptions = ScopeDisposedList<string>.GetFromPool();
             foreach (var badWord in this)
@@ -463,7 +463,8 @@ namespace UD_Bones_Folder.Mod.Moderation
                 || matchTrie.GetUnboundRegexPattern(Capturing: true) is not string matchPatternString)
                 return null;
 
-            string fullPattern = $"\\b{matchPatternString}+\\b";
+            string fullPattern = $"{matchPatternString}+";
+            //string fullPattern = $"\\b{matchPatternString}+\\b"; //this wasn't allowing partials
 
             if (exceptions.IsNullOrEmpty())
             {
@@ -475,7 +476,7 @@ namespace UD_Bones_Folder.Mod.Moderation
 
             using var exceptionTrie = new Trie($"{TrieName}:Exceptions", exceptions);
 
-            if (exceptionTrie.IsValid
+            if (!exceptionTrie.IsValid
                 || exceptionTrie.GetUnboundRegexPattern(Capturing: false) is not string exceptionPatternString)
             {
                 if (doBenchmark)
@@ -484,7 +485,8 @@ namespace UD_Bones_Folder.Mod.Moderation
                 return fullPattern;
             }
 
-            fullPattern = $"\\b(?:{exceptionPatternString}|{matchPatternString})+\\b";
+            fullPattern = $"(?:{exceptionPatternString}|{matchPatternString})+";
+            //fullPattern = $"\\b(?:{exceptionPatternString}|{matchPatternString})+\\b"; //this wasn't allowing partials
 
             if (doBenchmark)
                 RunFullBenchmark(
@@ -520,9 +522,9 @@ namespace UD_Bones_Folder.Mod.Moderation
             if (Text.IsNullOrEmpty())
                 return false;
 
-            string text = Text.Strip();
+            string textStripped = Text.Strip();
 
-            if (!BadWordSet.FilterResultCache.TryGetValue(text, out bool result)
+            if (!BadWordSet.FilterResultCache.TryGetValue(textStripped, out bool result)
                 || !IgnoreCache)
             {
                 result = MinimumSeverity == SeverityLevel.All;
@@ -553,13 +555,13 @@ namespace UD_Bones_Folder.Mod.Moderation
                     }
 
                     if (!megaPattern.IsNullOrEmpty())
-                        result = megaPattern.MatchesCaptureGroups(Text, BadWord.DefaultRegexOptions);
+                        result = megaPattern.MatchesCaptureGroups(textStripped, BadWord.DefaultRegexOptions, MegaPattern: true);
                     else
-                        result = BadWordSet.AllBadWords.IteratorSafe().Any(b => b.Severity >= MinimumSeverity && b.Check(text));
+                        result = BadWordSet.AllBadWords.IteratorSafe().Any(b => b.Severity >= MinimumSeverity && b.Check(textStripped));
                 }
 
                 if (!IgnoreCache)
-                    BadWordSet.FilterResultCache[text] = result;
+                    BadWordSet.FilterResultCache[textStripped] = result;
             }
 
             return result;

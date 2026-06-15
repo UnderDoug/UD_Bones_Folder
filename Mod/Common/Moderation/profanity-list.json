@@ -1,5 +1,18 @@
 [
   {
+    "id": "test-xkcd",
+    "match": "xkc*d",
+    "tags": [
+      "test"
+    ],
+    "severity": 4,
+    "exceptions": [
+      "v*",
+      "*v",
+      "y*y"
+    ]
+  },
+  {
     "id": "1man1jar",
     "match": "1m1j|1man1jar|1 man 1 jar|one man one jar|one jar one man",
     "tags": [
@@ -1104,7 +1117,8 @@
     "tags": [
       "lgbtq"
     ],
-    "severity": 3
+    "severity": 3,
+    "allow_partial":  false
   },
   {
     "id": "coimetrophilia",

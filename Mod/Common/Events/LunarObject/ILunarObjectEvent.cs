@@ -7,7 +7,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod.Events
 {
-    public abstract class ILunarObjectEvent<T> : ModSingletonEvent<T>
+    public abstract class ILunarObjectEvent<T> : ModPooledEvent<T>
         where T : ILunarObjectEvent<T>, new()
     {
         public new static readonly int CascadeLevel = CASCADE_ALL;
@@ -103,16 +103,14 @@ namespace UD_Bones_Folder.Mod.Events
             return true;
         }
 
-        protected static T Configure(
+        protected static T FromPool(
             SaveBonesInfo BonesInfo,
             GameObject LunarObject,
             string Context
             )
         {
-            if (Instance is not T E)
+            if (FromPool() is not T E)
                 return null;
-
-            Instance.Reset();
 
             E.BonesInfo = BonesInfo;
             E.LunarObject = LunarObject;
@@ -237,7 +235,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (Configure(
+            if (FromPool(
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Context: Context) is not T E)
@@ -266,14 +264,19 @@ namespace UD_Bones_Folder.Mod.Events
             GameObject LunarObject,
             string Context = null
             )
-            => Process(
+        {
+            if (Process(
                 Player: Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Success: out bool success,
-                Context: Context) != null
-            && success
-            ;
+                Context: Context) is T E)
+            {
+                ResetTo(ref E);
+                return success;
+            }
+            return false;
+        }
 
         public static void Send(
             GameObject Player,
@@ -293,14 +296,19 @@ namespace UD_Bones_Folder.Mod.Events
             GameObject LunarObject,
             string Context = null
             )
-            => Process(
+        {
+            if (Process(
                 Player: null,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarObject,
                 Success: out bool success,
-                Context: Context) != null
-            && success
-            ;
+                Context: Context) is T E)
+            {
+                ResetTo(ref E);
+                return success;
+            }
+            return false;
+        }
 
         public static void Send(
             SaveBonesInfo BonesInfo,
@@ -319,17 +327,31 @@ namespace UD_Bones_Folder.Mod.Events
             GameObject LunarObject,
             string Context = null
             )
-            => The.Game == null
-                || Process(
-                    Player: Player,
-                    BonesInfo: BonesInfo,
-                    LunarObject: LunarObject,
-                    Success: out bool success,
-                    Context: Context) is not T E
-                || !success
-            ? null
-            : E.LunarObject
-            ;
+        {
+            if (The.Game == null)
+                return null;
+
+            if (Process(
+                Player: Player,
+                BonesInfo: BonesInfo,
+                LunarObject: LunarObject,
+                Success: out bool success,
+                Context: Context) is T E)
+            {
+                try
+                {
+                    var lunarObject = E.LunarObject;
+                    if (success)
+                        return lunarObject;
+                    return null;
+                }
+                finally
+                {
+                    ResetTo(ref E);
+                }
+            }
+            return null;
+        }
 
         public bool CheckContext(string Value)
         {

@@ -2050,8 +2050,12 @@ namespace UD_Bones_Folder.Mod
 
         public static void RemoveAll<T>(this ScopeDisposedList<T> Source, Predicate<T> Where)
         {
-            while (Source.FirstOrDefault(t => Where?.Invoke(t) is not false) is T element)
-                Source.Remove(element);
+            if (Source.IsNullOrEmpty())
+                return;
+
+            for (int i = Source.Count - 1; i >= 0; i--)
+                if (Where?.Invoke(Source[i]) is true)
+                    Source.RemoveAt(i);
         }
 
         public static bool GainAP(this GameObject Creatrue, int Amount)

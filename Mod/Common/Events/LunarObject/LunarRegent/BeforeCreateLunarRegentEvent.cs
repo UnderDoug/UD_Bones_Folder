@@ -68,12 +68,10 @@ namespace UD_Bones_Folder.Mod.Events
             ;
 
 
-        protected static BeforeCreateLunarRegentEvent Configure(string Context)
+        protected static BeforeCreateLunarRegentEvent FromPool(string Context)
         {
-            if (Instance is not BeforeCreateLunarRegentEvent E)
+            if (FromPool() is not BeforeCreateLunarRegentEvent E)
                 return null;
-
-            Instance.Reset();
 
             E.Context = Context;
 
@@ -89,7 +87,7 @@ namespace UD_Bones_Folder.Mod.Events
             )
         {
             Success = false;
-            if (Configure(
+            if (FromPool(
                 Context: Context) is not BeforeCreateLunarRegentEvent E)
                 return null;
 

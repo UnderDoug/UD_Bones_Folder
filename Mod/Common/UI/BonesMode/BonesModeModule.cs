@@ -374,7 +374,7 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public static int GetRandomLevel()
-            => GetNDisadvantage(nameof(GetRandomLevel), MinimumLevelForBones, MaximumLevelForBonesMode, 3)
+            => GetNDisadvantage(nameof(GetRandomLevel), MinimumLevelForBones, MaximumLevelForBonesMode, 1)
             ;
 
         public static int GetRandomXPForLevel(int Level)
@@ -732,7 +732,34 @@ namespace UD_Bones_Folder.Mod.UI
                                 relic.RemovePart<TakenAchievement>();
 
                                 if (Player.ReceiveObject(relic))
+                                {
                                     relic.SetImportant(true, player: true);
+                                    if (relic.TryGetPart(out Book bookPart)
+                                        && relic.TryGetPart(out TrainingBook trainingBookPart))
+                                    {
+                                        Utils.SuppressPopupsWhile(delegate ()
+                                        {
+                                            AfterReadBookEvent.Send(Player, relic, bookPart, null); 
+                                            bookPart.SetHasBeenRead(flag: true);
+                                            if (InventoryActionEvent.FromPool() is InventoryActionEvent E)
+                                            {
+                                                E.Command = "Read";
+                                                E.Actor = Player;
+                                                E.Item = relic;
+                                                trainingBookPart.HandleEvent(E);
+                                                E.Reset();
+                                            }
+                                            /*InventoryActionEvent.Check(
+                                                Object: bookPart.ParentObject,
+                                                Actor: Player,
+                                                Item: bookPart.ParentObject,
+                                                Command: "Read",
+                                                OverrideEnergyCost: true,
+                                                Silent: true,
+                                                EnergyCostOverride: 0);*/
+                                        });
+                                    }
+                                }
 
                                 Player.AdjustCyberneticsLicensePointsFromWedges(
                                     Amount: VirtualCreditWedges + GetCreditWedgeTotalFromRelic(relic),
@@ -940,7 +967,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (Player.HasPart(Entry.Class))
             {
-                Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Already Know {Entry.Class}");
+                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Already Know {Entry.Class}");
                 SkillsList.Remove(Entry);
                 UnlearnedSkills.Remove(Entry);
                 return false;
@@ -950,7 +977,7 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (!Player.HasPart(Entry.Class))
             {
-                Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Issue Learning {Entry.Class}");
+                //Utils.Log($"{(Depth + 2).Indent()}[{Const.CROSS}] Issue Learning {Entry.Class}");
                 return false;
             }
 
@@ -977,7 +1004,7 @@ namespace UD_Bones_Folder.Mod.UI
             Player.Statistics["SP"].Penalty += Entry.Cost;
             TotalSpent += Entry.Cost;
 
-            Utils.Log($"{(Depth + 2).Indent()}[{Const.TICK}] Learned {Entry.Class}");
+            //Utils.Log($"{(Depth + 2).Indent()}[{Const.TICK}] Learned {Entry.Class}");
             return true;
         }
 
@@ -1009,13 +1036,13 @@ namespace UD_Bones_Folder.Mod.UI
             MissileSkills,
         };
 
-        public static bool IsSkillOrPowerOfSkill(IBaseSkillEntry BaseSkillEntry, string SkillName)
+        public static bool IsSkillOrPowerOfSkill(IBaseSkillEntry BaseSkillEntry, string SkillClass)
         {
-            if (SkillName == BaseSkillEntry.Name)
+            if (SkillClass == BaseSkillEntry.Class)
                 return true;
 
             if (BaseSkillEntry is PowerEntry powerEntry
-                && SkillName == powerEntry.ParentSkill.Name)
+                && SkillClass == powerEntry.ParentSkill.Class)
                 return true;
 
             return false;
@@ -1023,34 +1050,60 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static bool HasNegativePreference(IBaseSkillEntry BaseSkillEntry, GameObject Player, bool? PreferSingleWeaponFighting)
         {
-            if (!WeaponSkills.Any(e => Player.HasPart(e))
-                && !WeaponSkills.Contains(BaseSkillEntry.Name))
-                return true;
+            bool hasNegPref = false;
+            if (!WeaponSkills.Any(e => Player.HasPart(e)))
+            {
+                hasNegPref = !WeaponSkills.Contains(BaseSkillEntry.Class);
+                //Utils.Log($"{2.Indent()}[{Const.CROSS}] {BaseSkillEntry.Class}; No weapon skills and not weapon skill.");
+                return hasNegPref;
+            }
 
-            if (!MissileSkills.Any(e => Player.HasPart(e))
-                && !MissileSkills.Contains(BaseSkillEntry.Name))
-                return true;
+            if (!MissileSkills.Any(e => Player.HasPart(e)))
+            {
+                hasNegPref = !MissileSkills.Contains(BaseSkillEntry.Class);
+                //Utils.Log($"{2.Indent()}[{(!hasNegPref ? Const.TICK : Const.CROSS)}] {BaseSkillEntry.Class}; No missile skills.");
+                return hasNegPref;
+            }
 
             if (!FightingStyles.Any(e => Player.HasPart(e)))
             {
-                if (!FightingStyles.Contains(BaseSkillEntry.Name))
+                if (!FightingStyles.Contains(BaseSkillEntry.Class))
+                {
+                    //Utils.Log($"{2.Indent()}[{Const.CROSS}] {BaseSkillEntry.Class}; No fighting style.");
                     return true;
+                }
                 else
                 if (PreferSingleWeaponFighting.HasValue)
-                    return PreferSingleWeaponFighting.GetValueOrDefault()
-                        ? BaseSkillEntry.Name != nameof(SingleWeaponFighting)
-                        : BaseSkillEntry.Name != nameof(Multiweapon_Fighting)
+                {
+                    hasNegPref = PreferSingleWeaponFighting.GetValueOrDefault()
+                        ? BaseSkillEntry.Class != nameof(SingleWeaponFighting)
+                        : BaseSkillEntry.Class != nameof(Multiweapon_Fighting)
                         ;
+                    //Utils.Log($"{2.Indent()}[{(!hasNegPref ? Const.TICK : Const.CROSS)}] {BaseSkillEntry.Class}; No fighting style, preferred fighting style is {(PreferSingleWeaponFighting.GetValueOrDefault() ? nameof(SingleWeaponFighting) : nameof(Multiweapon_Fighting))}.");
+                    return hasNegPref;
+                }
                 else
+                {
+                    //Utils.Log($"{2.Indent()}[{Const.TICK}] {BaseSkillEntry.Class}; No fighting style.");
                     return false;
+                }
             }
 
             foreach (var negativePrefList in NegativePreferences.IteratorSafe())
+            {
                 foreach (var negPref in negativePrefList)
+                {
                     if (Player.HasPart(negPref))
-                        if (negativePrefList.Any(skillName => negPref != BaseSkillEntry.Name && IsSkillOrPowerOfSkill(BaseSkillEntry, skillName)))
+                    {
+                        if (negativePrefList.Any(skillClass => negPref != BaseSkillEntry.Class && IsSkillOrPowerOfSkill(BaseSkillEntry, skillClass)))
+                        {
+                            //Utils.Log($"{2.Indent()}[{Const.CROSS}] {BaseSkillEntry.Class}; have skill {negPref}.");
                             return true;
-
+                        }
+                    }
+                }
+            }
+            //Utils.Log($"{2.Indent()}[{Const.TICK}] {BaseSkillEntry.Class}; kept in shortlist.");
             return false;
         }
 
@@ -1084,7 +1137,7 @@ namespace UD_Bones_Folder.Mod.UI
             int remainingPoints = maxPointsToSpend;
             int attempts = 0;
 
-            Utils.Log($"{nameof(SpendSkillPointsRandomly)}(For: {Player?.DebugName ?? "NO_OBJECT"}, {nameof(maxPointsToSpend)}: {maxPointsToSpend})");
+            //Utils.Log($"{nameof(SpendSkillPointsRandomly)}(For: {Player?.DebugName ?? "NO_OBJECT"}, {nameof(maxPointsToSpend)}: {maxPointsToSpend})");
             while (Player.Stat("SP") > 0
                 && remainingPoints > 0
                 && totalSpent < maxPointsToSpend
@@ -1097,31 +1150,33 @@ namespace UD_Bones_Folder.Mod.UI
 
                 skillsShortList.Clear();
                 skillsShortList.AddRange(eligibleSkills);
+
+                //Utils.Log($"{1.Indent()}Processing {nameof(skillsShortList)}, {nameof(eligibleSkills)}: {eligibleSkills.Count()}");
                 skillsShortList.RemoveAll(entry => HasNegativePreference(entry, Player, preferSingleWeaponFighting));
 
-                Utils.Log($"{2.Indent()}{nameof(skillsShortList)}: {skillsShortList.Count()}");
+                //Utils.Log($"{1.Indent()}{nameof(skillsShortList)}: {skillsShortList.Count()}");
 
                 if (!skillsShortList.IsNullOrEmpty())
                 {
-                    foreach (var shortListSkill in skillsShortList)
-                        Utils.Log($"{3.Indent()}{nameof(shortListSkill)}: {shortListSkill.Class}, {nameof(shortListSkill.Cost)}: {shortListSkill.Cost}");
+                    /*foreach (var shortListSkill in skillsShortList)
+                        Utils.Log($"{2.Indent()}{nameof(shortListSkill)}: {shortListSkill.Class}, {nameof(shortListSkill.Cost)}: {shortListSkill.Cost}");*/
                     eligibleSkills = skillsShortList.IteratorSafe();
                 }
 
                 if (eligibleSkills.IsNullOrEmpty())
                 {
-                    Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
                         $"{nameof(attempts)}: {attempts}, " +
-                        $"{nameof(remainingPoints)}: {remainingPoints}");
+                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
                     break;
                 }
 
                 if (!eligibleSkills.Any(entry => entry.Cost <= remainingPoints))
                 {
-                    Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
+                    /*Utils.Log($"{1.Indent()}[{Const.CROSS}] {nameof(eligibleSkills)}: {eligibleSkills.Count()}, " +
                         $"{nameof(attempts)}: {attempts}, " +
                         $"{nameof(remainingPoints)}: {remainingPoints}, " +
-                        $"lowest cost: {eligibleSkills.Aggregate(int.MaxValue, (a, n) => Math.Min(a, n.Cost))}");
+                        $"lowest cost: {eligibleSkills.Aggregate(int.MaxValue, (a, n) => Math.Min(a, n.Cost))}");*/
                     break;
                 }
 
@@ -1130,33 +1185,33 @@ namespace UD_Bones_Folder.Mod.UI
                 int index = SeededRandom(nameof(SpendSkillPointsRandomly), 0, unlearnedSkills.Count - 1, attempts);
                 if (unlearnedSkills.TakeAt(index) is not IBaseSkillEntry skill)
                 {
-                    Utils.Log($"{1.Indent()}{Const.UNCHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                    /*Utils.Log($"{1.Indent()}{Const.UNCHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
                         $"{nameof(index)}: {index}, " +
                         $"{nameof(attempts)}: {attempts}, " +
-                        $"{nameof(remainingPoints)}: {remainingPoints}");
+                        $"{nameof(remainingPoints)}: {remainingPoints}");*/
                     continue;
                 }
-                Utils.Log($"{1.Indent()}{Const.CHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
+                /*Utils.Log($"{1.Indent()}{Const.CHECKED} {nameof(unlearnedSkills)}: {unlearnedSkills.Count()}, " +
                     $"{nameof(index)}: {index}, " +
                     $"{nameof(attempts)}: {attempts}, " +
                     $"{nameof(remainingPoints)}: {remainingPoints}");
-                Utils.Log($"{2.Indent()}{nameof(skill)}: {skill.Class}, {nameof(skill.Cost)}: {skill.Cost}");
+                Utils.Log($"{2.Indent()}{nameof(skill)}: {skill.Class}, {nameof(skill.Cost)}: {skill.Cost}");*/
 
                 if (skill is PowerEntry power
                     && !Player.HasPart(power.ParentSkill.Class))
                 {
-                    Utils.Log($"{2.Indent()}[/] Missing Parent Skill: {power.ParentSkill.Class}");
+                    //Utils.Log($"{2.Indent()}[/] Missing Parent Skill: {power.ParentSkill.Class}");
                     unlearnedSkills.Add(skill);
                     if (unlearnedSkills.Contains(power.ParentSkill)
                         || (power.ParentSkill.MeetsRequirements(Player)
                             && power.ParentSkill.Cost <= remainingPoints))
                     {
-                        Utils.Log($"{3.Indent()}{nameof(skill)} set to Parent: {power.ParentSkill.Class}");
+                        //Utils.Log($"{3.Indent()}{nameof(skill)} set to Parent: {power.ParentSkill.Class}");
                         skill = power.ParentSkill;
                     }
                     else
                     {
-                        Utils.Log($"{2.Indent()}[{Const.CROSS}] Unable to learn Parent: {power.ParentSkill.Class}");
+                        //Utils.Log($"{2.Indent()}[{Const.CROSS}] Unable to learn Parent: {power.ParentSkill.Class}");
                         continue;
                     }
                 }

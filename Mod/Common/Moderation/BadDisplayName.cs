@@ -194,11 +194,13 @@ namespace UD_Bones_Folder.Mod.Moderation
                 if (Object?.RequirePart<Honorifics>() is Honorifics newHonorifics)
                 {
                     foreach (var _ in OriginalDisplayName.Honorifics[0].CachedDoubleSemicolonExpansion().IteratorSafe())
-                        newHonorifics.AddHonorific(NameMaker.MakeHonorific(Object));
+                        if (NameMaker.MakeHonorific(Object) is string newHonorific)
+                            newHonorifics.AddHonorific(newHonorific);
 
                     if (newHonorifics.HonorificList.IsNullOrEmpty())
                         foreach (var honorific in OriginalDisplayName.Honorifics[1].CachedNumericDictionaryExpansion().IteratorSafe())
-                            newHonorifics.AddHonorific(NameMaker.MakeHonorific(Object), honorific.Value);
+                            if (NameMaker.MakeHonorific(Object) is string newHonorific)
+                                newHonorifics.AddHonorific(newHonorific, honorific.Value);
                 }
                 ModerationActions++;
                 return true;
@@ -236,11 +238,13 @@ namespace UD_Bones_Folder.Mod.Moderation
                 if (Object?.RequirePart<Titles>() is Titles newTitles)
                 {
                     foreach (var _ in OriginalDisplayName.Titles[0].CachedDoubleSemicolonExpansion().IteratorSafe())
-                        newTitles.AddTitle(NameMaker.MakeTitle(Object));
+                        if (NameMaker.MakeTitle(Object) is string newTitle)
+                            newTitles.AddTitle(newTitle);
 
                     if (newTitles.TitleList.IsNullOrEmpty())
                         foreach (var title in OriginalDisplayName.Titles[1].CachedNumericDictionaryExpansion().IteratorSafe())
-                            newTitles.AddTitle(NameMaker.MakeTitle(Object), title.Value);
+                            if (NameMaker.MakeTitle(Object) is string newTitle)
+                                newTitles.AddTitle(newTitle, title.Value);
                 }
                 ModerationActions++;
                 return true;
@@ -278,13 +282,13 @@ namespace UD_Bones_Folder.Mod.Moderation
                 if (Object?.RequirePart<Epithets>() is Epithets newEpithets)
                 {
                     foreach (var _ in OriginalDisplayName.Epithets[0].CachedDoubleSemicolonExpansion().IteratorSafe())
-                        newEpithets.AddEpithet(NameMaker.MakeEpithet(Object));
+                        if (NameMaker.MakeEpithet(Object) is string newEpithet)
+                            newEpithets.AddEpithet(newEpithet);
 
                     if (newEpithets.EpithetList.IsNullOrEmpty())
-                    {
                         foreach (var epithet in OriginalDisplayName.Epithets[1].CachedNumericDictionaryExpansion().IteratorSafe())
-                            newEpithets.AddEpithet(NameMaker.MakeEpithet(Object), epithet.Value);
-                    }
+                            if (NameMaker.MakeEpithet(Object) is string newEpithet)
+                                newEpithets.AddEpithet(newEpithet, epithet.Value);
                 }
                 ModerationActions++;
                 return true;
