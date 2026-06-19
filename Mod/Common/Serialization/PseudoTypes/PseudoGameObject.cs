@@ -129,8 +129,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 ;
             CrossGameObject.Clone.ApplyRegistrar();
 
-            if (CrossGameObject.Clone.TryGetPart(out GivesRep givesRep))
-                givesRep.wasParleyed = false;
+            CrossGameObject.Clone.SanitizeParts();
 
             if (CrossGameObject.Clone.Energy is Statistic energy)
                 energy.BaseValue = 0;

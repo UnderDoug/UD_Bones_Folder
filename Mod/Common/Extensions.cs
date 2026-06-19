@@ -2722,5 +2722,65 @@ namespace UD_Bones_Folder.Mod
                     seed: TextLineBefore,
                     func: Utils.NewLineDelimitedAggregator)
             ;
+
+        public static void SanitizeParts(this GameObject BonesObject)
+        {
+            BonesObject.SanitizeGivesRep();
+            BonesObject.SanitizeAddsRep();
+            BonesObject.SanitizeEngravedAndPainted();
+            BonesObject.SanitizeWaterRitualRecord();
+            BonesObject.SanitizeFactionDeed();
+        }
+
+        public static void SanitizeGivesRep(this GameObject BonesObject)
+        {
+            if (BonesObject.TryGetPart(out GivesRep givesRep))
+            {
+                givesRep.wasParleyed = false;
+                foreach (var relatedFaction in givesRep.relatedFactions.IteratorSafe())
+                    if (!Factions.Exists(relatedFaction.faction))
+                        relatedFaction.faction = "Strangers";
+            }
+        }
+
+        public static void SanitizeAddsRep(this GameObject BonesObject)
+        {
+            if (BonesObject.TryGetPart(out AddsRep addsRep))
+            {
+                if (!Factions.Exists(addsRep.Faction))
+                    addsRep.Faction = "Strangers";
+            }
+        }
+
+        public static void SanitizeEngravedAndPainted(this GameObject BonesObject)
+        {
+            if (BonesObject.TryGetPart(out ModPainted paintedMod))
+            {
+                paintedMod.LookedAt = false;
+            }
+
+            if (BonesObject.TryGetPart(out ModEngraved engravedMod))
+            {
+                engravedMod.LookedAt = false;
+            }
+        }
+
+        public static void SanitizeWaterRitualRecord(this GameObject BonesObject)
+        {
+            if (BonesObject.TryGetPart(out WaterRitualRecord waterRitualRecord))
+            {
+                if (!Factions.Exists(waterRitualRecord.faction))
+                    waterRitualRecord.faction = "Strangers";
+            }
+        }
+
+        public static void SanitizeFactionDeed(this GameObject BonesObject)
+        {
+            if (BonesObject.TryGetPart(out FactionDeed factionDeed))
+            {
+                if (!Factions.Exists(factionDeed.Faction))
+                    factionDeed.Faction = "Strangers";
+            }
+        }
     }
 }

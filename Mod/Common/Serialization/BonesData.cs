@@ -180,8 +180,7 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(Extensions.ApplyRegistrar);
                             bonesObject.ApplyRegistrar();
 
-                            if (bonesObject.TryGetPart(out GivesRep givesRep))
-                                givesRep.wasParleyed = false;
+                            bonesObject.SanitizeParts();
 
                             catchFlag = nameof(Extensions.TryModerate);
                             bonesObject.TryModerate(BonesInfo);
@@ -461,8 +460,7 @@ namespace UD_Bones_Folder.Mod
                                 lunarParty.LunarCourtiers.Add(bonesObject);
                             }
 
-                            if (bonesObject.TryGetPart(out GivesRep givesRep))
-                                givesRep.wasParleyed = false;
+                            bonesObject.SanitizeParts();
 
                             catchFlag = $"{nameof(Extensions.IsLunarRegent)}?";
                             if (bonesObject.IsLunarRegent(BonesID))
