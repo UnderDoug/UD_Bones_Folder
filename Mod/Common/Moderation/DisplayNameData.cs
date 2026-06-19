@@ -15,6 +15,7 @@ namespace UD_Bones_Folder.Mod.Moderation
     {
         public string BaseName;
         public string Adjectives;
+        [NonSerialized]
         public KeyValuePair<string, int> SizeAdjective;
         public string[] FactionAdjective;
         public string[] Honorifics;
@@ -23,6 +24,21 @@ namespace UD_Bones_Folder.Mod.Moderation
 
         public DisplayNameData()
         { }
+
+        #region Serialization
+
+        public virtual void Write(SerializationWriter Writer)
+        {
+            Writer.WriteOptimized(SizeAdjective.Key);
+            Writer.WriteOptimized(SizeAdjective.Value);
+        }
+
+        public virtual void Read(SerializationReader Reader)
+        {
+            SizeAdjective = new(Reader.ReadOptimizedString(), Reader.ReadOptimizedInt32());
+        }
+
+        #endregion
 
         public static DisplayNameData GetFrom(
             GameObject Object,

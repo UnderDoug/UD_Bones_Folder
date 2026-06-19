@@ -56,15 +56,22 @@ namespace UD_Bones_Folder.Mod
                 Variant = CoalescibleSet.Variant;
             }
 
-            public bool MoveNext()
+            private bool CheckNextValidIndex()
             {
-                if (Variant != CoalescibleSet.Variant)
-                    throw CollectionModifiedException;
+                if (++Index >= Items.Length)
+                    return false;
 
-                return ++Index < Items.Length
-                    && Current is not null
-                    ;
+                if (Current is null)
+                    return CheckNextValidIndex();
+
+                return true;
             }
+
+            public bool MoveNext()
+                => Variant != CoalescibleSet.Variant
+                ? throw CollectionModifiedException
+                : CheckNextValidIndex()
+                ;
 
             public void Reset()
             {

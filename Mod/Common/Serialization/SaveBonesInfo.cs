@@ -260,13 +260,12 @@ namespace UD_Bones_Folder.Mod
                 if (value == null)
                     FileLocationDataSet?.Clear();
                 else
-                if (!FileLocationDataSet.Any(fld => fld.SameAs(value)))
                     FileLocationDataSet.Add(value);
             }
         }
 
-        private HashSet<FileLocationData> _FileLocationDataSet;
-        public HashSet<FileLocationData> FileLocationDataSet => _FileLocationDataSet ??= new();
+        private FileLocationDataSet _FileLocationDataSet;
+        public FileLocationDataSet FileLocationDataSet => _FileLocationDataSet ??= new();
 
         public OsseousAsh.Host Host => FileLocationDataSet.FirstOrDefault(ld => ld.Type.IsOnline())?.Host;
 
@@ -386,7 +385,7 @@ namespace UD_Bones_Folder.Mod
             {
                 fileLocationData.PerformBasedOnTypeAsync(
                     Value: bonesJSON,
-                    OnlineCallback: v => fileLocationData.Host.PutBonesStats(v.ID, bonesJSON),
+                    OnlineCallback: v => fileLocationData.Host.PutBonesStats(v.ID, v),
                     ModCallback: v => Task.Run(() => Utils.Warn($"Currently unable to increment Mod-loaded bones files.")),
                     FileCallback: v => SafeWriteSaveBonesJSONAsync(),
                     DefaultCallback: v => Task.Run(() => Utils.Warn($"Attempted to increment stat for unknown or missing File Location Type: {(FileLocationData?.Type)?.ToString() ?? "NO_DATA"}."))
@@ -396,25 +395,25 @@ namespace UD_Bones_Folder.Mod
 
         public void IncrementEncountered()
             => IncrementStat(
-                IncrementStatFunc: () => Stats?.IncrementEncountered(OsseousAsh.Config.ID) is true,
+                IncrementStatFunc: () => Stats?.IncrementEncountered() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Encountered)))
                 ;
 
         public void IncrementDefeated()
             => IncrementStat(
-                IncrementStatFunc: () => Stats?.IncrementDefeated(OsseousAsh.Config.ID) is true,
+                IncrementStatFunc: () => Stats?.IncrementDefeated() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Defeated)))
                 ;
 
         public void IncrementReclaimed()
             => IncrementStat(
-                IncrementStatFunc: () => Stats?.IncrementReclaimed(OsseousAsh.Config.ID) is true,
+                IncrementStatFunc: () => Stats?.IncrementReclaimed() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Reclaimed)))
                 ;
 
         public void IncrementBroken()
             => IncrementStat(
-                IncrementStatFunc: () => Stats?.IncrementBroken(OsseousAsh.Config.ID) is true,
+                IncrementStatFunc: () => Stats?.IncrementBroken() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Broken)))
                 ;
 
@@ -859,7 +858,8 @@ namespace UD_Bones_Folder.Mod
             if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
                 return false;
 
-            if (ID == The.Game.GameID)
+            if (ID != null
+                && ID == The.Game?.GameID)
                 return false;
 
             if (IsBlocked)
@@ -968,7 +968,7 @@ namespace UD_Bones_Folder.Mod
                 || !loadedButBonesMissing.IsNullOrEmpty()
                 || !bonesHasButNotLoaded.IsNullOrEmpty())
             {
-                var options = new PickOptionDataSetAsync<IEnumerable<string>, UIUtils.CascadableResult>();
+                using var options = new PickOptionDataSetAsync<IEnumerable<string>, UIUtils.CascadableResult>();
                 do
                 {
                     if (!bonesHasButNotAvailable.IsNullOrEmpty())
@@ -1019,7 +1019,7 @@ namespace UD_Bones_Folder.Mod
                             .AppendLineEnd();
                     }
 
-                    options.Clear();
+                    options.Clear(Dispose: true);
                     if (!bonesHasButNotLoaded.IsNullOrEmpty())
                     {
                         options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>

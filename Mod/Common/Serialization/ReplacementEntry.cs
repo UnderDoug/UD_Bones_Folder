@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 
+using Newtonsoft.Json;
+
 using UD_Bones_Folder.Mod.Serialization;
 
 using XRL.Rules;
@@ -10,6 +12,7 @@ using XRL.World.Parts;
 
 namespace UD_Bones_Folder.Mod
 {
+    [JsonObject(MemberSerialization.OptIn)]
     [Serializable]
     public class ReplacementEntry : IComposite
     {
@@ -78,10 +81,15 @@ namespace UD_Bones_Folder.Mod
 
         public static EqualityComparer DefaultEqualityComparer => new(NameOnly: true);
 
+        [JsonProperty]
         public string Name;
+        [JsonProperty]
         public string Blueprint;
+        [JsonProperty]
         public string Tile;
+        [JsonProperty]
         public bool HFlip;
+        [JsonProperty]
         public bool VFlip;
 
         public ReplacementEntry()
@@ -116,7 +124,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static ReplacementEntry CreateDefaultFor(string Name)
-            => new ReplacementEntry
+            => new()
             {
                 Name = Name,
                 Blueprint = "PhysicalObject",
@@ -131,7 +139,7 @@ namespace UD_Bones_Folder.Mod
             string Blueprint,
             string Tile
             )
-            => new ReplacementEntry
+            => new()
             {
                 Name = Name,
                 Blueprint = Blueprint,
@@ -153,7 +161,8 @@ namespace UD_Bones_Folder.Mod
             if (Blueprint)
                 GameObject.Blueprint = this.Blueprint;
 
-            if (GameObject.Render is Render render)
+            if (Tile
+                && GameObject.Render is Render render)
             {
                 render.Tile = this.Tile;
 

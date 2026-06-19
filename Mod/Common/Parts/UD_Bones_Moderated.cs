@@ -161,7 +161,7 @@ namespace XRL.World.Parts
             }
 
             OriginalShortDesc = description._Short;
-            ModeratedShortDesc ??= Object.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description._Short));
+            ModeratedShortDesc ??= Object.GetBlueprint().GetPartParameter<string>(nameof(Description), nameof(Description.Short));
             description._Short = ModeratedShortDesc;
             ModerationActions++;
             return OptionSeverity;
@@ -192,7 +192,7 @@ namespace XRL.World.Parts
             }
         }
 
-        public bool ModerateContent(GameObject Object = null, string Context = null)
+        public bool ModerateContent(GameObject Object = null, string Context = null, bool Silent = true)
         {
             Object ??= ParentObject;
 
@@ -202,7 +202,6 @@ namespace XRL.World.Parts
                 if (Object == null)
                     return true;
 
-                bool silent = false;
                 var sw = Stopwatch.StartNew();
                 try
                 {
@@ -224,7 +223,7 @@ namespace XRL.World.Parts
                 }
                 finally
                 {
-                    if (!silent)
+                    if (!Silent)
                     {
                         string contextString = $"{nameof(ModerateContent)} for {Object?.DebugName?.Strip() ?? "NO_OBJECT"}";
                         if (!Context.IsNullOrEmpty())
@@ -388,7 +387,7 @@ namespace XRL.World.Parts
         {
             if (E.Object == ParentObject
                 && !IsModerationPaused)
-                ModerateContent(ParentObject, nameof(GetDisplayNameEvent));
+                ModerateContent(ParentObject, nameof(GetShortDescriptionEvent));
             return base.HandleEvent(E);
         }
 
@@ -421,6 +420,8 @@ namespace XRL.World.Parts
                 if (originalDisplayName.IsNullOrEmpty())
                     originalDisplayName = "null";
                 E.AddEntry(this, nameof(OriginalDisplayName), originalDisplayName);
+
+                E.AddEntry(this, nameof(OriginalShortDesc), OriginalShortDesc ?? "null");
             }
             catch (Exception x)
             {

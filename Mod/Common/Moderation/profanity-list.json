@@ -1217,10 +1217,12 @@
     ],
     "severity": 3,
     "exceptions": [
+      "s*",
       "suc*b",
       "suc*bs",
       "suc*bed",
-      "suc*bing"
+      "suc*bing",
+      "va*"
     ]
   },
   {
@@ -1674,8 +1676,19 @@
     "severity": 3
   },
   {
+    "id": "fisted",
+    "match": "fisted",
+    "tags": [
+      "sexual"
+    ],
+    "severity": 3,
+    "exceptions": [
+      "double-*"
+    ]
+  },
+  {
     "id": "fisting",
-    "match": "fisting|fisted",
+    "match": "fisting",
     "tags": [
       "sexual"
     ],
@@ -3155,11 +3168,28 @@
     "tags": [
       "sexual"
     ],
-    "severity": 4
+    "severity": 4,
+    "exceptions": [
+      "d*",
+      "g*",
+      "sc*"
+    ]
   },
   {
     "id": "raping",
-    "match": "raping|rapist",
+    "match": "raping",
+    "tags": [
+      "sexual"
+    ],
+    "severity": 4,
+    "exceptions": [
+      "d*",
+      "sc*"
+    ]
+  },
+  {
+    "id": "rapist",
+    "match": "rapist",
     "tags": [
       "sexual"
     ],

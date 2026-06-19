@@ -175,6 +175,10 @@ namespace UD_Bones_Folder.Mod.Moderation
             return this;
         }
 
+        public override string ToString()
+            => $"{ID} ({(int)Severity}, {Severity}) [{Tags.Aggregate((string)null, Utils.CommaSpaceDelimitedAggregator) ?? "no tags"}]"
+            ;
+
         public bool HasTag(string Tag)
             => Tags?.Contains(Tag) is true
             ;
@@ -479,12 +483,16 @@ namespace UD_Bones_Folder.Mod.Moderation
             this GameObject Object,
             out BadDisplayName BadDisplayName,
             IBadWord.SeverityLevel MinimumLevel = IBadWord.DefaultSeverity,
-            bool IgnoreCache = false
+            bool IgnoreCache = false,
+            bool Silent = true
             )
         {
             BadDisplayName = null;
 
-            var sw = Stopwatch.StartNew();
+            Stopwatch sw = null;
+            if (!Silent)
+                sw = Stopwatch.StartNew();
+
             try
             {
                 if (Object == null)
@@ -552,10 +560,11 @@ namespace UD_Bones_Folder.Mod.Moderation
             }
             finally
             {
-                if (Object != null)
+                if (!Silent
+                    && Object != null)
                     Utils.Log($"{nameof(HasBadDisplayName)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
 
-                sw.Stop();
+                sw?.Stop();
             }
         }
 
@@ -563,10 +572,14 @@ namespace UD_Bones_Folder.Mod.Moderation
             this GameObject Object,
             out bool InDescription,
             IBadWord.SeverityLevel MinimumLevel = IBadWord.DefaultSeverity,
-            bool IgnoreCache = false
+            bool IgnoreCache = false,
+            bool Silent = true
             )
         {
-            var sw = Stopwatch.StartNew();
+            Stopwatch sw = null;
+            if (!Silent)
+                sw = Stopwatch.StartNew();
+
             try
             {
                 return InDescription = Object.TryGetPart(out Description description)
@@ -575,10 +588,11 @@ namespace UD_Bones_Folder.Mod.Moderation
             }
             finally
             {
-                if (Object != null)
+                if (!Silent
+                    && Object != null)
                     Utils.Log($"{nameof(HasBadDescription)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
 
-                sw.Stop();
+                sw?.Stop();
             }
         }
 
@@ -587,10 +601,14 @@ namespace UD_Bones_Folder.Mod.Moderation
             out BadDisplayName BadDisplayName,
             out bool InDescription,
             IBadWord.SeverityLevel MinimumLevel = IBadWord.DefaultSeverity,
-            bool IgnoreCache = false
+            bool IgnoreCache = false,
+            bool Silent = true
             )
         {
-            var sw = Stopwatch.StartNew();
+            Stopwatch sw = null;
+            if (!Silent)
+                sw = Stopwatch.StartNew();
+
             try
             {
                 InDescription = false;
@@ -608,9 +626,11 @@ namespace UD_Bones_Folder.Mod.Moderation
             }
             finally
             {
-                if (Object != null)
+                if (!Silent
+                    && Object != null)
                     Utils.Log($"{nameof(HasBadWord)} for {Object.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
-                sw.Stop();
+
+                sw?.Stop();
             }
             
         }

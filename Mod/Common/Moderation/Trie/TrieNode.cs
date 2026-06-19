@@ -201,6 +201,8 @@ namespace UD_Bones_Folder.Mod.Moderation
             public readonly bool LazyRepeating => IsLazyRepeating(Count);
             public readonly bool NonRepeatingOptional => IsNonRepeatingOptional(Count);
 
+            public readonly bool IsSpecial => Value?.StartsWith('\\') is true;
+
             private static bool IsRepeating(Range Count)
                 => !Count.End.Equals(1)
                 ;
@@ -388,11 +390,16 @@ namespace UD_Bones_Folder.Mod.Moderation
                 return output;
             }
 
-            public override readonly string ToString()
-                => !Value.IsNullOrEmpty()
+            public readonly string ToString(bool ExcludeSpecial)
+                => (!ExcludeSpecial 
+                        || !IsSpecial)
+                    && !Value.IsNullOrEmpty()
                 ? $"{Value}{RangeToString(Count)}"
                 : null
                 ;
+
+            public override readonly string ToString()
+                => ToString(ExcludeSpecial: false);
 
             public override readonly bool Equals(object obj)
                 => obj is Token tokenObj
@@ -838,20 +845,29 @@ namespace UD_Bones_Folder.Mod.Moderation
             => $"{Parent?.ToPlainString()}{Value}"
             ;
 
-        public IEnumerable<Token> YieldParentTokens()
+        public IEnumerable<Token> YieldParentTokens(Predicate<Token> Where)
         {
             if (Parent != null)
-                foreach (var token in Parent.YieldParentTokens())
+                foreach (var token in Parent.YieldParentTokens(Where))
                     yield return token;
 
-            yield return Value;
+            if (Where?.Invoke(Value) is not false)
+                yield return Value;
         }
 
-        public Word ToWord()
-            => YieldParentTokens() is IEnumerable<Token> tokens
+        public IEnumerable<Token> YieldParentTokens()
+            => YieldParentTokens(null)
+            ;
+
+        public Word ToWord(Predicate<Token> Where)
+            => YieldParentTokens(Where) is IEnumerable<Token> tokens
                 && !tokens.IsNullOrEmpty()
             ? new Word(tokens)
             : null
+            ;
+
+        public Word ToWord()
+            => ToWord(null)
             ;
 
         protected void ClearNodeInfoCaches()

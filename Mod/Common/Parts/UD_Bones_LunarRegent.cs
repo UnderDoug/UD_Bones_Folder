@@ -538,10 +538,10 @@ namespace XRL.World.Parts
             if (!WantsThreePointLanding)
                 return false;
 
-            Event.PinCurrentPool();
+            // Event.PinCurrentPool();
             try
             {
-                Event.ResetPool();
+                // Event.ResetPool();
                 WantsThreePointLanding = false;
                 int forceLevel = 4;
                 if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
@@ -559,7 +559,7 @@ namespace XRL.World.Parts
             }
             finally
             {
-                Event.ResetToPin();
+                // Event.ResetToPin();
             }
             return true;
         }
@@ -644,9 +644,7 @@ namespace XRL.World.Parts
             if (!DoneDescription
                 && BonesID != The.Game?.GameID
                 && !BakedShortDesc.IsNullOrEmpty()
-                && ParentObject.TryGetPart(out Description description)
-                //&& description._Short == ShortDesc
-                )
+                && ParentObject.TryGetPart(out Description description))
             {
                 DoneDescription = true;
                 description._Short = BakedShortDesc.StartReplace().ToString();
@@ -678,7 +676,6 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(LoadLunarRegentEvent E)
         {
-            //Utils.Log($"{nameof(UD_Bones_LunarRegent)}: {nameof(HandleEvent)}({nameof(LoadLunarRegentEvent)})");
             if (ParentObject == E.LunarObject)
             {
                 string catchFlag = $"Top";
@@ -759,9 +756,7 @@ namespace XRL.World.Parts
         public override bool HandleEvent(AfterPseudoZoneLoadedEvent E)
         {
             if (E.LunarRegent == ParentObject
-                && ParentObject.CurrentCell is Cell currentCell
-                // && currentCell.GetObjectCountWithPart(nameof(Gas)) > 0
-                )
+                && ParentObject.CurrentCell is not null)
             {
                 if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT))
                 {

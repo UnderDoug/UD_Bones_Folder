@@ -166,7 +166,7 @@ namespace XRL.World.Parts
             if (E.Context.StartsWith($"{nameof(BonesID)}::"))
             {
                 OverrideBonesIDTyped<UD_Bones_LunarRegentAnnouncer>(E.Context.Split("::")[1]);
-                Utils.Log($"{nameof(UD_Bones_LunarRegentAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context}): {nameof(BonesID)}: {BonesID}");
+                // Utils.Log($"{nameof(UD_Bones_LunarRegentAnnouncer)}.{nameof(AfterObjectCreatedEvent)}({nameof(E.Context)}: {E.Context}): {nameof(BonesID)}: {BonesID}");
             }
             return base.HandleEvent(E);
         }

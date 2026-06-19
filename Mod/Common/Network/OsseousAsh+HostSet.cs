@@ -35,7 +35,7 @@ namespace UD_Bones_Folder.Mod
     {
         [JsonObject(MemberSerialization.OptIn)]
         [Serializable]
-        public class HostSet : CompositeSet<Host>, IDisposable
+        public class HostSet : CompositeSet<Host>
         {
             [Serializable]
             public class HostEqualityComparer : CompositeEqualityComparer<Host>
@@ -194,7 +194,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     Write();
                     if (Dispose)
-                        Host.Dispose();
+                        Host.Dispose(DisposePendingSavGz: true);
                 }
             }
 
@@ -202,11 +202,13 @@ namespace UD_Bones_Folder.Mod
             {
                 bool any = false;
                 foreach (var host in Hosts.IteratorSafe())
+                {
                     if (Remove(host))
                     {
-                        host.Dispose();
+                        host.Dispose(DisposePendingSavGz: true);
                         any = true;
                     }
+                }
 
                 if (any)
                     Write();
@@ -247,22 +249,24 @@ namespace UD_Bones_Folder.Mod
                     yield return host.ConnectionLevel;
             }
 
-            public void DisposeClear(Predicate<Host> Where)
+            public void DisposeClear(Predicate<Host> Where, bool DisposePendingSavGz = false)
             {
                 foreach (var host in this)
                     if (Where?.Invoke(host) is not false)
-                        host.Dispose();
+                        host.Dispose(DisposePendingSavGz: DisposePendingSavGz);
+
                 Clear();
             }
 
-            public void DisposeClear()
-                => DisposeClear(null)
+            public void DisposeClear(bool DisposePendingSavGz = false)
+                => DisposeClear(null, DisposePendingSavGz)
                 ;
 
             public override void Dispose()
             {
                 LocationData = null;
                 DisposeClear();
+                base.Dispose();
             }
         }
     }

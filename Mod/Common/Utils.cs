@@ -39,6 +39,7 @@ using XRL.CharacterBuilds;
 using UD_Bones_Folder.Mod.Moderation;
 using System.Diagnostics;
 using UD_Bones_Folder.Mod.Serialization;
+using Newtonsoft.Json;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -103,7 +104,12 @@ namespace UD_Bones_Folder.Mod
                         {
                             CachedBlueprints.Add(blueprint.Name);
                             CachedBlueprintSpecs[blueprint.Name] = cachedSpec;
+
+                            Log($"Created {nameof(BlueprintSpec)} from {blueprint.Name}");
+                            Log(JsonConvert.SerializeObject(cachedSpec, Formatting.Indented));
                         }
+                        else
+                            Log($"Failed to Create {nameof(BlueprintSpec)} from {blueprint.Name}");
                     }
                 }
             }
@@ -678,7 +684,7 @@ namespace UD_Bones_Folder.Mod
                 && The.Game.Running
                 && The.GameContext != null;
 
-            string currentContextString = "UnknownContext";
+            /*string currentContextString = "UnknownContext";
             if (The.CurrentContext == The.GameContext)
                 currentContextString = nameof(The.GameContext);
             else
@@ -690,7 +696,7 @@ namespace UD_Bones_Folder.Mod
                 (LastSpriteManagerPathMapCount != (SpriteManagerPathMap?.Count ?? 0)
                     ? $", {nameof(SpriteManagerPathMap)}: {SpriteManagerPathMap?.Count ?? 0}"
                     : null) +
-                $", {nameof(Tile)}: {Tile})");
+                $", {nameof(Tile)}: {Tile})");*/
 
             LastSpriteManagerPathMapCount = SpriteManagerPathMap?.Count ?? 0;
             var previousContext = The.CurrentContext;
@@ -766,6 +772,27 @@ namespace UD_Bones_Folder.Mod
                 || Cell.X == Zone.Width - 1)
             && (Cell.Y == 0
                 || Cell.Y == Zone.Height - 1)
+            ;
+
+        public static T SuppressPopupsWhile<T>(Func<T> Func)
+        {
+            bool originalPopupSuppress = Popup.Suppress;
+            Popup.Suppress = true;
+            try
+            {
+                return Func != null
+                    ? Func.Invoke()
+                    : default
+                    ;
+            }
+            finally
+            {
+                Popup.Suppress = originalPopupSuppress;
+            }
+        }
+
+        public static object SuppressPopupsWhile(Func<object> Func)
+            => SuppressPopupsWhile<object>(Func)
             ;
 
         public static void SuppressPopupsWhile(Action Action)

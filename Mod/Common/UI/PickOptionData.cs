@@ -6,7 +6,7 @@ using ConsoleLib.Console;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    public class PickOptionData<T, TResult>
+    public class PickOptionData<T, TResult> : IDisposable
     {
         public T Element;
         public string Text;
@@ -52,6 +52,15 @@ namespace UD_Bones_Folder.Mod.UI
                 return Callback.Invoke(Element);
             }
             return default;
+        }
+
+        public void Dispose()
+        {
+            Element = default;
+            Text = null;
+            Icon = null;
+            Hotkey = default;
+            Callback = null;
         }
     }
 }

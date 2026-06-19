@@ -627,11 +627,11 @@ namespace UD_Bones_Folder.Mod.UI
             var result = UIUtils.CascadableResult.Continue;
             try
             {
-                var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
+                using var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
                 do
                 {
                     sB.Clear();
-                    options.Clear();
+                    options.Clear(Dispose: true);
 
                     sB.Append(BonesInfo.GetBonesMenuDataRowString(0))
                     .AppendLine().Append(BonesInfo.GetBonesMenuDataRowString(1))

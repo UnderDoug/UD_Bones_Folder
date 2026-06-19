@@ -909,10 +909,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 Zone.AddPart(zonePart, true);
             }
 
-            Event.PinCurrentPool();
+            // Event.PinCurrentPool();
             foreach (var cell in Zone.LoopCells())
             {
-                Event.ResetPool();
+                // Event.ResetPool();
                 try
                 {
                     if (!TryGetCell(cell, out PseudoCell pseudoCell))
@@ -936,7 +936,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 }
                 finally
                 {
-                    Event.ResetToPin();
+                    // Event.ResetToPin();
                 }
             }
             return LunarRegent != null;
@@ -1020,10 +1020,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return false;
             }
 
-            Event.PinCurrentPool();
+            // Event.PinCurrentPool();
             for (int i = 0; i < bubble.Count; i++)
             {
-                Event.ResetPool();
+                // Event.ResetPool();
                 try
                 {
                     if (targetBubble[i] is Cell cell
@@ -1046,7 +1046,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 }
                 finally
                 {
-                    Event.ResetToPin();
+                    // Event.ResetToPin();
                 }
             }
 

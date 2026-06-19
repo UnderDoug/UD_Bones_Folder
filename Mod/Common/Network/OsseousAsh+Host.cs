@@ -42,6 +42,51 @@ namespace UD_Bones_Folder.Mod
         [Serializable]
         public class Host : IComposite, IEquatable<Host>, IDisposable
         {
+            public class PendingSavGz : IDisposable
+            {
+                public string BonesID;
+                public Guid Token;
+                public byte[] SavGz;
+                public DateTime UploadTime;
+                public Timer Timer;
+
+                public bool CheckValid(bool Silent = false)
+                {
+                    if (BonesID.IsNullOrEmpty())
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(BonesID)} is null or empty.");
+                        return false;
+                    }
+
+                    if (Token.IsEmptyOrDefault())
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(Token)} is empty or default {{{BonesID}}}.");
+                        return false;
+                    }
+
+                    if (SavGz.IsNullOrEmpty())
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is null or empty {{{BonesID}}}.");
+                        return false;
+                    }
+
+                    return true;
+                }
+
+                public void Dispose()
+                {
+                    BonesID = null;
+                    Token = default;
+                    SavGz = null;
+                    UploadTime = default;
+                    Timer?.Dispose();
+                    Timer = null;
+                }
+            }
+
             public static Host DefaultHost => new Host
             {
                 Name = "osseousash.cloud",
@@ -56,6 +101,8 @@ namespace UD_Bones_Folder.Mod
             private static long SeverStatusCheckInterval => 300000;
 
             private static int CurrentHostID = 0;
+
+            public static Dictionary<string, Dictionary<string, PendingSavGz>> PendingSavGzCache = new();
 
             public static string status => nameof(status);
             public static string canUp => nameof(canUp);
@@ -126,6 +173,13 @@ namespace UD_Bones_Folder.Mod
 
             [JsonIgnore]
             private bool? WrittenEnabled;
+
+            [JsonIgnore]
+            public bool IsOnCooldown => IsBuilt
+                && !Enabled
+                && WrittenEnabled.HasValue
+                && WrittenEnabled.GetValueOrDefault()
+                ;
 
             [JsonIgnore]
             public bool IsRunning => GetServerStatus();
@@ -217,9 +271,25 @@ namespace UD_Bones_Folder.Mod
             [JsonIgnore]
             public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
+            [JsonIgnore]
+            private string PendingSavGzCacheKey;
+
+            [JsonIgnore]
+            private Dictionary<string, PendingSavGz> PendingSavGzs
+            {
+                get
+                {
+                    if (!PendingSavGzCache.ContainsKey(PendingSavGzCacheKey))
+                        PendingSavGzCache[PendingSavGzCacheKey] = new();
+
+                    return PendingSavGzCache[PendingSavGzCacheKey];
+                }
+            }
+
             public Host()
             {
                 Enabled = true;
+                PendingSavGzCacheKey = Guid.NewGuid().ToString();
             }
 
             public Host(
@@ -267,6 +337,46 @@ namespace UD_Bones_Folder.Mod
 
                 StatusCheckTimer?.Dispose();
                 StatusCheckTimer = null;
+            }
+
+            public void ManuallyClearStatusCheckTimer(string ReasonForOverride = "manually overridden")
+            {
+                if (!WrittenEnabled.HasValue)
+                {
+                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                        $"{GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
+                    ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                    return;
+                }
+
+                if (!Enabled
+                    && WrittenEnabled.GetValueOrDefault())
+                {
+                    Enabled = true;
+                    try
+                    {
+                        if (IsRunning)
+                        {
+                            WrittenEnabled = null;
+                            Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                                $"{ReasonForOverride}");
+                            ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                        }
+                        else
+                            Enabled = false;
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
+                        Enabled = false;
+                    }
+                }
+                else
+                {
+                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                        $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
+                    ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                }
             }
 
             private static void SetupStatusCheckTimer(ref Timer StatusCheckTimer, Host Host, int Indent = 0)
@@ -462,6 +572,8 @@ namespace UD_Bones_Folder.Mod
                     Destination = Source.Clone();
                     return;
                 }
+
+                Destination.PendingSavGzCacheKey = Source.PendingSavGzCacheKey;
 
                 Destination.Name = Source.Name;
                 Destination.Port = Source.Port;
@@ -742,7 +854,7 @@ namespace UD_Bones_Folder.Mod
                     if (Proc != null)
                     {
                         using var streamWriter = new System.IO.StreamWriter(httpReq.GetRequestStream());
-                        Proc(streamWriter);
+                        Proc.Invoke(streamWriter);
                     }
                     return httpReq;
                 }
@@ -1031,86 +1143,156 @@ namespace UD_Bones_Folder.Mod
                 return Guid.Empty;
             }
 
-            public async Task<bool> PutBonesSavGz(
-                string BonesID,
-                Guid Token,
-                byte[] SavGz
-                )
+            public async Task<bool> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
             {
-                if (!IsRunning
-                    || BonesID.IsNullOrEmpty()
-                    || Token.IsEmptyOrDefault()
-                    || SavGz.IsNullOrEmpty())
-                    return false;
-
-                string uRI = BonesSavGzPutRoute(BonesID);
-
-                HttpWebRequest httpReq = null;
-                int? timeout = GetTimeout();
-                try
+                if (PendingSavGz == null)
                 {
-                    httpReq = CreatePutGz(
-                        URI: uRI,
-                        Timeout: timeout,
-                        Proc: async delegate (System.IO.StreamWriter streamWriter)
-                        {
-                            using (var savGzStream = new System.IO.MemoryStream(SavGz))
-                            {
-                                await savGzStream.CopyToAsync(streamWriter.BaseStream);
-                            }
-                        });
-
-                    string authHeader = null;
-                    if (httpReq.Headers.Get(HttpRequestHeader.Authorization.ToString()) is string existingAuthHeader)
-                        authHeader = existingAuthHeader + ";";
-
-                    httpReq.Headers.Add(HttpRequestHeader.Authorization, $"basic {Token}");
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
+                    if (!Silent)
+                        Utils.Warn($"{nameof(PendingSavGz)} is null");
                     return false;
                 }
 
-                if (httpReq == null)
+                if (!PendingSavGz.CheckValid(Silent: Silent))
                     return false;
 
+                bool setUpTimer = true;
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    if (!IsRunning)
+                        return false;
+
+                    string uRI = BonesSavGzPutRoute(PendingSavGz.BonesID);
+
+                    HttpWebRequest httpReq = null;
+                    int? timeout = GetTimeout();
+                    try
                     {
-                        var result = await streamReader.ReadToEndAsync();
-                        if (httpRes.StatusCode == HttpStatusCode.Created)
-                        {
-                            if (JObject.Parse(result) is JObject jObject
-                                && jObject["success"].ToObject<bool>())
+                        httpReq = CreatePutGz(
+                            URI: uRI,
+                            Timeout: timeout,
+                            Proc: async delegate (System.IO.StreamWriter streamWriter)
                             {
-                                Utils.Info($"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"" +
-                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
-                                return true;
+                                using (var savGzStream = new System.IO.MemoryStream(PendingSavGz.SavGz))
+                                {
+                                    await savGzStream.CopyToAsync(streamWriter.BaseStream);
+                                }
+                            });
+
+                        string authHeader = null;
+                        if (httpReq.Headers.Get(HttpRequestHeader.Authorization.ToString()) is string existingAuthHeader
+                            && !existingAuthHeader.IsNullOrEmpty())
+                            authHeader = existingAuthHeader + ";";
+
+                        authHeader += $"basic {PendingSavGz.Token}";
+
+                        httpReq.Headers.Add(HttpRequestHeader.Authorization, authHeader);
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
+                        return false;
+                    }
+
+                    if (httpReq == null)
+                        return false;
+
+                    try
+                    {
+                        var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                        using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                        {
+                            var result = await streamReader.ReadToEndAsync();
+                            if (httpRes.StatusCode == HttpStatusCode.Created)
+                            {
+                                if (JObject.Parse(result) is JObject jObject
+                                    && jObject["success"].ToObject<bool>())
+                                {
+                                    Utils.Info($"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"" +
+                                        $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
+
+                                    setUpTimer = false;
+
+                                    if (PendingSavGz.Timer == null)
+                                        PendingSavGz.Dispose();
+
+                                    return true;
+                                }
+                            }
+                            else
+                            {
+                                Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
+                                    $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
                             }
                         }
-                        else
+                    }
+                    catch (WebException x)
+                    {
+                        if (HandleTimeoutWebException(x, uRI, timeout))
                         {
-                            Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
-                                $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
+                            setUpTimer = false;
+
+                            if (PendingSavGz.Timer == null)
+                                PendingSavGz.Dispose();
+
+                            return false;
+                        }
+                        throw x;
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"Failed receiving PUT response for {uRI}", x);
+                        return false;
+                    }
+                    return false;
+                }
+                finally
+                {
+                    if (setUpTimer)
+                    {
+                        if (PendingSavGz != null
+                            && !PendingSavGzs.TryGetValue(PendingSavGz.BonesID, out var pendingSavGz))
+                        {
+                            PendingSavGzs[PendingSavGz.BonesID] = pendingSavGz = PendingSavGz;
+
+                            Utils.Info($"{DateTime.Now.Timestamp()} - Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{PendingSavGz.BonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
+
+                            pendingSavGz.Timer = new Timer(delegate (object state)
+                            {
+                                if (state is not string bonesID
+                                    || bonesID.IsNullOrEmpty())
+                                {
+                                    Utils.Error($"{nameof(Timer)} passed invalid {nameof(Host.PendingSavGz.BonesID)} ({state}).");
+                                    return;
+                                }
+
+                                if (PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
+                                {
+                                    var timeSinceFirstTry = DateTime.UtcNow - pendingSavGz.UploadTime;
+
+                                    if (timeSinceFirstTry.TotalMinutes >= 3.0
+                                        || PutBonesSavGz(pendingSavGz).WaitResult())
+                                    {
+                                        PendingSavGzs.Remove(pendingSavGz.BonesID);
+                                        pendingSavGz.Dispose();
+
+                                        string dueTo = "successful PUT";
+                                        if (timeSinceFirstTry.TotalMinutes >= 3.0)
+                                            dueTo = $"exceeding token duration";
+
+                                        Utils.Info($"Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
+                                    }
+                                }
+                                else
+                                    Utils.Warn($"{nameof(Timer)} passed {nameof(Host.PendingSavGz.BonesID)} not found in {nameof(PendingSavGzs)} ({bonesID}).");
+
+                            },
+                            state: PendingSavGz.BonesID,
+                            dueTime: 45000, // every 45 seconds
+                            period: 45000);
+
                         }
                     }
                 }
-                catch (WebException x)
-                {
-                    if (HandleTimeoutWebException(x, uRI, timeout))
-                        return false;
-                    throw x;
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Failed receiving PUT response for {uRI}", x);
-                    return false;
-                }
-
-                return false;
             }
 
             public async Task<bool> TryUploadBonesAsync(
@@ -1139,7 +1321,13 @@ namespace UD_Bones_Folder.Mod
 
                     try
                     {
-                        return await PutBonesSavGz(BonesID, token, SavGz);
+                        return await PutBonesSavGz(new PendingSavGz
+                        {
+                            BonesID = BonesID,
+                            Token = token,
+                            SavGz = SavGz,
+                            UploadTime = DateTime.UtcNow,
+                        });
                     }
                     catch
                     {
@@ -1874,7 +2062,7 @@ namespace UD_Bones_Folder.Mod
                     Utils.Error($"Failed receiving PUT response for {uRI}", x);
                     return false;
                 }
-
+                Utils.Warn($"Fell through sending/receiving PUT for {uRI}");
                 return false;
             }
 
@@ -1928,7 +2116,7 @@ namespace UD_Bones_Folder.Mod
                 })
                 ;
 
-            public void Dispose()
+            public void Dispose(bool DisposePendingSavGz)
             {
                 Name = null;
                 Port = null;
@@ -1937,7 +2125,20 @@ namespace UD_Bones_Folder.Mod
                 Enabled = false;
                 WrittenEnabled = false;
                 ClearStatusCheckTimer(ref StatusCheckTimer);
+                if (DisposePendingSavGz)
+                {
+                    foreach (var pendingSavGz in (PendingSavGzs?.Values).IteratorSafe())
+                        pendingSavGz.Dispose();
+
+                    if (PendingSavGzCache.ContainsKey(PendingSavGzCacheKey))
+                        PendingSavGzCache.Remove(PendingSavGzCacheKey);
+                }
+                PendingSavGzCacheKey = null;
             }
+
+            public void Dispose()
+                => Dispose(DisposePendingSavGz: false)
+                ;
 
             public static implicit operator string(Host Host)
                 => Host.ToString()

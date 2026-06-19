@@ -249,6 +249,17 @@ namespace UD_Bones_Folder.Mod
         }
 
         #endregion
+        #region Private Member References
+
+        protected CompositeEqualityComparer<T> GetEqualityComparer()
+            => _EqualityComparer
+            ;
+
+        protected Coalescer<T> GetCoalescer()
+            => _Coalescer
+            ;
+
+        #endregion
         #region Collection Helpers
 
         protected void Resize(int Capacity)

@@ -6,6 +6,8 @@ using System.Text;
 
 using FuzzySharp;
 
+using Newtonsoft.Json;
+
 using UD_Bones_Folder.Mod.Serialization;
 
 using XRL;
@@ -16,16 +18,17 @@ using XRL.World.Parts;
 
 namespace UD_Bones_Folder.Mod
 {
+    [JsonObject(MemberSerialization.OptIn)]
     [HasModSensitiveStaticCache]
     [Serializable]
     public class BlueprintSpec : IComposite, IDisposable
     {
         [Serializable]
-        public class DistanceRecord : IComposite, IDisposable
+        public class SimilarityRecord : IComposite, IDisposable
         {
             [Serializable]
             public class EqualityComparer
-                : CompositeEqualityComparer<DistanceRecord>
+                : CompositeEqualityComparer<SimilarityRecord>
                 , IComposite
                 , IDisposable
             {
@@ -56,14 +59,14 @@ namespace UD_Bones_Folder.Mod
                     => Strict
                     ;
 
-                public override bool Equals(DistanceRecord x, DistanceRecord y)
+                public override bool Equals(SimilarityRecord x, SimilarityRecord y)
                     => x is null
                         || y is null
                     ? (x is null) == (y is null)
                     : x.SameAs(y, Strict)
                     ;
 
-                public override int GetHashCode(DistanceRecord obj)
+                public override int GetHashCode(SimilarityRecord obj)
                     => obj?.ToString()?.GetHashCode()
                     ?? 0
                     ;
@@ -76,7 +79,7 @@ namespace UD_Bones_Folder.Mod
 
             [Serializable]
             public class Comparer
-                : Comparer<DistanceRecord>
+                : Comparer<SimilarityRecord>
                 , IComposite
                 , IDisposable
             {
@@ -123,14 +126,14 @@ namespace UD_Bones_Folder.Mod
                     => FilterValue(Value, Multi)
                     ;
 
-                public static int Compare(DistanceRecord x, DistanceRecord y, bool LeastSimilarFirst)
+                public static int Compare(SimilarityRecord x, SimilarityRecord y, bool LeastSimilarFirst)
                     => x is null
                         || y is null
-                    ? (x is null).CompareTo(y is null)
-                    : FilterValue(x.Distance.CompareTo(y.Distance), GetMulti(LeastSimilarFirst))
+                    ? (y is null).CompareTo(x is null)
+                    : FilterValue(y.Similarity.CompareTo(x.Similarity), GetMulti(LeastSimilarFirst))
                     ;
 
-                public override int Compare(DistanceRecord x, DistanceRecord y)
+                public override int Compare(SimilarityRecord x, SimilarityRecord y)
                     => Compare(x, y, LeastSimilarFirst)
                     ;
 
@@ -140,14 +143,14 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public static DistanceRecord Empty => new DistanceRecord
+            public static SimilarityRecord Empty => new SimilarityRecord
             {
                 Other = null,
-                Distance = MAX_DIST,
+                Similarity = MAX_SIMILARTY,
             };
 
             public BlueprintSpec Other;
-            public int Distance;
+            public int Similarity;
 
             public bool IsEmpty()
                 => ToString() == Empty.ToString()
@@ -162,7 +165,7 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public string DebugString()
-                => $"{this}@{Distance}"
+                => $"{this}@{Similarity}"
                 ;
 
             public bool Matches(string Key)
@@ -171,7 +174,7 @@ namespace UD_Bones_Folder.Mod
                 || Key == ToString()
                 ;
 
-            public bool SameAs(DistanceRecord Other, bool Strict = false)
+            public bool SameAs(SimilarityRecord Other, bool Strict = false)
                 => (!Strict
                     && Matches(Other?.ToString()))
                 || DebugString() == Other?.DebugString();
@@ -180,43 +183,44 @@ namespace UD_Bones_Folder.Mod
                 => Matches(Other.ToString())
                 ;
 
-            public static DistanceRecord MakeFor(BlueprintSpec Primary, BlueprintSpec Other)
+            public static SimilarityRecord MakeFor(BlueprintSpec Primary, BlueprintSpec Other)
                 => Primary != null
-                ? new DistanceRecord
+                ? new SimilarityRecord
                 {
                     Other = Other,
-                    Distance = Primary.GetDistanceFrom(Other),
+                    Similarity = Primary.GetSimilartyTo(Other),
                 }
                 : Empty
                 ;
 
-            public static bool TryMakeFor(BlueprintSpec Primary, BlueprintSpec Other, out DistanceRecord Result)
+            public static bool TryMakeFor(BlueprintSpec Primary, BlueprintSpec Other, out SimilarityRecord Result)
                 => !(Result = MakeFor(Primary, Other)).IsEmpty()
                 ;
 
-            public static bool TryGetFor(BlueprintSpec Primary, BlueprintSpec Other, out DistanceRecord Result)
+            public static bool TryGetFor(BlueprintSpec Primary, BlueprintSpec Other, out SimilarityRecord Result)
             {
                 Result = Empty;
                 if (Primary == null)
                     return false;
 
-                DistanceCache ??= new();
-                string primaryKey = Primary.Blueprint;
+                string primaryKey = GetKey(Primary);
                 string otherKey = GetKey(Other);
-                if (!DistanceCache.TryGetValue(primaryKey, out var results))
-                {
-                    results = new();
-                    DistanceCache[primaryKey] = results;
-                }
-                if (!results.TryGetValue(otherKey, out Result))
-                {
-                    Result = MakeFor(Primary, Other);
-                    results[otherKey] = Result;
-                }
-                return !results[otherKey].IsEmpty();
+
+                SimilarityCache ??= new();
+                if (!SimilarityCache.ContainsKey(primaryKey))
+                    SimilarityCache[primaryKey] = new();
+
+                var results = SimilarityCache[primaryKey];
+
+                if (!results.ContainsKey(otherKey))
+                    results[otherKey] = MakeFor(Primary, Other);
+
+                Result = results[otherKey];
+
+                return !Result.IsEmpty();
             }
 
-            public static DistanceRecord RentFor(BlueprintSpec Primary, BlueprintSpec Other)
+            public static SimilarityRecord RentFor(BlueprintSpec Primary, BlueprintSpec Other)
             {
                 if (TryGetFor(Primary, Other, out var Result))
                     return Result.Clone();
@@ -224,35 +228,28 @@ namespace UD_Bones_Folder.Mod
                 return Empty;
             }
 
-            public DistanceRecord Clone()
-                => new DistanceRecord
+            public SimilarityRecord Clone()
+                => new()
                 {
                     Other = new(Other),
-                    Distance = Distance,
+                    Similarity = Similarity,
                 };
 
-            public DistanceRecord CopyFrom(DistanceRecord Source)
+            public SimilarityRecord CopyFrom(SimilarityRecord Source)
             {
                 Other = new(Source.Other);
-                Distance = Source.Distance;
+                Similarity = Source.Similarity;
                 return this;
             }
 
-            public int GetWeight(int MaxDistance)
-            {
-                if (MaxDistance == 0)
-                    return 1;
-
-                return Distance != MAX_DIST
-                    ? Math.Clamp(MaxDistance - Distance, 0, MaxDistance)
-                    : 0
-                    ;
-            }
+            public int GetWeight()
+                => Math.Clamp(Similarity, MIN_SIMILARTY, MAX_SIMILARTY)
+                ;
 
             public void Clear()
             {
                 Other = null;
-                Distance = 0;
+                Similarity = 0;
             }
 
             public void Dispose()
@@ -260,8 +257,8 @@ namespace UD_Bones_Folder.Mod
                 Clear();
             }
 
-            public static implicit operator KeyValuePair<string, int>(DistanceRecord Operand)
-                => new(GetKey(Operand?.Other), Operand?.Distance ?? MAX_DIST)
+            public static implicit operator KeyValuePair<string, int>(SimilarityRecord Operand)
+                => new(GetKey(Operand?.Other), Operand?.Similarity ?? MAX_SIMILARTY)
                 ;
         }
 
@@ -325,7 +322,7 @@ namespace UD_Bones_Folder.Mod
         {
             public virtual bool WantFieldReflection => false;
 
-            protected static DistanceRecord.Comparer DistanceComparer = BlueprintSpec.DistanceComparer;
+            protected static SimilarityRecord.Comparer DistanceComparer = BlueprintSpec.SimilarityComparer;
 
             protected BlueprintSpec Primary;
             protected bool LeastSimilarFirst;
@@ -367,13 +364,13 @@ namespace UD_Bones_Folder.Mod
                     || y is null)
                     return (x is null).CompareTo(y is null);
 
-                if (!DistanceRecord.TryGetFor(Primary, x, out var xSpecDistance))
-                    xSpecDistance = DistanceRecord.Empty;
+                if (!SimilarityRecord.TryGetFor(Primary, x, out var xSpecDistance))
+                    xSpecDistance = SimilarityRecord.Empty;
 
-                if (!DistanceRecord.TryGetFor(Primary, y, out var ySpecDistance))
-                    ySpecDistance = DistanceRecord.Empty;
+                if (!SimilarityRecord.TryGetFor(Primary, y, out var ySpecDistance))
+                    ySpecDistance = SimilarityRecord.Empty;
 
-                return DistanceRecord.Comparer.Compare(xSpecDistance, ySpecDistance, LeastSimilarFirst);
+                return SimilarityRecord.Comparer.Compare(xSpecDistance, ySpecDistance, LeastSimilarFirst);
             }
 
             public int Compare(BlueprintSpec x, BlueprintSpec y, BlueprintSpec Primary)
@@ -396,11 +393,37 @@ namespace UD_Bones_Folder.Mod
 
         public const string BASE_BLUEPRINT = "PhysicalObject";
 
-        public static DistanceRecord.EqualityComparer DistanceEqualityComparer => new(Strict: false);
+        public static SimilarityRecord.EqualityComparer DistanceEqualityComparer => new(Strict: false);
 
-        public static DistanceRecord.Comparer DistanceComparer => new(LeastSimilarFirst: false);
+        public static SimilarityRecord.Comparer SimilarityComparer => new(LeastSimilarFirst: false);
 
         public static EqualityComparer DefaultEqualityComparer => new(BlueprintOnly: false);
+
+        public class StringSetArrayConverter : JsonConverter<StringSet>
+        {
+            public override StringSet ReadJson(JsonReader reader, Type objectType, StringSet existingValue, bool hasExistingValue, JsonSerializer serializer)
+                => reader.TokenType == JsonToken.StartArray
+                ? new(serializer.Deserialize<string[]>(reader))
+                : new()
+                ;
+
+            public override void WriteJson(JsonWriter writer, StringSet value, JsonSerializer serializer)
+                => serializer.Serialize(writer, (value ?? new()).ToArray())
+                ;
+        }
+
+        public class ListArrayConverter<T> : JsonConverter<List<T>>
+        {
+            public override List<T> ReadJson(JsonReader reader, Type objectType, List<T> existingValue, bool hasExistingValue, JsonSerializer serializer)
+                => reader.TokenType == JsonToken.StartArray
+                ? new(serializer.Deserialize<T[]>(reader))
+                : new()
+                ;
+
+            public override void WriteJson(JsonWriter writer, List<T> value, JsonSerializer serializer)
+                => serializer.Serialize(writer, (value ?? new()).ToArray())
+                ;
+        }
 
         public static string TierProp => GetPropName(nameof(Tier));
         public static string TechTierProp => GetPropName(nameof(TechTier));
@@ -415,30 +438,51 @@ namespace UD_Bones_Folder.Mod
         public static string TRUE => $"{true}";
         public static string FALSE => $"{false}";
 
-        public const int MAX_DIST = 9999;
+        public const int MIN_SIMILARTY = 1;
+        public const int MAX_SIMILARTY = 9999;
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
-        public static Dictionary<string, Dictionary<string, DistanceRecord>> DistanceCache = new();
+        public static Dictionary<string, Dictionary<string, SimilarityRecord>> SimilarityCache = new();
 
         public string DebugName;
+
+        [JsonProperty]
         public string Blueprint;
 
+        [JsonConverter(typeof(ListArrayConverter<string>))]
+        [JsonProperty]
         public List<string> BlueprintTree;
 
+        [JsonProperty]
         public string Category;
+
+        [JsonProperty]
         public int? Tier;
+
+        [JsonProperty]
         public int? TechTier;
 
         // [NonSerialized]
+        [JsonConverter(typeof(StringSetArrayConverter))]
         public StringSet WeaponSkills;
 
         // [NonSerialized]
+        [JsonConverter(typeof(StringSetArrayConverter))]
         public StringSet EquipmentSlots;
 
+        [JsonProperty]
         public string Species;
+
+        [JsonProperty]
         public string Class;
+
+        [JsonProperty]
         public string Role;
+
+        [JsonProperty]
         public string PaintedWall;
+
+        [JsonProperty]
         public string PaintedFence;
 
         public bool IsEmpty
@@ -796,10 +840,10 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (Model.TryGetStringPropertyOrTag(nameof(Species), out string species)
-                    && !species.IsNullOrEmpty())
+                if (Model.TryGetStringPropertyOrTag(nameof(Species), out string speciesPropTag)
+                    && !speciesPropTag.IsNullOrEmpty())
                 {
-                    Species = species;
+                    Species = speciesPropTag;
                 }
             }
             catch (Exception x)
@@ -809,25 +853,25 @@ namespace UD_Bones_Folder.Mod
 
             try
             {
-                if (Model.TryGetStringPropertyOrTag(nameof(Class), out string @class)
-                    && !@class.IsNullOrEmpty())
+                if (Model.TryGetStringPropertyOrTag(nameof(Class), out string classPropTag)
+                    && !classPropTag.IsNullOrEmpty())
                 {
-                    Class = @class;
+                    Class = classPropTag;
                 }
-                if (Model.TryGetStringPropertyOrTag(nameof(Role), out string role)
-                    && !role.IsNullOrEmpty())
+                if (Model.TryGetStringPropertyOrTag(nameof(Role), out string rolePropTag)
+                    && !rolePropTag.IsNullOrEmpty())
                 {
-                    Role = role;
+                    Role = rolePropTag;
                 }
-                if (Model.TryGetStringPropertyOrTag(nameof(PaintedWall), out string paintedWall)
-                    && !paintedWall.IsNullOrEmpty())
+                if (Model.TryGetStringPropertyOrTag(nameof(PaintedWall), out string paintedWallPropTag)
+                    && !paintedWallPropTag.IsNullOrEmpty())
                 {
-                    PaintedWall = paintedWall;
+                    PaintedWall = paintedWallPropTag;
                 }
-                if (Model.TryGetStringPropertyOrTag(nameof(PaintedFence), out string paintedFence)
-                    && !paintedFence.IsNullOrEmpty())
+                if (Model.TryGetStringPropertyOrTag(nameof(PaintedFence), out string paintedFencePropTag)
+                    && !paintedFencePropTag.IsNullOrEmpty())
                 {
-                    PaintedFence = paintedFence;
+                    PaintedFence = paintedFencePropTag;
                 }
             }
             catch (Exception x)
@@ -843,6 +887,11 @@ namespace UD_Bones_Folder.Mod
                 Species ??= string.Empty;
                 Class ??= string.Empty;
                 Role ??= string.Empty;
+            }
+            else
+            {
+                Species ??= Model.DisplayName();
+                Class ??= Model.Name;
             }
         }
 
@@ -1081,9 +1130,9 @@ namespace UD_Bones_Folder.Mod
             string catchFlag = "Top";
             try
             {
-                catchFlag = "Check Excluded";
+                /*catchFlag = "Check Excluded";
                 if (Blueprint.IsExcludedFromDynamicEncounters())
-                    return null;
+                    return null;*/
 
                 catchFlag = "Check Base";
                 if (Blueprint.IsBaseBlueprint())
@@ -1121,6 +1170,10 @@ namespace UD_Bones_Folder.Mod
 
             if (Field is ICollection collectionField)
                 return collectionField.Count == 0;
+
+            if (Field is IEnumerable enumerableField)
+                return enumerableField.GetEnumerator() is IEnumerator enumerator
+                    && enumerator.Current is not null;
 
             if (Field is int intField)
                 return intField == 0;
@@ -1231,132 +1284,144 @@ namespace UD_Bones_Folder.Mod
                 .Aggregate((string)null, Utils.NewLineDelimitedAggregator)
             ;
 
-        protected static int GetCollectionDistance(
-            IEnumerable<string> Primary,
-            IEnumerable<string> Other,
-            int MaxUnitDistance,
-            int MinUnitDistance = 0,
-            int? MaxTotalDistance = null
+        protected static int GetCollectionSimilarity(
+            ICollection<string> Primary,
+            ICollection<string> Other,
+            int MaxUnitSimilarity,
+            int MinUnitSimilarity = 0,
+            int? MaxTotalSimilarty = null
             )
         {
-            int distance = 0;
+            if (IsFieldWildCard(ref Primary))
+            {
+                var prospectiveSimilarity = Other.IteratorSafe().Count() * MaxUnitSimilarity;
+                return MaxTotalSimilarty.HasValue
+                    ? Math.Min(prospectiveSimilarity, MaxTotalSimilarty.GetValueOrDefault())
+                    : prospectiveSimilarity
+                    ;
+            }
+
+            int similarty = 0;
             var safePrimary = Primary.IteratorSafe();
             var safeOther = Other.IteratorSafe();
-            int blueprintTreeCountDiff = Math.Abs(safePrimary.Count() - safeOther.Count());
-            foreach (var blueprint in safePrimary)
+
+            int countDiff = Math.Abs(safePrimary.Count() - safeOther.Count());
+
+            foreach (var primaryEntry in safePrimary)
             {
-                if (MaxTotalDistance.HasValue
-                    && distance <= MaxTotalDistance.GetValueOrDefault())
+                if (MaxTotalSimilarty.HasValue
+                    && similarty <= MaxTotalSimilarty.GetValueOrDefault())
                 {
-                    distance = MaxTotalDistance.GetValueOrDefault();
+                    similarty = MaxTotalSimilarty.GetValueOrDefault();
                     break;
                 }
-                if (!safeOther.Contains(blueprint))
+                if (safeOther.Contains(primaryEntry))
                 {
-                    distance += Math.Clamp(blueprintTreeCountDiff, MinUnitDistance, MaxUnitDistance);
+                    similarty += Math.Clamp(countDiff, MinUnitSimilarity, MaxUnitSimilarity);
                     continue;
                 }
             }
-            return distance;
+            return similarty;
         }
 
-        protected static int GetFieldDistance<T>(ref T Primary, T Other, int DistanceWhenIncomparable)
+        protected static int GetFieldSimilarity<T>(ref T Primary, T Other, int SimilarityWhenIdentical)
             where T : IEquatable<T>
         {
             try
             {
                 if (IsFieldWildCard(ref Primary))
-                    return 0;
+                    return SimilarityWhenIdentical;
 
                 if (Primary is null
                     || Other is null)
-                    return DistanceWhenIncomparable;
+                    return 0;
 
                 if (!EqualityComparer<T>.Default.Equals(Primary, Other))
                 {
                     if (Primary is string stringPrimary
                         && Other is string stringOther)
-                        return Levenshtein.EditDistance(stringPrimary, stringOther);
+                        return Math.Max(0, SimilarityWhenIdentical - Levenshtein.EditDistance(stringPrimary, stringOther));
 
-                    return DistanceWhenIncomparable;
+                    return 0;
                 }
-                return 0;
+                return SimilarityWhenIdentical;
             }
             catch (Exception x)
             {
-                Utils.Warn($"Failed getting distance between {nameof(Primary)} {Primary} and {nameof(Other)} {Other}", x);
-                return DistanceWhenIncomparable;
+                Utils.Warn($"Failed getting similarity of {nameof(Primary)} {Primary} and {nameof(Other)} {Other}", x);
+                return 0;
             }
         }
 
-        public int GetDistanceFrom(BlueprintSpec Other)
+        public int GetSimilartyTo(BlueprintSpec Other)
         {
             if (Other == null)
-                return MAX_DIST;
-
-            if (IsWildCard)
                 return 0;
 
-            int distance = 0;
+            if (IsWildCard)
+                return MAX_SIMILARTY;
 
-            distance += GetCollectionDistance(
+            int similarity = MIN_SIMILARTY;
+
+            similarity += GetCollectionSimilarity(
                 Primary: BlueprintTree,
                 Other: Other.BlueprintTree,
-                MaxUnitDistance: 10);
+                MaxUnitSimilarity: 10);
 
-            distance += GetFieldDistance(ref Category, Other.Category, 15);
 
+            similarity += GetFieldSimilarity(ref Category, Other.Category, 15);
+
+            similarity += 64;
             if (!IsFieldWildCard(ref Tier))
-                distance += 8 * Math.Abs(Tier.GetValueOrDefault() - Other.Tier.GetValueOrDefault());
+                similarity -= 8 * Math.Abs(Tier.GetValueOrDefault() - Other.Tier.GetValueOrDefault());
 
+            similarity += 32;
             if (!IsFieldWildCard(ref TechTier))
-                distance += 4 * Math.Abs(TechTier.GetValueOrDefault() - Other.TechTier.GetValueOrDefault());
+                similarity -= 4 * Math.Abs(TechTier.GetValueOrDefault() - Other.TechTier.GetValueOrDefault());
 
-            if (!IsFieldWildCard(ref WeaponSkills))
-            {
-                distance += GetCollectionDistance(
-                    Primary: WeaponSkills,
-                    Other: Other.WeaponSkills,
-                    MaxUnitDistance: 10,
-                    MinUnitDistance: 10);
-            }
 
-            if (!IsFieldWildCard(ref EquipmentSlots))
-            {
-                distance += GetCollectionDistance(
-                    Primary: EquipmentSlots,
-                    Other: Other.EquipmentSlots,
-                    MaxUnitDistance: 10,
-                    MinUnitDistance: 10);
-            }
+            similarity += GetCollectionSimilarity(
+                Primary: WeaponSkills,
+                Other: Other.WeaponSkills,
+                MaxUnitSimilarity: 10,
+                MinUnitSimilarity: 10);
+            
 
-            distance += GetFieldDistance(ref Species, Other.Species, 15);
+            similarity += GetCollectionSimilarity(
+                Primary: EquipmentSlots,
+                Other: Other.EquipmentSlots,
+                MaxUnitSimilarity: 10,
+                MinUnitSimilarity: 10);
 
-            distance += GetFieldDistance(ref Class, Other.Class, 5);
-            distance += GetFieldDistance(ref Role, Other.Role, 5);
+            similarity += GetFieldSimilarity(ref Species, Other.Species, 15);
 
-            distance += GetFieldDistance(ref PaintedWall, Other.PaintedWall, 25);
-            distance += GetFieldDistance(ref PaintedFence, Other.PaintedFence, 25);
+            similarity += GetFieldSimilarity(ref Class, Other.Class, 5);
+            similarity += GetFieldSimilarity(ref Role, Other.Role, 5);
 
-            return Math.Clamp(distance, 0, MAX_DIST);
+            similarity += GetFieldSimilarity(ref PaintedWall, Other.PaintedWall, 25);
+            similarity += GetFieldSimilarity(ref PaintedFence, Other.PaintedFence, 25);
+
+            return Math.Clamp(similarity, MIN_SIMILARTY, MAX_SIMILARTY);
         }
 
-        public IEnumerable<DistanceRecord> GetOrderedDistanceRecords()
+        public IEnumerable<SimilarityRecord> GetOrderedSimilarityRecords()
         {
-            List<DistanceRecord> list = null;
+            Utils.Log($"{nameof(GetOrderedSimilarityRecords)} for {Blueprint}");
+            List<SimilarityRecord> list = null;
             foreach (var validSpec in (Utils.CachedBlueprintSpecs?.Values).IteratorSafe())
             {
-                if (DistanceRecord.TryGetFor(this, validSpec, out var distanceRecord)
-                    && !distanceRecord.IsEmpty())
+                if (SimilarityRecord.TryGetFor(this, validSpec, out var similarityRecord)
+                    && !similarityRecord.IsEmpty())
                 {
                     list ??= new();
-                    list.Add(distanceRecord);
+                    list.Add(similarityRecord);
                 }
             }
+
             if (list.IsNullOrEmpty())
                 return list.IteratorSafe();
 
-            list.StableSortInPlace(DistanceComparer);
+            list.StableSortInPlace(SimilarityComparer);
             return list;
         }
 

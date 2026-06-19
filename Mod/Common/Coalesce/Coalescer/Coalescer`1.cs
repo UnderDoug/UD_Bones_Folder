@@ -50,7 +50,7 @@ namespace UD_Bones_Folder.Mod
 
         public virtual bool WantFieldReflection => false;
 
-        private CoalesceMethod _CoalesceMethod;
+        protected CoalesceMethod _CoalesceMethod;
 
         public CoalesceMethod CoalesceMethod => _CoalesceMethod;
 
@@ -221,17 +221,17 @@ namespace UD_Bones_Folder.Mod
             + CoalesceMethod.GetHashCode();
 
         protected InvalidCastException NotCoalescible_InvalidCastException()
-            => new(typeof(T).ToStringWithGenerics() + " cannot be cast to " + nameof(ICoalescible<T>) + ".");
+            => new($"{typeof(T).ToStringWithGenerics()} cannot be cast to {nameof(ICoalescible<T>)}.");
 
         protected InvalidCastException NotComparable_InvalidCastException()
-            => new(typeof(T).ToStringWithGenerics() + " cannot be cast to " + nameof(IComparable) + " or " + nameof(IComparable<T>) + ".");
+            => new($"{typeof(T).ToStringWithGenerics()} cannot be cast to {nameof(IComparable)} or {nameof(IComparable<T>)}.");
 
         protected InvalidCastException NotTypeT_InvalidCastException(string ParamName, Type InvalidType)
             => new(
-                message: ParamName + ", of " + nameof(Type) + " " + InvalidType.ToStringWithGenerics() + ", " +
-                    "cannot be cast to " + typeof(T).ToStringWithGenerics() + ".");
+                message: $"{ParamName}, of {nameof(Type)} {InvalidType.ToStringWithGenerics()}, " +
+                    $"cannot be cast to {typeof(T).ToStringWithGenerics()}.");
 
         protected NotSupportedException Nonsense_NotSupportedException([CallerMemberName] string MethodName = "")
-            => new("There is no sensical way to " + MethodName + " for objects of " + nameof(Type) + " " + typeof(T).ToStringWithGenerics() + ".");
+            => new($"There is no sensical way to {MethodName} for objects of {nameof(Type)} {typeof(T).ToStringWithGenerics()}.");
     }
 }

@@ -413,7 +413,6 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(LoadLunarCourtierEvent E)
         {
-            Utils.Log($"{nameof(UD_Bones_LunarCourtier)}: {nameof(HandleEvent)}({nameof(LoadLunarCourtierEvent)})");
             if (E.LunarRegent != null
                 && E.LunarObject == ParentObject)
             {
@@ -444,10 +443,8 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(TidyLunarObjectsEvent E)
         {
-            // Utils.Log($"{0.Indent()}{nameof(UD_Bones_LunarCourtier)}.{nameof(TidyLunarObjectsEvent)}({nameof(GameObject)}: {ParentObject?.DebugName ?? "NO_OBJECT"})");
             if (E.Context == "Wish")
             {
-                // Utils.Log($"{1.Indent()}{nameof(E.Context)}: Wish");
                 bool bonesIDMatches = BonesID == E.BonesID
                     || E.BonesID == null;
 
@@ -462,7 +459,6 @@ namespace XRL.World.Parts
                         bool iDMatches = lunarPart.BonesID == E.BonesID
                             || E.BonesID == null;
 
-                        // Utils.Log($"{2.Indent()}{nameof(GameObject.RemovePart)}: {lunarPart.Name} ({lunarPart != this}), {nameof(iDMatches)}: {iDMatches}");
                         if (lunarPart != this)
                         {
                             if (iDMatches)

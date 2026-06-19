@@ -237,7 +237,7 @@ namespace XRL.World.Parts
             if (Player == null)
                 return false;
 
-            Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
+            // Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
 
             foreach (var companion in Player.GetCompanions(MaxDistance: 999999).IteratorSafe())
             {
@@ -378,7 +378,7 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(EnteringZoneEvent E)
         {
-            Utils.Log($"{nameof(EnteringZoneEvent)}: {E.Cell?.ParentZone?.ZoneID ?? "NO_ZONE_ID"}, from: {ParentObject?.CurrentZone?.ZoneID ?? "NO_ZONE_ID"}");
+            // Utils.Log($"{nameof(EnteringZoneEvent)}: {E.Cell?.ParentZone?.ZoneID ?? "NO_ZONE_ID"}, from: {ParentObject?.CurrentZone?.ZoneID ?? "NO_ZONE_ID"}");
             if (!CheckAnnounce
                 && E.Cell.ParentZone is Zone enteringZone)
             {

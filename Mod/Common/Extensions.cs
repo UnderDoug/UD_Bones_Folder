@@ -1038,6 +1038,50 @@ namespace UD_Bones_Folder.Mod
                 contentsObject.PerformActionRecursively(Action, Depth + 1);
         }
 
+        public static IEnumerable<GameObject> GetObjectsRecursively(
+            this GameObject Object,
+            Predicate<GameObject> Where = null,
+            int Depth = 0,
+            int? MaxDepth = null
+            )
+        {
+            if (MaxDepth.HasValue
+                && MaxDepth.GetValueOrDefault() > Depth)
+                yield break;
+
+            if (Where?.Invoke(Object) is not false)
+            yield return Object;
+
+            foreach (var inventoryObject in Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe())
+                foreach (var recursiveObject in inventoryObject.GetObjectsRecursively(Where, Depth + 1, MaxDepth))
+                    if (Where?.Invoke(recursiveObject) is not false)
+                        yield return recursiveObject;
+
+            foreach (var installedCybernetic in Object.GetInstalledCybernetics().IteratorSafe())
+                foreach (var recursiveObject in installedCybernetic.GetObjectsRecursively(Where, Depth + 1, MaxDepth))
+                    if (Where?.Invoke(recursiveObject) is not false)
+                        yield return recursiveObject;
+
+            foreach (var contentsObject in Object.GetContents().IteratorSafe())
+                foreach (var recursiveObject in contentsObject.GetObjectsRecursively(Where, Depth + 1, MaxDepth))
+                    if (Where?.Invoke(recursiveObject) is not false)
+                        yield return recursiveObject;
+        }
+
+        public static void PerformActionRecursivelyInRandomOrder(
+            this GameObject Object,
+            Action<GameObject> Action,
+            Predicate<GameObject> Where = null,
+            int Depth = 0,
+            Random Rnd = null
+            )
+        {
+            using var objectsList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Object.GetObjectsRecursively(Where, Depth));
+            objectsList.ShuffleInPlace(Rnd);
+            foreach (var randomObject in objectsList)
+                Action.Invoke(randomObject);
+        }
+
         public static void PerformActionRecursively(this GameObject Object, Action<GameObject> Action, int Depth = 0)
             => Object.PerformActionRecursively(
                 Action: delegate(GameObject go, int depth)
@@ -1300,14 +1344,20 @@ namespace UD_Bones_Folder.Mod
                 BonesID: BonesID))
             {
                 if (!BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
+                {
+                    Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {true}, added");
                     BonesObject.AddPart(UD_Bones_FeverWarped.NewWithBonesID(BonesID, warpFlags));
+                }
                 else
                 {
+                    Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
                     feverWarped.Flags = warpFlags;
+                    feverWarped.OverrideBonesID(BonesID);
                     feverWarped.Initialize();
                 }
                 return true;
             }
+            Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {false}");
             return false;
         }
 
@@ -1322,51 +1372,51 @@ namespace UD_Bones_Folder.Mod
             if (BonesObject == null)
                 return false;
 
-            if (!BonesObject.IsLunarRegent(BonesID))
+            if (BonesObject.IsLunarRegent(BonesID))
+                return false;
+
+            if (BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped)
+                && feverWarped.BonesID == BonesID)
+                return false;
+
+            if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
             {
-                if (BonesObject.HasPart< UD_Bones_FeverWarped>())
-                    return false;
+                WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+                if (BonesObject.GetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{false}").EqualsNoCase($"{true}"))
+                    WarpFlags = UD_Bones_FeverWarped.WarpFlags.Tile;
 
-                if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
+                return true;
+            }
+
+            bool blueprintExists = true;
+
+            SerializationExtensions.OptionallyPerformWithoutMetrics(delegate()
+            {
+                try
                 {
-                    WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
-                    if (BonesObject.GetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{false}").EqualsNoCase($"{true}"))
-                        WarpFlags = UD_Bones_FeverWarped.WarpFlags.Tile;
-
-                    return true;
-                }
-
-                bool blueprintExists = true;
-
-                SerializationExtensions.OptionallyPerformWithoutMetrics(delegate()
-                {
-                    try
-                    {
-                        blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
-
-                        if (blueprintExists)
-                            _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
-                    }
-                    catch
-                    {
-                        blueprintExists = false;
-                    }
-                });
-
-                if (BonesObject.GetTile() is string bonesTile
-                    && !bonesTile.IsTile())
-                {
-                    WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+                    blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
 
                     if (blueprintExists)
-                        WarpFlags &= ~ UD_Bones_FeverWarped.WarpFlags.Blueprint;
-                    return true;
+                        _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
                 }
+                catch
+                {
+                    blueprintExists = false;
+                }
+            });
 
-                if (!blueprintExists)
-                    return true;
+            if (BonesObject.GetTile() is string bonesTile
+                && !bonesTile.IsTile())
+            {
+                WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+
+                if (blueprintExists)
+                    WarpFlags &= ~UD_Bones_FeverWarped.WarpFlags.Blueprint;
+
+                return true;
             }
-            return false;
+
+            return !blueprintExists;
         }
 
         public static void MakeReportable(this GameObject Object, string BonesID)

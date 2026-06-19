@@ -217,6 +217,9 @@ namespace UD_Bones_Folder.Mod.Moderation
             {
                 IBadWord.SeverityLevelValueCache.ForEach(delegate(string name, SeverityLevel severity)
                 {
+                    if (!severity.IsTwixtInclusive(SeverityLevel.Mild, SeverityLevel.Severe))
+                        return;
+
                     if (!MegaPatterns.TryGetValue(severity, out string megaPattern))
                     {
                         if (BadWordSetCache.IsNullOrEmpty())
@@ -375,7 +378,7 @@ namespace UD_Bones_Folder.Mod.Moderation
             bool DoStarTest
             )
         {
-            var matchWords = MatchTrie.GetWordStrings();
+            var matchWords = MatchTrie.GetWordStrings(ExcludeSpecialTokens: true);
             string matchWordsString = matchWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
 
             if (DoStarTest)
@@ -386,7 +389,7 @@ namespace UD_Bones_Folder.Mod.Moderation
                 string regexReplaceTest = Utils.BenchmarkReturn(() => Regex.Replace(matchWordsString, FullPattern, "****"),
                     Description: $"{TrieName}:Matches {nameof(Regex)}.{nameof(Regex.Replace)}",
                     Default: "ERROR");
-                Utils.Log($"{TrieName} Replace Test: {regexReplaceTest}");
+                Utils.Log($"{TrieName} Replace Test: \n{regexReplaceTest}");
             }
 
             BenchmarkMatches(TrieName, $"{TrieName}:Matches", FullPattern, matchWordsString);
@@ -404,10 +407,10 @@ namespace UD_Bones_Folder.Mod.Moderation
             bool DoStarTest
             )
         {
-            var matchWords = MatchTrie.GetWordStrings();
+            var matchWords = MatchTrie.GetWordStrings(ExcludeSpecialTokens: true);
             string matchWordsString = matchWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
 
-            var exceptionWords = ExceptionTrie.GetWordStrings();
+            var exceptionWords = ExceptionTrie.GetWordStrings(ExcludeSpecialTokens: true);
             string exceptionWordsString = exceptionWords.Aggregate("", Utils.CommaSpaceDelimitedAggregator).Replace("+", "");
             
             if (DoStarTest)
@@ -418,11 +421,11 @@ namespace UD_Bones_Folder.Mod.Moderation
                 Utils.Log($"{nameof(exceptionWordsString)}: {exceptionWordsString}");
                 Utils.Log($"{nameof(ExceptionPatternString)}: {ExceptionPatternString}");
 
-                string fullTrieWords = $"## {TrieName} Match{matchWordsString}\n## {TrieName} Exception:\n{exceptionWordsString}";
+                string fullTrieWords = $"## {TrieName} Match\n{matchWordsString}\n## {TrieName} Exception:\n{exceptionWordsString}";
                 string regexReplaceTest = Utils.BenchmarkReturn(() => Regex.Replace(fullTrieWords, FullPattern, "****"),
                     Description: $"{TrieName}:Full {nameof(Regex)}.{nameof(Regex.Replace)}",
                     Default: "ERROR");
-                Utils.Log($"{TrieName} Replace Test: {regexReplaceTest}");
+                Utils.Log($"{TrieName} Replace Test: \n{regexReplaceTest}");
             }
 
             BenchmarkMatches(TrieName, $"{TrieName}:Matches", FullPattern, matchWordsString);

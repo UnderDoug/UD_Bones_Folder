@@ -69,8 +69,11 @@ namespace UD_Bones_Folder.Mod.Serialization
 
         public SerializeableSet(IEnumerable<T> Source, CompositeEqualityComparer<T> EqualityComparer, Coalescer<T> Coalescer)
             : this(Source, EqualityComparer, Coalescer, null)
-        {
-        }
+        { }
+
+        public SerializeableSet(IEnumerable<T> Source)
+            : this(Source, null, null)
+        { }
 
         #endregion
         #region Serialization

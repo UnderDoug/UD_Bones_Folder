@@ -44,9 +44,9 @@ namespace UD_Bones_Folder.Mod
             if (TryGetIndexOf(Item, out int index)
                 && Items[index] is T itemAtIndex)
                 throw new InvalidOperationException(
-                    message: "A " + typeof(CoalescibleSet<T>).ToStringWithGenerics() + " (" +
-                        GetType().ToStringWithGenerics() + ") cannot contain duplicate entries. " +
-                        nameof(Item) + " (" + Item.ToString() + ") already present (" + itemAtIndex.ToString() + ").");
+                    message: $"A {typeof(CoalescibleSet<T>).ToStringWithGenerics()} (" +
+                        $"{GetType().ToStringWithGenerics()}) cannot contain duplicate entries. " +
+                        $"{nameof(Item)} ({Item?.ToString() ?? "null"}) already present ({itemAtIndex?.ToString() ?? "null"}).");
 
             EnsureCapacity(Length + 1);
             Items[Length++] = Item;
@@ -70,15 +70,17 @@ namespace UD_Bones_Folder.Mod
             if (Item == null)
                 throw new ArgumentNullException(nameof(Item));
 
+            bool isNew = true;
             T itemToAdd = Item;
             if (TryGetIndexOf(Item, out int index)
                 && Items[index] is T itemAtIndex)
             {
                 RemoveAt(index);
                 itemToAdd = Coalescer.Coalesce(itemAtIndex, itemToAdd);
+                isNew = false;
             }
             InternalAdd(itemToAdd);
-            return false;
+            return isNew;
         }
 
         /// <summary>

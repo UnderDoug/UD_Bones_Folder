@@ -19,13 +19,19 @@ namespace UD_Bones_Folder.Mod
             public override BonesStatSet ReadJson(JsonReader reader, Type objectType, BonesStatSet existingValue, bool hasExistingValue, JsonSerializer serializer)
             {
                 if (reader.TokenType == JsonToken.StartArray)
-                    return new(serializer.Deserialize<BonesStat[]>(reader));
+                {
+                    var deserialized = serializer.Deserialize<BonesStat[]>(reader);
+                    //Utils.Log($"{nameof(BonesStatSet)}.{nameof(SetArrayConverter)}.{nameof(ReadJson)}, {nameof(deserialized)}: {deserialized?.Length ?? -1}");
+
+                    return new(deserialized);
+                }
 
                 return new();
             }
 
             public override void WriteJson(JsonWriter writer, BonesStatSet value, JsonSerializer serializer)
             {
+                //Utils.Log($"{nameof(BonesStatSet)}.{nameof(SetArrayConverter)}.{nameof(WriteJson)}, {nameof(value)}: {(value == null ? "null" : "not null")}");
                 serializer.Serialize(writer, (value ?? new()).ToArray());
             }
         }
@@ -60,6 +66,14 @@ namespace UD_Bones_Folder.Mod
         public BonesStatSet(IEnumerable<BonesStat> Source)
             : base(Source, BonesStatEqualityComparer.DefaultComparer)
         { }
+
+        protected  BonesStatSet(IEnumerable<BonesStat> Source, CompositeEqualityComparer<BonesStat> EqualityComparer, Coalescer<BonesStat> Coalescer)
+            : base(Source, EqualityComparer ?? BonesStatEqualityComparer.DefaultComparer, Coalescer ?? Coalescer<BonesStat>.Default)
+        { }
+
+        public BonesStatSet Clone(CompositeEqualityComparer<BonesStat> EqualityComparer = null, Coalescer<BonesStat> Coalescer = null)
+            => new(this, EqualityComparer ?? GetEqualityComparer(), Coalescer ?? GetCoalescer())
+            ;
 
         public BonesStat GetStat(Guid OsseousAshID)
             => this.FirstOrDefault(stat => stat.OsseousAshID == OsseousAshID.ToString())

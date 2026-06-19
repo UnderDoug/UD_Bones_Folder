@@ -342,11 +342,13 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task ManageOsseousAshIDAsync()
         {
-            PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult> options = new();
+            using var options = new PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult>();
             var sB = Event.NewStringBuilder();
             do
             {
                 sB.Clear();
+                options.Clear(Dispose: true);
+
                 sB.Append("Use the options below to manage your ").Append(OSSEOUS_ASH).Append(" ID.")
                     .AppendLine()
                     .AppendLine().Append("Your current ").Append(OSSEOUS_ASH).Append(" ID is:")
@@ -359,7 +361,6 @@ namespace UD_Bones_Folder.Mod
                     .Append("is able to restrict access.")
                     .AppendLineEnd();
 
-                options.Clear();
                 options.Add(new()
                 {
                     Element = Config,

@@ -116,7 +116,7 @@ namespace XRL.World.Parts
 
             if (!CosmeticOnly
                 && ParentObject.TryRequireBlueprintSpec(out BlueprintSpec blueprintSpec)
-                && BonesManager.System.RequireReplacementEntryForGameObject(blueprintSpec) is ReplacementEntry replacementEntry)
+                && BonesManager.System.RequireReplacementEntryForBlueprintSpec(blueprintSpec) is ReplacementEntry replacementEntry)
                 replacementEntry.ApplyTo(ParentObject, Flags.HasFlag(WarpFlags.Tile), Flags.HasFlag(WarpFlags.Blueprint));
 
             if (ParentObject.TryGetPart(out UD_Bones_Moderated moderatedPart))

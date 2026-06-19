@@ -116,7 +116,7 @@ namespace UD_Bones_Folder.Mod.Events
             E.LunarObject = LunarObject;
             E.Context = Context;
 
-            E.StringyEvent = E.GetStringyEvent();
+            // E.StringyEvent = E.GetStringyEvent();
 
             return E;
         }
@@ -132,7 +132,10 @@ namespace UD_Bones_Folder.Mod.Events
             if (GameObject.Validate(ref Object))
             {
                 WantsMin = Object.WantEvent(GetID(), GetCascadeLevel());
-                WantsStr = Object.HasRegisteredEvent(GetRegisteredEventID());
+
+                WantsStr = StringyEvent != null
+                    && Object.HasRegisteredEvent(GetRegisteredEventID());
+
                 return true;
             }
             return false;
@@ -149,7 +152,10 @@ namespace UD_Bones_Folder.Mod.Events
             if (Object != null)
             {
                 WantsMin = Object.WantEvent(GetID(), GetCascadeLevel());
-                WantsStr = Object.HasRegisteredEvent(GetRegisteredEventID());
+
+                WantsStr = StringyEvent != null
+                    && Object.HasRegisteredEvent(GetRegisteredEventID());
+
                 return true;
             }
             return false;
@@ -169,13 +175,15 @@ namespace UD_Bones_Folder.Mod.Events
 
         protected virtual bool ProcessForZone(Zone Zone)
         {
-
-            if (Zone?.HasObjectWithRegisteredEvent(GetRegisteredEventID()) is true)
+            if (StringyEvent != null)
             {
-                if (!Zone.FireEvent(StringyEvent))
-                    return false;
+                if (Zone?.HasObjectWithRegisteredEvent(GetRegisteredEventID()) is true)
+                {
+                    if (!Zone.FireEvent(StringyEvent))
+                        return false;
 
-                UpdateFromStringyEvent();
+                    UpdateFromStringyEvent();
+                }
             }
 
             if (Zone?.WantEvent(GetID(), GetCascadeLevel()) is true)

@@ -1114,32 +1114,48 @@ namespace UD_Bones_Folder.Mod
             => MissingBlueprintReplacements[Key] = ReplacementEntry.CreateDefaultFor(Key)
             ;
 
-        public ReplacementEntry RequireReplacementEntryForGameObject(BlueprintSpec BlueprintSpec)
+        public ReplacementEntry RequireReplacementEntryForBlueprintSpec(BlueprintSpec BlueprintSpec)
         {
             if (BlueprintSpec.Blueprint is not string key)
                 return null;
 
+            Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
             MissingBlueprintReplacements ??= new();
             try
             {
                 if (!MissingBlueprintReplacements.TryGetValue(key, out var replacementEntry))
                 {
-                    if (BlueprintSpec.GetOrderedDistanceRecords() is not IEnumerable<BlueprintSpec.DistanceRecord> orderedDistanceRecords)
+                    if (BlueprintSpec.GetOrderedSimilarityRecords() is not IEnumerable<BlueprintSpec.SimilarityRecord> orderedSimilarityRecords)
+                    {
+                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(orderedSimilarityRecords)} is null");
                         return CacheDefaultReplacementEntryForKey(key);
+                    }
 
-                    using var distanceRecords = ScopeDisposedList<BlueprintSpec.DistanceRecord>.GetFromPoolFilledWith(orderedDistanceRecords);
+                    using var similarityRecords = ScopeDisposedList<BlueprintSpec.SimilarityRecord>.GetFromPoolFilledWith(orderedSimilarityRecords);
                     
-                    if (distanceRecords.IsNullOrEmpty())
+                    if (similarityRecords.IsNullOrEmpty())
+                    {
+                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(similarityRecords)} is empty");
                         return CacheDefaultReplacementEntryForKey(key);
-
-                    int maxDist = distanceRecords.LastOrDefault().Distance;
+                    }
 
                     var specsByWeight = new Dictionary<string, int>();
-                    foreach (var distanceRecord in distanceRecords)
-                        specsByWeight[distanceRecord.ToString()] = distanceRecord.GetWeight(maxDist);
+                    foreach (var similarityRecord in similarityRecords)
+                    {
+                        if (similarityRecord.ToString() is not string specWeightKey)
+                            continue;
+
+                        if (!specsByWeight.ContainsKey(specWeightKey))
+                            specsByWeight[specWeightKey] = 0;
+
+                        specsByWeight[specWeightKey] += similarityRecord.GetWeight();
+                    }
 
                     if (specsByWeight.IsNullOrEmpty())
+                    {
+                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(specsByWeight)} is null or empty");
                         return CacheDefaultReplacementEntryForKey(key);
+                    }
 
                     string rndSeed = $"{nameof(Mod.BlueprintSpec)}::{BlueprintSpec.Blueprint}::{nameof(replacementEntry)}";
                     var rnd = Stat.GetSeededRandomGenerator(rndSeed);
@@ -1159,7 +1175,10 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     if (alternativeBlueprint == null)
+                    {
+                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(alternativeBlueprint)} is null");
                         return CacheDefaultReplacementEntryForKey(key);
+                    }
 
                     string tile = alternativeBlueprint.GetRenderable()?.Tile;
                     if (rnd.Next(0, 7000) % 500 == 0)
@@ -1180,14 +1199,15 @@ namespace UD_Bones_Folder.Mod
                         if (alternativeForTile != null)
                             tile = alternativeForTile.GetRenderable()?.Tile;
                     }
-
-                    return MissingBlueprintReplacements[key] = ReplacementEntry.CreateFor(key, alternativeBlueprint.Name, tile);
+                    replacementEntry = ReplacementEntry.CreateFor(key, alternativeBlueprint.Name, tile);
+                    MissingBlueprintReplacements[key] = replacementEntry;
                 }
+                Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
                 return replacementEntry;
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(RequireReplacementEntryForGameObject)}({key}), find alternate", x);
+                Utils.Error($"{nameof(RequireReplacementEntryForBlueprintSpec)}({key}), find alternate", x);
                 return CacheDefaultReplacementEntryForKey(key);
             }
         }
@@ -1613,7 +1633,7 @@ namespace UD_Bones_Folder.Mod
                         if (bonesInfos.Any(b => b.IsMad))
                             icon.SetTile(MOON_KING_FEVER_TILE);
 
-                        var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
+                        using var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
                         do
                         {
                             if (failedBonesList.Count >= bonesInfos.Count())
@@ -1622,7 +1642,7 @@ namespace UD_Bones_Folder.Mod
                                 break;
                             }
 
-                            options.Clear();
+                            options.Clear(Dispose: true);
 
                             // Add None Please:
                             options.Add(new PickOptionData<SaveBonesInfo, Task<UIUtils.CascadableResult>>

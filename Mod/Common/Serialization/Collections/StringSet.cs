@@ -16,8 +16,13 @@ namespace UD_Bones_Folder.Mod.Serialization
         public override ReadEach<string> ReadEach => r => r.ReadOptimizedString();
 
         #region Constructors
+
         public StringSet()
             : base()
+        { }
+
+        public StringSet(IEnumerable<string> Source)
+            : base(Source)
         { }
 
         #endregion

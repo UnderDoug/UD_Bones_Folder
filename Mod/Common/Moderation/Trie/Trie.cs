@@ -123,19 +123,39 @@ namespace UD_Bones_Folder.Mod.Moderation
             : CachedRegexPattern ??= $"(?:{this})"
             ;
 
-        public IEnumerable<Word> GetWords()
+        public IEnumerable<Word> GetWords(Predicate<Word> Where, Predicate<Token> WhereToken)
         {
             if (IsRoot
                 && IsEnd)
                 yield break;
 
             foreach (var node in YieldEndNodes())
-                yield return node.ToWord();
+            {
+                if (node.ToWord(WhereToken) is Word word)
+                {
+                    if (Where?.Invoke(word) is not false)
+                        yield return word;
+                    else
+                        word.Dispose();
+                }
+            }
         }
 
-        public IEnumerable<string> GetWordStrings()
+        public IEnumerable<Word> GetWords(Predicate<Word> Where)
+            => GetWords(Where, null)
+            ;
+
+        public IEnumerable<Word> GetWords(Predicate<Token> WhereToken)
+            => GetWords(null, WhereToken)
+            ;
+
+        public IEnumerable<Word> GetWords()
+            => GetWords(null, null)
+            ;
+
+        public IEnumerable<string> GetWordStrings(bool ExcludeSpecialTokens = false)
         {
-            foreach (var word in GetWords())
+            foreach (var word in GetWords(WhereToken: ExcludeSpecialTokens ? t => !t.IsSpecial : null))
                 yield return (string)word;
         }
 

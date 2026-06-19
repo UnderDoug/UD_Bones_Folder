@@ -9,6 +9,9 @@ using Newtonsoft.Json;
 
 using Platform.IO;
 
+using UD_Bones_Folder.Mod.Coalescence;
+using UD_Bones_Folder.Mod.Serialization;
+
 using XRL;
 using XRL.Collections;
 using XRL.Core;
@@ -20,6 +23,55 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class FileLocationData : IComposite, IEquatable<FileLocationData>, IDisposable
     {
+        public class EqualityComparer : CompositeEqualityComparer<FileLocationData>
+        {
+            public override bool Equals(FileLocationData x, FileLocationData y)
+                => x == null
+                    || y == null
+                ? (x == null) == (y == null)
+                : x.SameAs(y)
+                ;
+
+            public override int GetHashCode(FileLocationData obj)
+                => obj?.GetHashCode()
+                ?? 0
+                ;
+        }
+
+        public class Coalescer : Coalescer<FileLocationData>
+        {
+            public Coalescer()
+            {
+                _CoalesceMethod = CoalesceMethod.First;
+            }
+
+            public Coalescer(CoalesceMethod CoalesceMethod)
+                : base(CoalesceMethod)
+            { }
+
+            public override FileLocationData CoalesceFirst(FileLocationData x, FileLocationData y)
+                => x;
+
+            public override FileLocationData CoalesceSecond(FileLocationData x, FileLocationData y)
+                => y;
+
+            public override FileLocationData CoalesceGreater(FileLocationData x, FileLocationData y)
+                => throw Nonsense_NotSupportedException()
+                ;
+
+            public override FileLocationData CoalesceLesser(FileLocationData x, FileLocationData y)
+                => throw Nonsense_NotSupportedException()
+                ;
+
+            public override FileLocationData CoalesceCombine(FileLocationData x, FileLocationData y)
+                => throw Nonsense_NotSupportedException()
+                ;
+
+            public override FileLocationData CoalesceDifference(FileLocationData x, FileLocationData y)
+                => throw Nonsense_NotSupportedException()
+                ;
+        }
+
         [Serializable]
         public enum LocationType
         {
@@ -36,6 +88,10 @@ namespace UD_Bones_Folder.Mod
             '\\',
             System.IO.Path.DirectorySeparatorChar,
         };
+
+        public static EqualityComparer DefaultEqualityComparer = new();
+
+        public static Coalescer DefaultCoalescer = new();
 
         public static string MissingLocaitonShortDisplayName => $"a {"strange location".Colored(LocationType.None.TypeColor())}";
 

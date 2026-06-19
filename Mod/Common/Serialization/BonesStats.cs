@@ -52,14 +52,15 @@ namespace UD_Bones_Folder.Mod
             BonesStatSet Broken
             )
         {
-            this.Encountered = new(Encountered);
-            this.Defeated = new(Defeated);
-            this.Reclaimed = new(Reclaimed);
-            this.Broken = new(Broken);
+
+            this.Encountered = Encountered?.Clone() ?? new();
+            this.Defeated = Defeated?.Clone() ?? new();
+            this.Reclaimed = Reclaimed?.Clone() ?? new();
+            this.Broken = Broken?.Clone() ?? new();
         }
 
         public BonesStats(BonesStats Source)
-            : this(Source.Encountered, Source.Defeated, Source.Reclaimed, Source.Broken)
+            : this(Source?.Encountered, Source?.Defeated, Source?.Reclaimed, Source?.Broken)
         { }
 
         public bool IncrementStat(ref BonesStatSet StatSet, Guid OsseousAshID)
@@ -75,16 +76,32 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
+        public bool IncrementEncountered()
+            => IncrementEncountered(OsseousAsh.Config.ID)
+            ;
+
         public bool IncrementDefeated(Guid OsseousAshID)
             => IncrementStat(ref Defeated, OsseousAshID)
+            ;
+
+        public bool IncrementDefeated()
+            => IncrementDefeated(OsseousAsh.Config.ID)
             ;
 
         public bool IncrementReclaimed(Guid OsseousAshID)
             => IncrementStat(ref Reclaimed, OsseousAshID)
             ;
 
+        public bool IncrementReclaimed()
+            => IncrementReclaimed(OsseousAsh.Config.ID)
+            ;
+
         public bool IncrementBroken(Guid OsseousAshID)
             => IncrementStat(ref Broken, OsseousAshID)
+            ;
+
+        public bool IncrementBroken()
+            => IncrementBroken(OsseousAsh.Config.ID)
             ;
 
         public int GetStatValue(ref BonesStatSet StatSet, Guid OsseousAshID)

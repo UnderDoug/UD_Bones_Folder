@@ -37,10 +37,15 @@ namespace UD_Bones_Folder.Mod
             get => Items[Index];
             set
             {
-                if (TryGetIndexOf(value, out int valueIndex)
-                    && valueIndex != Index)
+                if (value is null)
                     RemoveAt(Index);
-                Add(value);
+                else
+                {
+                    if (TryGetIndexOf(value, out int valueIndex)
+                        && valueIndex != Index)
+                        RemoveAt(Index);
+                    Add(value);
+                }
             }
         }
 
@@ -65,11 +70,14 @@ namespace UD_Bones_Folder.Mod
         public virtual int IndexOf(T item)
             => Items
                 .Select((o, i) => new KeyValuePair<int, T>(i, o)) // convert to IEnumerable of KVP<int, T> where int is Index
-                .Aggregate(-1, (a, n) // start with -1 (no item)
-                    => EqualityComparer.Equals(n.Value, item) // if (n)ext.Value == Item
-                        && a < 0 // but only the first one (should always only be 1)
-                    ? n.Key // (a)ccumulator = n.Key (the Index)
-                    : a); // otherwise a is unchanged.
+                .Aggregate(
+                    seed: -1, // start with -1 (no item)
+                    func: (a, n) => EqualityComparer.Equals(n.Value, item) // if (n)ext.Value == Item
+                            && a < 0 // but only the first one (should always only be 1)
+                        ? n.Key // (a)ccumulator = n.Key (the Index)
+                        : a // otherwise a is unchanged.
+                    )
+            ;
 
         public void RemoveAt(int Index)
         {

@@ -316,7 +316,7 @@ namespace UD_Bones_Folder.Mod
                     Dictionary<int, Func<Task<UIUtils.CascadableResult>>> buttonCallbacks = null;
                     try
                     {
-                        var options = new PickOptionDataSetAsync<object, UIUtils.CascadableResult>();
+                        using var options = new PickOptionDataSetAsync<object, UIUtils.CascadableResult>();
                         var result = UIUtils.CascadableResult.Continue;
 
                         bool originalEnableDownloads = Options.EnableOsseousAshDownloads;
@@ -327,7 +327,7 @@ namespace UD_Bones_Folder.Mod
                         do
                         {
                             sB.Clear();
-                            options.Clear();
+                            options.Clear(Dispose: true);
 
                             sB.Append("Welcome to the ").Append(Utils.ThisMod?.DisplayTitle ?? "Bones(alpha)").Append(" mod!")
                             .AppendLine()
@@ -633,7 +633,7 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     // dispose all the already copied hosts
-                    existingHostCollection.DisposeClear(h => alreadyCopiedHosts.Contains(h));
+                    existingHostCollection.DisposeClear(h => alreadyCopiedHosts.Contains(h), DisposePendingSavGz: false);
                 }
             }
             readHosts.Clear();
@@ -678,24 +678,24 @@ namespace UD_Bones_Folder.Mod
             Predicate<PickOptionData<KeyValuePair<FileLocationData, Host>, Task<UIUtils.CascadableResult>>> SelectImmediately
             )
         {
-            PickOptionDataSetAsync<KeyValuePair<FileLocationData, Host>, UIUtils.CascadableResult> options;
+            using var options = new PickOptionDataSetAsync<KeyValuePair<FileLocationData, Host>, UIUtils.CascadableResult>();
             var result = UIUtils.CascadableResult.Continue;
             do
             {
-                options = new PickOptionDataSetAsync<KeyValuePair<FileLocationData, Host>, UIUtils.CascadableResult>
+                options.Clear(Dispose: true);
+
+                options.Add(new PickOptionDataAsync<KeyValuePair<FileLocationData, Host>, UIUtils.CascadableResult>
                 {
-                    new PickOptionDataAsync<KeyValuePair<FileLocationData, Host>, UIUtils.CascadableResult>
-                    {
-                        Text = "new host",
-                        Icon = new Renderable(
-                            Tile: "UI/sw_newchar.bmp",
-                            ColorString: "&W",
-                            TileColor: "&W",
-                            DetailColor: 'y'),
-                        Hotkey = 'n',
-                        Callback = PerformNewHostAsync,
-                    }
-                };
+                    Text = "new host",
+                    Icon = new Renderable(
+                        Tile: "UI/sw_newchar.bmp",
+                        ColorString: "&W",
+                        TileColor: "&W",
+                        DetailColor: 'y'),
+                    Hotkey = 'n',
+                    Callback = PerformNewHostAsync,
+                });
+
                 int offset = options.Count;
                 using var exludeHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
 
@@ -779,7 +779,10 @@ namespace UD_Bones_Folder.Mod
                 confirmed = await ConfirmParsedHost(newHost);
 
                 if (!confirmed.HasValue)
+                {
+                    newHost.Dispose(DisposePendingSavGz: true);
                     break;
+                }
 
                 if (newHost == null)
                     break;
@@ -791,6 +794,8 @@ namespace UD_Bones_Folder.Mod
                     .WriteAddHost(newHost);
                     break;
                 }
+
+                newHost.Dispose(DisposePendingSavGz: true);
             }
             while (true);
 
@@ -801,32 +806,40 @@ namespace UD_Bones_Folder.Mod
         {
             using var osseousAshFilePaths = ScopeDisposedList<FileLocationData>.GetFromPoolFilledWith(GetOsseousAshFileLocationData(Ensure: true));
             var hotkeys = new Rack<char>();
-            var options = new PickOptionDataSetAsync<FileLocationData, FileLocationData>();
+            using var options = new PickOptionDataSetAsync<FileLocationData, FileLocationData>();
 
-            foreach (var fileLocationData in osseousAshFilePaths)
+            try
             {
-                options.Add(new PickOptionDataAsync<FileLocationData, FileLocationData>
+                foreach (var fileLocationData in osseousAshFilePaths)
                 {
-                    Element = fileLocationData,
-                    Text = fileLocationData.TaggedDisplayName(),
-                    Hotkey = fileLocationData.Type.ToString().ToLower()[0],
-                    Callback = fLD => Task.Run(() => fLD),
-                });
-            }
+                    options.Add(new PickOptionDataAsync<FileLocationData, FileLocationData>
+                    {
+                        Element = fileLocationData,
+                        Text = fileLocationData.TaggedDisplayName(),
+                        Hotkey = fileLocationData.Type.ToString().ToLower()[0],
+                        Callback = fLD => Task.Run(() => fLD),
+                    });
+                }
 
-            if (options.Count == 1)
-                return await options[0].Invoke();
+                if (options.Count == 1)
+                    return await options[0].Invoke();
 
-            string localType = FileLocationData.LocationType.Local.GetColoredString();
-            string syncedType = FileLocationData.LocationType.Synced.GetColoredString();
+                string localType = FileLocationData.LocationType.Local.GetColoredString();
+                string syncedType = FileLocationData.LocationType.Synced.GetColoredString();
 
-            return await UIUtils.PerformPickOptionAsync(
+                return await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
                     Title: $"New {OSSEOUS_ASH} Host".Colored("yellow"),
                     Intro: $"Which location would you like to record your new host?\n\n" +
                         $"\u0007 [{localType}] only exists on this device.\n" +
                         $"\u0007 [{syncedType}] will be synced by the platform managing the game's installation (if there is one).\n\n",
                     IntroIcon: BlackAshCloudIcon);
+            }
+            finally
+            {
+                options.Clear(Dispose: true);
+            }
+            
         }
 
         private static async Task<string> AskFullHostName(FileLocationData ChosenLocation)
@@ -936,7 +949,7 @@ namespace UD_Bones_Folder.Mod
             var locationData = HostCollection.LocationData;
             var pair = (Host, HostCollection);
 
-            PickOptionDataSetAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult> options;
+            using var options = new PickOptionDataSetAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>();
             UIUtils.CascadableResult result;
             var sB = Event.NewStringBuilder();
             do
@@ -947,39 +960,66 @@ namespace UD_Bones_Folder.Mod
                     .AppendLine()
                     .AppendLine().Append(HostCollection.TaggedDisplayName())
                     .AppendLine()
-                    .AppendLine().AppendPair("Server Status", Host.ServerStatusString)
-                    .AppendLineEnd();
+                    .AppendLine().AppendPair("Server Status", Host.ServerStatusString);
+                if (Host.IsOnCooldown)
+                    sB.AppendLine().AppendColored("C", "Host status checks on cooldown.");
+                sB.AppendLineEnd();
 
-                options = new PickOptionDataSetAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                options.Clear(Dispose: true);
+                if (Host.IsOnCooldown)
+                {
+                    options.Add(new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
                     {
-                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                        Element = pair,
+                        Text = "clear timeout cooldown",
+                        Hotkey = 'c',
+                        Callback = async delegate ((Host Host, HostSet Hosts) p)
                         {
-                            Element = pair,
-                            Text = "modify",
-                            Hotkey = 'm',
-                            Callback = p => PerformModifyHostAsync(p.Host, p.Hosts)
-                        },
-                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                            string hostName = p.Host.GetHostNameWithProtocol();
+                            string message = $"Are you sure you want clear the timeout cooldown for {hostName}?";
+                            if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
+                                p.Host.ManuallyClearStatusCheckTimer(ReasonForOverride: $"{hostName} was cleared by player via options menu");
+
+                            message = $"Timeout cooldown for {hostName} cleared.";
+                            if (p.Host.IsOnCooldown)
+                                message = $"Failed to clear timeout cooldown for {hostName}.";
+
+                            await Popup.ShowAsync(message);
+
+                            return UIUtils.CascadableResult.Continue;
+                        }
+                    });
+                }
+                options.Add(new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                {
+                    Element = pair,
+                    Text = "modify",
+                    Hotkey = 'm',
+                    Callback = p => PerformModifyHostAsync(p.Host, p.Hosts)
+                });
+                options.Add(new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                {
+                    Element = pair,
+                    Text = "migrate",
+                    Hotkey = 'M',
+                    Callback = p => PerformMigrateHostAsync(p.Host, p.Hosts)
+                });
+                options.Add(new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
+                {
+                    Element = pair,
+                    Text = "delete",
+                    Hotkey = 'd',
+                    Callback = async delegate ((Host Host, HostSet Hosts) p)
+                    {
+                        string message = $"Are you sure you want to delete {p.Host.GetHostNameWithProtocol()} from {p.Hosts.DisplayName()}?";
+                        if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
                         {
-                            Element = pair,
-                            Text = "migrate",
-                            Hotkey = 'M',
-                            Callback = p => PerformMigrateHostAsync(p.Host, p.Hosts)
-                        },
-                        new PickOptionDataAsync<(Host Host, HostSet Hosts), UIUtils.CascadableResult>
-                        {
-                            Element = pair,
-                            Text = "delete",
-                            Hotkey = 'd',
-                            Callback = async delegate ((Host Host, HostSet Hosts) p)
-                            {
-                                string message = $"Are you sure you want to delete {p.Host.GetHostNameWithProtocol()} from {p.Hosts.DisplayName()}?";
-                                if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
-                                    p.Hosts.WriteRemoveHost(p.Host, Dispose: true);
-                                return UIUtils.CascadableResult.BackSilent;
-                            }
-                        },
-                    };
+                            p.Hosts.WriteRemoveHost(p.Host, Dispose: true);
+                            return UIUtils.CascadableResult.BackSilent;
+                        }
+                        return UIUtils.CascadableResult.Continue;
+                    }
+                });
 
                 result = await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
@@ -1004,7 +1044,7 @@ namespace UD_Bones_Folder.Mod
         {
             using var oldHost = Host.Clone();
             Host.Unbuild();
-            PickOptionDataSetAsync<Host, UIUtils.CascadableResult> options = new();
+            using var options = new PickOptionDataSetAsync<Host, UIUtils.CascadableResult>();
             UIUtils.CascadableResult result;
             var sB = Event.NewStringBuilder();
             Dictionary<int, Func<Task<UIUtils.CascadableResult>>> buttonCallbacks = null;
@@ -1020,7 +1060,7 @@ namespace UD_Bones_Folder.Mod
                     .AppendLine().AppendPair("Server Status", Host.ServerStatusString)
                     .AppendLineEnd();
 
-                options.Clear();
+                options.Clear(Dispose: true);
                 options.Add(new PickOptionDataAsync<Host, UIUtils.CascadableResult>
                 {
                     Element = Host,
@@ -1215,23 +1255,21 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<UIUtils.CascadableResult> PerformMigrateHostAsync(Host Host, HostSet HostCollection)
         {
-            PickOptionDataSetAsync<HostSet, UIUtils.CascadableResult> options = null;
+            using var options = new PickOptionDataSetAsync<HostSet, UIUtils.CascadableResult>();
             UIUtils.CascadableResult result;
             do
             {
                 using var hostCollections = ScopeDisposedList<HostSet>.GetFromPoolFilledWith(Hosts);
                 hostCollections.Remove(HostCollection);
 
-                options = new PickOptionDataSetAsync<HostSet, UIUtils.CascadableResult>
-                    {
-                        new PickOptionDataAsync<HostSet, UIUtils.CascadableResult>
-                        {
-                            Element = HostCollection,
-                            Text = $"Leave in {HostCollection.TaggedDisplayName()}".Colored("black"),
-                            Hotkey = 'x',
-                            Callback = hc => Task.Run(() => UIUtils.CascadableResult.BackSilent),
-                        }
-                    };
+                options.Clear(Dispose: true);
+                options.Add(new PickOptionDataAsync<HostSet, UIUtils.CascadableResult>
+                {
+                    Element = HostCollection,
+                    Text = $"Leave in {HostCollection.TaggedDisplayName()}".Colored("black"),
+                    Hotkey = 'x',
+                    Callback = hc => Task.Run(() => UIUtils.CascadableResult.BackSilent),
+                });
 
                 using var excludedHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
                 foreach (var hostCollection in hostCollections)
@@ -1565,7 +1603,7 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            PickOptionDataSetAsync<Report, UIUtils.CascadableResult> options = new();
+            using var options = new PickOptionDataSetAsync<Report, UIUtils.CascadableResult>();
             var report = new Report
             {
                 OsseousAshID = Config.ID,
@@ -1615,6 +1653,7 @@ namespace UD_Bones_Folder.Mod
                 if (!report.Description.IsNullOrEmpty())
                     enterDescriptionText = "Modify Description";
 
+                options.Clear(Dispose: true);
                 options.Add(new()
                 {
                     Element = report,
@@ -1730,7 +1769,7 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<Report.ReportTypes> AskBonesReportTypeAsync()
         {
-            PickOptionDataSetAsync<Report.ReportTypes, Report.ReportTypes> options = new();
+            using var options = new PickOptionDataSetAsync<Report.ReportTypes, Report.ReportTypes>();
 
             var reportType = Report.ReportTypes.None;
             while (Enum.IsDefined(typeof(Report.ReportTypes), ++reportType))
@@ -1739,6 +1778,7 @@ namespace UD_Bones_Folder.Mod
                 if (reportType != Report.ReportTypes.Other)
                     reportTypeText = $"They are {reportType.ToString().ToLower()}";
 
+                options.Clear(Dispose: true);
                 options.Add(new PickOptionDataAsync<Report.ReportTypes, Report.ReportTypes>
                 {
                     Element = reportType,
