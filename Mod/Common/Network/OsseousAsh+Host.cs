@@ -44,14 +44,26 @@ namespace UD_Bones_Folder.Mod
         {
             public class PendingSavGz : IDisposable
             {
+                public Host ParentHost;
+
                 public string BonesID;
                 public Guid Token;
                 public byte[] SavGz;
                 public DateTime UploadTime;
                 public Timer Timer;
 
+                public bool Success;
+                public bool ForceDispose;
+
                 public bool CheckValid(bool Silent = false)
                 {
+                    if (ParentHost == null)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(ParentHost)} is null.");
+                        return false;
+                    }
+
                     if (BonesID.IsNullOrEmpty())
                     {
                         if (!Silent)
@@ -73,17 +85,107 @@ namespace UD_Bones_Folder.Mod
                         return false;
                     }
 
+                    if (Success)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(Success)} is {Success}.");
+                        return false;
+                    }
+
+                    if (ForceDispose)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(ForceDispose)} is {ForceDispose}.");
+                        return false;
+                    }
+
+                    if (!Silent)
+                        Utils.Info($"{nameof(PendingSavGz)} is Valid; {{{BonesID}}}.");
+
                     return true;
                 }
 
-                public void Dispose()
+                public bool RetryUpload(bool ForceDispose = false)
                 {
+                    if (ForceDispose)
+                        this.ForceDispose = true;
+
+                    var timeSinceFirstTry = DateTime.UtcNow - UploadTime;
+                    bool exceededTimeLimit = timeSinceFirstTry.TotalMilliseconds >= 180000;
+
+                    Utils.Info($"{DateTime.Now.Timestamp()} - {nameof(PendingSavGz)} attempting to {nameof(RetryUpload)} of {{{BonesID ?? "NO_BONES_ID"}}} to {ParentHost?.ToString() ?? "NO_HOST"}, time since first try: {timeSinceFirstTry.ValueUnits()}");
+
+                    if (ParentHost == null)
+                    {
+                        Utils.Log($"{1.Indent()}ParentHost null");
+                        this.ForceDispose = true;
+                    }
+                    else
+                    if (exceededTimeLimit)
+                    {
+                        Utils.Log($"{1.Indent()}Exceeded Time Limit");
+                        this.ForceDispose = true;
+                    }
+                    else
+                    if (ParentHost.PutBonesSavGz(this).WaitResult())
+                    {
+                        Utils.Info($"{1.Indent()}Successful PUT");
+                        Success = true;
+                    }
+
+                    if (!this.ForceDispose
+                        && !Success)
+                        Utils.Warn($"{1.Indent()}{nameof(PendingSavGz)}.{nameof(RetryUpload)} fell through.");
+
+                    string dueTo = "unknown reason";
+                    if (Success)
+                        dueTo = "successful PUT";
+                    else
+                    if (exceededTimeLimit)
+                        dueTo = $"exceeding token duration";
+                    else
+                    if (ForceDispose)
+                        dueTo = "forced disposal";
+                    else
+                    if (ParentHost == null)
+                        dueTo = "missing parent host";
+
+                    if (Success
+                        || this.ForceDispose)
+                    {
+                        var pendingSavGzs = ParentHost?.PendingSavGzs;
+                        string pendingSavsCount = (pendingSavGzs?.Count)?.ToString() ?? "NO_DICTIONARY";
+                        Utils.Info($"{DateTime.Now.Timestamp()} - Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(ParentHost.PendingSavGzs)}: {pendingSavsCount}");
+                        Dispose();
+                    }
+
+                    return Success;
+                }
+
+                protected void DisposeInternal()
+                {
+                    ParentHost?.PendingSavGzs?.Remove(BonesID);
+
+                    ParentHost = null;
+
                     BonesID = null;
                     Token = default;
                     SavGz = null;
                     UploadTime = default;
                     Timer?.Dispose();
                     Timer = null;
+
+                    Success = false;
+                    ForceDispose = false;
+                }
+
+                public void Dispose()
+                {
+                    if (Success
+                        || ForceDispose)
+                        DisposeInternal();
+                    else
+                        RetryUpload(ForceDispose: true);
                 }
             }
 
@@ -533,7 +635,7 @@ namespace UD_Bones_Folder.Mod
 
             public string GetEnabledCheckbox()
                 => WrittenEnabled.HasValue
-                ? WrittenEnabled.GetValueOrDefault().GetCheckboxText(nameof(Enabled))
+                ? WrittenEnabled.GetValueOrDefault().GetCheckboxText(nameof(Enabled), "K")
                 : Enabled.GetCheckboxText(nameof(Enabled))
                 ;
 
@@ -729,7 +831,7 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public string FullDisplayName(bool IncludeAuth = false)
-                => $"{Enabled.GetCheckbox()} "
+                => $"{GetEnabledCheckbox()} "
                 + $"{GetConnectionSymbol(ConnectionLevel)} " // \u000f ☼ | \u0017 ↨
                 + GetHostNameWithProtocol()
                 + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
@@ -1143,8 +1245,37 @@ namespace UD_Bones_Folder.Mod
                 return Guid.Empty;
             }
 
+            private TimerCallback GetPendingSavGzTimerCallback(PendingSavGz PendingSavGz)
+                => delegate (object state)
+                {
+                    if (state is not string bonesID
+                        || bonesID.IsNullOrEmpty())
+                    {
+                        Utils.Error($"{nameof(Timer)} passed invalid {nameof(PendingSavGz.BonesID)} ({state?.ToString() ?? "NO_STATE"}).");
+                        return;
+                    }
+
+                    if (PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
+                        pendingSavGz.RetryUpload();
+                    else
+                        Utils.Warn($"{nameof(Timer)} passed {nameof(Host.PendingSavGz.BonesID)} not found in {nameof(PendingSavGzs)} ({bonesID ?? "NO_BONES_ID"}).");
+
+                };
+
+            private Timer GetPendingSavGzTimer(PendingSavGz PendingSavGz)
+            {
+                string bonesID = PendingSavGz.BonesID;
+                Utils.Info($"{DateTime.Now.Timestamp()} - Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{bonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
+
+                return new(GetPendingSavGzTimerCallback(PendingSavGz),
+                    state: bonesID,
+                    dueTime: 45000, // every 45 seconds
+                    period: 45000);
+            }
+
             public async Task<bool> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
             {
+                Utils.Log($"{nameof(PutBonesSavGz)} for {nameof(Host)} {ToString()} -> {nameof(PendingSavGz.BonesID)}: {{{PendingSavGz?.BonesID ?? "NO_BONES"}}}");
                 if (PendingSavGz == null)
                 {
                     if (!Silent)
@@ -1155,11 +1286,15 @@ namespace UD_Bones_Folder.Mod
                 if (!PendingSavGz.CheckValid(Silent: Silent))
                     return false;
 
-                bool setUpTimer = true;
+                bool setUpTimer = PendingSavGz.Timer == null;
                 try
                 {
                     if (!IsRunning)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{ToString()} is not running");
                         return false;
+                    }
 
                     string uRI = BonesSavGzPutRoute(PendingSavGz.BonesID);
 
@@ -1194,7 +1329,11 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     if (httpReq == null)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(httpReq)} for {ToString()} is null");
                         return false;
+                    }
 
                     try
                     {
@@ -1212,10 +1351,19 @@ namespace UD_Bones_Folder.Mod
 
                                     setUpTimer = false;
 
+                                    PendingSavGz.Success = true;
                                     if (PendingSavGz.Timer == null)
                                         PendingSavGz.Dispose();
 
                                     return true;
+                                }
+                                else
+                                {
+                                    if (!Silent)
+                                        Utils.Warn($"{nameof(TryUploadBonesAsync)} received expected response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}), " +
+                                            $"but {nameof(result)} was malformed\n{JObject.Parse(result)?.ToString() ?? result?.ToString() ?? $"{nameof(result)} null"}");
+
+                                    return false;
                                 }
                             }
                             else
@@ -1224,6 +1372,11 @@ namespace UD_Bones_Folder.Mod
                                     $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
                             }
                         }
+
+                        if (!Silent)
+                            Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}), " +
+                                $"but somehow fell through without an error.");
+                        return false;
                     }
                     catch (WebException x)
                     {
@@ -1231,6 +1384,7 @@ namespace UD_Bones_Folder.Mod
                         {
                             setUpTimer = false;
 
+                            PendingSavGz.ForceDispose = true;
                             if (PendingSavGz.Timer == null)
                                 PendingSavGz.Dispose();
 
@@ -1243,53 +1397,18 @@ namespace UD_Bones_Folder.Mod
                         Utils.Error($"Failed receiving PUT response for {uRI}", x);
                         return false;
                     }
-                    return false;
                 }
                 finally
                 {
                     if (setUpTimer)
                     {
+                        string bonesID = PendingSavGz.BonesID;
+
                         if (PendingSavGz != null
-                            && !PendingSavGzs.TryGetValue(PendingSavGz.BonesID, out var pendingSavGz))
+                            && !PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
                         {
-                            PendingSavGzs[PendingSavGz.BonesID] = pendingSavGz = PendingSavGz;
-
-                            Utils.Info($"{DateTime.Now.Timestamp()} - Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{PendingSavGz.BonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
-
-                            pendingSavGz.Timer = new Timer(delegate (object state)
-                            {
-                                if (state is not string bonesID
-                                    || bonesID.IsNullOrEmpty())
-                                {
-                                    Utils.Error($"{nameof(Timer)} passed invalid {nameof(Host.PendingSavGz.BonesID)} ({state}).");
-                                    return;
-                                }
-
-                                if (PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
-                                {
-                                    var timeSinceFirstTry = DateTime.UtcNow - pendingSavGz.UploadTime;
-
-                                    if (timeSinceFirstTry.TotalMinutes >= 3.0
-                                        || PutBonesSavGz(pendingSavGz).WaitResult())
-                                    {
-                                        PendingSavGzs.Remove(pendingSavGz.BonesID);
-                                        pendingSavGz.Dispose();
-
-                                        string dueTo = "successful PUT";
-                                        if (timeSinceFirstTry.TotalMinutes >= 3.0)
-                                            dueTo = $"exceeding token duration";
-
-                                        Utils.Info($"Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
-                                    }
-                                }
-                                else
-                                    Utils.Warn($"{nameof(Timer)} passed {nameof(Host.PendingSavGz.BonesID)} not found in {nameof(PendingSavGzs)} ({bonesID}).");
-
-                            },
-                            state: PendingSavGz.BonesID,
-                            dueTime: 45000, // every 45 seconds
-                            period: 45000);
-
+                            PendingSavGzs[bonesID] = pendingSavGz = PendingSavGz;
+                            pendingSavGz.Timer = GetPendingSavGzTimer(pendingSavGz);
                         }
                     }
                 }
@@ -1323,6 +1442,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         return await PutBonesSavGz(new PendingSavGz
                         {
+                            ParentHost = this,
                             BonesID = BonesID,
                             Token = token,
                             SavGz = SavGz,

@@ -41,6 +41,9 @@ using XRL.World.WorldBuilders;
 using System.Text.RegularExpressions;
 using UD_Bones_Folder.Mod.Moderation;
 using System.Diagnostics;
+using HarmonyLib;
+using System.Reflection.Emit;
+using System.Reflection;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -1251,10 +1254,6 @@ namespace UD_Bones_Folder.Mod
                         return null;
 
                     var holder = go.Holder;
-                    string heldByHolder = holder != null
-                        ? $" held by {holder.DebugName}"
-                        : null
-                        ;
 
                     if (!go.HasPart<UD_Bones_Moderated>()
                         || go.RemovePart<UD_Bones_Moderated>())
@@ -1289,49 +1288,59 @@ namespace UD_Bones_Folder.Mod
         => TryModerate(BonesObject, BonesInfo?.IsDownloaded is true, out _)
         ;
 
-        public static void FeverWarp(
+        public static void TryFeverWarp(
             this GameObject BonesObject,
             string BonesID,
-            bool Recursive = true
+            bool Recursive = true,
+            bool Silent = true
             )
         {
             if (!BonesID.IsNullOrEmpty())
             {
-                var sw = Stopwatch.StartNew();
+                Stopwatch sw = null;
+
+                if (!Silent)
+                    sw = Stopwatch.StartNew();
+
                 try
                 {
                     if (!Recursive)
-                    {
-                        BonesObject.TryFeverWarp(BonesID);
-                    }
+                        BonesObject.FeverWarp(BonesID);
                     else
                     {
                         BonesObject.PerformActionRecursively(delegate (GameObject go)
                         {
-                            var sw2 = Stopwatch.StartNew();
+                            Stopwatch sw2 = null;
+
+                            if (!Silent)
+                                sw2 = Stopwatch.StartNew();
                             try
                             {
-                                go.TryFeverWarp(BonesID);
+                                go.FeverWarp(BonesID);
                             }
                             finally
                             {
-                                if (go != null)
-                                    Utils.Log($"{nameof(TryFeverWarp)}.{nameof(PerformActionRecursively)} for {go.DebugName.Strip()} took {sw2.Elapsed.ValueUnits()}");
-                                sw2.Stop();
+                                if (!Silent
+                                    && go != null)
+                                    Utils.Log($"{nameof(FeverWarp)}.{nameof(PerformActionRecursively)} for {go.DebugName.Strip()} took {sw2.Elapsed.ValueUnits()}");
+
+                                sw2?.Stop();
                             }
                         });
                     }
                 }
                 finally
                 {
-                    if (BonesObject != null)
-                        Utils.Log($"{nameof(TryFeverWarp)} for {BonesObject.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
-                    sw.Stop();
+                    if (!Silent
+                        && BonesObject != null)
+                        Utils.Log($"{nameof(FeverWarp)} for {BonesObject.DebugName.Strip()} took {sw.Elapsed.ValueUnits()}");
+
+                    sw?.Stop();
                 }
             }
         }
 
-        public static bool TryFeverWarp(
+        public static bool FeverWarp(
             this GameObject BonesObject,
             string BonesID
             )
@@ -1345,19 +1354,19 @@ namespace UD_Bones_Folder.Mod
             {
                 if (!BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
                 {
-                    Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {true}, added");
+                    Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, added");
                     BonesObject.AddPart(UD_Bones_FeverWarped.NewWithBonesID(BonesID, warpFlags));
                 }
                 else
                 {
-                    Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
+                    Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
                     feverWarped.Flags = warpFlags;
-                    feverWarped.OverrideBonesID(BonesID);
+                    //feverWarped.OverrideBonesID(BonesID);
                     feverWarped.Initialize();
                 }
                 return true;
             }
-            Utils.Log($"{nameof(TryFeverWarp)}({BonesObject.DebugName}): {false}");
+            // Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {false}");
             return false;
         }
 
@@ -1405,19 +1414,58 @@ namespace UD_Bones_Folder.Mod
                 }
             });
 
-            if (BonesObject.GetTile() is string bonesTile
-                && !bonesTile.IsTile())
+            if (blueprintExists)
             {
-                WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
+                if (BonesObject.GetBlueprint() is GameObjectBlueprint bonesModel)
+                {
+                    if (!bonesModel.InheritsFromSafe("PhysicalObject"))
+                        return false;
 
-                if (blueprintExists)
-                    WarpFlags &= ~UD_Bones_FeverWarped.WarpFlags.Blueprint;
+                    if (bonesModel.InheritsFromAny(
+                        Blueprints: new string[]
+                        {
+                            "Widget",
+                            "DataBucket",
+                        }))
+                        return false;
 
-                return true;
+                    if (bonesModel.TryGetPartBlueprint<Render>(out var renderPartBlueprint)
+                        && !renderPartBlueprint.HasParameter(nameof(Render.Tile)))
+                        return false;
+                }
             }
 
-            return !blueprintExists;
+            bool tileExists = true; SerializationExtensions.OptionallyPerformWithoutMetrics(delegate ()
+            {
+                try
+                {
+                    tileExists = BonesObject.GetTile() is string bonesTile
+                        && bonesTile.IsTile();
+                }
+                catch
+                {
+                    tileExists = false;
+                }
+            });
+
+            if (!tileExists)
+                FlagsHelper.Set(ref WarpFlags, UD_Bones_FeverWarped.WarpFlags.Tile);
+
+            if (!blueprintExists)
+                FlagsHelper.Set(ref WarpFlags, UD_Bones_FeverWarped.WarpFlags.Blueprint);
+
+            return !tileExists
+                || !blueprintExists;
         }
+
+        public static bool HasSTag(this GameObjectBlueprint Blueprint, string STag)
+            => Blueprint?.Tags?.Keys is Dictionary<string, string>.KeyCollection keys
+            && keys.Any(s => s.Equals("Semantic" + STag))
+            ;
+
+        public static bool InheritsFromAny(this GameObjectBlueprint Blueprint, params string[] Blueprints)
+            => Blueprints?.Any(bp => Blueprint?.InheritsFromSafe(bp) is true) is true
+            ;
 
         public static void MakeReportable(this GameObject Object, string BonesID)
         {
@@ -1453,9 +1501,16 @@ namespace UD_Bones_Folder.Mod
             => GameObject.GetStringProperty(Const.EQ_FRAME_COLORS, Default)
             ;
 
-        public static bool IsEquipment(this GameObject GameObject)
+        public static bool IsEquipment(this GameObject GameObject, bool SkipModel = false)
         {
-            if (GameObject.GetBlueprint()?.InheritsFromSafe("Item") is not true)
+            if (!SkipModel
+                && GameObject.GetBlueprint()?.InheritsFromSafe("Item") is not true)
+                return false;
+            else
+            if (!GameObject.TryGetPart(out UD_Bones_BlueprintSpec blueprintSpecPart)
+                || blueprintSpecPart.BlueprintSpec is not BlueprintSpec blueprintSpec
+                || blueprintSpec.BlueprintTree.IsNullOrEmpty()
+                || !blueprintSpec.BlueprintTree.Any(b => b.EqualsNoCase("Item")))
                 return false;
 
             if (GameObject.HasPart<Armor>())
@@ -1748,11 +1803,13 @@ namespace UD_Bones_Folder.Mod
             : await ResultTask
             ;
 
-        public static string GetCheckbox(this bool Value)
-            => $"[{(Value ? "■" : " ")}]";
+        public static string GetCheckbox(this bool Value, string Colored = null)
+            => $"[{(Value ? "■".Colored(Colored) : " ")}]"
+            ;
 
-        public static string GetCheckboxText(this bool Value, string Label)
-            => $"{Value.GetCheckbox()} {Label}";
+        public static string GetCheckboxText(this bool Value, string Label, string ValueColored = null)
+            => $"{Value.GetCheckbox(ValueColored)} {Label}"
+            ;
 
         public static bool IsTwixt(this int Value, int LowerInclusive, int UpperExclusive)
             => Value >= LowerInclusive
@@ -1913,7 +1970,7 @@ namespace UD_Bones_Folder.Mod
             foreach ((var statName, var stat) in Object?.Statistics.IteratorSafe())
             {
                 if (statName.Contains("Resistance")
-                    && stat.Value < 25)
+                    && stat.Value < 20)
                 {
                     yield return statName[..^("Resistance".Length)];
                 }
@@ -2782,5 +2839,212 @@ namespace UD_Bones_Folder.Mod
                     factionDeed.Faction = "Strangers";
             }
         }
+
+        public static void NewGeneID(this GameObject Object)
+        {
+            if (The.Game == null)
+                return;
+
+            if (Object == null)
+                return;
+
+            int nextGeneID = The.Game.GetIntGameState("NextGeneID");
+            The.Game.SetIntGameState("NextGeneID", nextGeneID + 1);
+            Object.InjectGeneID(nextGeneID.ToString());
+        }
+
+        public static void RemoveLast<T>(this ScopeDisposedList<T> Source)
+        {
+            if (Source.IsNullOrEmpty())
+                return;
+
+            Source.RemoveAt(Source.Count - 1);
+        }
+
+        #region Harmony
+
+        #region Transpilation
+
+        public static bool IsEndOfSection(this OpCode OpCode)
+            => OpCode.ToString() is not string opCodeString
+            || opCodeString.StartsWith("pop")
+            || opCodeString.StartsWith("br")
+            || opCodeString.StartsWith("be")
+            || opCodeString.StartsWith("bg")
+            || opCodeString.StartsWith("bl")
+            || opCodeString.StartsWith("leave")
+            || opCodeString.StartsWith("ret")
+            || opCodeString.StartsWith("st")
+            || opCodeString.StartsWith("throw")
+            ;
+
+        public static LocalBuilder GetLocalAtIndex(this MethodBase MethodBase, int Index)
+            => MethodBase.GetMethodBody().LocalVariables[Index] as LocalBuilder
+            ;
+
+        public static CodeInstruction Vomit(
+            this CodeInstruction Instruction,
+            int Pos,
+            int PosPadding,
+            Dictionary<Label, int> LabelInstructions = null,
+            bool HaveILGen = false,
+            bool IncludeEnd = false,
+            bool Do = false
+            )
+        {
+            if (!Do)
+                return Instruction;
+
+            string arg = Instruction?.operand?.VomitOperand(PosPadding, LabelInstructions, HaveILGen, Do);
+            string arg2 = $"[{Pos.ToString().PadLeft(PosPadding, '0')}]";
+            if (HaveILGen)
+                arg2 = $"IL_{Pos:X4}:";
+
+            Utils.Log($"{arg2} {Instruction.opcode,-10} {arg}");
+            if (IncludeEnd
+                && Instruction.opcode.IsEndOfSection())
+                Utils.Log("");
+
+            return Instruction;
+        }
+
+        public static CodeMatch Vomit(
+            this CodeMatch CodeMatch,
+            int Pos,
+            int PosPadding,
+            Dictionary<Label, int> LabelInstructions = null,
+            bool HaveILGen = false,
+            bool IncludeEnd = false,
+            bool Do = false
+            )
+        {
+            if (!Do)
+                return CodeMatch;
+
+            string arg = CodeMatch?.operand?.VomitOperand(PosPadding, LabelInstructions, HaveILGen, Do);
+            string arg2 = $"[{Pos.ToString().PadLeft(PosPadding, '0')}]";
+            if (HaveILGen)
+                arg2 = $"IL_{Pos:X4}:";
+
+            Utils.Log($"{arg2} {CodeMatch.opcode,-10} {arg}");
+            if (IncludeEnd
+                && CodeMatch.opcode.IsEndOfSection())
+                Utils.Log("");
+
+            return CodeMatch;
+        }
+
+        public static CodeMatch[] Vomit(
+            this CodeMatch[] CodeMatchs,
+            string Context = null,
+            string EndContext = null,
+            Dictionary<Label, int> LabelInstructions = null,
+            bool HaveILGen = false,
+            bool IncludeEnd = false,
+            bool Do = false
+            )
+        {
+            if (!Do)
+                return CodeMatchs;
+
+            int num = 0;
+            int posPadding = Math.Max(4, (CodeMatchs.Length + 1).ToString().Length);
+            if (!Context.IsNullOrEmpty())
+                Utils.Log(Context);
+
+            for (int i = 0; i < CodeMatchs.Length; i++)
+                CodeMatchs[i].Vomit(
+                    IncludeEnd: num < CodeMatchs.Length - 1 && IncludeEnd,
+                    Pos: num++,
+                    PosPadding: posPadding,
+                    LabelInstructions: LabelInstructions,
+                    HaveILGen: HaveILGen,
+                    Do: Do);
+
+            if (!EndContext.IsNullOrEmpty())
+                Utils.Log(EndContext);
+
+            return CodeMatchs;
+        }
+
+        public static string VomitOperand(this object Operand, int PosPadding, Dictionary<Label, int> LabelInstructions = null, bool HaveILGen = false, bool Do = false)
+        {
+            if (!Do)
+                return null;
+
+            string result = Operand?.ToString();
+            if (Operand?.GetType() == typeof(string))
+                result = Operand?.ToString()?.ToLiteral(Quotes: true);
+            else
+            if (Operand is Label key)
+            {
+                string text = "????";
+                if (LabelInstructions.IsNullOrEmpty() && LabelInstructions.ContainsKey(key))
+                {
+                    text = LabelInstructions[key].ToString().PadLeft(PosPadding, '0');
+                    if (HaveILGen)
+                        text = $"IL_{LabelInstructions[key]:X4}";
+                }
+
+                result = "[" + text + "]";
+            }
+
+            return result;
+        }
+
+        public static CodeMatcher Vomit(this CodeMatcher CodeMatcher, ILGenerator Generator, bool Do = false)
+        {
+            if (Do)
+            {
+                bool flag = false;
+                var dictionary = new Dictionary<Label, int>();
+                int pos = CodeMatcher.Pos;
+
+                CodeMatcher.Start();
+                do
+                {
+                    var instruction = CodeMatcher.Instruction;
+                    int value = (flag ? Generator.ILOffset : CodeMatcher.Pos);
+
+                    if (instruction.labels.IsNullOrEmpty())
+                        continue;
+
+                    foreach (Label label in instruction.labels)
+                    {
+                        if (!dictionary.ContainsKey(label))
+                            dictionary.Add(label, value);
+                        else
+                            dictionary[label] = value;
+                    }
+                }
+                while (CodeMatcher.Advance(1).IsValid);
+
+                int posPadding = Math.Max(4, (CodeMatcher.Instructions().Count + 1).ToString().Length);
+
+                CodeMatcher.Start();
+                do
+                {
+                    int pos2 = (flag ? Generator.ILOffset : CodeMatcher.Pos);
+                    CodeMatcher.Instruction?.Vomit(pos2, posPadding, dictionary, flag, IncludeEnd: true, Do);
+                }
+                while (CodeMatcher.Advance(1).IsValid);
+
+                CodeMatcher.Start().Advance(pos);
+            }
+
+            return CodeMatcher;
+        }
+
+        public static CodeMatcher Vomit(this CodeMatcher CodeMatcher, bool Do = false)
+            => CodeMatcher.Vomit(null, Do)
+            ;
+
+        public static IEnumerable<CodeInstruction> Vomit(this IEnumerable<CodeInstruction> Instructions, bool Do = false)
+            => new CodeMatcher(Instructions).Vomit(Do).InstructionEnumeration()
+            ;
+
+        #endregion
+
+        #endregion
     }
 }

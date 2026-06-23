@@ -16,7 +16,7 @@ namespace UD_Bones_Folder.Mod.Serialization
         private SerializeEach<T> _SerializeEach;
         public SerializeEach<T> SerializeEach
         {
-            get => _SerializeEach ??= new();
+            get => _SerializeEach ??= new SerializeEach<T>();
             protected set
             {
                 _SerializeEach = value;
@@ -80,10 +80,9 @@ namespace UD_Bones_Folder.Mod.Serialization
 
         public override void WriteElements(SerializationWriter Writer)
         {
-            Writer.WriteComposite(SerializeEach);
+            Writer.Write(SerializeEach);
 
-            if (SerializeEach != null
-                || WriteEach != null)
+            if (WriteEach != null)
             {
                 foreach (var item in this.IteratorSafe())
                     WriteEach.Invoke(Writer, item);
@@ -106,10 +105,9 @@ namespace UD_Bones_Folder.Mod.Serialization
 
         public override void ReadElements(SerializationReader Reader, int Count)
         {
-            SerializeEach = Reader.ReadComposite<SerializeEach<T>>();
+            SerializeEach = Reader.ReadComposite() as SerializeEach<T>;
 
-            if (SerializeEach != null
-                || ReadEach != null)
+            if (ReadEach != null)
             {
                 for (int i = 0; i < Count; i++)
                     Add(ReadEach.Invoke(Reader));

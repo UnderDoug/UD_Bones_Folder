@@ -105,7 +105,15 @@ namespace XRL.World.Parts
                 .OverrideBonesIDTyped<UD_Bones_LunarColors>(BonesID);
             bonesColors.Persists = true;
 
-            if (ParentObject.IsEquipment())
+            if (!CosmeticOnly
+                && ParentObject.TryRequireBlueprintSpec(out BlueprintSpec blueprintSpec)
+                && BonesManager.System.RequireReplacementEntryForBlueprintSpec(blueprintSpec) is ReplacementEntry replacementEntry)
+                replacementEntry.ApplyTo(ParentObject, FlagsHelper.IsSet(Flags, WarpFlags.Tile), FlagsHelper.IsSet(Flags, WarpFlags.Blueprint));
+
+            // Anything you want to do to the object do below here, it potentiall lacks a blueprint prior
+            // ##########################################################################################
+
+            if (ParentObject.IsEquipment(!CosmeticOnly))
             {
                 if (!ParentObject.HasPart<Cursed>())
                 {
@@ -113,11 +121,6 @@ namespace XRL.World.Parts
                     ParentObject.AddPart<Cursed>().RevealInDescription = true;
                 }
             }
-
-            if (!CosmeticOnly
-                && ParentObject.TryRequireBlueprintSpec(out BlueprintSpec blueprintSpec)
-                && BonesManager.System.RequireReplacementEntryForBlueprintSpec(blueprintSpec) is ReplacementEntry replacementEntry)
-                replacementEntry.ApplyTo(ParentObject, Flags.HasFlag(WarpFlags.Tile), Flags.HasFlag(WarpFlags.Blueprint));
 
             if (ParentObject.TryGetPart(out UD_Bones_Moderated moderatedPart))
                 moderatedPart.ModerateContent(ParentObject, Context: nameof(FeverWarped));
@@ -159,11 +162,16 @@ namespace XRL.World.Parts
         {
             var sB = Event.NewStringBuilder();
             sB.Append(GetAdjective().Capitalize()).Append(": ")
-                .Append(ParentObject.ThisTheseDescriptiveCategory()).Append(" has been warped by the process of arriving in this world.");
+                .Append(ParentObject.ThisTheseDescriptiveCategory())
+                .Append(" =subject.verb:have= been warped by the process of arriving in this world."
+                    .StartReplace()
+                    .AddObject(ParentObject)
+                    .ToString()
+                    );
 
-            if (ParentObject.IsEquipment())
-            sB.AppendLine()
-                .AppendColored("R", $"{GetWillpowerMalus(ParentObject?.GetTier() ?? 1).Signed()} Willpower");
+            if (ParentObject.IsEquipment(!CosmeticOnly))
+                sB.AppendLine()
+                    .AppendColored("R", $"{GetWillpowerMalus(ParentObject?.GetTier() ?? 1).Signed()} Willpower");
 
             return Event.FinalizeString(sB);
         }
@@ -405,16 +413,19 @@ namespace XRL.World.Parts
             using var flagStrings = ScopeDisposedList<string>.GetFromPool();
             if (Flags == WarpFlags.None)
                 flagStrings.Add($"{WarpFlags.None} ({(int)WarpFlags.None})");
-            if (Flags.HasFlag(WarpFlags.Blueprint))
+            if (FlagsHelper.IsSet(Flags, WarpFlags.Blueprint))
                 flagStrings.Add($"{WarpFlags.Blueprint} ({(int)WarpFlags.Blueprint})");
-            if (Flags.HasFlag(WarpFlags.Tile))
+            if (FlagsHelper.IsSet(Flags, WarpFlags.Tile))
                 flagStrings.Add($"{WarpFlags.Tile} ({(int)WarpFlags.Tile})");
-            if (Flags.HasFlag(WarpFlags.Total))
+            if (FlagsHelper.IsSet(Flags, WarpFlags.Total))
                 flagStrings.Add($"{WarpFlags.Total} ({(int)WarpFlags.Total})");
             E.AddEntry(this, $"{nameof(Flags)} ({(int)Flags})", flagStrings.Aggregate("", Utils.NewLineDelimitedAggregator));
 
             E.AddEntry(this, nameof(TileOnly), TileOnly);
             E.AddEntry(this, nameof(CosmeticOnly), CosmeticOnly);
+
+            if (BonesManager.System.TryGetReplacementEntry(ParentObject, out var replacementEntry))
+                E.AddEntry(this, nameof(ReplacementEntry), replacementEntry.GetDebugString());
 
             return base.HandleEvent(E);
         }

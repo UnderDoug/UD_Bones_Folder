@@ -48,7 +48,7 @@ namespace XRL.World.Parts
             : base()
         { }
 
-        public static GameObject Create(string BonesID, bool IsDownloaded)
+        public static GameObject Create(string BonesID, bool IsDownloaded, GameObject LunarRegent = null)
         {
             if (GameObject.CreateUnmodified(Const.LUNAR_RELIQUARY_BLUEPRINT) is not GameObject lunarReliquary)
                 return null;
@@ -60,7 +60,22 @@ namespace XRL.World.Parts
                 return null;
             }
 
-            reliquaryPart.OverrideBonesID(BonesID ?? The.Game?.GameID);
+            string lunarRegentBonesID = LunarRegent?.GetBonesID();
+            reliquaryPart.OverrideBonesID(BonesID ?? lunarRegentBonesID ?? The.Game?.GameID);
+
+            if (reliquaryPart.BonesID == (BonesID ?? lunarRegentBonesID)
+                && lunarReliquary.Render?.DisplayName?.Contains("@@LunarRegent@@") is true)
+            {
+                if (LunarRegent != null)
+                {
+                    string lunarRegentName = $"=subject.RegalTitle= {LunarRegent.BaseDisplayName}"
+                            .StartReplace()
+                            .AddObject(LunarRegent)
+                            .ToString();
+
+                    lunarReliquary.DisplayName = lunarReliquary.Render.DisplayName.Replace("@@LunarRegent@@", Grammar.MakePossessive(lunarRegentName));
+                }
+            }
 
             lunarReliquary.MakeReportable(BonesID);
             lunarReliquary.TryModerate(IsDownloaded);
@@ -69,8 +84,8 @@ namespace XRL.World.Parts
             return lunarReliquary;
         }
 
-        public static GameObject Create(SaveBonesInfo BonesInfo)
-            => Create(BonesInfo?.ID, BonesInfo?.IsDownloaded is true)
+        public static GameObject Create(SaveBonesInfo BonesInfo, GameObject LunarRegent = null)
+            => Create(BonesInfo?.ID, BonesInfo?.IsDownloaded is true, LunarRegent)
             ;
 
         public static GameObject Create(bool IsDownloaded = false)

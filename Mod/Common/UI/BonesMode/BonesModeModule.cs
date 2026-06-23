@@ -42,7 +42,7 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static int MinimumLevelForBones => UD_Bones_BonesSaver.MinimumLevelForBones;
         public static int MaximumLevelForBonesMode => 80;
-        public static int LevelRollDisadvantage => 2;
+        public static int LevelRollDisadvantage => Options.BonesMode_ProgressionSlant;
 
         public string Mode => builder?.GetModule<QudGamemodeModule>()?.data?.Mode;
 
@@ -344,13 +344,13 @@ namespace UD_Bones_Folder.Mod.UI
                     && UD_Bones_WorldBuilder.Builder is JoppaWorldBuilder worldBuilder)
                 {
                     player = The.Player;
-                    SimulateBeingSomewhereCool(player, worldBuilder, Silent: true);
-
-                    if (player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
+                    if (player != null
+                        && player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
                     {
                         bonesSaver.BonesMode = (data.type == "InstantDeath");
                         bonesSaver.PetBlueprint = info.getData<QudCustomizeCharacterModuleData>()?.pet;
                     }
+                    SimulateBeingSomewhereCool(player, worldBuilder, Silent: true);
                 }
             }
             return base.handleBootEvent(id, game, info, element);
@@ -450,6 +450,8 @@ namespace UD_Bones_Folder.Mod.UI
                 Player.Brain?.PerformReequip(Silent: true, Initial: true);
 
                 ShedAFewPounds(Player);
+
+                PeformSundryOtherPrep(Player);
             }
             catch (Exception x)
             {
@@ -469,6 +471,74 @@ namespace UD_Bones_Folder.Mod.UI
                 OverTier.Add(XRL.World.Capabilities.Tier.MAXIMUM);
         }
 
+        private static bool InfectLimbWithPaxKlanq(BodyPart TargetLimb, IEnumerable<BodyPart> BodyParts)
+        {
+            if (TargetLimb.Equipped != null
+                && !TargetLimb.TryUnequip())
+                return false;
+
+            if (GameObjectFactory.Factory.CreateObject("PaxInfection") is not GameObject paxInfection)
+                return false;
+
+            try
+            {
+                if (paxInfection.TryGetPart(out Armor paxArmor))
+                {
+                    if (TargetLimb.Type == "Body")
+                        paxArmor.AV = 3;
+                    else
+                        paxArmor.AV = 1;
+                }
+
+                if (TargetLimb.Type == "Hand"
+                    && paxInfection.TryGetPart(out MeleeWeapon paxWeapon))
+                {
+                    paxWeapon.BaseDamage = "1d4";
+                    paxWeapon.Skill = "Cudgel";
+                    paxWeapon.PenBonus = 0;
+                    paxWeapon.MaxStrengthBonus = 4;
+                    paxInfection.SetIntProperty("ShowMeleeWeaponStats", 1);
+                }
+
+                if (TargetLimb.SupportsDependent != null)
+                {
+                    foreach (var bodyPart in BodyParts)
+                    {
+                        if (bodyPart == null)
+                            continue;
+
+                        if (bodyPart == TargetLimb)
+                            continue;
+
+                        if (bodyPart.DependsOn != TargetLimb.SupportsDependent)
+                            continue;
+
+                        if (!FungalSporeInfection.BodyPartSuitableForFungalInfection(bodyPart, IgnoreBodyPartCategory: true))
+                            continue;
+
+                        paxInfection.UsesSlots = TargetLimb.Type + "," + bodyPart.Type;
+                        break;
+                    }
+                }
+
+                if (!TargetLimb.Equip(Item: paxInfection, EnergyCost: 0, Silent: true, SemiForced: true))
+                {
+                    paxInfection?.Destroy();
+                    return false;
+                }
+
+                return TargetLimb?.Equipped != null
+                    && TargetLimb.Equipped == paxInfection;
+            }
+            catch (Exception x)
+            {
+                string bodyPartString = TargetLimb?.ToString()?.Strip() ?? "NO_LIMB";
+                Utils.Error($"{nameof(InfectLimbWithPaxKlanq)} failed to create and equip {bodyPartString} with {paxInfection?.DebugName ?? "NO_PAX_OBJECT"}", x);
+                return TargetLimb?.Equipped != null
+                    && TargetLimb.Equipped == paxInfection;
+            }
+        }
+
         private static bool GetIntimateWithPaxKlanq(GameObject Player, int PerMyriadChance)
         {
             if (!SeededPerMyriadChance(nameof(GetIntimateWithPaxKlanq), Chance: PerMyriadChance))
@@ -476,38 +546,21 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (Player.Body.GetBody() is BodyPart playerBody)
             {
-                BodyPart target = null;
                 if (Player.Body.LoopParts().Where(limb => FungalSporeInfection.BodyPartSuitableForFungalInfection(limb)) is IEnumerable<BodyPart> infectableLimbs
                     && !infectableLimbs.IsNullOrEmpty())
                 {
-                    using (var randomBodyParts = ScopeDisposedList<BodyPart>.GetFromPoolFilledWith(infectableLimbs))
-                    {
-                        if (!randomBodyParts.IsNullOrEmpty())
-                        {
-                            randomBodyParts.ShuffleInPlace(SeededGenerator(nameof(PaxInfectLimb)));
-                            var bodyParts = new List<BodyPart>(Player.Body.GetParts());
-                            var bodyPartsEnumerable = randomBodyParts.IteratorSafe();
-                            
-                            foreach (var bodyPart in bodyPartsEnumerable)
-                            {
-                                bool success = false;
-                                Utils.SuppressPopupsWhile(delegate ()
-                                {
-                                    success = bodyPart != null
-                                        && PaxInfectLimb.InfectLimb(bodyParts, bodyPart, bodyPart.GetOrdinalName());
-                                });
+                    using var randomBodyParts = ScopeDisposedList<BodyPart>.GetFromPoolFilledWith(infectableLimbs);
+                    if (!randomBodyParts.IsNullOrEmpty())
+                        return false;
 
-                                if (success)
-                                {
-                                    target = bodyPart;
-                                    break;
-                                }
-                            }
-                            
-                        }
-                    }
+                    randomBodyParts.ShuffleInPlace(SeededGenerator(nameof(PaxInfectLimb)));
+
+                    var bodyParts = Player.Body.GetParts();
+
+                    foreach (var bodyPart in randomBodyParts)
+                        if (InfectLimbWithPaxKlanq(bodyPart, bodyParts))
+                            return true;
                 }
-                return target.Equipped?.Blueprint == "PaxInfection";
             }
             return false;
         }
@@ -724,7 +777,7 @@ namespace UD_Bones_Folder.Mod.UI
             Relic.SetImportant(true, player: true);
             if (Relic.HasPart<TrainingBook>())
             {
-                Utils.Log($"{nameof(RecoverRelics)}({Relic.DebugName ?? "NO_OBJECT"}) is Book");
+                //Utils.Log($"{nameof(RecoverRelics)}({Relic.DebugName ?? "NO_OBJECT"}) is Book");
                 var relic = Relic;
                 Utils.SuppressPopupsWhile(delegate ()
                 {
@@ -1476,6 +1529,10 @@ namespace UD_Bones_Folder.Mod.UI
                     {
                         using var bodyParts = ScopeDisposedList<BodyPart>.GetFromPoolFilledWith(loopedParts);
 
+                        using var preferNotImplants = ScopeDisposedList<GameObject>.GetFromPool();
+                        foreach (var bodyPart in bodyParts)
+                            preferNotImplants.Add(bodyPart.Unimplant());
+
                         bodyParts.RemoveAll(bp => !bp.CanReceiveCyberneticImplant());
 
                         int totalParts = bodyParts.Count;
@@ -1531,6 +1588,18 @@ namespace UD_Bones_Folder.Mod.UI
                                     Filter: delegate (GameObject go)
                                     {
                                         return !Player.GetInstalledCybernetics().Contains(go)
+                                            && !preferNotImplants.Contains(go)
+                                            && matchesSpec(
+                                                Model: go.GetBlueprint(),
+                                                NextPart: nextPart,
+                                                AvailableLP: availableLP,
+                                                ExcludeInstalled: false);
+                                    }
+                                    ).GetRandomElement(rnd)
+                                ?? Player.GetInventoryAndEquipment(
+                                    Filter: delegate (GameObject go)
+                                    {
+                                        return !Player.GetInstalledCybernetics().Contains(go)
                                             && matchesSpec(
                                                 Model: go.GetBlueprint(),
                                                 NextPart: nextPart,
@@ -1559,6 +1628,28 @@ namespace UD_Bones_Folder.Mod.UI
                                     if (implant.GetBlueprint() is GameObjectBlueprint model
                                         && !implantedList.Contains(model))
                                         implantedList.Add(model);
+                                }
+                                else
+                                {
+                                    if (implant.GetBlueprint().InheritsFromSafe("MotorizedTreads")
+                                        && GameObject.Create("Tread Guard") is GameObject treadGuard)
+                                    {
+                                        treadGuard.Count = 2;
+                                        if (Player.HasPart(nameof(Tinkering))
+                                            || Player.HasPart(nameof(Tinkering_Tinker1))
+                                            || Player.HasPart(nameof(Tinkering_Tinker2))
+                                            || Player.HasPart(nameof(Tinkering_Tinker3)))
+                                        {
+                                            string seedMethod = $"{nameof(BecomeSomewhat)}::{nameof(ItemModding.ApplyModification)}::Tread Guard";
+                                            if (SeededPerMyriadChance($"{seedMethod}::{nameof(ModSturdy)}", 8000, treadGuard.BaseID))
+                                                ItemModding.ApplyModification(treadGuard, new ModSturdy());
+                                            if (SeededPerMyriadChance($"{seedMethod}::{nameof(ModLacquered)}", 8000, treadGuard.BaseID))
+                                                ItemModding.ApplyModification(treadGuard, new ModLacquered());
+                                            if (SeededPerMyriadChance($"{seedMethod}::{nameof(ModWillowy)}", 8000, treadGuard.BaseID))
+                                                ItemModding.ApplyModification(treadGuard, new ModWillowy());
+                                        }
+                                        Player.ReceiveObject(treadGuard);
+                                    }
                                 }
                             }
                             else
@@ -1698,14 +1789,22 @@ namespace UD_Bones_Folder.Mod.UI
                             {
                                 for (int i = 0; i < intMod; i++)
                                 {
-                                    InventoryActionEvent.Check(
-                                        Object: go,
-                                        Actor: Player,
-                                        Item: go,
-                                        Command: "Examine",
-                                        OverrideEnergyCost: true,
-                                        Silent: true,
-                                        EnergyCostOverride: 0);
+                                    try
+                                    {
+                                        InventoryActionEvent.Check(
+                                            Object: go,
+                                            Actor: Player,
+                                            Item: go,
+                                            Command: "Examine",
+                                            OverrideEnergyCost: true,
+                                            Silent: true,
+                                            EnergyCostOverride: 0);
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        Utils.Warn($"Skipping Examination of {go?.DebugName ?? "MISSING_OBJECT"}, due to thrown exception", x);
+                                        break;
+                                    }
                                 }
                             }
                         });
@@ -2058,6 +2157,17 @@ namespace UD_Bones_Folder.Mod.UI
                 Utils.Error($"{nameof(ShedAFewPounds)} for {Player?.DebugName ?? "MISSING_PLAYER"}", x);
                 return false;
             }
+            return true;
+        }
+
+        public static bool PeformSundryOtherPrep(GameObject Player)
+        {
+            if (Player == null)
+                return false;
+
+            if (Player.TryGetPart(out ElectricalGeneration electricalGeneration))
+                electricalGeneration.AddCharge(electricalGeneration.GetMaxCharge() - electricalGeneration.GetCharge());
+
             return true;
         }
 

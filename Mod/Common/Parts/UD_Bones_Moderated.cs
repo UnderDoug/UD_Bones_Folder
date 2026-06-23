@@ -153,7 +153,7 @@ namespace XRL.World.Parts
 
             if (!GameObjectFactory.Factory.HasBlueprint(Object.Blueprint))
             {
-                if (!Object.TryFeverWarp(Object.GetBonesID(Default: null)))
+                if (!Object.FeverWarp(Object.GetBonesID(Default: null)))
                 {
                     Utils.Warn($"Attempted to Moderate the {nameof(Description)} of an object whose {nameof(GameObject.Blueprint)} doesn't exist.");
                     return null;

@@ -94,6 +94,17 @@ namespace XRL.World.Parts
             if (E.BonesID == BonesID
                 && E.LunarRegent != null)
                 SetLunarRegentReference(E.LunarRegent);
+            else
+            {
+                foreach (var gameObject in (ParentObject?.CurrentZone?.YieldObjects()).IteratorSafe())
+                {
+                    if (gameObject.IsLunarRegent(BonesID))
+                    {
+                        SetLunarRegentReference(gameObject);
+                        break;
+                    }
+                }
+            }
 
             return base.HandleEvent(E);
         }
@@ -103,6 +114,17 @@ namespace XRL.World.Parts
             if (E.BonesID == BonesID
                 && E.LunarRegent != null)
                 SetLunarRegentReference(E.LunarRegent);
+            else
+            {
+                foreach (var gameObject in E.PseudoZone.YieldObjects())
+                {
+                    if (gameObject.IsLunarRegent(BonesID))
+                    {
+                        SetLunarRegentReference(gameObject);
+                        break;
+                    }
+                }
+            }
 
             return base.HandleEvent(E);
         }

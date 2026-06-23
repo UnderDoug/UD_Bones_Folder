@@ -214,6 +214,18 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             }
         }
 
+        public static void TransmuteBrain(
+            CrossGameObject CrossGameObject,
+            IEnumerable<GameObject> OriginObjects,
+            IEnumerable<GameObject> DestinationObjects
+            )
+            => TransmuteBrain(
+                Original: CrossGameObject.Original,
+                Clone: CrossGameObject.Clone,
+                OriginObjects: OriginObjects,
+                DestinationObjects: DestinationObjects)
+            ;
+
         public static void TransferPartyInZone(GameObject Original, GameObject Clone, IEnumerable<GameObject> ZoneObjects)
         {
             if (ZoneObjects == null)
@@ -308,7 +320,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                             if (LunarRegent != null
                                 && LunarRegent != bonesObject)
                             {
-                                Utils.Warn($"Probable error loading {nameof(LunarRegent)} {bonesObject.DebugName}, " +
+                                Utils.Warn($"Probable error loading {{{BonesID}}} {nameof(LunarRegent)} {bonesObject.DebugName}, " +
                                     $"{nameof(LunarRegent)} already assigned {LunarRegent.DebugName}");
                             }
                             LunarRegent = bonesObject;

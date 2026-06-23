@@ -1,23 +1,21 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
 using ConsoleLib.Console;
-
 using Genkit;
-
 using HarmonyLib;
-
 using HistoryKit;
-
 using Kobold;
-
+using Newtonsoft.Json;
 using Qud.UI;
 
 using XRL;
+using XRL.CharacterBuilds;
 using XRL.Collections;
 using XRL.Core;
 using XRL.Language;
@@ -34,12 +32,10 @@ using XRL.World.Text.Delegates;
 using ReplacerContext = XRL.World.Text.Delegates.DelegateContext;
 using ConversationContext = XRL.World.Conversations.DelegateContext;
 
-using static UD_Bones_Folder.Mod.Const;
-using XRL.CharacterBuilds;
 using UD_Bones_Folder.Mod.Moderation;
-using System.Diagnostics;
 using UD_Bones_Folder.Mod.Serialization;
-using Newtonsoft.Json;
+
+using static UD_Bones_Folder.Mod.Const;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -76,10 +72,10 @@ namespace UD_Bones_Folder.Mod
 
         #region Blueprint Specs
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        //[ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static StringSet CachedBlueprints = new();
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        //[ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<string, BlueprintSpec> CachedBlueprintSpecs = new();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
@@ -90,13 +86,30 @@ namespace UD_Bones_Folder.Mod
         {
             using (var status = Loading.StartTask("Converting Lunar Regents"))
             {
-                foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom(Mod.BlueprintSpec.BASE_BLUEPRINT))
-                {
-                    CachedBlueprintSpecs ??= new();
-                    CachedBlueprintSpecs.Clear();
+                CachedBlueprintSpecs ??= new();
+                CachedBlueprintSpecs.Clear();
 
-                    CachedBlueprints ??= new();
-                    CachedBlueprints.Clear();
+                CachedBlueprints ??= new();
+                CachedBlueprints.Clear();
+
+                foreach (var blueprint in GameObjectFactory.Factory.SafelyGetBlueprintsInheritingFrom(BlueprintSpec.BASE_BLUEPRINT))
+                {
+                    if (blueprint.InheritsFromAny(
+                        Blueprints: new string[]
+                        {
+                            "Widget",
+                            "DataBucket",
+                        }))
+                        continue;
+
+                    if (blueprint.HasSTag("Chiliad"))
+                        continue;
+
+                    if (blueprint.Name.StartsWith("Chiliad "))
+                        continue;
+
+                    if (blueprint.HasTag("Golem"))
+                        continue;
 
                     if (!CachedBlueprintSpecs.ContainsKey(blueprint.Name))
                     {
@@ -105,18 +118,23 @@ namespace UD_Bones_Folder.Mod
                             CachedBlueprints.Add(blueprint.Name);
                             CachedBlueprintSpecs[blueprint.Name] = cachedSpec;
 
-                            Log($"Created {nameof(BlueprintSpec)} from {blueprint.Name}");
-                            Log(JsonConvert.SerializeObject(cachedSpec, Formatting.Indented));
+                            /*Log($"Created {nameof(BlueprintSpec)} from {blueprint.Name}");
+                            Log(JsonConvert.SerializeObject(cachedSpec, Formatting.Indented));*/
                         }
-                        else
-                            Log($"Failed to Create {nameof(BlueprintSpec)} from {blueprint.Name}");
+                        /*else
+                            Log($"Failed to Create {nameof(BlueprintSpec)} from {blueprint.Name}");*/
                     }
                 }
+                Info($"Cached {(CachedBlueprintSpecs?.Count ?? 0).Things(nameof(BlueprintSpec))} in {nameof(CachedBlueprintSpecs)}");
             }
         }
 
         #endregion
         #region Pseudo-Debug
+
+        public static HashSet<string> SingleTimeLogMessages = new();
+        public static Dictionary<ModInfo, HashSet<string>> SingleTimeErrorMessages = new();
+        public static Dictionary<ModInfo, HashSet<string>> SingleTimeWarnMessages = new();
 
         public static void Error(ModInfo ModInfo, object Message)
             => (ModInfo ?? ThisMod).Error(Message)
@@ -132,6 +150,30 @@ namespace UD_Bones_Folder.Mod
 
         public static void Error(object Context, Exception X)
             => Error(ModInfo: null, Context, X)
+            ;
+
+        public static void ErrorOnce(ModInfo ModInfo, object Message)
+        {
+            ModInfo ??= ThisMod;
+            SingleTimeErrorMessages ??= new();
+            if (!SingleTimeErrorMessages.ContainsKey(ModInfo))
+                SingleTimeErrorMessages[ModInfo] = new();
+
+            string message = Message.ToString();
+            if (SingleTimeErrorMessages[ModInfo].Add(message))
+                ModInfo.Error(message);
+        }
+
+        public static void ErrorOnce(object Message)
+            => ErrorOnce(ModInfo: null, Message)
+            ;
+
+        public static void ErrorOnce(ModInfo ModInfo, object Context, Exception X)
+            => ErrorOnce(ModInfo, $"{Context}: {X}")
+            ;
+
+        public static void ErrorOnce(object Context, Exception X)
+            => ErrorOnce(ModInfo: null, Context, X)
             ;
 
         public static void Warn(ModInfo ModInfo, object Message)
@@ -158,6 +200,38 @@ namespace UD_Bones_Folder.Mod
             => Warn(ModInfo: null, Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
             ;
 
+        public static void WarnOnce(ModInfo ModInfo, object Message)
+        {
+            ModInfo ??= ThisMod;
+            SingleTimeWarnMessages ??= new();
+            if (!SingleTimeWarnMessages.ContainsKey(ModInfo))
+                SingleTimeWarnMessages[ModInfo] = new();
+
+            string message = Message.ToString();
+            if (SingleTimeWarnMessages[ModInfo].Add(message))
+                ModInfo.Warn(message);
+        }
+
+        public static void WarnOnce(object Message)
+            => WarnOnce(ModInfo: null, Message)
+            ;
+
+        public static void WarnOnce(ModInfo ModInfo, object Context, Exception X)
+            => WarnOnce(ModInfo, $"{Context}: {X}")
+            ;
+
+        public static void WarnOnce(object Context, Exception X)
+            => WarnOnce(ModInfo: null, Context, X)
+            ;
+
+        public static void WarnOnce(ModInfo ModInfo, object Message, StackTrace WithTrace)
+            => WarnOnce(ModInfo: ModInfo, Message: (WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            ;
+
+        public static void WarnOnce(object Message, StackTrace WithTrace)
+            => WarnOnce(ModInfo: null, Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
+            ;
+
         public static void Info(object Message)
             => MetricsManager.LogModInfo(ThisMod, Message)
             ;
@@ -165,6 +239,14 @@ namespace UD_Bones_Folder.Mod
         public static void Log(object Message)
             => UnityEngine.Debug.Log(Message)
             ;
+
+        public static void LogOnce(object Message)
+        {
+            SingleTimeLogMessages ??= new();
+            string message = Message.ToString();
+            if (SingleTimeLogMessages.Add(message))
+                Log(message);
+        }
 
         public static T LogReturn<T>(object Message, T Return)
         {

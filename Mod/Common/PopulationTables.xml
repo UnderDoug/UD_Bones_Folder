@@ -274,7 +274,7 @@
   </population>
   
   <population Name="UD_Bones_BonesMode_Tomb">
-    <group Name="Items" Style="pickeach">
+    <group Name="Supplies" Style="pickeach">
       <group Name="Rifle" Style="pickone">
         <object Blueprint="Chain Laser" Weight="1" />
         <object Blueprint="Phase Cannon" Weight="1" />
@@ -337,6 +337,7 @@
       <object Blueprint="RubbergumTonic" Number="0-3" />
       <object Blueprint="LoveTonic" Number="0-5" />
       <object Blueprint="NectarTonic" Number="0-2" />
+      <table Name="UD_Bones_BonesMode_Gemstones" Number="1d12" />
     </group>
   </population>
 
@@ -349,7 +350,6 @@
       <object Blueprint="The Shemesh Face" Weight="2" />
       <object Blueprint="The Kesil Face" Weight="1" />
     </group>
-
   </population>
 
   <population Name="UD_Bones_BonesMode_Reef">
@@ -362,27 +362,59 @@
       </group>
       <table Name="UD_Bones_BonesMode_SultanFace" />
       <object Blueprint="Quantum Mote" />
+      <table Name="UD_Bones_BonesMode_Gemstones" Number="2d6" />
+    </group>
+  </population>
+
+  <population Name="UD_Bones_BonesMode_Gemstones">
+    <group Name="Gemstones" Style="pickone">
+      <object Blueprint="Rough Agate" Weight="30" />
+      <object Blueprint="Rough Topaz" Weight="25" />
+      <object Blueprint="Rough Jasper" Weight="20" />
+      <object Blueprint="Rough Amethyst" Weight="15" />
+      <object Blueprint="Rough Sapphire" Weight="10" />
+      <object Blueprint="Rough Emerald" Weight="5" />
+      <object Blueprint="Rough Peridot" Weight="5" />
+      <object Blueprint="Polished Agate" Weight="12" />
+      <object Blueprint="Polished Topaz" Weight="10" />
+      <object Blueprint="Polished Jasper" Weight="8" />
+      <object Blueprint="Polished Amethyst" Weight="6" />
+      <object Blueprint="Polished Sapphire" Weight="4" />
+      <object Blueprint="Polished Emerald" Weight="2" />
+      <object Blueprint="Polished Peridot" Weight="2" />
+      <group Name="Figurines" Style="pickone" Weight="1">
+        <table Name="Figurines 1" Weight="1" />
+        <table Name="Figurines 2" Weight="2" />
+        <table Name="Figurines 3" Weight="4" />
+        <table Name="Figurines 4" Weight="8" />
+        <table Name="Figurines 5" Weight="8" />
+        <table Name="Figurines 6" Weight="4" />
+        <table Name="Figurines 7" Weight="2" />
+        <table Name="Figurines 8" Weight="1" />
+      </group>
     </group>
   </population>
   
   <population Name="UD_Bones_BonesMode_Final">
-    <table Name="UD_Bones_BonesMode_Reef" />
-    <table Name="Armor 8C" />
-    <object Blueprint="Urberry" Number="3-6" />
-    <object Blueprint="Sun-Dried Banana" Number="1-2" />
-    <object Blueprint="SalveTonic" Number="5-10" />
-    <object Blueprint="UbernostrumTonic" Number="1-2" />
-    <group Name="Artifacts" Style="pickeach">
-      <table Name="Artifact 7R" Chance="100,100,25,25" />
-      <table Name="Artifact 8R" Chance="100,100,25,25" />
+    <group Name="Supplies" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_Reef" />
+      <table Name="Armor 8C" />
+      <object Blueprint="Urberry" Number="3-6" />
+      <object Blueprint="Sun-Dried Banana" Number="1-2" />
+      <object Blueprint="SalveTonic" Number="5-10" />
+      <object Blueprint="UbernostrumTonic" Number="1-2" />
+      <group Name="Artifacts" Style="pickeach">
+        <table Name="Artifact 7R" Chance="100,100,25,25" />
+        <table Name="Artifact 8R" Chance="100,100,25,25" />
+      </group>
+      <group Name="Weapon" Style="pickone">
+        <object Blueprint="Long Sword8" Chance="100,50,1" />
+        <object Blueprint="Cudgel8" Chance="100,50,1" />
+        <object Blueprint="Battle Axe8" Chance="100,50,1" />
+        <object Blueprint="Dagger8" Chance="100,100,50,1" />
+      </group>
+      <table Name="UD_Bones_BonesMode_Gemstones" Number="2d18" />
     </group>
-    <group Name="Weapon" Style="pickone">
-      <object Blueprint="Long Sword8" Chance="100,50,1" />
-      <object Blueprint="Cudgel8" Chance="100,50,1" />
-      <object Blueprint="Battle Axe8" Chance="100,50,1" />
-      <object Blueprint="Dagger8" Chance="100,100,50,1" />
-    </group>
-    <object Blueprint="Polished Emerald" Number="5d8" />
   </population>
   
 </populations>

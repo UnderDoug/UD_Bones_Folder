@@ -12,13 +12,11 @@ namespace UD_Bones_Folder.Mod.Serialization
     {
         public virtual bool WantFieldReflection => true;
 
-        [SerializeField]
-        private readonly bool UseBaseDefault;
+        private bool UseBaseDefault;
 
         public CompositeEqualityComparer()
             : base()
-        {
-        }
+        { }
 
         public CompositeEqualityComparer(bool UseBaseDefault)
             : this()
@@ -27,10 +25,14 @@ namespace UD_Bones_Folder.Mod.Serialization
         }
 
         public virtual void Write(SerializationWriter Writer)
-        { }
+        {
+            Writer.Write(UseBaseDefault);
+        }
 
         public virtual void Read(SerializationReader Reader)
-        { }
+        {
+            UseBaseDefault = Reader.ReadBoolean();
+        }
 
         public override bool Equals(T x, T y)
         {

@@ -18,6 +18,15 @@ namespace XRL.World.Parts
         : UD_Bones_BaseLunarSubject
         , IModEventHandler<AfterPseudoZoneLoadedEvent>
     {
+        public static List<string> InventoryActionCommandsThatAreSafe = new()
+        {
+            "Look",
+            "ReadStory",
+            "ShowEffects",
+            "ShowInternals",
+            OsseousAsh.ReportBonesInventoryAction.Command,
+        };
+
         public bool WantsToBeDropped;
 
         public bool IsProtected;
@@ -163,8 +172,13 @@ namespace XRL.World.Parts
             if (!WantsToBeDropped)
                 return true;
 
-            if (ParentObject?.InInventory?.IsLunarRegent(BonesID) is not true)
-                return true;
+            if (ParentObject?.InInventory is GameObject holder
+                && BonesID != null)
+            {
+                if (holder.PartsList?.FirstOrDefault(p => p is IFragileObjectHolderPart) is not IFragileObjectHolderPart lunarPart
+                    || lunarPart.BonesID != BonesID)
+                    return true;
+            }
 
             EquipmentAPI.DropObject(ParentObject);
 
@@ -177,9 +191,9 @@ namespace XRL.World.Parts
             return wasDropped;
         }
 
-        public bool IsHeldByOriginRegent()
+        public bool IsHeldByOriginHolder()
         {
-            string logText = $"{1.Indent()}{nameof(IsHeldByOriginRegent)}({ParentObject?.DebugName ?? "NO_OBJECT"})";
+            string logText = $"{1.Indent()}{nameof(IsHeldByOriginHolder)}({ParentObject?.DebugName ?? "NO_OBJECT"})";
             if (ParentObject.Holder is not GameObject holder)
             {
                 //Utils.Log($"{logText} is not being held.");
@@ -230,7 +244,7 @@ namespace XRL.World.Parts
                 if (IsProtected)
                     return;
 
-                if (IsHeldByOriginRegent())
+                if (IsHeldByOriginHolder())
                     return;
             }
 
@@ -382,18 +396,14 @@ namespace XRL.World.Parts
                 bool holderIsReliquary = ParentObject.Holder is GameObject holder
                     && holder.HasPart<UD_Bones_LunarReliquary>();
 
-                if (E.Command == "EmptyForDisassemble"
+                /*if (E.Command == "EmptyForDisassemble"
                     || E.Command == "Disassemble"
                     || E.Command == "DisassembleAll"
                     || E.Command == "LoadMagazineAmmo"
                     || E.Command == "UnloadMagazineAmmo")
                     AttemptDamage(Force: holderIsReliquary, Source: $"{nameof(InventoryActionEvent)}.{nameof(E.Command)} {E.Command} (trigger)");
-                else
-                if (E.Command != "Look"
-                    && E.Command != "ReadStory"
-                    && E.Command != "ShowEffects"
-                    && E.Command != "ShowInternals"
-                    && E.Command != OsseousAsh.ReportBonesInventoryAction.Command)
+                else*/
+                if (InventoryActionCommandsThatAreSafe?.Any(c => E.Command == c) is not true)
                     AttemptDamage(Force: holderIsReliquary, Source: $"{nameof(InventoryActionEvent)}.{nameof(E.Command)} {E.Command} (not safe)");
             }
             return base.HandleEvent(E);
@@ -403,6 +413,14 @@ namespace XRL.World.Parts
         {
             if (ParentObject == E.Object)
                 AttemptDamage(Source: nameof(BeforeBeginTakeActionEvent));
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(ZoneActivatedEvent E)
+        {
+            if (!TryBeDropped())
+                AttemptDamage(Source: $"!TryBeDropped() -> {nameof(ZoneActivatedEvent)}");
 
             return base.HandleEvent(E);
         }
@@ -423,8 +441,8 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(AfterBonesZoneLoadedEvent E)
         {
-            if (!TryBeDropped())
-                AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterBonesZoneLoadedEvent)}");
+            /*if (!TryBeDropped())
+                AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterBonesZoneLoadedEvent)}");*/
 
             return base.HandleEvent(E);
         }
@@ -433,8 +451,8 @@ namespace XRL.World.Parts
         {
             if (base.HandleEvent(E))
             {
-                if (!TryBeDropped())
-                    AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterPseudoZoneLoadedEvent)}");
+                /*if (!TryBeDropped())
+                    AttemptDamage(Source: $"!TryBeDropped() -> {nameof(AfterPseudoZoneLoadedEvent)}");*/
 
                 return true;
             }

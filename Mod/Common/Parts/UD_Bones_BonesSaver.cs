@@ -23,6 +23,7 @@ using XRL.Wish;
 using XRL.World.AI;
 using XRL.World.Capabilities;
 using XRL.World.Effects;
+using XRL.World.Parts.Mutation;
 using XRL.World.WorldBuilders;
 
 using Options = UD_Bones_Folder.Mod.Options;
@@ -237,7 +238,7 @@ namespace XRL.World.Parts
             if (Player == null)
                 return false;
 
-            // Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
+            Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
 
             foreach (var companion in Player.GetCompanions(MaxDistance: 999999).IteratorSafe())
             {
@@ -267,26 +268,99 @@ namespace XRL.World.Parts
 
                             visMap[visMapIndex] = visibility;
                         }
-                        BonesModeModule.GiveOverTierStuff(companion);
-                        BonesModeModule.GiveTierStuff(companion);
+
+                        int virtualCreditWedges = 0;
+                        BonesModeModule.GiveOverTierStuff(companion, ref virtualCreditWedges);
+                        BonesModeModule.GiveTierStuff(companion, ref virtualCreditWedges);
+
                         BonesModeModule.PerformVeryIntelligentPointAssignment(companion);
-                        BonesModeModule.GrowLimbs(companion);
+                        //BonesModeModule.GrowLimbs(companion);
+
+                        BonesModeModule.BecomeSomewhat(companion, ref virtualCreditWedges);
+                        BonesModeModule.CashOutVirtualCreditWedges(companion, ref virtualCreditWedges);
+                        BonesModeModule.InstallSomeCells(companion);
 
                         companion.Brain?.PerformReequip(Silent: true, Initial: true);
 
-                        using (var nonequippedItems = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(companion.GetInventory()))
+                        int carriedWeight = companion.GetCarriedWeight();
+                        int maxCarryCapacity = companion.GetMaxCarriedWeight();
+
+                        int maxCarryModLow = -(int)Math.Ceiling(maxCarryCapacity * 0.1);
+                        int maxCarryModHigh = (int)Math.Ceiling(maxCarryCapacity * 0.05);
+
+                        maxCarryCapacity += BonesModeModule.GetNDisadvantage(
+                            Method: $"{nameof(PreparePetForBonesMode)}::{nameof(GameObject.GetCarriedWeight)}",
+                            Low: maxCarryModLow,
+                            High: maxCarryModHigh,
+                            N: 2,
+                            Iteration: companion.BaseID);
+
+                        int failedAttempts = 0;
+                        while (carriedWeight > maxCarryCapacity
+                            && failedAttempts < 25
+                            && companion.GetInventory() is List<GameObject> companionInventory
+                            && !companionInventory.IsNullOrEmpty())
                         {
-                            for (int i = 0; i < nonequippedItems.Count; i++)
+                            try
                             {
-                                if (nonequippedItems[i] is GameObject nonequippedItem
-                                    && nonequippedItem.Equipped == null)
+                                using var nonEquippedItems = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(companionInventory);
+                                nonEquippedItems.ShuffleInPlace();
+                                if (nonEquippedItems.TakeAt(0).SplitFromStack() is GameObject randomObject)
                                 {
-                                    companion.Inventory?.RemoveObjectFromInventory(nonequippedItem, Silent: true);
-                                    nonequippedItem?.Obliterate();
+                                    randomObject?.TryRemoveFromContext();
+                                    randomObject?.Obliterate();
                                 }
+                                else
+                                    failedAttempts++;
+
+                                companion.FlushCarriedWeightCache();
+                                carriedWeight = companion.GetCarriedWeight();
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"{nameof(PreparePetForBonesMode)}, Inventory", x);
+                                failedAttempts++;
                             }
                         }
-                        companion.ForeachEquippedObject(go => go.MakeUnderstood());
+
+                        if (!Player.HasPart<Dystechnia>())
+                        {
+                            Utils.SuppressPopupsWhile(delegate ()
+                            {
+                                int intMod = Math.Min(1, Player.StatMod("Intelligence") + 3);
+                                companion.PerformActionRecursively(delegate (GameObject go)
+                                {
+                                    if (!go.IsBroken()
+                                        && go.TryGetPart(out Examiner examiner)
+                                        && !go.Understood())
+                                    {
+                                        for (int i = 0; i < intMod; i++)
+                                        {
+                                            try
+                                            {
+                                                InventoryActionEvent.Check(
+                                                    Object: go,
+                                                    Actor: Player,
+                                                    Item: go,
+                                                    Command: "Examine",
+                                                    OverrideEnergyCost: true,
+                                                    Silent: true,
+                                                    EnergyCostOverride: 0);
+                                            }
+                                            catch (Exception x)
+                                            {
+                                                Utils.Warn($"Skipping Examination of {go?.DebugName ?? "MISSING_OBJECT"}, due to thrown exception", x);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                });
+                                Player.Energy.BaseValue = 1000;
+                            });
+                        }
+                        // companion.ForeachEquippedObject(go => go.MakeUnderstood());
+
+                        BonesModeModule.PeformSundryOtherPrep(companion);
                     });
 
                     return true;
@@ -316,6 +390,9 @@ namespace XRL.World.Parts
         {
             if (E.LunarObject is GameObject lunarRegent)
             {
+                lunarRegent.NewGeneID();
+                lunarRegent.SetStringProperty("CloneOfGenes", lunarRegent.GeneID);
+
                 lunarRegent.GiveProperName(E.Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
 
                 lunarRegent.RestorePristineHealth();
@@ -635,7 +712,7 @@ namespace XRL.World.Parts
                 bool isAccidental = BonesModeModule.SeededPerMyriadChance(accidentalSeed, 2500);
                 if (!willDie
                     || !The.Player.TakeDamage(
-                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(135, 225) / 100f)),
+                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(155, 225) / 100f)),
                         Message: DamageTexts.GetRandomElementCosmetic(),
                         Attributes: $"IgnoreResist Expected Unavoidable Cosmic Umbral Vorpal{extraDamageType}",
                         Owner: killer,

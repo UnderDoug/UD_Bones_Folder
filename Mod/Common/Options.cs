@@ -32,16 +32,36 @@ namespace UD_Bones_Folder.Mod
     [HasOptionFlagUpdate(Prefix = MOD_PREFIX)]
     public static class Options
     {
-        // Debug Settings
+        #region Debug Settings
+
         [OptionFlag] public static bool DebugEnableBadWordFilterLogging;
         [OptionFlag] public static bool DebugEnableBadWordFilterForLocalBones;
+
+        private static bool _DebugEnableBadWordFilterTestWords;
+        [OptionFlag]
+        public static bool DebugEnableBadWordFilterTestWords
+        {
+            get => _DebugEnableBadWordFilterTestWords;
+            set
+            {
+                if (_DebugEnableBadWordFilterTestWords != value)
+                {
+                    _DebugEnableBadWordFilterTestWords = value;
+                    BadWordSet.InitCache();
+                }
+            }
+        }
+
         [OptionFlag] public static bool DebugEnableNoHoarding;
         [OptionFlag] public static bool DebugEnableNoExhuming;
         [OptionFlag] public static bool DebugEnablePickingBones;
         [OptionFlag] public static bool DebugEnableForcePickingBones;
         [OptionFlag] public static bool DebugEnableIgnoreAllowReallyDie;
 
-        // General Settings
+        #endregion
+        #region General Settings
+
+        [OptionFlag] public static int BonesMode_ProgressionSlant;
         [OptionFlag] public static bool EnableFlashingLightEffects;
         [OptionFlag] public static bool EnableBonesFromEarlierModVersions;
 
@@ -86,6 +106,101 @@ namespace UD_Bones_Folder.Mod
 
         private static int? _CustomPermyriadChance;
         [OptionFlag] public static int CustomPermyriadChance => (_CustomPermyriadChance ??= Config?.CustomPermyriadChance) ?? DefaultPermyriadChance;
+
+        private static HashSet<string> LockedMembers = new();
+
+        private static bool? _EnableOsseousAshStartupPopup;
+        [OptionFlag]
+        public static bool EnableOsseousAshStartupPopup
+        {
+            get => (_EnableOsseousAshStartupPopup ??= Config?.AskAtStartup) ?? false;
+            set
+            {
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(EnableOsseousAshStartupPopup)))
+                {
+                    LockedMembers.Add(nameof(EnableOsseousAshStartupPopup));
+                    try
+                    {
+                        if (Config != null
+                            && Config.AskAtStartup != value)
+                        {
+                            Config.WriteAskAtStartup(value);
+                        }
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(EnableOsseousAshStartupPopup));
+                    }
+                }
+                if (_EnableOsseousAshStartupPopup != value)
+                    _EnableOsseousAshStartupPopup = value;
+            }
+        }
+
+        private static bool? _EnableOsseousAshDownloads;
+        [OptionFlag]
+        public static bool EnableOsseousAshDownloads
+        {
+            get => (_EnableOsseousAshDownloads ??= Config?.EnableDownloads) ?? false;
+            set
+            {
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(EnableOsseousAshDownloads)))
+                {
+                    LockedMembers.Add(nameof(EnableOsseousAshDownloads));
+                    try
+                    {
+                        if (Config != null
+                            && Config.EnableDownloads != value)
+                        {
+                            Config.WriteEnableDownloads(value);
+                        }
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(EnableOsseousAshDownloads));
+                    }
+                }
+                if (_EnableOsseousAshDownloads != value)
+                    _EnableOsseousAshDownloads = value;
+            }
+        }
+
+        private static bool? _EnableOsseousAshUploads;
+        [OptionFlag]
+        public static bool EnableOsseousAshUploads
+        {
+            get => (_EnableOsseousAshUploads ??= Config?.EnableUploads) ?? false;
+            set
+            {
+                LockedMembers ??= new();
+                if (!LockedMembers.Contains(nameof(EnableOsseousAshUploads)))
+                {
+                    LockedMembers.Add(nameof(EnableOsseousAshUploads));
+                    try
+                    {
+                        if (Config != null
+                            && Config.EnableUploads != value)
+                        {
+                            Config.WriteEnableUploads(value);
+                        }
+                    }
+                    finally
+                    {
+                        LockedMembers.Remove(nameof(EnableOsseousAshUploads));
+                    }
+                }
+                if (_EnableOsseousAshUploads != value)
+                    _EnableOsseousAshUploads = value;
+            }
+        }
+
+        [OptionFlag] public static string OsseousAshHandle => Config?.Handle ?? DefaultOsseousAshHandle;
+
+        #endregion
+        #region Option Helpers
+        #region Custom Permyriad Chance
 
         public static async Task ManageCustomPermyriadChance()
         {
@@ -142,7 +257,7 @@ namespace UD_Bones_Folder.Mod
                             .Append(".").AppendLine().AppendLine()
                             .Append("Keep this value?"))
                     );
-            
+
             switch (confirmResult)
             {
                 case DialogResult.Yes:
@@ -176,93 +291,27 @@ namespace UD_Bones_Folder.Mod
             return Math.Clamp(chance, 1, 10000);
         }
 
-        private static HashSet<string> LockedMembers = new();
+        #endregion
+        #region Osseous Ash Handle
 
-        private static bool? _EnableOsseousAshStartupPopup;
-        [OptionFlag] public static bool EnableOsseousAshStartupPopup
+        private static string BaseHandleDisplayText;
+        [OptionFlagUpdate]
+        public static void UpdateOsseousAshHandleDisplay()
         {
-            get => (_EnableOsseousAshStartupPopup ??= Config?.AskAtStartup) ?? false;
-            set
+            if (XRL.UI.Options.OptionsByID is Dictionary<string, GameOption> optionsByID
+                && optionsByID.TryGetValue("UD_Bones_Folder_OsseousAshHandle", out var handleOption) is true)
             {
-                LockedMembers ??= new();
-                if (!LockedMembers.Contains(nameof(EnableOsseousAshStartupPopup)))
-                {
-                    LockedMembers.Add(nameof(EnableOsseousAshStartupPopup));
-                    try
-                    {
-                        if (Config != null
-                            && Config.AskAtStartup != value)
-                        {
-                            Config.WriteAskAtStartup(value);
-                        }
-                    }
-                    finally
-                    {
-                        LockedMembers.Remove(nameof(EnableOsseousAshStartupPopup));
-                    }
-                }
-                if (_EnableOsseousAshStartupPopup != value)
-                    _EnableOsseousAshStartupPopup = value;
+                BaseHandleDisplayText ??= handleOption.DisplayText;
+                handleOption.DisplayText = $"{BaseHandleDisplayText}: {OsseousAshHandle ?? DefaultOsseousAshHandle}";
             }
         }
 
-        private static bool? _EnableOsseousAshDownloads;
-        [OptionFlag] public static bool EnableOsseousAshDownloads
+        [ModSensitiveCacheInit]
+        public static void PerformSetup()
         {
-            get => (_EnableOsseousAshDownloads ??= Config?.EnableDownloads) ?? false;
-            set
-            {
-                LockedMembers ??= new();
-                if (!LockedMembers.Contains(nameof(EnableOsseousAshDownloads)))
-                {
-                    LockedMembers.Add(nameof(EnableOsseousAshDownloads));
-                    try
-                    {
-                        if (Config != null
-                            && Config.EnableDownloads != value)
-                        {
-                            Config.WriteEnableDownloads(value);
-                        }
-                    }
-                    finally
-                    {
-                        LockedMembers.Remove(nameof(EnableOsseousAshDownloads));
-                    }
-                }
-                if (_EnableOsseousAshDownloads != value)
-                    _EnableOsseousAshDownloads = value;
-            }
+            // AskOnStartup().Wait();
+            UpdateOsseousAshHandleDisplay();
         }
-
-        private static bool? _EnableOsseousAshUploads;
-        [OptionFlag] public static bool EnableOsseousAshUploads
-        {
-            get => (_EnableOsseousAshUploads ??= Config?.EnableUploads) ?? false;
-            set
-            {
-                LockedMembers ??= new();
-                if (!LockedMembers.Contains(nameof(EnableOsseousAshUploads)))
-                {
-                    LockedMembers.Add(nameof(EnableOsseousAshUploads));
-                    try
-                    {
-                        if (Config != null
-                            && Config.EnableUploads != value)
-                        {
-                            Config.WriteEnableUploads(value);
-                        }
-                    }
-                    finally
-                    {
-                        LockedMembers.Remove(nameof(EnableOsseousAshUploads));
-                    }
-                }
-                if (_EnableOsseousAshUploads != value)
-                    _EnableOsseousAshUploads = value;
-            }
-        }
-
-        [OptionFlag] public static string OsseousAshHandle => Config?.Handle ?? DefaultOsseousAshHandle;
 
         public static async Task ManageOsseousAshHandleAsync()
         {
@@ -340,6 +389,8 @@ namespace UD_Bones_Folder.Mod
                     );
         }
 
+        #endregion
+        #region Osseous Ash ID
         public static async Task ManageOsseousAshIDAsync()
         {
             using var options = new PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult>();
@@ -429,7 +480,8 @@ namespace UD_Bones_Folder.Mod
                 case UIUtils.CascadableResult.CancelSilent:
                 default:
                     return UIUtils.CascadableResult.CancelSilent;
-            };
+            }
+            ;
         }
 
         private static async Task<UIUtils.CascadableResult> ConfirmOsseousAshID(Guid OAID)
@@ -478,23 +530,7 @@ namespace UD_Bones_Folder.Mod
                     );
         }
 
-        private static string BaseHandleDisplayText;
-        [OptionFlagUpdate]
-        public static void UpdateOsseousAshHandleDisplay()
-        {
-            if (XRL.UI.Options.OptionsByID is Dictionary<string, GameOption> optionsByID
-                && optionsByID.TryGetValue("UD_Bones_Folder_OsseousAshHandle", out var handleOption) is true)
-            {
-                BaseHandleDisplayText ??= handleOption.DisplayText;
-                handleOption.DisplayText = $"{BaseHandleDisplayText}: {OsseousAshHandle ?? DefaultOsseousAshHandle}";
-            }
-        }
-
-        [ModSensitiveCacheInit]
-        public static void PerformSetup()
-        {
-            // AskOnStartup().Wait();
-            UpdateOsseousAshHandleDisplay();
-        }
+        #endregion
+        #endregion
     }
 }

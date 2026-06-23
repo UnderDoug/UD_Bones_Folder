@@ -14,7 +14,7 @@ namespace UD_Bones_Folder.Mod.Serialization.Delegates
     [Serializable]
     public class SerializeEachLocation : SerializeEach<Location2D>
     {
-        public static SerializeEachLocation Default = new SerializeEachLocation();
+        public static SerializeEachLocation Default => new();
 
         #region Constructors
 

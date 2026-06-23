@@ -46,6 +46,27 @@
     </helptext>
   </option>
   <option
+        ID="UD_Bones_Folder_DebugEnableBadWordFilterTestWords"
+        DisplayText="{{Y|Bones}}: Enable the bad word filter test words."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, the bad word filter will include entries with the tag &quot;test&quot; allowing for the testing of the filter's application without the need to fill objects with genuinely offensive content.
+
+      The current test entry is:
+
+      Match: xkc*d {{K|// the c may be repeated an unlimited number of times}}
+      Severity: 3 (strong)
+      Exceptions:
+      &#x7; vxkc*d {{K|// the starting v results in no match}}
+      &#x7; xkc*dv {{K|// the ending v results in no match}}
+      &#x7; yxkc*dy {{K|// surrounded by y results in no match, but should match without one or the other }}
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_DebugEnableNoHoarding"
         DisplayText="{{Y|Bones}}: Pause hoarding bones (saving new bones files)."
         Category="Debug"
@@ -262,20 +283,50 @@
         Default="3"
         Values="0|everything,1|mild,2|medium,3|strong,4|severe,5|no filter">
     <helptext>
-      Sets the minimum severity of the profanity filter used when deserializing bones files from online locations. Any text components which have &quot;bad words&quot; will cause the object to be &quot;fever warped&quot; (the same process as when it is missing integral components from unenabled mods), and the offending text component to be replaced with an alternative from the base game.
+      Sets the minimum severity of the profanity filter used when deserializing bones files from online locations. Text components which have &quot;bad words&quot; will be replaced with whatever their blueprint contains if available, otherwise will be replaced with a randomly generated equivalent (such as for titles), or, finally, simply removed.
+      
+      Currently, the short description, display name, name adjectives, and name titles (honorifics, epithets, etc.) are all checked for moderatable content.
 
-      {{c|&#x7;}} everything - all deserialized objects will be treated as though they contain &quot;bad words&quot;*.
+      {{c|&#x7;}} everything - all deserialized objects will be treated as though they contain &quot;bad words&quot;.
       {{c|&#x7;}} mild - even the least offensive profanity will be filtered.
       {{c|&#x7;}} medium - most profanity will be filtered.
       {{c|&#x7;}} strong - default, as recommended by the compiler of the list.
       {{c|&#x7;}} severe - only the most offensive words will be filtered.
       {{c|&#x7;}} no filter - objects will be untouched by the profanity filter.
 
-      *these won't be entirely &quot;fever warped&quot;, unless they would otherwise have been.
-
       If you find an online bones file that contains content that you believe the filter has missed, please use the ingame &quot;report bones&quot; inventory action (same place you'd [{{W|l}}]ook at something) to report the bones file to the server admin of any server it's avaialble on, and don't hesitate to reach out to the mod author on the {{b-b-b-y-b sequence|steam}} workshop.
 
+      {{W|Please note:}} {{Y|while a significant effort has been made to reduce the likelihood of exposure to potentially offensive content from other users, user discretion is advised when interacting with the online components of this mod. The server software is available on GitHub (https://github.com/UnderDoug/OsseousAsh), and has whitelisting capabilities built in.}}
+
       The default is {{W|strong}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_BonesMode_ProgressionSlant"
+        DisplayText="Choose rough direction you'd like Bones Mode characters' level to be slanted."
+        Category="Mod: Bones"
+        Type="Combo"
+        Default="2"
+        Values="4|extremely low,3|very low,2|low,1|slightly low,0|even,-1|slightly high,-2|high,-3|very high,-4|extremely high">
+    <helptext>
+      Sets the {{c|dis}}{{C|advantage}} amount when rolling for a character's level during Bones Mode character generation.
+
+      &quot;Low&quot; rolls with disadvantage, that is: it rolls multiple times and takes the lowest result.
+      &quot;High&quot; rolls with advantage, as above, but taking the highest result.
+      
+      Bones Mode characters are always between level 5 and level 80 inclusive.
+
+      {{c|&#x7;}} {{Y|extremely low}}  - 4x {{c|dis}}{{C|advantage}}, average {{rules|17.2}}, 50% of rolls {{K|under}} {{rules|15}}
+      {{c|&#x7;}} {{Y|very low}}       - 3x {{c|dis}}{{C|advantage}}, average {{rules|19.7}}, 50% of rolls {{K|under}} {{rules|17}}
+      {{c|&#x7;}} {{M|low}}            - 2x {{c|dis}}{{C|advantage}}, average {{rules|23.5}}, 50% of rolls {{K|under}} {{rules|21}}
+      {{c|&#x7;}} {{Y|slightly low}}   - 1x {{c|dis}}{{C|advantage}}, average {{rules|29.8}}, 50% of rolls {{K|under}} {{rules|28}}
+      {{c|&#x7;}} {{Y|even}}           - 0x {{c|dis}}/{{C|advantage}}, average {{rules|42.5}}, {{rules|even distribution}}
+      {{c|&#x7;}} {{Y|slightly high}}  - 1x {{C|advantage}}, average {{rules|55.2}}, 50% of rolls {{Y|over}} {{rules|57}}
+      {{c|&#x7;}} {{Y|high}}           - 2x {{C|advantage}}, average {{rules|61.5}}, 50% of rolls {{Y|over}} {{rules|64}}
+      {{c|&#x7;}} {{Y|very high}}      - 3x {{C|advantage}}, average {{rules|65.3}}, 50% of rolls {{Y|over}} {{rules|68}}
+      {{c|&#x7;}} {{Y|extremely high}} - 4x {{C|advantage}}, average {{rules|67.8}}, 50% of rolls {{Y|over}} {{rules|70}}
+
+      The default is {{M|low}}.
     </helptext>
   </option>
   <option

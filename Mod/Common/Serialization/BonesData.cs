@@ -186,7 +186,7 @@ namespace UD_Bones_Folder.Mod
                             bonesObject.TryModerate(BonesInfo);
 
                             catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.FeverWarp(BonesInfo.ID);
+                            bonesObject.TryFeverWarp(BonesInfo.ID);
 
                             if (bonesObject.IsLunarRegent(BonesID))
                             {
@@ -436,11 +436,14 @@ namespace UD_Bones_Folder.Mod
                             catchFlag = nameof(Extensions.ApplyRegistrar);
                             bonesObject.ApplyRegistrar();
 
+                            catchFlag = nameof(Body.UpdateBodyParts);
+                            bonesObject.Body?.UpdateBodyParts();
+
                             catchFlag = nameof(Extensions.TryModerate);
                             bonesObject.TryModerate(BonesInfo);
 
                             catchFlag = nameof(Extensions.TryFeverWarp);
-                            bonesObject.FeverWarp(BonesInfo.ID);
+                            bonesObject.TryFeverWarp(BonesInfo.ID);
 
                             if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
                             {

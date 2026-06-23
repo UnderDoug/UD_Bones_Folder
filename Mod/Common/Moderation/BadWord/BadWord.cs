@@ -160,6 +160,9 @@ namespace UD_Bones_Folder.Mod.Moderation
             protected set => _ProcessedExceptions = value;
         }
 
+        [JsonIgnore]
+        public bool IsTest => Tags?.Any(s => s.EqualsNoCase("test")) is true;
+
         public BadWord()
         {
             AllowPartial = true;

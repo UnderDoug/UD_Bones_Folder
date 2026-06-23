@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 using Newtonsoft.Json;
@@ -170,5 +171,23 @@ namespace UD_Bones_Folder.Mod
                 render.VFlip = VFlip;
             }
         }
+
+        public IEnumerable<KeyValuePair<string, object>> GetDebugPairs(bool SkipName = true)
+        {
+            if (!SkipName)
+                yield return new (nameof(Name), Name);
+            yield return new (nameof(Blueprint), Blueprint);
+            yield return new (nameof(Tile), Tile);
+            yield return new (nameof(HFlip), HFlip);
+            yield return new (nameof(VFlip), VFlip);
+        }
+
+        public IEnumerable<string> GetDebugLines(bool SkipName = true)
+            => GetDebugPairs(SkipName: SkipName).Select(pair => $"{pair.Key}: {pair.Value}")
+            ;
+
+        public string GetDebugString(bool SkipName = true)
+            => GetDebugLines(SkipName: SkipName).Aggregate((string)null, Utils.NewLineDelimitedAggregator)
+            ;
     }
 }

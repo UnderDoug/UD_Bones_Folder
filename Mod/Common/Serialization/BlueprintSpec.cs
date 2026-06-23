@@ -129,8 +129,8 @@ namespace UD_Bones_Folder.Mod
                 public static int Compare(SimilarityRecord x, SimilarityRecord y, bool LeastSimilarFirst)
                     => x is null
                         || y is null
-                    ? (y is null).CompareTo(x is null)
-                    : FilterValue(y.Similarity.CompareTo(x.Similarity), GetMulti(LeastSimilarFirst))
+                    ? (x is null).CompareTo(y is null)
+                    : FilterValue(x.Similarity.CompareTo(y.Similarity), GetMulti(LeastSimilarFirst))
                     ;
 
                 public override int Compare(SimilarityRecord x, SimilarityRecord y)
@@ -146,18 +146,19 @@ namespace UD_Bones_Folder.Mod
             public static SimilarityRecord Empty => new SimilarityRecord
             {
                 Other = null,
-                Similarity = MAX_SIMILARTY,
+                Similarity = -1,
             };
 
             public BlueprintSpec Other;
             public int Similarity;
 
             public bool IsEmpty()
-                => ToString() == Empty.ToString()
+                => DebugString() == Empty.DebugString()
                 ;
 
             public static string GetKey(BlueprintSpec BlueprintSpec)
-                => $"{BlueprintSpec?.Blueprint ?? "NULL"}"
+                => BlueprintSpec?.Blueprint
+                ?? "NULL"
                 ;
 
             public override string ToString()
@@ -184,14 +185,21 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public static SimilarityRecord MakeFor(BlueprintSpec Primary, BlueprintSpec Other)
-                => Primary != null
-                ? new SimilarityRecord
+            {
+                if (Primary == null
+                    || Other == null)
+                {
+                    //Utils.Log($"{2.Indent()}{nameof(SimilarityRecord)}.{nameof(MakeFor)}({Primary?.Blueprint ?? "NO_PRIMARY"}, {Other?.Blueprint ?? "NO_OTHER"}): {nameof(Empty)}");
+                    return Empty;
+                }
+                var record = new SimilarityRecord
                 {
                     Other = Other,
                     Similarity = Primary.GetSimilartyTo(Other),
-                }
-                : Empty
-                ;
+                };
+                //Utils.Log($"{2.Indent()}{nameof(SimilarityRecord)}.{nameof(MakeFor)}({Primary?.Blueprint ?? "NO_PRIMARY"}, {Other?.Blueprint ?? "NO_OTHER"}): {record}");
+                return record;
+            }
 
             public static bool TryMakeFor(BlueprintSpec Primary, BlueprintSpec Other, out SimilarityRecord Result)
                 => !(Result = MakeFor(Primary, Other)).IsEmpty()
@@ -199,6 +207,7 @@ namespace UD_Bones_Folder.Mod
 
             public static bool TryGetFor(BlueprintSpec Primary, BlueprintSpec Other, out SimilarityRecord Result)
             {
+                //Utils.Log($"{2.Indent()}{nameof(SimilarityRecord)}.{nameof(TryGetFor)}({Primary?.Blueprint ?? "NO_PRIMARY"}, {Other?.Blueprint ?? "NO_OTHER"})");
                 Result = Empty;
                 if (Primary == null)
                     return false;
@@ -1324,7 +1333,12 @@ namespace UD_Bones_Folder.Mod
             return similarty;
         }
 
-        protected static int GetFieldSimilarity<T>(ref T Primary, T Other, int SimilarityWhenIdentical)
+        protected static int GetFieldSimilarity<T>(
+            ref T Primary,
+            T Other,
+            int SimilarityWhenIdentical,
+            int DistanceMultiplier = 1
+            )
             where T : IEquatable<T>
         {
             try
@@ -1340,7 +1354,10 @@ namespace UD_Bones_Folder.Mod
                 {
                     if (Primary is string stringPrimary
                         && Other is string stringOther)
-                        return Math.Max(0, SimilarityWhenIdentical - Levenshtein.EditDistance(stringPrimary, stringOther));
+                    {
+                        int distance = (DistanceMultiplier * Levenshtein.EditDistance(stringPrimary, stringOther));
+                        return Math.Max(0, SimilarityWhenIdentical - distance);
+                    }
 
                     return 0;
                 }
@@ -1366,56 +1383,87 @@ namespace UD_Bones_Folder.Mod
             similarity += GetCollectionSimilarity(
                 Primary: BlueprintTree,
                 Other: Other.BlueprintTree,
-                MaxUnitSimilarity: 10);
+                MaxUnitSimilarity: 100,
+                MinUnitSimilarity: 0,
+                MaxTotalSimilarty: 300);
 
+            if (!BlueprintTree.IsNullOrEmpty()
+                && !IsFieldWildCard(ref BlueprintTree)
+                && !Other.BlueprintTree.IsNullOrEmpty())
+            {
+                if (BlueprintTree.Count > 1
+                    && (Other.BlueprintTree.Count <= 1
+                        || BlueprintTree[1] != Other.BlueprintTree[1]))
+                    similarity -= 400;
 
-            similarity += GetFieldSimilarity(ref Category, Other.Category, 15);
+                if (BlueprintTree.Count > 2
+                    && (Other.BlueprintTree.Count <= 2
+                        || BlueprintTree[2] != Other.BlueprintTree[2]))
+                    similarity -= 200;
 
-            similarity += 64;
+                if (BlueprintTree.Count > 3
+                    && (Other.BlueprintTree.Count <= 3
+                        || BlueprintTree[3] != Other.BlueprintTree[3]))
+                    similarity -= 100;
+            }
+
+            similarity += GetFieldSimilarity(ref Category, Other.Category, SimilarityWhenIdentical: 1000, DistanceMultiplier: 100);
+
+            similarity += (XRL.World.Capabilities.Tier.MAXIMUM + 2).Fibonacci();
             if (!IsFieldWildCard(ref Tier))
-                similarity -= 8 * Math.Abs(Tier.GetValueOrDefault() - Other.Tier.GetValueOrDefault());
+                similarity -= Math.Abs((Tier.GetValueOrDefault() + 2).Fibonacci() - (Other.Tier.GetValueOrDefault() + 2).Fibonacci());
 
-            similarity += 32;
+            similarity += (XRL.World.Capabilities.Tier.MAXIMUM + 2).Fibonacci();
             if (!IsFieldWildCard(ref TechTier))
-                similarity -= 4 * Math.Abs(TechTier.GetValueOrDefault() - Other.TechTier.GetValueOrDefault());
-
+                similarity -= Math.Abs((TechTier.GetValueOrDefault() + 2).Fibonacci() - (Other.TechTier.GetValueOrDefault() + 2).Fibonacci());
 
             similarity += GetCollectionSimilarity(
                 Primary: WeaponSkills,
                 Other: Other.WeaponSkills,
-                MaxUnitSimilarity: 10,
-                MinUnitSimilarity: 10);
+                MaxUnitSimilarity: 100,
+                MinUnitSimilarity: 0,
+                MaxTotalSimilarty: 200);
             
-
             similarity += GetCollectionSimilarity(
                 Primary: EquipmentSlots,
                 Other: Other.EquipmentSlots,
-                MaxUnitSimilarity: 10,
-                MinUnitSimilarity: 10);
+                MaxUnitSimilarity: 100,
+                MinUnitSimilarity: 0,
+                MaxTotalSimilarty: 200);
 
-            similarity += GetFieldSimilarity(ref Species, Other.Species, 15);
+            similarity += GetFieldSimilarity(ref Species, Other.Species, SimilarityWhenIdentical: 100, DistanceMultiplier: 10);
 
-            similarity += GetFieldSimilarity(ref Class, Other.Class, 5);
-            similarity += GetFieldSimilarity(ref Role, Other.Role, 5);
+            similarity += GetFieldSimilarity(ref Class, Other.Class, SimilarityWhenIdentical: 50, DistanceMultiplier: 5);
+            similarity += GetFieldSimilarity(ref Role, Other.Role, SimilarityWhenIdentical: 250, DistanceMultiplier: 100);
 
-            similarity += GetFieldSimilarity(ref PaintedWall, Other.PaintedWall, 25);
-            similarity += GetFieldSimilarity(ref PaintedFence, Other.PaintedFence, 25);
+            similarity += GetFieldSimilarity(ref PaintedWall, Other.PaintedWall, SimilarityWhenIdentical: 250, DistanceMultiplier: 25);
+            similarity += GetFieldSimilarity(ref PaintedFence, Other.PaintedFence, SimilarityWhenIdentical: 250, DistanceMultiplier: 25);
 
             return Math.Clamp(similarity, MIN_SIMILARTY, MAX_SIMILARTY);
         }
 
         public IEnumerable<SimilarityRecord> GetOrderedSimilarityRecords()
         {
-            Utils.Log($"{nameof(GetOrderedSimilarityRecords)} for {Blueprint}");
+            Utils.Log($"{nameof(GetOrderedSimilarityRecords)} for {Blueprint ?? "NULL"} ({nameof(Utils.CachedBlueprintSpecs)}: {(Utils.CachedBlueprintSpecs?.Count)?.ToString() ?? "null"})");
             List<SimilarityRecord> list = null;
+
             foreach (var validSpec in (Utils.CachedBlueprintSpecs?.Values).IteratorSafe())
             {
-                if (SimilarityRecord.TryGetFor(this, validSpec, out var similarityRecord)
-                    && !similarityRecord.IsEmpty())
+                //Utils.Log($"{1.Indent()}{validSpec?.Blueprint ?? $"{nameof(validSpec)}_NULL"}:");
+                if (SimilarityRecord.TryGetFor(this, validSpec, out var similarityRecord))
                 {
-                    list ??= new();
-                    list.Add(similarityRecord);
+                    if (!similarityRecord.IsEmpty())
+                    {
+                        list ??= new();
+                        list.Add(similarityRecord);
+                        //Utils.Log($"{3.Indent()}{similarityRecord.DebugString()}");
+                    }
+                    /*else
+                        Utils.Log($"{3.Indent()}{nameof(similarityRecord)} is {nameof(SimilarityRecord.Empty)}");*/
                 }
+                /*else
+                    Utils.Log($"{3.Indent()}{validSpec?.Blueprint ?? "NULL"} got {nameof(SimilarityRecord.Empty)} {nameof(similarityRecord)}");*/
+                //Utils.Log($"{1.Indent()}{Blueprint} is {similarityRecord.DebugString()}");
             }
 
             if (list.IsNullOrEmpty())

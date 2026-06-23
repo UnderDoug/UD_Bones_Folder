@@ -120,25 +120,29 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         {
             CrossGameObject = CrossGameObject.CreateFrom(GameObject);
 
+            var clone = CrossGameObject.Clone;
+
             // Anything you want to do to objects, do it AFTER here
             // ####################################################
 
-            CrossGameObject.Clone.MakeReportable(BonesInfo);
+            clone.MakeReportable(BonesInfo);
 
-            PseudoCell.TransmuteBrain(CrossGameObject.Original, CrossGameObject.Clone, OriginObjects, DestinationObjects);
+            PseudoCell.TransmuteBrain(CrossGameObject, OriginObjects, DestinationObjects);
 ;
-            CrossGameObject.Clone.ApplyRegistrar();
+            clone.ApplyRegistrar();
 
-            CrossGameObject.Clone.SanitizeParts();
+            clone.SanitizeParts();
 
-            if (CrossGameObject.Clone.Energy is Statistic energy)
+            clone.Body?.UpdateBodyParts();
+
+            if (clone.Energy is Statistic energy)
                 energy.BaseValue = 0;
 
-            CrossGameObject.Clone.TryModerate(BonesInfo);
+            clone.TryModerate(BonesInfo);
 
-            CrossGameObject.Clone.TryFeverWarp(BonesInfo.ID);
+            clone.TryFeverWarp(BonesInfo.ID);
 
-            return CrossGameObject.Clone;
+            return clone;
         }
 
         public void Dispose()

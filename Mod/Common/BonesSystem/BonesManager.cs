@@ -14,6 +14,9 @@ using Platform;
 using Platform.IO;
 using UnityEngine;
 
+using HarmonyLib;
+using Genkit;
+
 using Qud.API;
 using Qud.UI;
 
@@ -45,8 +48,6 @@ using CompressionLevel = System.IO.Compression.CompressionLevel;
 
 using GameObject = XRL.World.GameObject;
 using Event = XRL.World.Event;
-using HarmonyLib;
-using Genkit;
 using UD_Bones_Folder.Mod.Moderation;
 
 namespace UD_Bones_Folder.Mod
@@ -309,12 +310,21 @@ namespace UD_Bones_Folder.Mod
             return SaveTask = null;
         }
 
-        public static void PrepareZoneObjectsForNextRun(Zone Z, string GameID)
+        public static void PrepareZoneObjectsForNextRun(Zone Z, string GameID, GameObject LunarRegent)
         {
             foreach (var zoneGO in Z.GetObjects())
             {
+                if (zoneGO.IsPlayer())
+                    continue;
+
                 zoneGO.PerformActionRecursively(delegate (GameObject go, int depth)
                 {
+                    if (go.GeneIDMatch(The.Player))
+                    {
+                        go.InjectGeneID(LunarRegent.GeneID);
+                        go.SetStringProperty("CloneOfGenes", LunarRegent.GeneID);
+                    }
+
                     bool moderationRestored = false;
                     if (go.TryGetPart(out UD_Bones_Moderated moderated))
                     {
@@ -399,7 +409,7 @@ namespace UD_Bones_Folder.Mod
 
                 using var status = Loading.StartTask(message);
 
-                PrepareZoneObjectsForNextRun(currentZone, GameID);
+                PrepareZoneObjectsForNextRun(currentZone, GameID, LunarRegent);
 
                 var fileLocationData = GetBonesLocationData();
                 var bonesFilePath = fileLocationData.WithFileName(GetSaveFileName());
@@ -1119,12 +1129,15 @@ namespace UD_Bones_Folder.Mod
             if (BlueprintSpec.Blueprint is not string key)
                 return null;
 
-            Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
+            //Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
+            //Utils.Log(JsonConvert.SerializeObject(BlueprintSpec, Formatting.Indented));
             MissingBlueprintReplacements ??= new();
             try
             {
                 if (!MissingBlueprintReplacements.TryGetValue(key, out var replacementEntry))
                 {
+                    Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
+                    Utils.Log(JsonConvert.SerializeObject(BlueprintSpec, Formatting.Indented));
                     if (BlueprintSpec.GetOrderedSimilarityRecords() is not IEnumerable<BlueprintSpec.SimilarityRecord> orderedSimilarityRecords)
                     {
                         Utils.Log($"{1.Indent()}[{CROSS}] {nameof(orderedSimilarityRecords)} is null");
@@ -1139,7 +1152,25 @@ namespace UD_Bones_Folder.Mod
                         return CacheDefaultReplacementEntryForKey(key);
                     }
 
+                    int maxSimilarity = similarityRecords.FirstOrDefault().Similarity;
+
+                    int halfRecordsCount = similarityRecords.Count / 2;
+
+                    while (similarityRecords.Count > 10
+                        && similarityRecords.Count > halfRecordsCount)
+                        similarityRecords.RemoveLast();
+
+                    for (int i = similarityRecords.Count - 1; i >= 0; i--)
+                    {
+                        if (similarityRecords.Count <= 10)
+                            break;
+
+                        if (similarityRecords[i].Similarity < (int)(maxSimilarity * 0.75))
+                            similarityRecords.RemoveAt(i);
+                    }
+
                     var specsByWeight = new Dictionary<string, int>();
+                    Utils.Log($"{1.Indent()}{key} shortlist ({similarityRecords.Count}):");
                     foreach (var similarityRecord in similarityRecords)
                     {
                         if (similarityRecord.ToString() is not string specWeightKey)
@@ -1149,6 +1180,8 @@ namespace UD_Bones_Folder.Mod
                             specsByWeight[specWeightKey] = 0;
 
                         specsByWeight[specWeightKey] += similarityRecord.GetWeight();
+
+                        Utils.Log($"{2.Indent()}{key} is {similarityRecord.DebugString()}");
                     }
 
                     if (specsByWeight.IsNullOrEmpty())
@@ -1163,7 +1196,7 @@ namespace UD_Bones_Folder.Mod
                     GameObjectBlueprint alternativeBlueprint = null;
                     var specsBag = specsByWeight.ToBallBag(rnd);
                     while (!specsBag.IsNullOrEmpty()
-                        && alternativeBlueprint != null)
+                        && alternativeBlueprint == null)
                     {
                         if (specsBag.PickOne() is not string pickedSpec)
                             continue;
@@ -1200,9 +1233,10 @@ namespace UD_Bones_Folder.Mod
                             tile = alternativeForTile.GetRenderable()?.Tile;
                     }
                     replacementEntry = ReplacementEntry.CreateFor(key, alternativeBlueprint.Name, tile);
+                    Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
                     MissingBlueprintReplacements[key] = replacementEntry;
                 }
-                Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
+                //Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
                 return replacementEntry;
             }
             catch (Exception x)
@@ -1210,6 +1244,34 @@ namespace UD_Bones_Folder.Mod
                 Utils.Error($"{nameof(RequireReplacementEntryForBlueprintSpec)}({key}), find alternate", x);
                 return CacheDefaultReplacementEntryForKey(key);
             }
+        }
+
+        public bool TryGetReplacementEntry(BlueprintSpec BlueprintSpec, out ReplacementEntry ReplacementEntry)
+        {
+            ReplacementEntry = null;
+            if (BlueprintSpec.Blueprint is not string key)
+                return false;
+
+            return MissingBlueprintReplacements.TryGetValue(key, out ReplacementEntry);
+        }
+
+        public bool TryGetReplacementEntry(GameObject GameObject, out ReplacementEntry ReplacementEntry)
+        {
+            ReplacementEntry = null;
+
+            if (GameObject == null)
+                return false;
+
+            if (!GameObject.TryGetPart(out UD_Bones_BlueprintSpec blueprintSpecPart))
+                return false;
+
+            if (blueprintSpecPart.BlueprintSpec is not BlueprintSpec blueprintSpec)
+                return false;
+
+            if (blueprintSpec.Blueprint is not string key)
+                return false;
+
+            return MissingBlueprintReplacements.TryGetValue(key, out ReplacementEntry);
         }
 
         public void CremateLunarRegent(string BonesID)

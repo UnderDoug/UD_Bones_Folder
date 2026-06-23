@@ -502,6 +502,7 @@ namespace XRL.World.Parts
                     LunarReliquary.ReceiveObject(item, Context: Context);
                     continue;
                 }
+
                 if (LunarCreature.IsLunarRegent()
                     && Context == PseudoZone.RECLAIM_CONTEXT)
                 {
@@ -538,28 +539,26 @@ namespace XRL.World.Parts
             if (!WantsThreePointLanding)
                 return false;
 
-            // Event.PinCurrentPool();
+            Event.PinCurrentPool();
             try
             {
-                // Event.ResetPool();
+                Event.ResetPool();
                 WantsThreePointLanding = false;
                 int forceLevel = 4;
                 if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
                 {
                     if (adjacentCells.All(c => c.IsSolidFor(ParentObject)))
                     {
-                        currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject);
-                        /*Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-                        forceLevel = 25;*/
+                        currentCell.Clear(Combat: true, alsoExclude: go => go == ParentObject || go.ConsiderSolidFor(ParentObject));
+                        Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
+                        forceLevel = 25;
                     }
                 }
-                Physics.ApplyExplosion(currentCell, 15000, Local: true, Show: true, Owner: ParentObject, Neutron: true, DamageModifier: 0f, WhatExploded: ParentObject);
-                forceLevel = 25;
                 StunningForce.Concussion(StartCell: currentCell, ParentObject: ParentObject, Level: forceLevel, Distance: 1, Stun: false, Damage: false);
             }
             finally
             {
-                // Event.ResetToPin();
+                Event.ResetToPin();
             }
             return true;
         }
@@ -676,7 +675,8 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(LoadLunarRegentEvent E)
         {
-            if (ParentObject == E.LunarObject)
+            if (ParentObject == E.LunarObject
+                && E.LunarObject is GameObject lunarRegent)
             {
                 string catchFlag = $"Top";
                 try
@@ -684,21 +684,21 @@ namespace XRL.World.Parts
                     LocationData = E.BonesInfo.FileLocationData;
 
                     foreach (var part in BonesManager.PartsLunarRegentsShouldNotHave.IteratorSafe())
-                        E.LunarObject.RemovePart(part);
+                        lunarRegent.RemovePart(part);
 
-                    var playerParts = E.LunarObject.GetPartsDescendedFrom<IPlayerPart>();
+                    var playerParts = lunarRegent.GetPartsDescendedFrom<IPlayerPart>();
                     foreach (var part in playerParts.IteratorSafe())
-                        E.LunarObject.RemovePart(part);
+                        lunarRegent.RemovePart(part);
 
-                    E.LunarObject.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
+                    lunarRegent.SetStringProperty("OriginalPlayerBody", null, RemoveIfNull: true);
 
                     if (E.IsMad)
                         IsMad = true;
 
                     catchFlag = $"{nameof(GameObjectFactory.Factory.HasBlueprint)}";
-                    if (!GameObjectFactory.Factory.HasBlueprint(E.LunarObject.Blueprint))
+                    if (!GameObjectFactory.Factory.HasBlueprint(lunarRegent.Blueprint))
                     {
-                        E.LunarObject.Blueprint = "Lunar Regent";
+                        lunarRegent.Blueprint = "Lunar Regent";
                         IsMad = true;
                     }
 
@@ -706,7 +706,7 @@ namespace XRL.World.Parts
                     if (IsMad)
                     {
                         catchFlag = $"{nameof(IsMad)}: true";
-                        E.LunarObject.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
+                        lunarRegent.Render.Tile = Const.MAD_LUNAR_REGENT_TILE;
                         IsMad = true;
                     }
                     else
@@ -718,31 +718,31 @@ namespace XRL.World.Parts
                     if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT)
                         && The.Player is GameObject player)
                     {
-                        E.LunarObject.AddOpinion<OpinionMollify>(player);
-                        player.AddOpinion<OpinionMollify>(E.LunarObject);
+                        lunarRegent.AddOpinion<OpinionMollify>(player);
+                        player.AddOpinion<OpinionMollify>(lunarRegent);
 
                         catchFlag = $"{nameof(BonesManager.BonesFileName)}AttitudeSetup";
                         var attitudeSetup = Event.New($"{nameof(BonesManager.BonesFileName)}AttitudeSetup")
-                            .SetParameter(nameof(E.LunarObject), E.LunarObject)
+                            .SetParameter(nameof(E.LunarObject), lunarRegent)
                             .SetParameter(nameof(The.Player), player);
 
                         catchFlag = nameof(GameObject.FireEvent);
                         if (player.FireEvent(attitudeSetup))
                         {
-                            var brain = E.LunarObject.Brain;
+                            var brain = lunarRegent.Brain;
                             brain?.PushGoal(new Kill(player));
                             ApplyHostility(player, brain, 0);
                         }
 
-                        MakeInventoryFragile(E.LunarObject, UD_Bones_LunarReliquary.Create(E.BonesInfo), E.Context);
+                        MakeInventoryFragile(lunarRegent, UD_Bones_LunarReliquary.Create(E.BonesInfo, lunarRegent), E.Context);
                     }
 
-                    if (E.LunarObject.Render is Render render)
+                    if (lunarRegent.Render is Render render)
                         render.Visible = true;
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"{nameof(LoadLunarRegentEvent)}, ({catchFlag}): {E.LunarObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                    Utils.Error($"{nameof(LoadLunarRegentEvent)}, ({catchFlag}): {lunarRegent?.DebugName ?? "MISSING_OBJECT"}", x);
                 }
             }
 

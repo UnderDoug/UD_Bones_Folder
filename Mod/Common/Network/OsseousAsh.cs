@@ -748,7 +748,8 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static async Task ManageHostsOptionButtonAsync()
-            => await ManageHostsOptionButtonWithSelectionAsync(null);
+            => await ManageHostsOptionButtonWithSelectionAsync(null)
+            ;
 
         private static async Task<UIUtils.CascadableResult> PerformNewHostAsync(KeyValuePair<FileLocationData, Host> Element)
         {
@@ -1378,7 +1379,7 @@ namespace UD_Bones_Folder.Mod
                 any = true;
                 sB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Enabled),
-                    Value: $"{OldHost.GetEnabledValueForMenu().GetCheckbox()} \u001a {ModifiedHost.GetEnabledValueForMenu().GetCheckbox()}");
+                    Value: $"{OldHost.GetEnabledCheckbox()} \u001a {ModifiedHost.GetEnabledCheckbox()}");
             }
 
             if (!any)

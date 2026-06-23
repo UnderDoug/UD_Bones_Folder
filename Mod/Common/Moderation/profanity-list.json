@@ -5,7 +5,7 @@
     "tags": [
       "test"
     ],
-    "severity": 4,
+    "severity": 3,
     "exceptions": [
       "v*",
       "*v",
@@ -82,11 +82,12 @@
     "tags": [
       "sexual"
     ],
-      "severity": 2,
-      "exceptions": [
-        "c*s",
-        "artis*ly"
-      ]
+    "severity": 2,
+    "allow_partial": false,
+    "exceptions": [
+      "c*s",
+      "artis*ly"
+    ]
   },
   {
     "id": "anal-assassin",
@@ -119,6 +120,7 @@
       "sexual"
     ],
     "severity": 1,
+    "allow_partial": false,
     "exceptions": [
       "m*",
       "m*cript",

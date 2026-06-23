@@ -61,6 +61,19 @@ namespace UD_Bones_Folder.Mod.Moderation
 
         public static Dictionary<string, bool> FilterResultCache = new();
 
+        private static bool _Original_DebugEnableBadWordFilterTestWords = Options.DebugEnableBadWordFilterTestWords;
+        public static bool Original_DebugEnableBadWordFilterTestWords
+        {
+            get => _Original_DebugEnableBadWordFilterTestWords;
+            set
+            {
+                if (_Original_DebugEnableBadWordFilterTestWords != value)
+                {
+                    _Original_DebugEnableBadWordFilterTestWords = value;
+                    InitCache();
+                }
+            }
+        }
 
         private SeverityLevel severity;
         /// <summary>
@@ -121,14 +134,18 @@ namespace UD_Bones_Folder.Mod.Moderation
         { }
 
         [ModSensitiveCacheInit]
-        public static void InitCache()
+        public static void Init()
         {
             Loading.LoadTask($"Initializing bad word set...", InitializeBadWordSetsInternal);
+            InitCache();
+        }
+
+        public static void InitCache()
+        {
             Loading.LoadTask($"Caching bad word filter mega patterns...", CacheMegaPatterns);
             Loading.LoadTask($"Caching compiled Regicies for bad word filter ...", CacheCompiledRegex);
             Loading.LoadTask($"Caching blueprint strings for bad word filter ...", CacheMostObjectBlueprints);
         }
-
 
         public static void InitializeBadWordSets()
             => InitializeBadWordSets(CalledManually: true)
@@ -215,6 +232,8 @@ namespace UD_Bones_Folder.Mod.Moderation
             MegaPatterns.Clear();
             if (AllBadWords != null)
             {
+                Original_DebugEnableBadWordFilterTestWords = Options.DebugEnableBadWordFilterTestWords;
+
                 IBadWord.SeverityLevelValueCache.ForEach(delegate(string name, SeverityLevel severity)
                 {
                     if (!severity.IsTwixtInclusive(SeverityLevel.Mild, SeverityLevel.Severe))
@@ -445,6 +464,10 @@ namespace UD_Bones_Folder.Mod.Moderation
             using var exceptions = ScopeDisposedList<string>.GetFromPool();
             foreach (var badWord in this)
             {
+                if (badWord.IsTest
+                    && !Options.DebugEnableBadWordFilterTestWords)
+                    continue;
+
                 foreach (var match in badWord.Matches.IteratorSafe())
                 {
                     if (BadWord.ProcessMatchString(match, badWord.AllowPartial, IncludeWildCard: false) is string matchPattern
