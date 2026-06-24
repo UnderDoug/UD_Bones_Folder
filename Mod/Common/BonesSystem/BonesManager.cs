@@ -565,6 +565,12 @@ namespace UD_Bones_Folder.Mod
                     && modVersion != saveBonesVersion)
                     isMisMatch = true;
 
+                // marks significant adjustment to how serializable sets are serialized and broke back-compat.
+                var v0039 = new XRL.Version(0, 0, 3, 9);
+                if (modVersion >= v0039
+                    && saveBonesVersion < v0039)
+                    isMisMatch = true;
+
                 if (isMisMatch)
                 {
                     // Utils.Log($"Version mismatch, current: {currentVersion}, bones: {bonesVersion}, for BonesID {SaveBonesInfo.ID}");

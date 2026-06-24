@@ -169,8 +169,16 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void ErrorOnce(ModInfo ModInfo, object Context, Exception X)
-            => ErrorOnce(ModInfo, $"{Context}: {X}")
-            ;
+        {
+            ModInfo ??= ThisMod;
+            SingleTimeErrorMessages ??= new();
+            if (!SingleTimeErrorMessages.ContainsKey(ModInfo))
+                SingleTimeErrorMessages[ModInfo] = new();
+
+            string message = Context.ToString();
+            if (SingleTimeErrorMessages[ModInfo].Add(message))
+                ModInfo.Error($"{message}: {X}");
+        }
 
         public static void ErrorOnce(object Context, Exception X)
             => ErrorOnce(ModInfo: null, Context, X)
@@ -217,8 +225,16 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void WarnOnce(ModInfo ModInfo, object Context, Exception X)
-            => WarnOnce(ModInfo, $"{Context}: {X}")
-            ;
+        {
+            ModInfo ??= ThisMod;
+            SingleTimeWarnMessages ??= new();
+            if (!SingleTimeWarnMessages.ContainsKey(ModInfo))
+                SingleTimeWarnMessages[ModInfo] = new();
+
+            string message = Context.ToString();
+            if (SingleTimeWarnMessages[ModInfo].Add(message))
+                ModInfo.Warn($"{message}: {X}");
+        }
 
         public static void WarnOnce(object Context, Exception X)
             => WarnOnce(ModInfo: null, Context, X)

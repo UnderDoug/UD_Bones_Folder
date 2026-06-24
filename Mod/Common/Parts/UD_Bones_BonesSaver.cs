@@ -230,7 +230,7 @@ namespace XRL.World.Parts
             || ParentObject.RemoveActivatedAbility(ref MakeBonesActivatedAbilityID)
             ;
 
-        public static bool PreparePetForBonesMode(string PetBlueprint, GameObject Player)
+        public static bool PreparePetForBonesMode(string PetBlueprint, GameObject Player, bool Silent = true)
         {
             if (PetBlueprint.IsNullOrEmpty())
                 return false;
@@ -238,7 +238,8 @@ namespace XRL.World.Parts
             if (Player == null)
                 return false;
 
-            Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
+            if (!Silent)
+                Utils.Log($"{nameof(PreparePetForBonesMode)}({nameof(PetBlueprint)}: {PetBlueprint}, {nameof(Player)}: {Player?.DebugName ?? "NO_PLAYER"})");
 
             foreach (var companion in Player.GetCompanions(MaxDistance: 999999).IteratorSafe())
             {
@@ -258,6 +259,7 @@ namespace XRL.World.Parts
 
                             companion.GetStat("XP").BaseValue = xpToAward;
 
+                            // this makes the companion non-visible which turns off the particle effects.
                             int visMapIndex = companionCell.X + (companionCell.Y * companionZone.Width);
                             var visMap = companionZone.VisibilityMap;
                             bool visibility = visMap[visMapIndex];
@@ -273,7 +275,7 @@ namespace XRL.World.Parts
                         BonesModeModule.GiveOverTierStuff(companion, ref virtualCreditWedges);
                         BonesModeModule.GiveTierStuff(companion, ref virtualCreditWedges);
 
-                        BonesModeModule.PerformVeryIntelligentPointAssignment(companion);
+                        BonesModeModule.PerformVeryIntelligentPointAssignment(companion, Silent: Silent);
                         //BonesModeModule.GrowLimbs(companion);
 
                         BonesModeModule.BecomeSomewhat(companion, ref virtualCreditWedges);
@@ -349,7 +351,7 @@ namespace XRL.World.Parts
                                             }
                                             catch (Exception x)
                                             {
-                                                Utils.Warn($"Skipping Examination of {go?.DebugName ?? "MISSING_OBJECT"}, due to thrown exception", x);
+                                                Utils.WarnOnce($"Skipping Examination of {go?.DebugName ?? "MISSING_OBJECT"}, due to thrown exception", x);
                                                 break;
                                             }
                                         }

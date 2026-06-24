@@ -920,10 +920,12 @@ namespace UD_Bones_Folder.Mod.UI
             if (Player == null)
                 return;
 
+            if (Player.Stat("MP") > 0)
+                Player.RequirePart<Mutations>();
+
             int maxPointsToSpend = Player.Stat("MP");
             if (MaxToSpend.HasValue)
                 maxPointsToSpend = Math.Min(MaxToSpend.Value, Player.Stat("MP"));
-
 
             int maxAttempts = 200;
             if (maxPointsToSpend > 0)
@@ -932,52 +934,58 @@ namespace UD_Bones_Folder.Mod.UI
                 int totalSpent = 0;
                 int lastRemainingPoints = 0;
                 int lastPointsToSpend = 0;
-                bool stuck = false;
                 int attempts = 0;
                 while (Player.Stat("MP") > 0
-                    && Player.Stat("MP") != lastRemainingPoints
                     && totalSpent < maxPointsToSpend
-                    && !stuck
                     && ++attempts < maxAttempts)
                 {
-                    int maxPointSpend = Math.Max(1, Math.Min(Player.Stat("MP"), 4));
-                    int pointsToSpend = SeededRandom(nameof(GameObject.RandomlySpendPoints), 1, maxPointSpend, attempts);
-
                     int stuckPoints = Player.Stat("MP");
-                    if (lastRemainingPoints != stuckPoints)
-                        stuck = false;
-                    else
-                    {
-                        stuck = true;
+
+                    int maxPointSpend = Math.Clamp(stuckPoints, 1, 4);
+                    int pointsToSpend = SeededRandom($"{nameof(GameObject.RandomlySpendPoints)}::{Player.BaseID}", 1, maxPointSpend, attempts);
+
+                    if (lastRemainingPoints == stuckPoints)
                         pointsToSpend += lastPointsToSpend;
-                    }
 
                     lastPointsToSpend = pointsToSpend;
-                    lastRemainingPoints = Player.Stat("MP");
+                    lastRemainingPoints = stuckPoints;
                     totalSpent += pointsToSpend;
-                    Player.RandomlySpendPoints(maxAPtospend: 0, maxSPtospend: 0, maxMPtospend: pointsToSpend, result: sB);
 
-                    if (stuckPoints != lastRemainingPoints)
-                        stuck = false;
+                    if (maxPointSpend == 4
+                        && MutationsAPI.RandomlyMutate(
+                            go: Player,
+                            rng: SeededGenerator($"{nameof(SpendMutationPointsInSmallChunks)}::{Player.BaseID}", attempts),
+                            allowMultipleDefects: false,
+                            result: sB) != null)
+                    {
+                        Player.Statistics["MP"].Penalty += 4;
+                    }
+                    else
+                    {
+                        Player.RandomlySpendPoints(
+                            maxAPtospend: 0,
+                            maxSPtospend: 0,
+                            maxMPtospend: pointsToSpend,
+                            result: sB);
+                    }
                 }
 
                 var resultString = sB.ToString().Strip().Trim();
                 Event.ResetTo(sB);
                 if (!Silent
-                    && Player.IsPlayer())
+                    //&& Player.IsPlayer()
+                    )
                 {
                     using var resultStrings = ScopeDisposedList<string>.GetFromPoolFilledWith(resultString.Split("! ").IteratorSafe());
 
                     for (int i = 0; i < resultStrings.Count; i++)
                         resultStrings[i] = resultStrings[i].Replace("base rank in ", "").Trim();
 
-                    Utils.Log(resultStrings.Aggregate("Spending Mutation Points...", Utils.NewLineDelimitedAggregator));
+                    Utils.Log(resultStrings.Aggregate($"Spending Mutation Points for {Player?.DebugName ?? "NO_CREATURE"}...", Utils.NewLineDelimitedAggregator));
 
                     if (attempts >= 200)
                         Utils.Log($"Mutation point spend aborted early due to {nameof(attempts)} exceeding {maxAttempts}.");
                     else
-                    if (stuck)
-                        Utils.Log($"Mutation point spend aborted early due to being {nameof(stuck)}.");
                     if (Player.Stat("MP") == lastRemainingPoints)
                         Utils.Log($"Mutation point spend aborted early due to {nameof(lastRemainingPoints)} being equal to the current remaining points.");
                 }
@@ -1369,7 +1377,7 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
-        public static bool PerformVeryIntelligentPointAssignment(GameObject Player)
+        public static bool PerformVeryIntelligentPointAssignment(GameObject Player, bool Silent = true)
         {
             try
             {
@@ -1384,6 +1392,7 @@ namespace UD_Bones_Folder.Mod.UI
                 int abilityStatsCount = abilityStats.Count;
                 if (Player.IsMutant())
                 {
+                    Player.RequirePart<Mutations>();
                     for (int i = 0; i < amount; i++)
                     {
                         int index = SeededRandom($"{nameof(Nectar_Tonic_Applicator)}::Apply", 0, abilityStatsCount * 1000, i) % (abilityStatsCount + 1);
@@ -1403,9 +1412,9 @@ namespace UD_Bones_Folder.Mod.UI
                 else
                     Player.GainAP(amount); // represents getting some eaters injectors.
 
-                SpendMutationPointsInSmallChunks(Player, Silent: false);
+                SpendMutationPointsInSmallChunks(Player, Silent: Silent);
                 SpendAbilityPointsWeighted(Player);
-                SpendSkillPointsRandomly(Player);
+                SpendSkillPointsRandomly(Player, Silent: Silent);
             }
             catch (Exception x)
             {
@@ -1781,13 +1790,29 @@ namespace UD_Bones_Folder.Mod.UI
                     Utils.SuppressPopupsWhile(delegate ()
                     {
                         int intMod = Math.Min(1, Player.StatMod("Intelligence") + 3);
+                        int attemptsToMake = intMod;
+
+                        if (Player.HasPart<Tinkering_Tinker3>())
+                            attemptsToMake *= 5;
+                        else
+                        if (Player.HasPart<Tinkering_Tinker2>()
+                            || Player.HasPart<Tinkering_ReverseEngineer>())
+                            attemptsToMake *= 4;
+                        else
+                        if (Player.HasPart<Tinkering_Tinker1>()
+                            || Player.HasPart<Tinkering_Disassemble>())
+                            attemptsToMake *= 3;
+                        else
+                        if (Player.HasPart<Tinkering>())
+                            attemptsToMake *= 2;
+
                         Player.PerformActionRecursively(delegate (GameObject go)
                         {
                             if (!go.IsBroken()
                                 && go.TryGetPart(out Examiner examiner)
                                 && !go.Understood())
                             {
-                                for (int i = 0; i < intMod; i++)
+                                for (int i = 0; i < attemptsToMake; i++)
                                 {
                                     try
                                     {
@@ -1881,6 +1906,10 @@ namespace UD_Bones_Folder.Mod.UI
                         || energyCells.IsNullOrEmpty())
                         return;
 
+                    if (go.Count > 1
+                        && go.HasPart<EnergyCellSocket>())
+                        go.SplitStack(Count: 1, OwningObject: Player, NoRemove: true);
+
                     if (!go.TryGetPart(out EnergyCellSocket cellSocket))
                         return;
 
@@ -1894,6 +1923,9 @@ namespace UD_Bones_Folder.Mod.UI
                 },
                 Where: go => go.TryGetPart(out EnergyCellSocket cellSocket) && cellSocket.Cell == null,
                 Rnd: rnd);
+
+            Player.PerformActionRecursively(go => go.CheckStacks());
+
             return true;
         }
 
@@ -2160,13 +2192,53 @@ namespace UD_Bones_Folder.Mod.UI
             return true;
         }
 
-        public static bool PeformSundryOtherPrep(GameObject Player)
+        public static bool OpenSaltShuffleRevivalPacks(GameObject Player)
+        {
+            if (Player == null)
+                return false;
+
+            int failedAttempts = 0;
+            while (Player.GetInventory() is List<GameObject> inventory
+                && inventory.FirstOrDefault(go => go.GetBlueprint().InheritsFromAny("Plaidman_SSR_Booster", "Plaidman_SSR_Starter")) is GameObject cardPack
+                && cardPack.SplitFromStack() is GameObject singleCardPack
+                && failedAttempts <= 10)
+            {
+                try
+                {
+                    // Attempts to open any Salt Shuffle Revival booster packs
+                    if (singleCardPack == null
+                        || !InventoryActionEvent.Check(
+                            Object: singleCardPack,
+                            Actor: Player,
+                            Item: singleCardPack,
+                            Command: "InvCommandUnwrap",
+                            OverrideEnergyCost: true,
+                            Silent: true,
+                            EnergyCostOverride: 0))
+                        failedAttempts++;
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"Failed attempt opening {singleCardPack?.DebugName ?? "MISSING_OBJECT"}, due to thrown exception", x);
+                    failedAttempts++;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool PeformSundryOtherPrep(GameObject Player, bool Silent = false)
         {
             if (Player == null)
                 return false;
 
             if (Player.TryGetPart(out ElectricalGeneration electricalGeneration))
                 electricalGeneration.AddCharge(electricalGeneration.GetMaxCharge() - electricalGeneration.GetCharge());
+
+            if (Silent)
+                Utils.SuppressPopupsWhile(() => OpenSaltShuffleRevivalPacks(Player));
+            else
+                OpenSaltShuffleRevivalPacks(Player);
 
             return true;
         }

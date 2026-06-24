@@ -117,25 +117,25 @@ namespace UD_Bones_Folder.Mod
 
                     if (ParentHost == null)
                     {
-                        Utils.Log($"{1.Indent()}ParentHost null");
+                        Utils.Info($"ParentHost null");
                         this.ForceDispose = true;
                     }
                     else
                     if (exceededTimeLimit)
                     {
-                        Utils.Log($"{1.Indent()}Exceeded Time Limit");
+                        Utils.Info($"Exceeded Time Limit");
                         this.ForceDispose = true;
                     }
                     else
                     if (ParentHost.PutBonesSavGz(this).WaitResult())
                     {
-                        Utils.Info($"{1.Indent()}Successful PUT");
+                        Utils.Info($"Successful PUT");
                         Success = true;
                     }
 
                     if (!this.ForceDispose
                         && !Success)
-                        Utils.Warn($"{1.Indent()}{nameof(PendingSavGz)}.{nameof(RetryUpload)} fell through.");
+                        Utils.Warn($"{nameof(PendingSavGz)}.{nameof(RetryUpload)} fell through.");
 
                     string dueTo = "unknown reason";
                     if (Success)
@@ -153,10 +153,10 @@ namespace UD_Bones_Folder.Mod
                     if (Success
                         || this.ForceDispose)
                     {
+                        Dispose();
                         var pendingSavGzs = ParentHost?.PendingSavGzs;
                         string pendingSavsCount = (pendingSavGzs?.Count)?.ToString() ?? "NO_DICTIONARY";
                         Utils.Info($"{DateTime.Now.Timestamp()} - Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(ParentHost.PendingSavGzs)}: {pendingSavsCount}");
-                        Dispose();
                     }
 
                     return Success;
@@ -1276,6 +1276,16 @@ namespace UD_Bones_Folder.Mod
             public async Task<bool> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
             {
                 Utils.Log($"{nameof(PutBonesSavGz)} for {nameof(Host)} {ToString()} -> {nameof(PendingSavGz.BonesID)}: {{{PendingSavGz?.BonesID ?? "NO_BONES"}}}");
+
+                string currentContextString = "UnknownContext";
+                if (The.CurrentContext == The.GameContext)
+                    currentContextString = nameof(The.GameContext);
+                else
+                if (The.CurrentContext == The.UiContext)
+                    currentContextString = nameof(The.UiContext);
+
+                Utils.Log($"{nameof(The.CurrentContext)} is {currentContextString}");
+
                 if (PendingSavGz == null)
                 {
                     if (!Silent)
@@ -1293,6 +1303,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         if (!Silent)
                             Utils.Warn($"{ToString()} is not running");
+
                         return false;
                     }
 
@@ -1420,7 +1431,7 @@ namespace UD_Bones_Folder.Mod
                 byte[] SavGz
                 )
             {
-                if (!Enabled)
+                if (!IsRunning)
                     return false;
 
                 try
