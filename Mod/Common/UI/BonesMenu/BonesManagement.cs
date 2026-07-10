@@ -351,29 +351,40 @@ namespace UD_Bones_Folder.Mod.UI
 
         private bool IsBonesToShow(SaveBonesInfo SaveBonesInfo)
         {
-            bool isBlocked = SaveBonesInfo.IsBlocked;
-            if (VisibilityMode == VisibilityModes.Allowed
-                && isBlocked)
-                return false;
+            try
+            {
+                bool isBlocked = SaveBonesInfo.IsBlocked;
+                if (VisibilityMode == VisibilityModes.Allowed
+                    && isBlocked)
+                    return false;
 
-            if (VisibilityMode == VisibilityModes.Blocked
-                && !isBlocked)
-                return false;
+                if (VisibilityMode == VisibilityModes.Blocked
+                    && !isBlocked)
+                    return false;
 
-            var fileLocationDataType = SaveBonesInfo.FileLocationData.Type;
-            if (SourceMode == SourceModes.File
-                && !fileLocationDataType.IsFile())
-                return false;
+                if (SaveBonesInfo.FileLocationData is not FileLocationData fileLocationData)
+                    return false;
 
-            if (SourceMode == SourceModes.Mod
-                && !fileLocationDataType.IsMod())
-                return false;
+                var fileLocationDataType = fileLocationData.Type;
+                if (SourceMode == SourceModes.File
+                    && !fileLocationDataType.IsFile())
+                    return false;
 
-            if (SourceMode == SourceModes.Online
-                && !fileLocationDataType.IsOnline())
-                return false;
+                if (SourceMode == SourceModes.Mod
+                    && !fileLocationDataType.IsMod())
+                    return false;
 
-            return true;
+                if (SourceMode == SourceModes.Online
+                    && !fileLocationDataType.IsOnline())
+                    return false;
+
+                return true;
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"Failed determining whether {nameof(SaveBonesInfo)} {{{SaveBonesInfo?.ID ?? "MISSING_BONES_INFO"}}} should be shown for {nameof(SourceMode)} {SourceMode} and {nameof(VisibilityMode)} {VisibilityMode}", x);
+                return false;
+            }
         }
 
         public override void Show()
