@@ -218,13 +218,20 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 || Clone.Brain is not Brain cloneBrain)
                 return;
 
-            Clone.PartyLeader = Original.PartyLeader;
+            if (Original.PartyLeader?.Brain is not Brain originalLeaderBrain)
+                Clone.PartyLeader = null;
+            else
+                Clone.PartyLeader = originalLeaderBrain.ParentObject;
+
             if (!originalBrain.PartyMembers.IsNullOrEmpty())
+            {
+                cloneBrain.PartyMembers.Clear();
                 foreach ((int partyMemberID, PartyMember partyMember) in originalBrain.PartyMembers)
-                    cloneBrain.PartyMembers[partyMemberID] = partyMember;
+                    cloneBrain.PartyMembers[partyMemberID] = new(partyMember.Reference, partyMember.Flags);
+            }
+
             try
             {
-
                 if (!originalBrain.Allegiance.IsNullOrEmpty())
                     (originalBrain.Allegiance, cloneBrain.Allegiance) = (cloneBrain.Allegiance, originalBrain.Allegiance);
 
@@ -267,7 +274,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     if (!Clone.HasPart<Persuasion_Proselytize>())
                         continue;
 
-                    proselytized.Proselytizer = Clone;
+                    if (Clone.Brain != null)
+                        proselytized.Proselytizer = Clone;
+                    else
+                        proselytized.Proselytizer = null;
                 }
 
                 if (gameObject.TryGetEffect<Beguiled>(out var beguiled))
@@ -275,11 +285,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     if (!Clone.HasPart<Beguiling>())
                         continue;
 
-                    beguiled.Beguiler = Clone;
+                    if (Clone.Brain != null)
+                        beguiled.Beguiler = Clone;
+                    else
+                        beguiled.Beguiler = null;
                 }
 
-                gameObject.PartyLeader = Clone;
-                gameObject.Brain.Goals.Clear();
+                if (Clone.Brain != null)
+                    gameObject.PartyLeader = Clone;
+                else
+                    gameObject.PartyLeader = null;
             }
         }
 

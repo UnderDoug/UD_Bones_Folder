@@ -364,8 +364,8 @@ namespace XRL.World.Parts
 
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
-            Registrar.Register(GetDisplayNameEvent.ID, EventOrder.EXTREMELY_EARLY, Serialize: true);
-            Registrar.Register(GetShortDescriptionEvent.ID, EventOrder.EXTREMELY_EARLY, Serialize: true);
+            Registrar.Register(GetDisplayNameEvent.ID, EventOrder.EXTREMELY_EARLY);
+            Registrar.Register(GetShortDescriptionEvent.ID, EventOrder.EXTREMELY_EARLY);
             base.Register(Object, Registrar);
         }
 
