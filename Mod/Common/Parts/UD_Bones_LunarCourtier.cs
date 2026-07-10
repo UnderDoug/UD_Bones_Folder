@@ -399,7 +399,12 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(ZoneActivatedEvent E)
         {
-
+            if (!DoneAllyship
+                && LunarRegent == null)
+            {
+                DoneAllyship = true;
+                ParentObject.MakeAggressivelyHateThePlayer();
+            }
             return base.HandleEvent(E);
         }
 
@@ -413,10 +418,17 @@ namespace XRL.World.Parts
 
         public virtual bool HandleEvent(LoadLunarCourtierEvent E)
         {
-            if (E.LunarRegent != null
-                && E.LunarObject == ParentObject)
+            if (E.LunarObject == ParentObject)
             {
-                PerformAllyship(E.LunarRegent, Force: true, Initial: true);
+                if (E.LunarRegent != null)
+                    PerformAllyship(E.LunarRegent, Force: true, Initial: true);
+                else
+                if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT)
+                    && !DoneAllyship)
+                {
+                    DoneAllyship = true;
+                    ParentObject.MakeAggressivelyHateThePlayer();
+                }
 
                 if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT))
                     UD_Bones_LunarRegent.MakeInventoryFragile(ParentObject, null, E.Context);

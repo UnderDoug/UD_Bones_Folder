@@ -81,6 +81,7 @@
       <table Name="Junk 3" Chance="75,50,50,25,25" />
       <table Name="Ammo 1" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 2" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier1" Chance="75,50,25" />
       <object Blueprint="Copper Nugget" Chance="50,25,10" />
       <object Blueprint="Wooden Buckler" Chance="50" />
       <object Blueprint="Musket" Chance="75" />
@@ -108,6 +109,7 @@
       <table Name="Junk 4" Chance="75,50,50,25,25" />
       <table Name="Ammo 2" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier2" Chance="75,50,25,25" />
       <object Blueprint="Copper Nugget" Chance="50,25,10" />
       <object Blueprint="Grit Gate Recoiler" Chance="25" />
       <object Blueprint="Spectacles" Chance="25" />
@@ -130,6 +132,7 @@
       <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
       <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier3" Chance="75,75,50,50,25,25" />
       <object Blueprint="Silver Nugget" Chance="50,25,10" />
       <object Blueprint="Grit Gate Recoiler" Chance="25" />
       <object Blueprint="Kyakukya Recoiler" Chance="50" />
@@ -152,6 +155,7 @@
       <table Name="Ammo 2" Number="5-7" Chance="100,75,50,25" />
       <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 4" Chance="100,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier4" Chance="75,75,50,50,25,25" />
       <object Blueprint="Silver Nugget" Chance="50,25,10" />
       <object Blueprint="Grit Gate Recoiler" Chance="25" />
       <object Blueprint="Kyakukya Recoiler" Chance="75" />
@@ -174,6 +178,7 @@
       <table Name="Ammo 3" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 5" Chance="100,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier5" Chance="75,75,50,50,25,25" />
       <object Blueprint="Silver Nugget" Chance="50,25,10,10,10" />
       <object Blueprint="Bethesda Susa Recoiler" Chance="50" />
       <object Blueprint="Ezra Recoiler" Chance="35" />
@@ -195,6 +200,7 @@
       <table Name="Ammo 4" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 5" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 6" Chance="100,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier6" Chance="75,75,50,50,25,25" />
       <object Blueprint="Silver Nugget" Chance="50,25,10,10,10" />
       <object Blueprint="Bethesda Susa Recoiler" Chance="25" />
       <object Blueprint="Ezra Recoiler" Chance="50" />
@@ -219,6 +225,7 @@
       <table Name="Ammo 5" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 6" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 7" Chance="100,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier7" Chance="75,75,50,50,25,25" />
       <object Blueprint="Gold Nugget" Chance="25,25,10,10,10" />
       <object Blueprint="Ezra Recoiler" Chance="25" />
       <object Blueprint="Yd Freehold Recoiler" Chance="50" />
@@ -243,6 +250,7 @@
       <table Name="Ammo 6" Chance="100,100,75,75,50,50,25,25" />
       <table Name="Ammo 7" Chance="100,75,75,50,50,25,25" />
       <table Name="Ammo 8" Chance="100,75,50,50,25,25" />
+      <table Name="DynamicObjectsTable:EnergyCells:Tier8" Chance="75,75,50,50,25,25" />
       <object Blueprint="Gold Nugget" Chance="25,25,25,25,10,10,10" />
       <object Blueprint="Ezra Recoiler" Chance="25" />
       <object Blueprint="Yd Freehold Recoiler" Chance="25" />

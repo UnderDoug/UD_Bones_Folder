@@ -96,8 +96,7 @@ namespace XRL.World.Parts
         public override void Initialize()
         {
             base.Initialize();
-            ParentObject.SetStringProperty(nameof(UD_Bones_FeverWarped), null, true);
-            ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::{nameof(TileOnly)}", null, true);
+
             ParentObject.SetStringProperty($"{nameof(UD_Bones_FeverWarped)}::OriginalBlueprint", ParentObject.Blueprint, true);
             ParentObject.SetStringProperty(Const.IS_MAD_PROP, $"{true}");
 
@@ -151,7 +150,7 @@ namespace XRL.World.Parts
                 Flags = Flags,
                 Persists = Persists,
             }
-            .OverrideBonesIDTyped< UD_Bones_FeverWarped>(BonesID)
+            .OverrideBonesIDTyped<UD_Bones_FeverWarped>(BonesID)
             ;
 
         public bool IsTileOnly()

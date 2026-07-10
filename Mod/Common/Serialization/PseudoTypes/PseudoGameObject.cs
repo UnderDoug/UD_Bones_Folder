@@ -35,6 +35,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         protected string OriginalAbility;
         // Not Serialized
         protected string OriginalGameID;
+        // Not Serialized
+        protected string ReplacedRecallStoryID;
 
         // Not Serialized
         protected UD_Bones_Moderated ModeratedPart;
@@ -68,6 +70,13 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             OriginalGameID = GameObject.GetStringProperty(SerializationExtensions.GAME_ID_PROPERTY);
             GameObject.SetStringProperty(SerializationExtensions.GAME_ID_PROPERTY, The.Game.GameID);
 
+            /*ReplacedRecallStoryID = GameObject.GetPropertyOrTag(Const.ORIGINAL_RECALL_STORY_PROP);
+            if (ReplacedRecallStoryID != null)
+            {
+                GameObject.SetStringProperty("Story", ReplacedRecallStoryID);
+                GameObject.RemoveStringProperty(Const.ORIGINAL_RECALL_STORY_PROP);
+            }*/
+
             if (GameObject.TryGetPart(out ModeratedPart))
                 GameObject.PartsList.Remove(ModeratedPart);
         }
@@ -77,6 +86,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             GameObject.SetStringProperty(SerializationExtensions.ACTIVE_OBJECT_PROPERTY, OriginalActive, true);
             GameObject.SetStringProperty(SerializationExtensions.ABILITY_OBJECT_PROPERTY, OriginalAbility, true);
             GameObject.SetStringProperty(SerializationExtensions.GAME_ID_PROPERTY, OriginalGameID, true);
+
+            /*if (ReplacedRecallStoryID != null)
+            {
+                GameObject.SetStringProperty(Const.ORIGINAL_RECALL_STORY_PROP, ReplacedRecallStoryID);
+                GameObject.SetStringProperty("Story", $"UD_Bones_Missing_Recall_Story {Math.Abs(GameObject.BaseID % 5)}");
+            }*/
 
             if (ModeratedPart != null)
                 GameObject.PartsList.Add(ModeratedPart);

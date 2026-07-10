@@ -135,7 +135,7 @@ namespace XRL.World.Parts
             {
                 E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(LunarRegent), LunarRegent != null ? "not null" : "null");
                 E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(LunarRegentBaseID), LunarRegentBaseID);
-                E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(BakedLunarRegentName), BakedLunarRegentName);
+                E.AddEntry(nameof(UD_Bones_BaseLunarSubject), nameof(BakedLunarRegentName), BakedLunarRegentName ?? null);
             }
             return base.HandleEvent(E);
         }

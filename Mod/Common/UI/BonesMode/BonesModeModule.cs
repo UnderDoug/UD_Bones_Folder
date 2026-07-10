@@ -451,6 +451,8 @@ namespace UD_Bones_Folder.Mod.UI
 
                 ShedAFewPounds(Player);
 
+                HaveFactionRelations(Player);
+
                 PeformSundryOtherPrep(Player);
             }
             catch (Exception x)
@@ -1948,7 +1950,7 @@ namespace UD_Bones_Folder.Mod.UI
             if (!GO.TryGetPart(out TinkerItem tinkerItem))
                 return false;
 
-            if (!Player.HasSkill(nameof(Tinkering_Disassemble)))
+            if (!Player.HasPart<Tinkering_Disassemble>())
                 return false;
 
             bool interrupt = false;
@@ -2068,25 +2070,35 @@ namespace UD_Bones_Folder.Mod.UI
                     => !IsDroppableItem(go)
                     ;
 
-                using (var scrapList = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Player.Inventory.Objects))
+                //Utils.Log($"Scrapping Scrap:");
+                while (Player.GetInventory(Tinkering_Disassemble.ConsiderScrap) is List<GameObject> scrapList
+                    && !scrapList.IsNullOrEmpty())
                 {
-                    scrapList.RemoveAll(go => !Tinkering_Disassemble.ConsiderScrap(go));
-
-                    while (!scrapList.IsNullOrEmpty()
-                        && scrapList.TakeAt(0) is GameObject scrap)
+                    if (scrapList[0].SplitFromStack() is not GameObject scrap)
+                    {
+                        //Utils.Log($"Ran into null scrap object attempting to split from stack.");
+                        break;
+                    }
+                    Utils.SuppressPopupsWhile(delegate ()
                     {
                         if (!TryDoDisassembly(scrap, Player))
+                        {
+                            //Utils.Log($"{1.Indent()}{scrap?.DebugName ?? "MISSING_OBJECT"} Destroyed");
                             scrap.Destroy();
-                    }
+                        }
+                        /*else
+                            Utils.Log($"{1.Indent()}{scrap?.DebugName ?? "MISSING_OBJECT"} Scrapped");*/
+                    });
                 }
+                //Utils.Log($"Shedding Pounds:");
 
-                using var playerInventoryWithWeightLowestValueRatioFirst = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Player.Inventory.Objects);
+                using var playerInventoryWithWeightLowestValueRatioFirst = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Player.GetInventory());
                 playerInventoryWithWeightLowestValueRatioFirst.RemoveAll(isNotDroppable);
 
-                using var playerInventoryWithWeightHeaviest = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Player.Inventory.Objects);
+                using var playerInventoryWithWeightHeaviest = ScopeDisposedList<GameObject>.GetFromPoolFilledWith(Player.GetInventory());
                 playerInventoryWithWeightHeaviest.RemoveAll(isNotSlimmableObjectTierAppropriately);
 
-                GameObject sphereOfNegativeWeight = Player.Inventory.GetFirstObject(IsSphereOfNegWeight);
+                var sphereOfNegativeWeight = Player.Inventory.GetFirstObject(IsSphereOfNegWeight);
 
                 int carriedWeight = Player.GetCarriedWeight();
                 int maxCarryCapacity = Player.GetMaxCarriedWeight();
@@ -2125,11 +2137,23 @@ namespace UD_Bones_Folder.Mod.UI
                     {
                         droppableItem.SplitFromStack();
                         //Utils.Log($"{1.Indent()}Dropping: {droppableItem?.DebugName ?? "NO_ITEM"}");
-                        if (!TryDoDisassembly(droppableItem, Player))
-                            droppableItem?.Obliterate();
+                        /*if (!TryDoDisassembly(droppableItem, Player))
+                            droppableItem?.Obliterate();*/
 
+                        Utils.SuppressPopupsWhile(delegate ()
+                        {
+                            if (!TryDoDisassembly(droppableItem, Player))
+                            {
+                                //Utils.Log($"{1.Indent()}{droppableItem?.DebugName ?? "MISSING_OBJECT"} Obliterated");
+                                droppableItem.TryRemoveFromContext();
+                                droppableItem?.Obliterate();
+                            }
+                            /*else
+                                Utils.Log($"{1.Indent()}{droppableItem?.DebugName ?? "MISSING_OBJECT"} Scrapped");*/
+                        });
+                        
                         playerInventoryWithWeightLowestValueRatioFirst.Clear();
-                        playerInventoryWithWeightLowestValueRatioFirst.AddRange(Player.Inventory.Objects);
+                        playerInventoryWithWeightLowestValueRatioFirst.AddRange(Player.GetInventory());
                         playerInventoryWithWeightLowestValueRatioFirst.RemoveAll(isNotDroppable);
                     }
                     else
@@ -2168,7 +2192,7 @@ namespace UD_Bones_Folder.Mod.UI
                         //Utils.Log($"{1.Indent()}Slimming: {slimmableItem?.DebugName ?? "NO_ITEM"}, {nameof(ModWillowy)}: {slimmableItem.HasPart<ModWillowy>()}, {nameof(ModSlender)}: {slimmableItem.HasPart<ModSlender>()}");
 
                         playerInventoryWithWeightHeaviest.Clear();
-                        playerInventoryWithWeightHeaviest.AddRange(Player.Inventory.Objects);
+                        playerInventoryWithWeightHeaviest.AddRange(Player.GetInventory());
                         playerInventoryWithWeightHeaviest.RemoveAll(isNotSlimmableObjectTierAppropriately);
                     }
 
@@ -2224,6 +2248,34 @@ namespace UD_Bones_Folder.Mod.UI
                 }
             }
 
+            return true;
+        }
+
+        public static bool HaveFactionRelations(GameObject Player)
+        {
+            GetTierAndOverTier(Player, out int tier, out List<int> overTier);
+
+            int repCap = 10000;
+            // repCap *= tier + overTier.Count;
+
+            int factionsCount = (4 * tier) + (6 * overTier.Count);
+            factionsCount += SeededRandom($"{nameof(HaveFactionRelations)}::{nameof(factionsCount)}", -2, 2);
+            factionsCount = Math.Max(1, factionsCount);
+
+            using var factions = ScopeDisposedList<Faction>.GetFromPoolFilledWith(Factions.GetList().Where(f => f.Visible));
+            var rnd = SeededGenerator(nameof(HaveFactionRelations));
+
+            factions.ShuffleInPlace(rnd);
+
+            while (factions.Count > factionsCount) factions.RemoveLast();
+
+            foreach (var faction in factions)
+            {
+                int adjustment = GetNDisadvantage($"{nameof(HaveFactionRelations)}::{faction.Name}", 0, repCap, 3);
+                if (SeededPerMyriadChance($"{nameof(HaveFactionRelations)}::{faction.Name}", 5000))
+                    adjustment = -adjustment;
+                Utils.SuppressPopupsWhile(() => The.Game.PlayerReputation.Modify(faction.Name, adjustment, BONES_MODE));
+            }
             return true;
         }
 

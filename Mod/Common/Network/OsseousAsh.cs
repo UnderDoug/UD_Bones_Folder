@@ -27,6 +27,7 @@ using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
 
 using static UD_Bones_Folder.Mod.Const;
+using static UD_Bones_Folder.Mod.OsseousAsh.Host;
 using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.World.Event;
@@ -148,11 +149,29 @@ namespace UD_Bones_Folder.Mod
         private static Rack<HostSet> _Hosts;
         public static Rack<HostSet> Hosts => _Hosts ??= ReadHostCollections()?.WaitResult();
 
-        public static Renderable BlackAshCloudIcon = new(
+        public static IRenderable BlackAshCloudIcon = new Renderable(
             Tile: "Mutations/gas_generation.bmp",
             ColorString: "&K",
             TileColor: "&K",
-            DetailColor: 'y');
+            DetailColor: 'y')
+            ;
+
+        public static IRenderable DownloadIcon = new Renderable(
+            Tile: "Abilities/tile_supressive_fire.png",
+            ColorString: "&y",
+            TileColor: "&y",
+            DetailColor: 'R')
+            ;
+
+        public static IRenderable UploadIcon = new FlippableRender(
+            Source: new Renderable(
+                Tile: "Abilities/tile_supressive_fire.png",
+                ColorString: "&y",
+                TileColor: "&y",
+                DetailColor: 'W'),
+            HFlip: false,
+            VFlip: true)
+            ;
 
         public static bool WantToAsk
             => Options.EnableOsseousAshStartupPopup
@@ -359,11 +378,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 Element = null,
                                 Text = enableDownloads.GetCheckboxText($"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_DOWNLOADS}"),
-                                Icon = new Renderable(
-                                    Tile: "Abilities/tile_supressive_fire.png",
-                                    ColorString: "&y",
-                                    TileColor: "&y",
-                                    DetailColor: 'R'),
+                                Icon = DownloadIcon,
                                 Hotkey = 'd',
                                 Callback = e => Task.Run(delegate ()
                                 {
@@ -376,14 +391,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 Element = null,
                                 Text = enableUploads.GetCheckboxText($"Opt in to {OSSEOUS_ASH} {OSSEOUS_ASH_UPLOADS}"),
-                                Icon = new FlippableRender(
-                                    Source: new Renderable(
-                                        Tile: "Abilities/tile_supressive_fire.png",
-                                        ColorString: "&y",
-                                        TileColor: "&y",
-                                        DetailColor: 'W'),
-                                    HFlip: false,
-                                    VFlip: true),
+                                Icon = UploadIcon,
                                 Hotkey = 'u',
                                 Callback = e => Task.Run(delegate ()
                                 {
@@ -1418,7 +1426,7 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
-        public static async Task<bool> TryUploadBones(
+        public static async Task<List<Host>> UploadBonesAsync(
             string BonesID,
             SaveBonesJSON SaveBonesJSON,
             byte[] SavGz
@@ -1426,13 +1434,23 @@ namespace UD_Bones_Folder.Mod
         {
             try
             {
-                bool any = false;
-                foreach (var host in AllHosts(h => h.Enabled).IteratorSafe())
+                List<Host> successfulHosts = null;
+                foreach (var host in AllEnabledHosts().IteratorSafe())
                 {
                     try
                     {
-                        if (await host.TryUploadBonesAsync(BonesID, SaveBonesJSON, SavGz))
-                            any = true;
+                        if (await host.TryUploadBonesAsync(
+                            SaveBonesJSON: SaveBonesJSON,
+                            PendingSavGz: new PendingSavGz
+                            {
+                                ParentHost = host,
+                                BonesID = BonesID,
+                                SavGz = SavGz,
+                            }))
+                        {
+                            successfulHosts ??= new();
+                            successfulHosts.Add(host);
+                        }
                         else
                             Utils.Warn($"Failed to upload bones to {host}");
                     }
@@ -1442,14 +1460,22 @@ namespace UD_Bones_Folder.Mod
                         continue;
                     }
                 }
-                return any;
+                return successfulHosts;
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(TryUploadBones)} failed to upload Bones with BonesID {BonesID}", x);
-                return false;
+                Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {BonesID}", x);
+                return null;
             }
         }
+
+        public static async Task<bool> TryUploadBonesAsync(
+            string BonesID,
+            SaveBonesJSON SaveBonesJSON,
+            byte[] SavGz
+            )
+            => !(await UploadBonesAsync(BonesID, SaveBonesJSON, SavGz)).IsNullOrEmpty()
+            ;
 
         public static List<SaveBonesInfo> GetBonesInfos()
         {
@@ -1467,7 +1493,9 @@ namespace UD_Bones_Folder.Mod
                     if (saveBonesInfos?.FirstOrDefault(b => b.ID == hostedSaveBonesInfo.ID) is SaveBonesInfo existingInfo
                         && existingInfo.FileLocationData != null)
                     {
-                        existingInfo.FileLocationData = hostedSaveBonesInfo.FileLocationData;
+                        _ = existingInfo.FileLocationData;
+                        _ = hostedSaveBonesInfo.FileLocationData;
+                        existingInfo.FileLocationDataSet.UnionWith(hostedSaveBonesInfo.FileLocationDataSet);
                         continue;
                     }
                     saveBonesInfos ??= new();
@@ -1517,7 +1545,7 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(TryUploadBones)} failed to upload Bones Report for BonesID {Report.BonesID}", x);
+                Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones Report for BonesID {Report.BonesID}", x);
                 return false;
             }
         }

@@ -121,7 +121,10 @@ namespace XRL.World.Parts
         public override void Initialize()
         {
             base.Initialize();
-            SetBonesIDInternal(The.Game?.GameID, true);
+            if (The.Game?.GameID is string gameID)
+                SetBonesIDInternal(gameID);
+
+            // SetBonesIDInternal(The.Game?.GameID, Override: true);
         }
 
         protected virtual void SetBonesIDInternal(string BonesID, bool Override)

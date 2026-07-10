@@ -45,6 +45,8 @@ namespace UD_Bones_Folder.Mod
         public const string LUNAR_RELIQUARY_BLUEPRINT = "Lunar Reliquary";
         public const string LUNAR_RELIQUARY_TRIGGERED = "UD_Bones_Reliquary_Triggered";
 
+        public const string ORIGINAL_RECALL_STORY_PROP = MOD_PREFIX + "Original_Recall_Story";
+
         public const int MYRIAD = 10000;
 
         public const int MAX_ZONE_X = 239;
@@ -55,5 +57,9 @@ namespace UD_Bones_Folder.Mod
 
         public const string TICK = "\u221A";  // √
         public const string CROSS = "\u0058"; // X
+
+        public const string BULLET = "\u0007"; // •
+        public const string NBSP = "\xFF"; // " "
+        public const string DF = "\u000f"; // ☼
     }
 }

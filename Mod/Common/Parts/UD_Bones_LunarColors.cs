@@ -54,6 +54,12 @@ namespace XRL.World.Parts
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<string, string> EquipmentFrameByTileColor = new();
 
+        public static List<string> AlwaysRenderColorsContexts = new()
+        {
+            nameof(UD_Bones_LunarRegentAnnouncer),
+            nameof(SaveBonesInfo),
+        };
+
         public static int BaseAnimationFrameDuration => 8;
         public static int BaseAnimationLengthInFrames
         {
@@ -271,6 +277,7 @@ namespace XRL.World.Parts
             int animationFrameDuration = AnimationFrameDuration ?? BaseAnimationFrameDuration;
             using var colors = BorrowScopeDisposedColorsFromPool();
             int animationLengthInFrames = AnimationLengthInFrames ?? (animationFrameDuration * colors.Count);
+            XRLCore.FrameTimer?.Start();
             int frameWithOffset = XRLCore.GetCurrentFrameAtFPS(60) + offset;
             return frameWithOffset % animationLengthInFrames;
         }
@@ -357,7 +364,29 @@ namespace XRL.World.Parts
         }
 
         public override bool Render(RenderEvent E)
+            => HandleRender(E, IsFinal: false)
+            ;
+
+        public override bool FinalRender(RenderEvent E)
+            => HandleRender(E, IsFinal: true)
+            ;
+
+        private static bool ShouldDoColors(RenderEvent E)
+            => E.ColorsVisible
+            || E.Context?.ContainsAny(AlwaysRenderColorsContexts) is true
+            || E.UI
+            ;
+
+        public bool HandleRender(RenderEvent E, bool IsFinal)
         {
+            if (IsFinal
+                && E.Context != nameof(UD_Bones_LunarRegentAnnouncer))
+                return base.FinalRender(E);
+
+            if (!IsFinal
+                && E.Context == nameof(UD_Bones_LunarRegentAnnouncer))
+                return base.Render(E);
+
             var animationEvent = new ColorAnimationEvent
             {
                 Offset = FrameOffset,
@@ -376,17 +405,43 @@ namespace XRL.World.Parts
                 Keyframe: out KeyframeOfLastFrame))
                 LunarObjectColorChangedEvent.Send(ParentObject, TileColor, DetailColor, IsMad, KeyframeOfLastFrame);
 
+            if (!IsFinal
+                && E.Context == nameof(SaveBonesInfo))
+                return base.Render(E);
+
             if (Options.EnableFlashingLightEffects
-                && E.ColorsVisible
-                && ParentObject.Render is Render render)
+                && ShouldDoColors(E)
+                //&& ParentObject.Render is Render render
+                )
             {
-                render.ColorString = GetTileColor();
-                render.TileColor = GetTileColor();
+                bool skippedTileColor = true;
+                if (E.ColorStringPriority < Tattoos.ICON_COLOR_PRIORITY)
+                {
+                    E.ColorStringPriority = Tattoos.ICON_COLOR_PRIORITY - 1;
+                    E.ColorString = GetTileColor();
+                    //render.TileColor = GetTileColor();
+                    skippedTileColor = false;
+                }
 
                 if (IsMad)
-                    render.DetailColor = GetDetailColor();
+                {
+                    if (E.DetailColorPriority < Tattoos.ICON_COLOR_PRIORITY
+                        || skippedTileColor)
+                    {
+                        if (skippedTileColor
+                            && E.DetailColorPriority == Tattoos.ICON_COLOR_PRIORITY)
+                            E.DetailColorPriority++;
+                        else
+                            E.DetailColorPriority = Tattoos.ICON_COLOR_PRIORITY - 1;
+
+                        E.DetailColor = GetDetailColor();
+                    }
+                }
             }
-            return base.Render(E);
+            return IsFinal
+                ? base.FinalRender(E)
+                : base.Render(E)
+                ;
         }
 
         public override bool WantEvent(int ID, int Cascade)

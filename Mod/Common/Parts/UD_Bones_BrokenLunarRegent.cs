@@ -21,6 +21,7 @@ using XRL.UI;
 using XRL.World.AI;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using XRL;
+using HistoryKit;
 
 namespace XRL.World.Parts
 {
@@ -29,7 +30,14 @@ namespace XRL.World.Parts
         : IScribedPart
         , IModEventHandler<LoadLunarRegentEvent>
     {
+        public const string BASE_BROKEN_LUNAR_REGENT = "Base Broken Lunar Regent";
+
         private static IEnumerable<SaveBonesInfo> CachedSaveBonesInfo;
+
+        public static List<string> ContextsToIgnoreEncountered = new()
+        {
+            $"Plaidman.SaltShuffleRevival.FactionEntity",
+        };
 
         public LunarPartyIDs CachedCourtiers;
 
@@ -41,13 +49,15 @@ namespace XRL.World.Parts
 
         public bool ExcludeMad;
 
-        public int ForPlayerLevel;
+        public string ForPlayerLevel;
 
         public string OriginalDescription;
 
         protected bool HasIncremented;
 
         private AllegianceSet OriginalAllegience;
+
+        public string Context;
 
         public UD_Bones_BrokenLunarRegent()
         { }
@@ -57,21 +67,15 @@ namespace XRL.World.Parts
             CachedSaveBonesInfo = null;
         }
 
-        public override void Register(GameObject Object, IEventRegistrar Registrar)
-        {
-            Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_LATE);
-            base.Register(Object, Registrar);
-        }
-
-        public override bool WantEvent(int ID, int Cascade)
-            => base.WantEvent(ID, Cascade)
-            || ID == BeforeObjectCreatedEvent.ID
-            || ID == EnteredCellEvent.ID
-            ;
-
         public static bool BonesNotEncounteredOrFailedAlready(SaveBonesInfo BonesInfo)
             => !BonesManager.System.Encountered.Contains(BonesInfo.ID)
             && !BonesManager.System.FailedToLoadBones.Contains(BonesInfo.ID)
+            ;
+
+        public int GetForPlayerLevel()
+            => !int.TryParse(ForPlayerLevel, out int forPlayerLevel)
+            ? ParentObject?.Level ?? 0
+            : forPlayerLevel
             ;
 
         public bool IsNotExcludeMadOrNotMad(SaveBonesInfo BonesInfo)
@@ -80,9 +84,9 @@ namespace XRL.World.Parts
             ;
 
         public bool IsWithinDefinedLevel(SaveBonesInfo BonesInfo)
-            => ForPlayerLevel == 0
-            || BonesInfo.BonesSpec is not BonesSpec bonesSpec
-            || BonesSpec.IsWithinLevel(bonesSpec.Level, ForPlayerLevel)
+            => GetForPlayerLevel() < 5
+            || BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON
+            || BonesSpec.IsWithinLevel(bonesJSON.Level, GetForPlayerLevel())
             ;
 
         public bool MatchesSpec(SaveBonesInfo BonesInfo)
@@ -97,16 +101,93 @@ namespace XRL.World.Parts
             && GameObject.GetBlueprint().InheritsFromSafe("Lunar Reliquary")
             ;
 
+        public static string GetANonLegendaryCreatureBlueprint(Predicate<GameObjectBlueprint> Where = null, Random Rnd = null, int? AroundLevel = null)
+        {
+            Rnd ??= Stat.Rnd2;
+            using var shortList = ScopeDisposedList<GameObjectBlueprint>.GetFromPool();
+            using var aggregatedModels = ScopeDisposedList<string>.GetFromPool();
+            using var shuffledBlueprints = ScopeDisposedList<GameObjectBlueprint>.GetFromPoolFilledWith(GameObjectFactory.Factory.BlueprintList);
+            shuffledBlueprints.ShuffleInPlace(Rnd);
+            int targetLevel = AroundLevel.GetValueOrDefault();
+            do
+            {
+                foreach (var blueprint in shuffledBlueprints)
+                {
+                    if (!EncountersAPI.IsEligibleForDynamicEncounters(blueprint)
+                        || !EncountersAPI.IsLegendaryEligible(blueprint))
+                        continue;
+
+                    if (targetLevel > 0)
+                    {
+                        if (!blueprint.HasStat("Level")
+                            || blueprint.BaseStat("Level") != targetLevel)
+                            continue;
+                    }
+
+                    if (Where?.Invoke(blueprint) is false)
+                        continue;
+
+                    if (blueprint.GetTag("AggregateWith", null) is string tag)
+                    {
+                        if (aggregatedModels.Contains(tag))
+                            continue;
+
+                        aggregatedModels.Add(tag);
+                    }
+
+                    shortList.Add(blueprint);
+                }
+                if (!shortList.IsNullOrEmpty())
+                    return shortList.FirstOrDefault()?.Name;
+
+                targetLevel--;
+                shuffledBlueprints.ShuffleInPlace(Rnd);
+            }
+            while (targetLevel > 0);
+
+            return null;
+        }
+
+        public static GameObject GetANonLegendaryCreature(Predicate<GameObjectBlueprint> Where = null, Random Rnd = null, int? AroundLevel = null, bool AllowAnimated = true)
+        {
+            Rnd ??= Stat.Rnd2;
+
+            if (AllowAnimated
+                && If.OneIn(5000))
+                return EncountersAPI.GetAnAnimatedObject();
+
+            return GameObject.Create(GetANonLegendaryCreatureBlueprint(Where, Rnd, AroundLevel));
+        }
+
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_LATE);
+            base.Register(Object, Registrar);
+        }
+
+        public override bool WantEvent(int ID, int Cascade)
+            => base.WantEvent(ID, Cascade)
+            || ID == BeforeObjectCreatedEvent.ID
+            || ID == EnteredCellEvent.ID
+            ;
+
         public override bool HandleEvent(BeforeObjectCreatedEvent E)
         {
-            GameObject replacement = null;
+            Context = E.Context;
 
             OriginalAllegience = ParentObject?.Brain?.Allegiance;
             OriginalDescription = ParentObject?.GetPart<Description>()?._Short;
 
             if (CachedSaveBonesInfo.IsNullOrEmpty())
-                CachedSaveBonesInfo = BonesManager.System.GetEligibleSaveBonesInfo();
+                CachedSaveBonesInfo = BonesManager.System?.GetEligibleSaveBonesInfo()
+                    ?? BonesManager.GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible).WaitResult();
 
+            var originalObject = ParentObject;
+            string originalPrimaryFaction = originalObject.GetPrimaryFaction();
+
+            var rnd = ParentObject.GetSeededRandom(nameof(UD_Bones_BrokenLunarRegent));
+
+            GameObject replacement = null;
             if (CachedSaveBonesInfo.Where(MatchesSpec) is IEnumerable<SaveBonesInfo> saveBonesInfos
                 && !saveBonesInfos.IsNullOrEmpty())
             {
@@ -124,20 +205,32 @@ namespace XRL.World.Parts
                 }
 
                 int biggestWeight = bonesWeights.Aggregate(0, (a, n) => Math.Max(a, n.Value));
-                foreach (var bonesInfo in bonesInfoList)
+                int nonMadCount = bonesInfoList.Where(b => !b.IsMad).Count();
+
+                int madCount = bonesInfoList.Where(b => b.IsMad).Count();
+                int notMadCount = bonesInfoList.Where(b => !b.IsMad).Count();
+
+                bool forceMad = PreferMad
+                    && madCount <= (notMadCount * 0.25)
+                    ;
+                
+                if (PreferMad
+                    && !forceMad)
                 {
-                    if (PreferMad
-                        && bonesInfo.IsMad
-                        && bonesWeights.ContainsKey(bonesInfo.ID))
-                        bonesWeights[bonesInfo.ID] += biggestWeight;
+                    foreach (var bonesInfo in bonesInfoList)
+                    {
+                        if (PreferMad
+                            && bonesWeights.ContainsKey(bonesInfo.ID))
+                        {
+                            if (bonesInfo.IsMad)
+                                bonesWeights[bonesInfo.ID] += biggestWeight;
+                            else
+                                bonesWeights[bonesInfo.ID] = Math.Max(1, bonesWeights[bonesInfo.ID] / nonMadCount);
+                        }
+                    }
                 }
 
-                var bonesBag = bonesWeights.ToBallBag();
-
-                foreach ((var bonesID, var weight) in bonesWeights)
-                    bonesBag.Add(bonesID, weight);
-
-                var originalObject = ParentObject;
+                var bonesBag = bonesWeights.ToBallBag(rnd);
 
                 while (!bonesBag.IsNullOrEmpty()
                     && bonesBag.Count > 10 // prevents exauhsting bones before the player has an oportunity to fight them
@@ -151,11 +244,18 @@ namespace XRL.World.Parts
                             PickedBones: pickedBones,
                             LunarRegent: out replacement,
                             CachedCourtiers: out CachedCourtiers,
+                            LogEncountered: !LoadLunarRegentEvent.CheckContextAny(Context, ContextsToIgnoreEncountered.ToArray()),
                             ProcPreLoad: delegate (GameObject go)
                             {
                                 if (go.IsLunarRegent())
+                                {
+                                    if (forceMad)
+                                        go?.SetMad(true);
+
                                     go?.AddPart(this);
-                            }))
+                                }
+                            },
+                            Context: Context))
                             break;
 
                         originalObject?.AddPart(this);
@@ -171,7 +271,40 @@ namespace XRL.World.Parts
                     && !originalObject.HasPart<UD_Bones_BrokenLunarRegent>())
                     originalObject?.AddPart(this);
             }
-            E.ReplacementObject = replacement ?? EncountersAPI.GetANonLegendaryCreature(model => !model.InheritsFromSafe("Broken Lunar Regent"));
+            int aroundLevel = GetForPlayerLevel();
+            if (aroundLevel < 5)
+                aroundLevel = 0;
+            E.ReplacementObject = replacement
+                ?? GetANonLegendaryCreature(
+                    Where: delegate (GameObjectBlueprint model)
+                    {
+                        return !model.InheritsFromSafe(BASE_BROKEN_LUNAR_REGENT)
+                            && model.GetPrimaryFaction() == originalPrimaryFaction
+                            ;
+                    },
+                    Rnd: rnd,
+                    AroundLevel: aroundLevel,
+                    AllowAnimated: false)
+                ?? GetANonLegendaryCreature(
+                    Where: delegate (GameObjectBlueprint model)
+                    {
+                        return !model.InheritsFromSafe(BASE_BROKEN_LUNAR_REGENT)
+                            && model.GetPrimaryFaction() == originalPrimaryFaction
+                            ;
+                    },
+                    Rnd: rnd,
+                    AllowAnimated: false)
+                ?? GetANonLegendaryCreature(
+                    Where: model => !model.InheritsFromSafe(BASE_BROKEN_LUNAR_REGENT),
+                    Rnd: rnd,
+                    AroundLevel: aroundLevel,
+                    AllowAnimated: true)
+                ?? GetANonLegendaryCreature(
+                    Where: model => !model.InheritsFromSafe(BASE_BROKEN_LUNAR_REGENT),
+                    Rnd: rnd,
+                    AllowAnimated: true)
+                ?? GameObject.Create("Dog")
+                ;
             return base.HandleEvent(E);
         }
 

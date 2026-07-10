@@ -384,6 +384,16 @@ namespace UD_Bones_Folder.Mod
             ;
 
         #endregion
+        #region Sorting
+
+        public virtual CoalescibleSet<T> SortInPlace(Comparison<T> Comparison)
+        {
+            if (!Items.IsNullOrEmpty())
+                Array.Sort(Items, Comparison);
+            return this;
+        }
+
+        #endregion
         #region ReadOnlySpan
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

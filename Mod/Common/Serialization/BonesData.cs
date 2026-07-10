@@ -64,7 +64,8 @@ namespace UD_Bones_Folder.Mod
             out LunarPartyIDs CachedLunarCourtiers,
             out bool Blocked,
             Action<GameObject> ProcPreLoad = null,
-            Action<GameObject> ProcPostLoad = null
+            Action<GameObject> ProcPostLoad = null,
+            string Context = null
             )
         {
             CachedLunarCourtiers = null;
@@ -79,7 +80,8 @@ namespace UD_Bones_Folder.Mod
                     LunarParty: out LunarParty lunarParty,
                     Blocked: out Blocked,
                     ProcPreLoad: ProcPreLoad,
-                    ProcPostLoad: ProcPostLoad)
+                    ProcPostLoad: ProcPostLoad,
+                    Context: Context)
                     || Blocked)
                     return null;
 
@@ -112,14 +114,16 @@ namespace UD_Bones_Folder.Mod
             out LunarPartyIDs CachedLunarCourtiers,
             out bool Blocked,
             Action<GameObject> ProcPreLoad = null,
-            Action<GameObject> ProcPostLoad = null
+            Action<GameObject> ProcPostLoad = null,
+            string Context = null
             )
             => (LunarRegent = ExtractLunarRegent(
                 BonesInfo: BonesInfo,
                 CachedLunarCourtiers: out CachedLunarCourtiers,
                 Blocked: out Blocked,
                 ProcPreLoad: ProcPreLoad,
-                ProcPostLoad: ProcPostLoad)) != null
+                ProcPostLoad: ProcPostLoad,
+                Context: Context)) != null
                 && !Blocked
             ;
 
@@ -309,7 +313,8 @@ namespace UD_Bones_Folder.Mod
             SaveBonesInfo BonesInfo,
             ZoneBonesAllocation.AllocationTypes Type,
             out GameObject LunarRegent,
-            out bool Blocked
+            out bool Blocked,
+            string Context = null
             )
         {
             LunarRegent = null;
@@ -332,7 +337,14 @@ namespace UD_Bones_Folder.Mod
 
             using var status = Loading.StartTask($"Materializing Lunar Regent", Visible: false);
             if (PseudoZone != null)
-                return ApplyPseudoZone(Zone, BonesInfo, Type, out LunarRegent, out Blocked);
+                return ApplyPseudoZone(
+                    Zone: Zone,
+                    BonesInfo: BonesInfo,
+                    Type: Type,
+                    LunarRegent: out LunarRegent,
+                    Blocked: out Blocked,
+                    Context: Context)
+                    ;
 
             if (BonesZone != null)
                 return ApplyZone(Zone, BonesInfo, Type, out LunarRegent, BonesInfo.IsMad);
@@ -345,7 +357,8 @@ namespace UD_Bones_Folder.Mod
             SaveBonesInfo BonesInfo,
             ZoneBonesAllocation.AllocationTypes Type,
             out GameObject LunarRegent,
-            out bool Blocked
+            out bool Blocked,
+            string Context = null
             )
         {
             LunarRegent = null;
@@ -359,7 +372,8 @@ namespace UD_Bones_Folder.Mod
                 BonesInfo: BonesInfo,
                 Type: Type,
                 LunarRegent: out LunarRegent,
-                Blocked: out Blocked)
+                Blocked: out Blocked,
+                Context: Context)
                 || Blocked)
                 return false;
 
@@ -626,6 +640,9 @@ namespace UD_Bones_Folder.Mod
 
             TransferPartyInZone(Original, Clone, BonesZone);
             TransferPartyInZone(Original, Clone, NewZone);
+
+            PseudoCell.SanitizeFactions(originalBrain.Allegiance);
+            PseudoCell.SanitizeFactions(cloneBrain.Allegiance);
         }
 
         public static void TransferPartyInZone(GameObject Original, GameObject Clone, Zone Zone)

@@ -72,6 +72,16 @@ namespace UD_Bones_Folder.Mod
                 ;
         }
 
+        public class TypeComparer : Comparer<FileLocationData>
+        {
+            public override int Compare(FileLocationData x, FileLocationData y)
+                => x == null
+                    || y == null
+                ? (x == null).CompareTo(y == null)
+                : x.Type.CompareTo(y.Type)
+                ;
+        }
+
         [Serializable]
         public enum LocationType
         {
@@ -92,6 +102,8 @@ namespace UD_Bones_Folder.Mod
         public static EqualityComparer DefaultEqualityComparer = new();
 
         public static Coalescer DefaultCoalescer = new();
+
+        public static TypeComparer DefaultTypeComparer = new();
 
         public static string MissingLocaitonShortDisplayName => $"a {"strange location".Colored(LocationType.None.TypeColor())}";
 
@@ -264,6 +276,21 @@ namespace UD_Bones_Folder.Mod
             => $"{Tag()} {DisplayName()}"
             ;
 
+        public string GetSavedVerb()
+            => Type switch
+            {
+                LocationType.Synced or
+                LocationType.Local => "saved to",
+                LocationType.Mod => "compiled in",
+                LocationType.Online => "uploaded to",
+                _ => "materialized mytseriously in",
+            };
+
+        public bool Exists(string Directory)
+            => !Path.IsNullOrEmpty()
+            && Platform.IO.Directory.Exists(Combine(Directory))
+            ;
+
         public bool Exists()
             => !Path.IsNullOrEmpty()
             && Directory.Exists(Path)
@@ -334,10 +361,10 @@ namespace UD_Bones_Folder.Mod
 
         public bool TryDeleteDirectory(Action<FileLocationData> OnSuccess = null, Action<FileLocationData> OnFailure = null)
         {
-            if (Type <= LocationType.Synced)
+            if (Type.IsFile())
             {
                 int attempts = 0;
-                while (true)
+                while (Directory.Exists(this))
                 {
                     try
                     {
@@ -362,6 +389,23 @@ namespace UD_Bones_Folder.Mod
 
             OnFailure?.Invoke(this);
             return false;
+        }
+
+        public string Combine(string Path)
+            => !Path.IsNullOrEmpty()
+            ? Platform.IO.Path.Combine(this, Path)
+            : this
+            ;
+
+        public FileLocationData CreateCombine(string Path)
+        {
+            if (Type.IsOnline())
+                throw new NotSupportedException($"{nameof(LocationType.Online)} {nameof(FileLocationData)} don't currently support URLs beyond the TLD (or a subdomain).");
+
+            if (Path.IsNullOrEmpty())
+                return Clone();
+
+            return NewAssumed(Combine(Path));
         }
 
         public string WithFileName(string FileName)

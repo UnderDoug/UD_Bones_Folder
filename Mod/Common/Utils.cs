@@ -99,6 +99,10 @@ namespace UD_Bones_Folder.Mod
                         {
                             "Widget",
                             "DataBucket",
+                            "Lunar Regent",
+                            "Lunar Face",
+                            "Lunar Reliquary",
+                            "BaseNephal",
                         }))
                         continue;
 
@@ -346,11 +350,10 @@ namespace UD_Bones_Folder.Mod
         [VariableReplacer]
         public static string ud_nbsp(ReplacerContext Context)
         {
-            string nbsp = "\xFF";
-            string output = nbsp;
+            string output = NBSP;
             if (!Context.Parameters.IsNullOrEmpty()
                 && int.TryParse(Context.Parameters[0], out int count))
-                output = nbsp.ThisManyTimes(count);
+                output = NBSP.ThisManyTimes(count);
 
             return output;
         }

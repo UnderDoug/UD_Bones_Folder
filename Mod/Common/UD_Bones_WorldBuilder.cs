@@ -33,39 +33,45 @@ namespace XRL.World.WorldBuilders
 
         public override void OnAfterBuild(JoppaWorldBuilder Builder)
         {
-            //MetricsManager.rngCheckpoint("UD_Bones_WorldBuilder_Start");
             UD_Bones_WorldBuilder.Builder ??= Builder;
-            Builder?.BuildStep("Exhuming Lunar Regents", ExhumeLunarRegent);
-            //MetricsManager.rngCheckpoint("UD_Bones_WorldBuilder_Finish");
             base.OnAfterBuild(Builder);
         }
 
         public override void OnAfterMutableInit(JoppaWorldBuilder Builder)
         {
-            /*if (The.ZoneManager.ZoneBuilders is Dictionary<string, ZoneBuilderCollection> zoneBuilders)
-            {
-                foreach ((var zoneID, var zoneBuilderCollection) in zoneBuilders)
-                {
-
-                }
-            }*/
-
             UD_Bones_WorldBuilder.Builder ??= Builder;
-            Builder?.BuildStep("Diagnosing Moon King Fever", ExhumeLunarRegent);
+            Builder?.BuildStep("Diagnosing Moon King Fever", DiagnoseMoonKingFever);
             base.OnAfterMutableInit(Builder);
         }
 
-        public void ExhumeLunarRegent(string WorldID)
+        public void DiagnoseMoonKingFever(string WorldID)
         {
             if (WorldID != "JoppaWorld")
                 return;
 
             BonesManager.MutableLocations = AllMutableLocations();
         }
+        
+        public class SerializeEachLocationVerbose : SerializeEachLocation
+        {
+            public string Name;
+            public override void WriteEach(SerializationWriter Writer, Location2D Element)
+            {
+                //Utils.Log($"{nameof(SerializeEachLocationVerbose)}.{nameof(WriteEach)}({Name}: {Element})");
+                Writer.Write(Element);
+            }
+
+            public override Location2D ReadEach(SerializationReader Reader)
+            {
+                var value = Reader.ReadLocation2D();
+                Utils.Log($"{nameof(SerializeEachLocationVerbose)}.{nameof(ReadEach)}({Name}: {value})");
+                return value;
+            }
+        }
 
         public SerializeableSet<Location2D> AllMutableLocations()
         {
-            var mutableLocations = new SerializeableSet<Location2D>(SerializeEachLocation.Default);
+            var mutableLocations = new SerializeableSet<Location2D>(new SerializeEachLocationVerbose() { Name = nameof(AllMutableLocations) });
 
             foreach (var parasangs in (Builder?.worldInfo?.terrainLocations?.Values).IteratorSafe())
                 foreach (var parasang in parasangs.IteratorSafe())

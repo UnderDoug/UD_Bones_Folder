@@ -531,10 +531,13 @@ namespace UD_Bones_Folder.Mod.Moderation
             => ProduceTrieMegaPattern(Severity)
             ;
 
+        public bool Check(string Text, SeverityLevel MinimumSeverity)
+            => this.Any(b => b.Severity >= MinimumSeverity && b.Check(Text))
+            ;
+
         public bool Check(string Text)
-        {
-            throw new NotImplementedException();
-        }
+            => Check(Text, Severity)
+            ;
     }
 
     public static class BadWordSetExtensions
@@ -583,7 +586,7 @@ namespace UD_Bones_Folder.Mod.Moderation
                     if (!megaPattern.IsNullOrEmpty())
                         result = megaPattern.MatchesCaptureGroups(textStripped, BadWord.DefaultRegexOptions, MegaPattern: true);
                     else
-                        result = BadWordSet.AllBadWords.IteratorSafe().Any(b => b.Severity >= MinimumSeverity && b.Check(textStripped));
+                        result = BadWordSet.AllBadWords?.Check(textStripped, MinimumSeverity) is true;
                 }
 
                 if (!IgnoreCache)

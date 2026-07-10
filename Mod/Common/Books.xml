@@ -17,4 +17,50 @@
     <page>I have performed your task! Now, give me my due!!</page>
     <page>=MARKOVSENTENCE|FeverWarped=</page>
   </book>
+  
+  <book ID="UD_Bones_Missing_Recall_Story 0" Title="=MARKOVSENTENCE|FeverWarped=">
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+  </book>
+  <book ID="UD_Bones_Missing_Recall_Story 1" Title="=MARKOVSENTENCE|FeverWarped=">
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+  </book>
+  <book ID="UD_Bones_Missing_Recall_Story 2" Title="=MARKOVSENTENCE|FeverWarped=">
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+  </book>
+  <book ID="UD_Bones_Missing_Recall_Story 3" Title="=MARKOVSENTENCE|FeverWarped=">
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+  </book>
+  <book ID="UD_Bones_Missing_Recall_Story 4" Title="=MARKOVSENTENCE|FeverWarped=">
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+    <page>=MARKOVSENTENCE|FeverWarped= =MARKOVSENTENCE|FeverWarped=</page>
+  </book>
 </books>

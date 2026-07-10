@@ -185,6 +185,28 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             && Cell.Y == Y
             ;
 
+        public static void SanitizeFactions(AllegianceSet AllegianceSet)
+        {
+            if (AllegianceSet.IsNullOrEmpty())
+                return;
+
+            using (var allegianceSetList = ScopeDisposedList<KeyValuePair<string, int>>.GetFromPoolFilledWith(AllegianceSet))
+            {
+                foreach ((var faction, int weight) in allegianceSetList)
+                {
+                    if (Factions.Exists(faction))
+                        continue;
+
+                    AllegianceSet.Remove(faction);
+                    if (!AllegianceSet.ContainsKey("Strangers"))
+                        AllegianceSet.Add("Strangers", 0);
+
+                    AllegianceSet["Strangers"] = Math.Clamp(AllegianceSet["Strangers"] + weight, 0, 100);
+                }
+            }
+            SanitizeFactions(AllegianceSet.Previous);
+        }
+
         public static void TransmuteBrain(
             GameObject Original,
             GameObject Clone,
@@ -202,11 +224,15 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     cloneBrain.PartyMembers[partyMemberID] = partyMember;
             try
             {
+
                 if (!originalBrain.Allegiance.IsNullOrEmpty())
                     (originalBrain.Allegiance, cloneBrain.Allegiance) = (cloneBrain.Allegiance, originalBrain.Allegiance);
 
                 TransferPartyInZone(Original, Clone, OriginObjects);
                 TransferPartyInZone(Original, Clone, DestinationObjects);
+
+                SanitizeFactions(originalBrain.Allegiance);
+                SanitizeFactions(cloneBrain.Allegiance);
             }
             catch (Exception x)
             {

@@ -136,6 +136,18 @@ namespace UD_Bones_Folder.Mod
 
         public static int BaseBonesWeight = 50;
 
+        public static IRenderable NonePleaseIcon = new BonesRender(
+                Blueprint: GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"),
+                HFlip: false)
+            .SetTileColor("&K")
+            .SetDetailColor('K');
+
+        public static IRenderable RollItIcon = new BonesRender(
+            Tile: "Abilities/sw_skill_pointed_circle.png",
+            ColorString: "&y",
+            TileColor: "&y",
+            DetailColor: 'W');
+
         public static IRenderable ModConfigIcon = new Renderable(
             Tile: "Abilities/sw_skill_tinkering.png",
             ColorString: "&y",
@@ -147,6 +159,12 @@ namespace UD_Bones_Folder.Mod
             ColorString: $"&K",
             TileColor: $"&K",
             DetailColor: 'R');
+
+        public static IRenderable ManageConfigIcon = new Renderable(
+            Tile: "Abilities/sw_skill_tinkering.png",
+            ColorString: "&y",
+            TileColor: "&y",
+            DetailColor: 'c');
 
         public static IRenderable YesAvailableModsIcon = new Renderable(UnavailableModsIcon).setDetailColor('y');
 
@@ -212,12 +230,19 @@ namespace UD_Bones_Folder.Mod
         public BonesRender Render => _Render ??= new(GetBonesJSON());
         public BonesRender FlippedRender => new(Render, HFlip: !Render.GetHFlip());
 
+        public IRenderable StatsIcon => new Renderable(
+            Tile: "Items/sw_bookshelf1.bmp,Items/sw_bookshelf2.bmp,Items/sw_bookshelf3.bmp".CachedCommaExpansion().GetRandomElementCosmetic(),
+            ColorString: "&w",
+            TileColor: "&w",
+            DetailColor: Render.GetDetailColor());
+
         public string FullBonesPathSav => GetFullBonesPathSav(FileLocationData);
         public string FullBonesPathSavGz => GetFullBonesPathSavGz(FileLocationData);
         public string FullBonesPathBak => GetFullBonesPathBak(FileLocationData);
 
         public string DisplayDirectory => FileLocationData.SanitiseForDisplay();
         public string BonesBakDisplay => FileLocationData.SanitiseForDisplay(SavGzBak);
+        public string TaggedDisplayDirectory => FileLocationData.TaggedDisplayName();
 
         public bool IsDummy;
 
@@ -240,7 +265,7 @@ namespace UD_Bones_Folder.Mod
                     FileLocationDataSet.Add(new FileLocationData(type, assumedLocationData.Path, assumedLocationData.Host));
                     // Utils.Log($"New {nameof(_FileLocationData)}: {_FileLocationData?.SanitiseForDisplay() ?? "NO_DATA"}");
                 }
-                return FileLocationDataSet.OrderBy(data => data.Type).FirstOrDefault(delegate (FileLocationData locationData)
+                return FileLocationDataSet.FirstOrDefault(delegate (FileLocationData locationData)
                 {
                     if (locationData.Type.IsFile())
                     {
@@ -265,7 +290,14 @@ namespace UD_Bones_Folder.Mod
         }
 
         private FileLocationDataSet _FileLocationDataSet;
-        public FileLocationDataSet FileLocationDataSet => _FileLocationDataSet ??= new();
+        public FileLocationDataSet FileLocationDataSet
+        {
+            get
+            {
+                _FileLocationDataSet ??= new();
+                return _FileLocationDataSet?.SortInPlace(FileLocationData.DefaultTypeComparer.Compare) as FileLocationDataSet;
+            }
+        }
 
         public OsseousAsh.Host Host => FileLocationDataSet.FirstOrDefault(ld => ld.Type.IsOnline())?.Host;
 
@@ -277,9 +309,7 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsCrematable
             => !IsDummy
-            && FileLocationData != null
-            && FileLocationData.Type.IsFile()
-            && FileLocationData.Exists()
+            && FileLocationDataSet.IsCrematable
             ;
 
         public bool IsDownloaded
@@ -313,27 +343,87 @@ namespace UD_Bones_Folder.Mod
             ?? "{{y|mods:}} {{K|N/A}}"
             ;
 
-        public string GetFileLocationTypeColorString()
-            => (FileLocationData?.Type ?? FileLocationData.LocationType.None)
+        public string GetFileLocationTypeColorString(bool IncludeAdditionalPips = true)
+        {
+            string output = (FileLocationData?.Type ?? FileLocationData.LocationType.None)
                 .ToString()
                 .ToLower()
-                .Colored(FileLocationData?.GetFileLocationDataTypeColor() ?? "R")
-            ;
+                .Colored(FileLocationData?.GetFileLocationDataTypeColor() ?? "R");
+
+            string additionsString = null;
+
+            if (IncludeAdditionalPips)
+            {
+                additionsString = FileLocationDataSet?.Aggregate(
+                    seed: (string)null,
+                    func: delegate (string acc, FileLocationData next)
+                    {
+                        if (next?.SameAs(FileLocationData) is false)
+                            acc += Const.BULLET.Colored(next.GetFileLocationDataTypeColor());
+
+                        return acc;
+                    });
+            }
+
+            if (!additionsString.IsNullOrEmpty())
+                //additionsString = $"{"{{K|"}[{additionsString}]{"}}"}";
+                additionsString = $" {additionsString}";
+
+            return $"{output}{additionsString}";
+        }
+
+        public string GetName(bool IncludeVersionWarning)
+        {
+            string name = $"{(IsMad ? "Mad " : null)}{Name}"
+                .StartReplace()
+                .ToString();
+
+            if (IncludeVersionWarning)
+            {
+                if (GetBonesJSON() is SaveBonesJSON saveBonesJSON)
+                {
+                    string versionString = null;
+                    string versionColor = null;
+                    if (saveBonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
+                    {
+                        versionString = $"Incompatible Version".Colored("R");
+                        versionColor = "R";
+                    }
+                    else
+                    if (saveBonesJSON.SaveVersion < XRLGame.SaveVersion)
+                    {
+                        versionString = $"Older Version".Colored("R");
+                        versionColor = "R";
+                    }
+                    else
+                    if (saveBonesJSON.SaveVersion > XRLGame.SaveVersion)
+                    {
+                        versionString = $"Newer Version".Colored("r");
+                        versionColor = "r";
+                    }
+
+                    if (!versionString.IsNullOrEmpty())
+                    {
+                        versionString = $"{versionString} ({saveBonesJSON.GameVersion})".Colored(versionColor);
+                        name = $"{versionString} {name}";
+                    }
+                }
+            }
+            return name;
+        }
 
         public string GetName()
-            => $"{(IsMad ? "Mad " : null)}{Name}"
-                .StartReplace()
-                .ToString()
+            => GetName(false)
             ;
 
         public XRL.Version GetModVersion()
             => new(ModVersion)
             ;
 
-        public string GetBonesMenuDataRowString(int N)
+        public string GetBonesMenuDataRowString(int N, bool IncludeVersionWarning)
             => N switch
             {
-                0 => $"{GetName()}::{Description}".Colored("W"),
+                0 => $"{GetName(IncludeVersionWarning: IncludeVersionWarning)}::{Description}".Colored("W"),
                 1 => ColorUtility.CapitalizeExceptFormatting(Info),
                 2 => $"{DeathReason} on {GetSaveTimeString()}",
                 3 => $"{Size} {"{" + ID + "} "}".Colored("K"),
@@ -341,7 +431,15 @@ namespace UD_Bones_Folder.Mod
             }
             ;
 
-        private static async Task SafeWriteSaveBonesJSONAsync(FileLocationData LocationData, SaveBonesJSON BonesJSON, bool RequireExisting = true)
+        public string GetBonesMenuDataRowString(int N)
+            => GetBonesMenuDataRowString(N, IncludeVersionWarning: false)
+            ;
+
+        public static async Task SafeWriteSaveBonesJSONAsync(
+            FileLocationData LocationData,
+            SaveBonesJSON BonesJSON,
+            bool RequireExisting = true
+            )
         {
             if (LocationData is null)
             {
@@ -554,8 +652,8 @@ namespace UD_Bones_Folder.Mod
             => GetBonesFilePathAsync().WaitResult()
             ;
 
-        public async Task<byte[]> GetSavGzBytes()
-            => await Host.GetBonesSavGz(ID)
+        public async Task<byte[]> GetSavGzBytesAsync()
+            => await Host.GetBonesSavGzAsync(ID)
             ;
 
         public async Task<System.IO.Stream> GetSavGzStreamAsync()
@@ -563,7 +661,7 @@ namespace UD_Bones_Folder.Mod
             if ((await GetBonesFilePathAsync()) is string bonesPath)
                 return File.OpenRead(bonesPath);
 
-            byte[] cloudBytes = await GetSavGzBytes();
+            byte[] cloudBytes = await GetSavGzBytesAsync();
 
             return !cloudBytes.IsNullOrEmpty()
                 ? new System.IO.MemoryStream(cloudBytes)
@@ -688,28 +786,36 @@ namespace UD_Bones_Folder.Mod
 
             sB.AppendLine()
                 .AppendLine().Append("They ");
-            switch (FileLocationData?.Type)
-            {
-                case FileLocationData.LocationType.Synced:
-                case FileLocationData.LocationType.Local:
-                    sB.Append("were saved to ");
-                    break;
-                case FileLocationData.LocationType.Mod:
-                    sB.Append("were compiled in ");
-                    break;
-                case FileLocationData.LocationType.Online:
-                    sB.Append("were uploaded to ");
-                    break;
-                case FileLocationData.LocationType.None:
-                default:
-                    sB.Append("materialized mytseriously in ");
-                    break;
-            }
+
+            if (FileLocationData?.Type != null
+                && FileLocationData.Type != FileLocationData.LocationType.None)
+                sB.Append("were ");
+
+            sB.Append(FileLocationData?.GetSavedVerb() ?? "materialized mytseriously in").Append(" ");
 
             sB.Append(FileLocationData?.ShortDisplayName() ?? FileLocationData.MissingLocaitonShortDisplayName)
                 .Append(" on ").Append(GetSaveTimeString()).Append(", ")
                 .AppendRule(SaveTimeValue.TimeAgo("ago")).Append(".")
                 .AppendLine();
+
+            if ((FileLocationDataSet?.Count ?? 0) > 1)
+            {
+                sB.AppendLine().Append("There is also a copy ");
+
+                if (FileLocationDataSet.Count == 2)
+                {
+                    var otherLocation = FileLocationDataSet[1];
+                    sB.Append(otherLocation.GetSavedVerb()).Append(" ").Append(otherLocation.ShortDisplayName());
+                }
+                else
+                {
+                    sB.Append("in the following additional locations:");
+                    for (int i = 1; i < FileLocationDataSet.Count; i++)
+                        sB.AppendLine()
+                            .Append(FileLocationDataSet[i].ShortDisplayName());
+                }
+                sB.AppendLine();
+            }
 
             sB.AppendLine()
                 .Append("They are from version ").AppendRule(GetModVersion()).Append(" of the ").AppendColored("Y", Utils.ModTitle).Append(" mod");
@@ -869,7 +975,7 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             if (bonesJSON.SaveVersion < XRLGame.MaxSaveVersion)
-                return false;
+                return !Strict; // false;
 
             if (!GenotypeFactory.GenotypesByName.ContainsKey(bonesJSON.GenotypeName))
                 return !Strict;
@@ -915,8 +1021,18 @@ namespace UD_Bones_Folder.Mod
             : GetName()
             ;
 
-        public bool AttemptLoad(Zone Z, ZoneBonesAllocation.AllocationTypes Type, out bool Blocked)
-            => BonesManager.System.AttemptLoadBones(Z, this, Type, out Blocked)
+        public bool AttemptLoad(
+            Zone Z,
+            ZoneBonesAllocation.AllocationTypes Type,
+            out bool Blocked,
+            string Context = null
+            )
+            => BonesManager.System.AttemptLoadBones(
+                Z: Z,
+                PickedBones: this,
+                Type: Type, 
+                Blocked: out Blocked,
+                Context: Context)
             ;
 
         public async Task<bool> TryRestoreModsAsync()

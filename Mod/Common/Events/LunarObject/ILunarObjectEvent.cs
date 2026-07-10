@@ -361,7 +361,7 @@ namespace UD_Bones_Folder.Mod.Events
             return null;
         }
 
-        public bool CheckContext(string Value)
+        public static bool CheckContext(string Context, string Value)
         {
             if (Context.IsNullOrEmpty())
                 return Value.IsNullOrEmpty();
@@ -370,7 +370,11 @@ namespace UD_Bones_Folder.Mod.Events
                 && Context.Contains(Value);
         }
 
-        public bool CheckContextNot(string Value)
+        public bool CheckContext(string Value)
+            => CheckContext(Context, Value)
+            ;
+
+        public static bool CheckContextNot(string Context, string Value)
         {
             if (Context.IsNullOrEmpty())
                 return !Value.IsNullOrEmpty();
@@ -379,28 +383,40 @@ namespace UD_Bones_Folder.Mod.Events
                 || !Context.Contains(Value);
         }
 
-        public bool CheckContextAny(params string[] Values)
+        public bool CheckContextNot(string Value)
+            => CheckContextNot(Context, Value)
+            ;
+
+        public static bool CheckContextAny(string Context, params string[] Values)
         {
             if (Values.IsNullOrEmpty())
-                return CheckContext(null);
+                return CheckContext(Context, null);
 
             foreach (var value in Values)
-                if (CheckContext(value))
+                if (CheckContext(Context, value))
                     return true;
 
             return false;
         }
 
-        public bool CheckContextNotAny(params string[] Values)
+        public bool CheckContextAny(params string[] Values)
+            => CheckContextAny(Context, Values)
+            ;
+
+        public static bool CheckContextNotAny(string Context, params string[] Values)
         {
             if (Values.IsNullOrEmpty())
-                return CheckContextNot(null);
+                return CheckContextNot(Context, null);
 
             foreach (var value in Values)
-                if (CheckContext(value))
+                if (CheckContext(Context, value))
                     return false;
 
             return true;
         }
+
+        public bool CheckContextNotAny(params string[] Values)
+            => CheckContextNotAny(Context, Values)
+            ;
     }
 }

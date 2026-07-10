@@ -23,7 +23,7 @@ namespace XRL.World.ZoneBuilders
         public string ZoneID;
 
         private SaveBonesInfo _SaveBonesInfo;
-        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= BonesManager.System?.GetSavedBonesByID(BonesID);
+        public SaveBonesInfo SaveBonesInfo => _SaveBonesInfo ??= GetSavedBonesByID(BonesID);
 
         public bool Blocked;
 

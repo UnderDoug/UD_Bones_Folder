@@ -44,43 +44,16 @@ using System.Diagnostics;
 using HarmonyLib;
 using System.Reflection.Emit;
 using System.Reflection;
+using XRL.World.Effects;
 
 namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
     {
-        public static SaveBonesJSON CreateSaveBonesJSON(
-            this XRLGame Game,
-            IDeathEvent E,
-            GameObject LunarRegent
-            )
+        public static string MakeDeathReasonThirdPersion(this string DeathReason, string Default = "You died under mysterious circumstances!")
         {
-            var localTimeNow = DateTime.Now;
-            long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
+            string deathReason = DeathReason ?? Default;
 
-            bool visible = LunarRegent.Render.Visible;
-            LunarRegent.Render.Visible = true;
-            LunarRegent.RestorePristineHealth();
-            var render = new BonesRender(LunarRegent.RenderForUI("SaveBonesInfo", true), HFlip: true);
-            LunarRegent.Render.Visible = visible;
-
-            var colorChars = render.GetColorChars();
-            var tileColor = colorChars.foreground;
-            var detailColor = colorChars.detail;
-
-            var timeSpan = TimeSpan.FromTicks(Game._walltime);
-
-            var zone = LunarRegent.CurrentZone;
-            string zoneID = zone.ZoneID;
-            var terrainObject = zone.GetTerrainObject();
-            string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
-
-            string location = null;
-
-            if (zone.Z > 10)
-                location += $"{zoneTerrainType}, ";
-
-            string deathReason = E.Reason ?? "You died under mysterious circumstances!";
             if (deathReason.EndsWith(".")
                 || deathReason.EndsWith("!"))
                 deathReason = deathReason[..^1];
@@ -159,6 +132,48 @@ namespace UD_Bones_Folder.Mod
             if (deathReason.Contains(" you"))
                 deathReason = deathReason.Replace(" you", " =subject.subjective=");
 
+            return deathReason;
+        }
+
+        public static SaveBonesJSON CreateSaveBonesJSON(
+            this XRLGame Game,
+            IDeathEvent E,
+            GameObject LunarRegent
+            )
+        {
+            var localTimeNow = DateTime.Now;
+            long saveTimeValue = localTimeNow.ToUniversalTime().Ticks;
+
+            var lunarRegent = LunarRegent.DeepCopy();
+
+            lunarRegent.RestorePristineHealth();
+            lunarRegent.RemoveEffect<LiquidStained>();
+            lunarRegent.RemoveEffect<LiquidCovered>();
+            lunarRegent.Render.Visible = true;
+            lunarRegent.SetIntProperty("NoStatusColor", 1);
+
+            var render = new BonesRender(lunarRegent.RenderForUI(nameof(SaveBonesInfo), true), HFlip: true);
+
+            lunarRegent?.Obliterate();
+
+            var colorChars = render.GetColorChars();
+            var tileColor = colorChars.foreground;
+            var detailColor = colorChars.detail;
+
+            var timeSpan = TimeSpan.FromTicks(Game._walltime);
+
+            var zone = LunarRegent.CurrentZone;
+            string zoneID = zone.ZoneID;
+            var terrainObject = zone.GetTerrainObject();
+            string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
+
+            string location = null;
+
+            if (zone.Z > 10)
+                location += $"{zoneTerrainType}, ";
+
+            string deathReason = E.Reason.MakeDeathReasonThirdPersion();
+
             string genotype = LunarRegent.genotypeEntry?.DisplayName;
             string subtype = LunarRegent.subtypeEntry?.DisplayName;
 
@@ -183,6 +198,13 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
+            string lunarRegentName = LunarRegent.GetDisplayName(
+                Context: nameof(SaveBonesJSON),
+                AsIfKnown: true,
+                NoConfusion: true,
+                Short: true,
+                Reference: true);
+
             return new SaveBonesJSON
             {
                 OsseousAshID = Config?.ID ?? Guid.Empty,
@@ -190,7 +212,7 @@ namespace UD_Bones_Folder.Mod
                 SaveVersion = XRLGame.SaveVersion,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
-                Name = $"=LunarShader:{UD_Bones_LunarRegent.GetRegalTitle(LunarRegent)}:*= {LunarRegent.GetDisplayName(BaseOnly: true, AsIfKnown: true, NoConfusion: true)}",
+                Name = lunarRegentName,
                 Level = LunarRegent.Statistics["Level"].Value,
                 GenoSubType = genoSubType,
                 GameMode = Game.GetStringGameState("GameMode", "Classic"),
@@ -789,6 +811,7 @@ namespace UD_Bones_Folder.Mod
         public static string ThisManyTimes(this string @string, int Times = 1)
             => Times.Aggregate("", (a, n) => a + @string)
             ;
+
         public static string ThisManyTimes(this char @char, int Times = 1)
             => @char.ToString().ThisManyTimes(Times)
             ;
@@ -1094,7 +1117,11 @@ namespace UD_Bones_Folder.Mod
                 Depth: Depth)
             ;
 
-        public static IEnumerable<T> PerformFunctionRecursively<T>(this GameObject Object, Func<GameObject, int, T> Func, int Depth = 0)
+        public static IEnumerable<T> PerformFunctionRecursively<T>(
+            this GameObject Object,
+            Func<GameObject, int, T> Func,
+            int Depth = 0
+            )
         {
             //Utils.Log($"{Depth.Indent()}{nameof(PerformFunctionRecursively)}({nameof(Object)}: {Object?.DebugName ?? "NO_OBJECT"}, {nameof(Depth)}: {Depth})");
 
@@ -1174,37 +1201,87 @@ namespace UD_Bones_Folder.Mod
                 Depth: Depth)
             ;
 
-        public static void ApplyRegistrar(this GameObject Object, bool Active = false, bool Recursive = true, int Depth = 0)
+        public static void ApplyRegistrar(
+            this GameObject Object,
+            bool Active = false,
+            bool Recursive = true,
+            int Depth = 0
+            )
         {
-            //Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
-
+            // Utils.Log($"{Depth.Indent()}{nameof(ApplyRegistrar)}: {Object?.DebugName ?? "NO_OBJECT??"}");
             if (Recursive)
             {
-                if (Object.GetInventoryAndEquipmentAndDefaultEquipment() is List<GameObject> inventoryObjects)
-                    for (int i = 0; i < inventoryObjects.Count; i++)
-                        inventoryObjects[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+                foreach (var inventoryObject in Object.GetInventoryAndEquipmentAndDefaultEquipment().IteratorSafe())
+                {
+                    try
+                    {
+                        SerializationExtensions.PerformSilently(() => inventoryObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Warn($"{nameof(Extensions)}.{nameof(ApplyRegistrar)}, Inventory of {Object?.DebugName ?? "MISSING_OBJECT"}; {inventoryObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                    }
+                }
 
-                if (Object.GetInstalledCybernetics() is List<GameObject> installedCybernetics)
-                    for (int i = 0; i < installedCybernetics.Count; i++)
-                        installedCybernetics[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+                foreach (var installedCybernetic in Object.GetInstalledCybernetics().IteratorSafe())
+                {
+                    try
+                    {
+                        SerializationExtensions.PerformSilently(() => installedCybernetic.ApplyRegistrar(Active, Recursive, Depth + 1));
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Warn($"{nameof(Extensions)}.{nameof(ApplyRegistrar)}, Cybernetics of {Object?.DebugName ?? "MISSING_OBJECT"}; {installedCybernetic?.DebugName ?? "MISSING_OBJECT"}", x);
+                    }
+                }
 
-                if (Object.GetContents() is List<GameObject> contentsObject)
-                    for (int i = 0; i < contentsObject.Count; i++)
-                        contentsObject[i].ApplyRegistrar(Active, Recursive, Depth + 1);
+                foreach (var contentsObject in Object.GetContents().IteratorSafe())
+                {
+                    try
+                    {
+                        SerializationExtensions.PerformSilently(() => contentsObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Warn($"{nameof(Extensions)}.{nameof(ApplyRegistrar)}, Contents of {Object?.DebugName ?? "MISSING_OBJECT"}; {contentsObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                    }
+                }
             }
 
             if (Object?.PartsList is PartRack partsList)
             {
                 for (int i = 0; i < partsList.Count; i++)
+                {
                     if (partsList[i] is IPart part)
-                        part.ApplyRegistrar(Object, Active);
+                    {
+                        try
+                        {
+                            SerializationExtensions.PerformSilently(() => part.ApplyRegistrar(Object, Active));
+                        }
+                        catch (Exception x)
+                        {
+                            Utils.Warn($"{nameof(Extensions)}.{nameof(ApplyRegistrar)}, Parts ({part?.GetType()?.Name ?? "MISSING_PART"}) for {Object?.DebugName ?? "MISSING_OBJECT"}", x);
+                        }
+                    }
+                }
             }
 
             if (Object?._Effects is EffectRack _effects)
             {
                 for (int i = 0; i < _effects.Count; i++)
+                {
                     if (_effects[i] is Effect effect)
-                        effect.ApplyRegistrar(Object, Active);
+                    {
+                        try
+                        {
+                            SerializationExtensions.PerformSilently(() => effect.ApplyRegistrar(Object, Active));
+                        }
+                        catch (Exception x)
+                        {
+                            Utils.Warn($"{nameof(Extensions)}.{nameof(ApplyRegistrar)}, Effects ({effect?.GetType()?.Name ?? "MISSING_EFFECT"}) for {Object?.DebugName ?? "MISSING_OBJECT"}", x);
+                        }
+                    }
+                }
             }
         }
 
@@ -1361,7 +1438,8 @@ namespace UD_Bones_Folder.Mod
                 {
                     Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
                     feverWarped.Flags = warpFlags;
-                    //feverWarped.OverrideBonesID(BonesID);
+                    if (feverWarped.BonesID == The.Game.GameID)
+                        feverWarped.OverrideBonesID(BonesID);
                     feverWarped.Initialize();
                 }
                 return true;
@@ -1373,7 +1451,7 @@ namespace UD_Bones_Folder.Mod
         public static bool NeedsFeverWarped(
             this GameObject BonesObject,
             out UD_Bones_FeverWarped.WarpFlags WarpFlags,
-            string BonesID = null
+            string BonesID
             )
         {
             WarpFlags = UD_Bones_FeverWarped.WarpFlags.None;
@@ -1388,10 +1466,10 @@ namespace UD_Bones_Folder.Mod
                 && feverWarped.BonesID == BonesID)
                 return false;
 
-            if (BonesObject.GetStringProperty(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
+            if (BonesObject.GetPropertyOrTag(nameof(UD_Bones_FeverWarped), $"{false}").EqualsNoCase($"{true}"))
             {
                 WarpFlags = UD_Bones_FeverWarped.WarpFlags.Total;
-                if (BonesObject.GetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{false}").EqualsNoCase($"{true}"))
+                if (BonesObject.GetPropertyOrTag(UD_Bones_FeverWarped.TileOnlyProp, $"{false}").EqualsNoCase($"{true}"))
                     WarpFlags = UD_Bones_FeverWarped.WarpFlags.Tile;
 
                 return true;
@@ -1405,8 +1483,8 @@ namespace UD_Bones_Folder.Mod
                 {
                     blueprintExists = GameObjectFactory.Factory.HasBlueprint(BonesObject.Blueprint);
 
-                    if (blueprintExists)
-                        _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];
+                    /*if (blueprintExists)
+                        _ = GameObjectFactory.Factory.Blueprints[BonesObject.Blueprint];*/
                 }
                 catch
                 {
@@ -1426,6 +1504,10 @@ namespace UD_Bones_Folder.Mod
                         {
                             "Widget",
                             "DataBucket",
+                            "Lunar Regent",
+                            "Lunar Face",
+                            "Lunar Reliquary",
+                            "BaseNephal",
                         }))
                         return false;
 
@@ -1617,19 +1699,13 @@ namespace UD_Bones_Folder.Mod
 
             int valLen = Value.Length;
             int strLen = String.Length;
-            int end = strLen - valLen;
-            bool contains = false;
-            for (int i = 0; i < end; i++)
-            {
-                int toLen = i + valLen - 1;
-                if (toLen > String.Length - 1)
-                    break;
+            int end = strLen - (valLen - 1);
 
-                Utils.Log($"{String}, {Value}; {i}: {String[i..toLen]}");
-                if (String[i..toLen].EqualsNoCase(Value))
-                    contains = true;
-            }
-            return contains;
+            for (int i = 0; i < end; i++)
+                if (String[i..(i + valLen)].EqualsNoCase(Value))
+                    return true;
+
+            return false;
         }
 
         public static bool InheritsFrom(
@@ -2675,7 +2751,7 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
-        public static IEnumerable<T> OrderInPlace<T>(this IEnumerable<T> Enumerable, Comparison<T> Comparison)
+        public static IEnumerable<T> SortBy<T>(this IEnumerable<T> Enumerable, Comparison<T> Comparison)
         {
             using var scopeList = ScopeDisposedList<T>.GetFromPoolFilledWith(Enumerable);
             scopeList.Sort(Comparison.ToComparer());
@@ -2787,6 +2863,7 @@ namespace UD_Bones_Folder.Mod
             BonesObject.SanitizeEngravedAndPainted();
             BonesObject.SanitizeWaterRitualRecord();
             BonesObject.SanitizeFactionDeed();
+            BonesObject.SanitizeRecallStory();
         }
 
         public static void SanitizeGivesRep(this GameObject BonesObject)
@@ -2840,6 +2917,16 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static void SanitizeRecallStory(this GameObject BonesObject)
+        {
+            if (BonesObject.GetPropertyOrTag("Story") is string storyBookID
+                && !BookUI.Books.ContainsKey(storyBookID))
+            {
+                BonesObject.SetStringProperty(Const.ORIGINAL_RECALL_STORY_PROP, storyBookID);
+                BonesObject.SetStringProperty("Story", $"UD_Bones_Missing_Recall_Story {Math.Abs(BonesObject.BaseID % 5)}");
+            }
+        }
+
         public static void NewGeneID(this GameObject Object)
         {
             if (The.Game == null)
@@ -2853,12 +2940,54 @@ namespace UD_Bones_Folder.Mod
             Object.InjectGeneID(nextGeneID.ToString());
         }
 
+        public static bool MakeAggressivelyHateThePlayer(this GameObject Creature)
+        {
+            if (Creature?.Brain is not Brain brain)
+                return false;
+
+            brain.SetPartyLeader(null, Silent: true);
+            brain.Hibernating = false;
+            brain.Staying = false;
+            brain.Passive = false;
+            brain.Factions = "Mean-100,Playerhater-99";
+            brain.Allegiance.Hostile = true;
+            brain.Allegiance.Calm = false;
+
+            return true;
+        }
+
         public static void RemoveLast<T>(this ScopeDisposedList<T> Source)
         {
             if (Source.IsNullOrEmpty())
                 return;
 
             Source.RemoveAt(Source.Count - 1);
+        }
+
+        /// <summary>
+        /// Returns a formatted string representing the size, up to TB, of <paramref name="Buffer"/> (i.e. 10 KB).
+        /// </summary>
+        /// <param name="Buffer">The byte array.</param>
+        /// <returns>A formatted string representing the size, up to TB, of <paramref name="Buffer"/> (i.e. 10 KB).</returns>
+        public static string FormatBytes(this byte[] Buffer)
+            => Buffer.Length.FormatBytes()
+            ;
+
+        /// <summary>
+        /// Returns a formatted string representing the size, up to TB, of <paramref name="Bytes"/> (i.e. 10 KB).
+        /// </summary>
+        /// <param name="Bytes">The number of Bytes.</param>
+        /// <returns>A formatted string representing the size, up to TB, of <paramref name="Bytes"/> (i.e. 10 KB).</returns>
+        public static string FormatBytes(this int Bytes)
+        {
+            string[] suffix = new string[] { "B", "KB", "MB", "GB", "TB" };
+
+            int i;
+            double bytesDouble = Bytes;
+            for (i = 0; i < suffix.Length && Bytes >= 1000; i++, Bytes /= 1000)
+                bytesDouble = Bytes / 1000.0;
+
+            return $"{bytesDouble:0.#} {suffix[i]}";
         }
 
         #region Harmony

@@ -392,14 +392,23 @@ namespace XRL.World.Parts
         {
             if (E.LunarObject is GameObject lunarRegent)
             {
+                lunarRegent.RestorePristineHealth();
+
+                lunarRegent.RemoveIntProperty("Renamed");
+                lunarRegent.RemoveStringProperty("OriginalPlayerBody");
+
                 lunarRegent.NewGeneID();
                 lunarRegent.SetStringProperty("CloneOfGenes", lunarRegent.GeneID);
 
-                lunarRegent.GiveProperName(E.Player.GetReferenceDisplayName(WithoutTitles: true, Short: true), Force: true);
+                lunarRegent.SetStringProperty(
+                    Name: $"{Const.MOD_PREFIX}{nameof(The.Game.PlayerReputation.ReputationValues)}",
+                    Value: The.Game.PlayerReputation.ReputationValues.Aggregate(
+                        seed: (string)null,
+                        func: (a, n) => a + (!a.IsNullOrEmpty() ? ";;" : null) + $"{n.Key}::{n.Value}"));
 
-                lunarRegent.RestorePristineHealth();
+                lunarRegent.GiveProperName(E.Player.GetReferenceDisplayName(WithoutTitles: true, Short: true, BaseOnly: true), Force: true);
 
-                lunarRegent.RenderForUI("SaveGameInfo", true);
+                lunarRegent.RenderForUI(nameof(SaveGameInfo), true);
 
                 /*
                 var renderEvent = moonKing.RenderForUI("SaveGameInfo", true);
@@ -413,14 +422,9 @@ namespace XRL.World.Parts
                     $"{nameof(moonKing.Render.getDetailColor)}: {moonKing.Render.getDetailColor()})");
                 */
 
-                var lunarBrain = lunarRegent.Brain;
-                lunarBrain.PartyLeader = null;
-                lunarBrain.Hibernating = false;
-                lunarBrain.Staying = false;
-                lunarBrain.Passive = false;
-                lunarBrain.Factions = "Mean-100,Playerhater-99";
-                lunarBrain.Allegiance.Hostile = true;
-                lunarBrain.Allegiance.Calm = false;
+                lunarRegent.MakeAggressivelyHateThePlayer();
+
+                lunarRegent.RemovePart<GivesRep>();
 
                 if (lunarRegent.Render is Render render)
                     render.Visible = false;
@@ -440,7 +444,7 @@ namespace XRL.World.Parts
                         Utils.Warn($"Strange unequippable {lunarRegentMask?.DebugName ?? "NO_MASK_OBJECT"} without {nameof(UD_Bones_LunarFace)} part...");
                 }
 
-                lunarBrain.PerformEquip();
+                lunarRegent.Brain?.PerformEquip();
             }
             return base.HandleEvent(E);
         }
@@ -738,7 +742,7 @@ namespace XRL.World.Parts
 
                 if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo, b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced))
                 {
-                    Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in {saveBonesInfo.DisplayDirectory}!");
+                    Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in:\n{saveBonesInfo.TaggedDisplayDirectory}!");
                     return true;
                 }
             }

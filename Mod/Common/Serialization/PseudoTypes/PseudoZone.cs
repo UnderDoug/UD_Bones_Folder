@@ -652,11 +652,20 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             return gameObjectSet;
         }
 
+        public static void ProcessContext(ref string Context, string MainContext)
+        {
+            if (!Context.IsNullOrEmpty())
+                Context = $"{MainContext} {Context}";
+            else
+                Context = MainContext;
+        }
+
         public LunarParty ExtractLunarParty(
             SaveBonesInfo BonesInfo,
             out bool Blocked,
             Action<GameObject> ProcPreLoad = null,
-            Action<GameObject> ProcPostLoad = null
+            Action<GameObject> ProcPostLoad = null,
+            string Context = null
             )
         {
             Blocked = false;
@@ -676,14 +685,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 return null;
             }
 
+            ProcessContext(ref Context, EXTRACT_CONTEXT);
+
             if (!EarlyBeforeLoadLunarRegentEvent.Check(
                 BonesInfo: BonesInfo,
                 LunarObject: lunarParty.LunarRegent,
-                Context: EXTRACT_CONTEXT)
+                Context: Context)
                 || !BeforeLoadLunarRegentEvent.Check(
                     BonesInfo: BonesInfo,
                     LunarObject: lunarParty.LunarRegent,
-                    Context: EXTRACT_CONTEXT))
+                    Context: Context))
             {
                 Blocked = true;
                 lunarParty.Obliterate();
@@ -695,11 +706,11 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             LoadLunarRegentEvent.Send(
                 BonesInfo: BonesInfo,
                 LunarObject: lunarParty.LunarRegent,
-                Context: EXTRACT_CONTEXT);
+                Context: Context);
             AfterLoadedLunarRegentEvent.Send(
                 BonesInfo: BonesInfo,
                 LunarObject: lunarParty.LunarRegent,
-                Context: EXTRACT_CONTEXT);
+                Context: Context);
 
             ProcPostLoad?.Invoke(lunarParty.LunarRegent);
 
@@ -711,12 +722,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                         BonesInfo: BonesInfo,
                         LunarObject: lunarCourtier,
                         LunarRegent: lunarParty.LunarRegent,
-                        Context: EXTRACT_CONTEXT)
+                        Context: Context)
                         || !BeforeLoadLunarCourtierEvent.Check(
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
                             LunarRegent: lunarParty.LunarRegent,
-                            Context: EXTRACT_CONTEXT))
+                            Context: Context))
                     {
                         courtiersToRemove.Add(lunarCourtier);
                         continue;
@@ -728,12 +739,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                         BonesInfo: BonesInfo,
                         LunarObject: lunarCourtier,
                         LunarRegent: lunarParty.LunarRegent,
-                        Context: EXTRACT_CONTEXT);
+                        Context: Context);
                     AfterLoadedLunarCourtierEvent.Send(
                         BonesInfo: BonesInfo,
                         LunarObject: lunarCourtier,
                         LunarRegent: lunarParty.LunarRegent,
-                        Context: EXTRACT_CONTEXT);
+                        Context: Context);
 
                     ProcPostLoad?.Invoke(lunarCourtier);
                 }
@@ -751,14 +762,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             out LunarParty LunarParty,
             out bool Blocked,
             Action<GameObject> ProcPreLoad = null,
-            Action<GameObject> ProcPostLoad = null
+            Action<GameObject> ProcPostLoad = null,
+            string Context = null
             )
         {
             if ((LunarParty = ExtractLunarParty(
                 BonesInfo: BonesInfo,
                 Blocked: out Blocked,
                 ProcPreLoad: ProcPreLoad,
-                ProcPostLoad: ProcPostLoad)) != null
+                ProcPostLoad: ProcPostLoad,
+                Context: Context)) != null
                 && !Blocked)
                 return true;
 
@@ -1209,13 +1222,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             out GameObject LunarRegent,
             out bool Blocked,
             Predicate<GameObject> AddWhenNot = null,
-            bool IgnoreLocationMismatch = false
+            bool IgnoreLocationMismatch = false,
+            string Context = null
             )
         {
             LunarRegent = null;
             Blocked = false;
 
-            if (!BeforePseudoZoneLoadedEvent.Check(Zone, BonesID, this, RECLAIM_CONTEXT))
+            ProcessContext(ref Context, RECLAIM_CONTEXT);
+
+            if (!BeforePseudoZoneLoadedEvent.Check(Zone, BonesID, this, Context))
             {
                 Blocked = true;
                 return false;
@@ -1274,12 +1290,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     Player: The.Player,
                     BonesInfo: BonesInfo,
                     LunarObject: LunarRegent,
-                    Context: RECLAIM_CONTEXT)
+                    Context: Context)
                 || !BeforeLoadLunarRegentEvent.Check(
                     Player: The.Player,
                     BonesInfo: BonesInfo,
                     LunarObject: LunarRegent,
-                    Context: RECLAIM_CONTEXT))
+                    Context: Context))
             {
                 Blocked = LunarRegent != null;
 
@@ -1296,14 +1312,14 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 Player: The.Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarRegent,
-                Context: RECLAIM_CONTEXT);
+                Context: Context);
 
             //Utils.Log($"{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarRegentEvent)}");
             AfterLoadedLunarRegentEvent.Send(
                 Player: The.Player,
                 BonesInfo: BonesInfo,
                 LunarObject: LunarRegent,
-                Context: RECLAIM_CONTEXT);
+                Context: Context);
 
             //Utils.Log($"foreach ((var regentID, var lunarParty) in lunarParties.IteratorSafe())");
             foreach ((var regentID, var lunarParty) in lunarParties.IteratorSafe())
@@ -1325,12 +1341,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
                             LunarRegent: LunarRegent,
-                            Context: RECLAIM_CONTEXT)
+                            Context: Context)
                             || !BeforeLoadLunarCourtierEvent.Check(
                                 BonesInfo: BonesInfo,
                                 LunarObject: lunarCourtier,
                                 LunarRegent: LunarRegent,
-                                Context: RECLAIM_CONTEXT))
+                                Context: Context))
                         {
                             courtiersToRemove.Add(lunarCourtier);
                             continue;
@@ -1341,14 +1357,14 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
                             LunarRegent: LunarRegent,
-                            Context: RECLAIM_CONTEXT);
+                            Context: Context);
 
                         //Utils.Log($"{2.Indent()}{nameof(TryApplyToZone)}: {nameof(AfterLoadedLunarCourtierEvent)}");
                         AfterLoadedLunarCourtierEvent.Send(
                             BonesInfo: BonesInfo,
                             LunarObject: lunarCourtier,
                             LunarRegent: LunarRegent,
-                            Context: RECLAIM_CONTEXT);
+                            Context: Context);
                     }
                     foreach (var courtierToRemove in courtiersToRemove)
                     {
@@ -1391,7 +1407,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     Zone.DisplayName = $"feverish {Zone.DisplayName}";
             }
 
-            AfterPseudoZoneLoadedEvent.Send(Zone, BonesID, LunarRegent, this, RECLAIM_CONTEXT);
+            AfterPseudoZoneLoadedEvent.Send(Zone, BonesID, LunarRegent, this, Context);
             return LunarRegent != null;
         }
 

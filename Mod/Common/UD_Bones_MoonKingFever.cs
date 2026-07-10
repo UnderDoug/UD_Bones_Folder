@@ -95,8 +95,8 @@ namespace XRL.World.Effects
                 {
                     var preacher = Object.AddPart<Preacher>();
                     preacher.Book = "UD_Bones_MoonKingFever";
-                    preacher.Prefix = "=subject.T= =verb:proclaim= {{W|\'";
-                    preacher.Postfix = "\'}}";
+                    preacher.Prefix = "=subject.T= =verb:proclaim= {{W|'";
+                    preacher.Postfix = "'}}";
                 }
             }
         }
@@ -244,7 +244,7 @@ namespace XRL.World.Effects
         {
             E.AddEntry(this, nameof(OriginalMaxKillDistance), OriginalMaxKillDistance);
             E.AddEntry(this, nameof(AlreadyPreacher), AlreadyPreacher);
-            E.AddEntry(this, nameof(Duration), Duration >= DURATION_INDEFINITE ? "\u00EC" : Duration.ToString());
+            // E.AddEntry(this, nameof(Duration), Duration >= DURATION_INDEFINITE ? "\u00EC" : Duration.ToString());
             return base.HandleEvent(E);
         }
 

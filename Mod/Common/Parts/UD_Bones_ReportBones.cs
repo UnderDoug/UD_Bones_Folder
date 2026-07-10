@@ -65,7 +65,7 @@ namespace XRL.World.Parts
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(LoadedBonesID), LoadedBonesID);
-            if (BonesManager.System.GetSavedBonesByID(LoadedBonesID) is SaveBonesInfo bonesInfo)
+            if (BonesManager.GetSavedBonesByID(LoadedBonesID) is SaveBonesInfo bonesInfo)
             {
                 E.AddEntry(this, nameof(bonesInfo.ModVersion), bonesInfo.ModVersion);
                 E.AddEntry(this, nameof(bonesInfo.SaveTimeValue), bonesInfo.SaveTimeValue.Timestamp());

@@ -1219,13 +1219,19 @@
     ],
     "severity": 3,
     "exceptions": [
+      "cir*",
+      "cir*ference",
+      "cir*navigate",
+      "cir*scribe",
+      "cir*spect",
       "s*",
       "suc*b",
       "suc*bs",
       "suc*bed",
       "suc*bing",
       "va*"
-    ]
+    ],
+    "allow_partial": false
   },
   {
     "id": "cumming",
@@ -3146,7 +3152,8 @@
     "tags": [
       "sexual"
     ],
-    "severity": 3
+    "severity": 3,
+    "allow_partial": false
   },
   {
     "id": "raghead",
@@ -3397,7 +3404,14 @@
     ],
     "severity": 3,
     "exceptions": [
-      "*tet"
+      "*tant",
+      "*tants",
+      "*tet",
+      "*tets",
+      "*tuple",
+      "*tuples",
+      "*tuplet",
+      "*tuplets"
     ]
   },
   {

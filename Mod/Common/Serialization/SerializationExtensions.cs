@@ -153,7 +153,7 @@ namespace UD_Bones_Folder.Mod
             {
                 if (Reader.ReadGameObjectMetricsOff() is GameObject gameObject)
                 {
-                    if (gameObject.NeedsFeverWarped(out UD_Bones_FeverWarped.WarpFlags warpFlags))
+                    if (gameObject.NeedsFeverWarped(out UD_Bones_FeverWarped.WarpFlags warpFlags, BonesID: null))
                     {
                         gameObject.SetStringProperty(nameof(UD_Bones_FeverWarped), $"{true}");
                         gameObject.SetStringProperty(UD_Bones_FeverWarped.TileOnlyProp, $"{warpFlags == UD_Bones_FeverWarped.WarpFlags.Tile}");
@@ -600,7 +600,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static void WriteStringCompositeValues<T>(this SerializationWriter Writer, IDictionary<string, T> Dictionary)
+        public static void WriteStringCompositeDictionary<T>(this SerializationWriter Writer, IDictionary<string, T> Dictionary)
             where T : IComposite, new()
         {
             Writer.Write(Dictionary?.Count ?? -1);

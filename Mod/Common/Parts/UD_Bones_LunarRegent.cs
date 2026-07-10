@@ -12,11 +12,12 @@ using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.Events;
 using XRL.World.AI.GoalHandlers;
 using XRL.World.AI;
-using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
-using UD_Bones_Folder.Mod.Parts;
 using XRL.Collections;
 using XRL.Rules;
+
 using UD_Bones_Folder.Mod.UI;
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using UD_Bones_Folder.Mod.Parts;
 
 namespace XRL.World.Parts
 {
@@ -88,14 +89,20 @@ namespace XRL.World.Parts
                 {
                     if (value)
                     {
-                        BakedBrokenTitle = $"=LunarShader:{RegalTitle}:{ParentObject.BaseID}=".StartReplace().ToString();
+                        BakedBrokenTitle = $"=LunarShader:{RegalTitle}:{ParentObject.BaseID}="
+                            .StartReplace()
+                            .ToString();
+
+                        BakedBrokenTitle = BakedBrokenTitle.FeverWarped();
 
                         if (IsMad)
                             BakedBrokenTitle = $"Mad {BakedBrokenTitle}";
 
-                        BakedBrokenTitle = $"{nameof(Broken).ToLower()} {BakedBrokenTitle.FeverWarped()}";
+                        BakedBrokenTitle = $"{nameof(Broken).ToLower()} {BakedBrokenTitle}";
 
-                        BakedBrokenTitle = BakedBrokenTitle.StartReplace().ToString();
+                        BakedBrokenTitle = BakedBrokenTitle
+                            .StartReplace()
+                            .ToString();
                     }
                     else
                         BakedBrokenTitle = null;
@@ -179,7 +186,7 @@ namespace XRL.World.Parts
         public SaveBonesInfo GetSourceSaveBonesInfo(bool AggregateLocations = true)
         {
             if (AggregateLocations)
-                return BonesManager.System.GetSavedBonesByID(BonesID);
+                return BonesManager.GetSavedBonesByIDDirect(BonesID);
 
             if (LocationData is not null)
             {
@@ -198,8 +205,7 @@ namespace XRL.World.Parts
                         Utils.Warn($"{storedHost} no longer exists and can't have bones retreived from it.");
                 }
 
-                if (BonesManager.System is BonesManager system
-                    && system.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => bonesInfo.FileLocationData?.SameAs(LocationData) is true))
+                if (BonesManager.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => LocationData.SameAs(bonesInfo.FileLocationData)))
                     return saveBonesInfo;
             }
 
@@ -504,14 +510,14 @@ namespace XRL.World.Parts
                 }
 
                 if (LunarCreature.IsLunarRegent()
-                    && Context == PseudoZone.RECLAIM_CONTEXT)
+                    && LoadLunarRegentEvent.CheckContext(Context, PseudoZone.RECLAIM_CONTEXT))
                 {
                     if (fragilePart != null)
                         fragilePart.WantsToBeDropped = true;
                 }
                 else
                 if (LunarCreature.IsLunarCourtier()
-                    && Context == PseudoZone.RECLAIM_CONTEXT)
+                    && LoadLunarCourtierEvent.CheckContext(Context, PseudoZone.RECLAIM_CONTEXT))
                 {
                     objectsToDestroy.Add(item);
                 }
@@ -563,9 +569,86 @@ namespace XRL.World.Parts
             return true;
         }
 
+        public static bool IsNonGeneratedFaction(Faction faction)
+        {
+            if (faction.Name.StartsWith("SultanCult"))
+                return false;
+
+            if (faction.Name.StartsWith("villagers of "))
+                return faction.Name.EndsWith("Ezra")
+                    || faction.Name.EndsWith("Joppa");
+
+            return true;
+        }
+
+        public static IEnumerable<Faction> GetSuperlativeOrderedFactions(
+            GameObject LunarRegent,
+            bool Positive,
+            Predicate<Faction> Where = null
+            )
+        {
+            Dictionary<string, float> playerRep = null;
+            if (!LunarRegent.TryGetStringProperty($"{Const.MOD_PREFIX}{nameof(The.Game.PlayerReputation.ReputationValues)}", out string storedPlayerRepString))
+                playerRep = The.Game?.PlayerReputation?.ReputationValues;
+            else
+            {
+                foreach (var pairString in storedPlayerRepString.Split(";;"))
+                {
+                    if (pairString.Split("::") is not string[] splitPair
+                        || splitPair.Length < 2)
+                    {
+                        Utils.Warn($"Bad dictionary expansion part '{pairString}'");
+                        continue;
+                    }
+
+                    if (!float.TryParse(splitPair[1], out float value))
+                    {
+                        Utils.Warn($"Invalid dictionary expansion value for key '{splitPair[0]}': {splitPair[1]} is not {typeof(float).Name}");
+                        continue;
+                    }
+
+                    playerRep ??= new();
+                    if (playerRep.ContainsKey(splitPair[0]))
+                    {
+                        Utils.Warn($"Duplicate dictionary expansion entry '{splitPair[0]}'");
+                        continue;
+                    }
+
+                    playerRep[splitPair[0]] = value;
+                }
+            }
+
+            if (playerRep.IsNullOrEmpty())
+                yield break;
+
+            var orderedFactions = Positive
+                ? playerRep.OrderByDescending(rep => rep.Value)
+                : playerRep.OrderBy(rep => rep.Value)
+                ;
+
+            foreach ((var factionName, var _) in orderedFactions)
+            {
+                if (Factions.GetIfExists(factionName) is Faction faction
+                    && Where?.Invoke(faction) is not false
+                    && faction.Visible)
+                {
+                    yield return faction;
+                }
+            }
+        }
+
+        public static ScopeDisposedList<Faction> RentMostLovedFactions(GameObject LunarRegent)
+            => ScopeDisposedList<Faction>.GetFromPoolFilledWith(GetSuperlativeOrderedFactions(LunarRegent, Positive: true, Where: IsNonGeneratedFaction))
+            ;
+
+        public static ScopeDisposedList<Faction> RentMostHatedFactions(GameObject LunarRegent)
+            => ScopeDisposedList<Faction>.GetFromPoolFilledWith(GetSuperlativeOrderedFactions(LunarRegent, Positive: false, Where: IsNonGeneratedFaction))
+            ;
+
         public override void Register(GameObject Object, IEventRegistrar Registrar)
         {
             Registrar.Register(LoadLunarRegentEvent.ID, EventOrder.EXTREMELY_EARLY);
+            Registrar.Register($"Apply{nameof(UD_Bones_MoonKingFever)}");
             base.Register(Object, Registrar);
         }
 
@@ -617,12 +700,22 @@ namespace XRL.World.Parts
             if (!E.WithoutTitles)
             {
                 bool isBroken = Broken
-                && !BakedBrokenTitle.IsNullOrEmpty();
+                    && !BakedBrokenTitle.IsNullOrEmpty();
+
+                bool forSave = E.Context == nameof(SaveBonesJSON);
+                string shaderParam = !forSave
+                    ? ParentObject.BaseID.ToString()
+                    : "*"
+                    ;
 
                 string title = !isBroken
-                    ? $"=LunarShader:{RegalTitle}:{ParentObject.BaseID}=".StartReplace().ToString()
+                    ? $"=LunarShader:{RegalTitle}:{shaderParam}="
                     : BakedBrokenTitle
                     ;
+
+                if (!isBroken
+                    && !forSave)
+                    title = title.StartReplace().ToString();
 
                 if (!isBroken)
                 {
@@ -715,6 +808,93 @@ namespace XRL.World.Parts
                     catchFlag = nameof(Description);
                     SetBakedShortDesc(IsYou: E.IsYou, WhoItWas: E.BonesInfo?.OsseousAshHandle ?? OsseousAsh.DefaultOsseousAshHandle);
 
+                    if (lunarRegent.AddPart<GivesRep>() is GivesRep givesRep)
+                    {
+                        using var mostLovedFactions = RentMostLovedFactions(lunarRegent);
+                        using var mostHatedFactions = RentMostHatedFactions(lunarRegent);
+
+                        int reasonCount = 3;
+
+                        if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT)
+                            || IsMad)
+                        {
+                            if (Math.Abs(lunarRegent.GetSeededRandom(nameof(GivesRep)).Next()) % 2 == 0)
+                            {
+                                givesRep.relatedFactions.Add(
+                                    item: new FriendorFoe
+                                    {
+                                        faction = IsMad ? "Entropic" : "Strangers",
+                                        status = "love",
+                                        reason = IsMad ? "reasons that should be somewhat obvious" : "being strange and mysterious"
+                                    });
+                                reasonCount--;
+                            }
+                        }
+
+                        while (reasonCount > 0)
+                        {
+                            bool positive = Math.Abs(lunarRegent.GetSeededRandom(nameof(GivesRep)).Next()) % 5 < 2;
+                            Faction faction = null;
+
+                            bool noLoved = mostLovedFactions.IsNullOrEmpty();
+                            bool noHated = mostHatedFactions.IsNullOrEmpty();
+
+                            if (positive
+                                && faction == null)
+                            {
+                                if (!noLoved)
+                                    faction = mostLovedFactions.TakeAt(0);
+                                else
+                                    positive = false;
+                            }
+
+                            if (!positive
+                                || faction == null)
+                            {
+                                if (!noHated)
+                                    faction = mostHatedFactions.TakeAt(0);
+                                else
+                                if (!noLoved)
+                                {
+                                    faction = mostLovedFactions.TakeAt(0);
+                                    positive = true;
+                                }
+                            }
+
+                            faction ??= Factions.GetRandomFaction(givesRep.relatedFactions.Select(f => f.faction).ToArray());
+
+                            if (faction == null)
+                                break;
+
+                            string status = positive
+                                ? "love"
+                                : "hate"
+                                ;
+
+                            if (givesRep.relatedFactions.Count > 0)
+                                status = positive
+                                    ? "friend"
+                                    : "dislike"
+                                    ;
+
+                            string reason = positive ? GenerateFriendOrFoe.getLikeReason() : GenerateFriendOrFoe.getHateReason();
+                            if (Math.Abs(lunarRegent.GetSeededRandom(nameof(GivesRep)).Next()) % 2 == 0)
+                                reason = $"allegedly {reason}";
+                            else
+                                reason = $"{reason}; allegedly";
+
+                            givesRep.relatedFactions.Add(
+                                item: new FriendorFoe
+                                {
+                                    faction = faction.Name,
+                                    status = status,
+                                    reason = reason,
+                                });
+
+                            reasonCount--;
+                        }
+                    }
+
                     if (E.CheckContext(PseudoZone.RECLAIM_CONTEXT)
                         && The.Player is GameObject player)
                     {
@@ -735,6 +915,8 @@ namespace XRL.World.Parts
                         }
 
                         MakeInventoryFragile(lunarRegent, UD_Bones_LunarReliquary.Create(E.BonesInfo, lunarRegent), E.Context);
+
+                        Onset();
                     }
 
                     if (lunarRegent.Render is Render render)
@@ -785,6 +967,16 @@ namespace XRL.World.Parts
             }
             return base.HandleEvent(E);
         }
+
+        public override bool FireEvent(Event E)
+        {
+            if (E.ID == $"Apply{nameof(UD_Bones_MoonKingFever)}"
+                && Broken)
+                return false;
+
+            return base.FireEvent(E);
+        }
+
         public override bool HandleEvent(GetDebugInternalsEvent E)
         {
             E.AddEntry(this, nameof(Cremated), Cremated);

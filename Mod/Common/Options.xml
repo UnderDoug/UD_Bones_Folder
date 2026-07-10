@@ -6,8 +6,8 @@
   
   -->
   <!--option
-        ID="UD_Bones_Folder_ DebugEnableOption"
-        DisplayText="{{Y|Choose Your Body Plan}}: Enable a debug option for this mod."
+        ID="UD_Bones_Folder_DebugEnableOption"
+        DisplayText="{{Y|Bones}}: Enable a debug option for this mod."
         Category="Debug"
         Type="Checkbox"
         Default="No">

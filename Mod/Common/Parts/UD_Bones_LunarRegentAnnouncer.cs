@@ -96,7 +96,7 @@ namespace XRL.World.Parts
             {
                 try
                 {
-                    var render = new BonesRender(LunarRegent.RenderForUI("SaveBonesInfo", true));
+                    var render = new BonesRender(LunarRegent.RenderForUI(nameof(UD_Bones_LunarRegentAnnouncer), true));
 
                     string message;
 

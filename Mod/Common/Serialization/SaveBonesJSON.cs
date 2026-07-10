@@ -72,12 +72,12 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public static SaveBonesJSON DummyBonesJSON(BonesManagement.VisibilityModes VisibilityMode)
-            => new SaveBonesJSON
+            => new()
             {
                 IsYou = true,
                 OsseousAshID = Guid.Empty,
                 OsseousAshHandle = $"A Highlight Entropic Being",
-                SaveVersion = 400,
+                SaveVersion = XRLGame.SaveVersion,
                 GameVersion = typeof(MainMenu).Assembly.GetName().Version.ToString(),
                 ID = Guid.Empty.ToString(),
                 Name = $"Bones That Are Yet To Exist",
@@ -117,12 +117,13 @@ namespace UD_Bones_Folder.Mod
             bool IsDummy = false
             )
         {
+            string saveSize = ((int)SaveSize).FormatBytes();
             if (SaveBonesJSON == null)
             {
                 return new SaveBonesInfo
                 {
                     Name = "Corrupt info file".Colored("R"),
-                    Size = $"Total size: {SaveSize / 1000}kb",
+                    Size = $"Total size: {saveSize}",
                     Info = "",
                     Directory = FileLocationData
                 };
@@ -141,7 +142,7 @@ namespace UD_Bones_Folder.Mod
             {
                 json = SaveBonesJSON,
                 Directory = FileLocationData,
-                Size = $"Total size: {SaveSize / 1000}kb",
+                Size = $"Total size: {saveSize}",
                 ID = SaveBonesJSON.ID,
                 Version = SaveBonesJSON.GameVersion,
                 Name = SaveBonesJSON.Name,
@@ -169,13 +170,6 @@ namespace UD_Bones_Folder.Mod
 
             if (!SaveBonesJSON.CharIcon.IsTile())
                 SaveBonesJSON.HotSwapCharIcon();
-
-            if (SaveBonesJSON.SaveVersion < 395
-                || SaveBonesJSON.SaveVersion > 400)
-            {
-                string olderVersionString = $"Older Version ({SaveBonesJSON.GameVersion})".Colored("R");
-                saveBonesInfo.Name = $"{olderVersionString} {saveBonesInfo.Name}";
-            }
 
             return saveBonesInfo;
         }
@@ -238,7 +232,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public SaveBonesJSON Clone()
-            => new SaveBonesJSON
+            => new()
             {
                 OsseousAshID = OsseousAshID,
                 OsseousAshHandle = OsseousAshHandle,
@@ -249,7 +243,7 @@ namespace UD_Bones_Folder.Mod
                 Level = Level,
                 GenoSubType = GenoSubType,
                 GameMode = GameMode,
-                CharIcon = CharIcon,
+                CharIcon = IsCharIconSwapped() ? OriginalCharIcon : CharIcon,
                 FColor = FColor,
                 DColor = DColor,
 
@@ -289,8 +283,8 @@ namespace UD_Bones_Folder.Mod
             GenoSubType = null;
             GameMode = null;
             CharIcon = null;
-            FColor = '\0';
-            DColor = '\0';
+            FColor = default;
+            DColor = default;
 
             Location = null;
             InGameTime = null;
@@ -313,6 +307,9 @@ namespace UD_Bones_Folder.Mod
             GenotypeName = null;
             SubtypeName = null;
             Blueprint = null;
+
+            OriginalCharIcon = null;
+            CharIconSwapped = false;
         }
     }
 }

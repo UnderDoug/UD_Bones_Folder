@@ -44,6 +44,8 @@ namespace UD_Bones_Folder.Mod
         {
             public class PendingSavGz : IDisposable
             {
+                public static int MaxFileSizeInBytes => 1000 * 1000 * 4;
+
                 public Host ParentHost;
 
                 public string BonesID;
@@ -55,7 +57,7 @@ namespace UD_Bones_Folder.Mod
                 public bool Success;
                 public bool ForceDispose;
 
-                public bool CheckValid(bool Silent = false)
+                public bool CheckValid(bool IgnoreToken = false, bool Silent = false)
                 {
                     if (ParentHost == null)
                     {
@@ -71,7 +73,8 @@ namespace UD_Bones_Folder.Mod
                         return false;
                     }
 
-                    if (Token.IsEmptyOrDefault())
+                    if (!IgnoreToken
+                        && Token.IsEmptyOrDefault())
                     {
                         if (!Silent)
                             Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(Token)} is empty or default {{{BonesID}}}.");
@@ -82,6 +85,13 @@ namespace UD_Bones_Folder.Mod
                     {
                         if (!Silent)
                             Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is null or empty {{{BonesID}}}.");
+                        return false;
+                    }
+
+                    if (SavGz.Length > MaxFileSizeInBytes)
+                    {
+                        if (!Silent)
+                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is {SavGz.FormatBytes()}, limit is {MaxFileSizeInBytes.FormatBytes()} {{{BonesID}}}.");
                         return false;
                     }
 
@@ -99,13 +109,13 @@ namespace UD_Bones_Folder.Mod
                         return false;
                     }
 
-                    if (!Silent)
-                        Utils.Info($"{nameof(PendingSavGz)} is Valid; {{{BonesID}}}.");
+                    /*if (!Silent)
+                        Utils.Info($"{nameof(PendingSavGz)} is Valid; {{{BonesID}}}.");*/
 
                     return true;
                 }
 
-                public bool RetryUpload(bool ForceDispose = false)
+                public async Task<bool> RetryUpload(bool ForceDispose = false)
                 {
                     if (ForceDispose)
                         this.ForceDispose = true;
@@ -116,22 +126,13 @@ namespace UD_Bones_Folder.Mod
                     Utils.Info($"{DateTime.Now.Timestamp()} - {nameof(PendingSavGz)} attempting to {nameof(RetryUpload)} of {{{BonesID ?? "NO_BONES_ID"}}} to {ParentHost?.ToString() ?? "NO_HOST"}, time since first try: {timeSinceFirstTry.ValueUnits()}");
 
                     if (ParentHost == null)
-                    {
-                        Utils.Info($"ParentHost null");
                         this.ForceDispose = true;
-                    }
                     else
                     if (exceededTimeLimit)
-                    {
-                        Utils.Info($"Exceeded Time Limit");
                         this.ForceDispose = true;
-                    }
                     else
-                    if (ParentHost.PutBonesSavGz(this).WaitResult())
-                    {
-                        Utils.Info($"Successful PUT");
+                    if (await ParentHost.PutBonesSavGz(this))
                         Success = true;
-                    }
 
                     if (!this.ForceDispose
                         && !Success)
@@ -153,8 +154,8 @@ namespace UD_Bones_Folder.Mod
                     if (Success
                         || this.ForceDispose)
                     {
-                        Dispose();
                         var pendingSavGzs = ParentHost?.PendingSavGzs;
+                        Dispose();
                         string pendingSavsCount = (pendingSavGzs?.Count)?.ToString() ?? "NO_DICTIONARY";
                         Utils.Info($"{DateTime.Now.Timestamp()} - Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(ParentHost.PendingSavGzs)}: {pendingSavsCount}");
                     }
@@ -185,7 +186,7 @@ namespace UD_Bones_Folder.Mod
                         || ForceDispose)
                         DisposeInternal();
                     else
-                        RetryUpload(ForceDispose: true);
+                        RetryUpload(ForceDispose: true).Wait();
                 }
             }
 
@@ -779,7 +780,7 @@ namespace UD_Bones_Folder.Mod
                 ;
 
             public static string GetConnectionSymbol(int ConnectionLevel)
-                => "\u000f".Colored(GetConnectionColor(ConnectionLevel)) // \u000f ☼ | \u0017 ↨
+                => DF.Colored(GetConnectionColor(ConnectionLevel)) // DF ☼ | \u0017 ↨
                 ;
 
             public string GetEnableDisableUIText()
@@ -1161,17 +1162,43 @@ namespace UD_Bones_Folder.Mod
             #endregion
             #region Upload Saves
 
-            public async Task<Guid> PostBonesInfo(
-                string BonesID,
+            public async Task<Guid> PostBonesInfoAsync(
                 SaveBonesJSON SaveBonesJSON,
-                byte[] SavGz
+                PendingSavGz PendingSavGz,
+                bool Silent = false
                 )
             {
-                if (!IsRunning
-                    || BonesID.IsNullOrEmpty()
-                    || SaveBonesJSON == null
-                    || SavGz.IsNullOrEmpty())
+                if (!IsRunning)
+                {
+                    if (!Silent)
+                        Utils.Warn($"{ToString()} is not running");
+
                     return Guid.Empty;
+                }
+
+                if (SaveBonesJSON == null)
+                {
+                    if (!Silent)
+                        Utils.Warn($"{nameof(SaveBonesJSON)} is null");
+
+                    return Guid.Empty;
+                }
+
+                if (!PendingSavGz.CheckValid(IgnoreToken: true, Silent: false))
+                {
+                    if (!Silent)
+                        Utils.Warn($"{nameof(PendingSavGz)} is invalid");
+
+                    return Guid.Empty;
+                }
+
+                if (GetSaveBonesInfo(PendingSavGz.BonesID) is SaveBonesInfo existingBonesInfo)
+                {
+                    if (!Silent)
+                        Utils.Warn($"{ToString()} already has a bones with the following ID {{{existingBonesInfo.ID}}}");
+
+                    return Guid.Empty;
+                }    
 
                 string uRI = BonesPostRoute();
 
@@ -1183,6 +1210,9 @@ namespace UD_Bones_Folder.Mod
                     {
                         tempSaveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
 
+                        if (tempSaveBonesJSON.IsCharIconSwapped())
+                            tempSaveBonesJSON.HotSwapCharIcon();
+
                         httpReq = CreatePostJSON(
                             URI: uRI,
                             Timeout: timeout,
@@ -1190,9 +1220,9 @@ namespace UD_Bones_Folder.Mod
                             {
                                 using var record = new Record(
                                     UserID: Config.ID,
-                                    BonesID: BonesID,
+                                    BonesID: PendingSavGz.BonesID,
                                     SaveBonesJSON: tempSaveBonesJSON,
-                                    SavGz: SavGz)
+                                    SavGz: PendingSavGz.SavGz)
                                 ;
                                 await streamWriter.WriteAsync(JsonConvert.SerializeObject(record));
                             });
@@ -1201,14 +1231,19 @@ namespace UD_Bones_Folder.Mod
                 catch (Exception x)
                 {
                     Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
+                    return Guid.Empty;
                 }
 
                 if (httpReq == null)
+                {
+                    if (!Silent)
+                        Utils.Warn($"{nameof(httpReq)} for {ToString()} is null");
                     return Guid.Empty;
+                }
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = await streamReader.ReadToEndAsync();
@@ -1256,7 +1291,7 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     if (PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
-                        pendingSavGz.RetryUpload();
+                        pendingSavGz.RetryUpload().Wait();
                     else
                         Utils.Warn($"{nameof(Timer)} passed {nameof(Host.PendingSavGz.BonesID)} not found in {nameof(PendingSavGzs)} ({bonesID ?? "NO_BONES_ID"}).");
 
@@ -1275,17 +1310,6 @@ namespace UD_Bones_Folder.Mod
 
             public async Task<bool> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
             {
-                Utils.Log($"{nameof(PutBonesSavGz)} for {nameof(Host)} {ToString()} -> {nameof(PendingSavGz.BonesID)}: {{{PendingSavGz?.BonesID ?? "NO_BONES"}}}");
-
-                string currentContextString = "UnknownContext";
-                if (The.CurrentContext == The.GameContext)
-                    currentContextString = nameof(The.GameContext);
-                else
-                if (The.CurrentContext == The.UiContext)
-                    currentContextString = nameof(The.UiContext);
-
-                Utils.Log($"{nameof(The.CurrentContext)} is {currentContextString}");
-
                 if (PendingSavGz == null)
                 {
                     if (!Silent)
@@ -1348,7 +1372,7 @@ namespace UD_Bones_Folder.Mod
 
                     try
                     {
-                        var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                        var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                         using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                         {
                             var result = await streamReader.ReadToEndAsync();
@@ -1405,7 +1429,7 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
-                        Utils.Error($"Failed receiving PUT response for {uRI}", x);
+                        Utils.ErrorOnce($"Failed receiving PUT response for {uRI} ({x.GetType().ToStringWithGenerics()})", x);
                         return false;
                     }
                 }
@@ -1425,40 +1449,30 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public async Task<bool> TryUploadBonesAsync(
-                string BonesID,
-                SaveBonesJSON SaveBonesJSON,
-                byte[] SavGz
-                )
+            public async Task<bool> TryUploadBonesAsync(SaveBonesJSON SaveBonesJSON, PendingSavGz PendingSavGz)
             {
                 if (!IsRunning)
                     return false;
 
                 try
                 {
-                    Guid token = Guid.Empty;
                     try
                     {
-                        token = await PostBonesInfo(BonesID, SaveBonesJSON, SavGz);
+                        PendingSavGz.Token = await PostBonesInfoAsync(SaveBonesJSON, PendingSavGz);
+                        PendingSavGz.UploadTime = DateTime.UtcNow;
                     }
-                    catch
+                    catch (Exception x)
                     {
-                        token = Guid.Empty;
+                        PendingSavGz.Token = Guid.Empty;
+                        Utils.Warn($"{nameof(Host)}.{nameof(TryUploadBonesAsync)}", x);
                     }
 
-                    if (token.IsEmptyOrDefault())
+                    if (PendingSavGz.Token.IsEmptyOrDefault())
                         return false;
 
                     try
                     {
-                        return await PutBonesSavGz(new PendingSavGz
-                        {
-                            ParentHost = this,
-                            BonesID = BonesID,
-                            Token = token,
-                            SavGz = SavGz,
-                            UploadTime = DateTime.UtcNow,
-                        });
+                        return await PutBonesSavGz(PendingSavGz);
                     }
                     catch
                     {
@@ -1467,17 +1481,10 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {BonesID}", x);
+                    Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {PendingSavGz.BonesID}", x);
                     return false;
                 }
             }
-
-            public bool TryUploadBones(
-                string BonesID,
-                SaveBonesJSON SaveBonesJSON,
-                byte[] SavGz
-                )
-                => TryUploadBonesAsync(BonesID, SaveBonesJSON, SavGz).WaitResult();
 
             #endregion
             #region Post Bones Report
@@ -1513,7 +1520,7 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = await streamReader.ReadToEndAsync();
@@ -1580,7 +1587,7 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = await streamReader.ReadToEndAsync();
@@ -1880,6 +1887,9 @@ namespace UD_Bones_Folder.Mod
                     return null;
 
                 string uRI = BonesInfoGetRoute(BonesID);
+
+                //Utils.Log($"{nameof(GetSaveBonesJSON)} -> {uRI}");
+
                 HttpWebRequest httpReq = null;
                 int? timeout = GetTimeout();
                 try
@@ -1897,34 +1907,36 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                    using (var httpRes = (HttpWebResponse)httpReq.GetResponse())
                     {
-                        var result = streamReader.ReadToEnd();
-                        if (httpRes.StatusCode == HttpStatusCode.OK
-                            && JObject.Parse(result) is JObject jObject
-                            && jObject["success"].ToObject<bool>())
+                        using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                         {
-                            try
+                            var result = streamReader.ReadToEnd();
+                            if (httpRes.StatusCode == HttpStatusCode.OK
+                                && JObject.Parse(result) is JObject jObject
+                                && jObject["success"].ToObject<bool>())
                             {
-                                return JsonConvert.DeserializeObject<SaveBonesJSON>(jObject["BonesInfo"].ToString());
+                                try
+                                {
+                                    return JsonConvert.DeserializeObject<SaveBonesJSON>(jObject["BonesInfo"].ToString());
+                                }
+                                catch (Exception x)
+                                {
+                                    Utils.Error($"{nameof(GetSaveBonesJSON)} failed to deserialize {nameof(jObject)}[\"BonesInfo\"] to {nameof(SaveBonesJSON)}", x);
+                                    return null;
+                                }
                             }
-                            catch (Exception x)
+                            else
+                            if (httpRes.StatusCode == HttpStatusCode.NoContent)
                             {
-                                Utils.Error($"{nameof(GetBonesInfos)} failed to deserialize {nameof(jObject)}[\"BonesInfo\"] to {typeof(SaveBonesJSON).Name}", x);
-                                return null;
+                                //Utils.Log($"{nameof(GetSaveBonesJSON)} got no SaveBonesJSON from {ToString()}" +
+                                //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                             }
-                        }
-                        else
-                        if (httpRes.StatusCode == HttpStatusCode.NoContent)
-                        {
-                            //Utils.Log($"{nameof(GetBonesInfo)} got no SaveBonesInfo from {ToString()}" +
-                            //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                        }
-                        else
-                        {
-                            Utils.Warn($"{nameof(GetBonesInfos)} got no SaveBonesInfo from {ToString()}" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            else
+                            {
+                                Utils.Warn($"{nameof(GetSaveBonesJSON)} got no SaveBonesJSON from {ToString()}" +
+                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            }
                         }
                     }
                 }
@@ -1944,13 +1956,13 @@ namespace UD_Bones_Folder.Mod
             public SaveBonesInfo GetSaveBonesInfo(string BonesID)
                 => GetSaveBonesJSON(BonesID)?.InfoFromJson(
                     FileLocationData: FileLocationData.NewOnline(this),
-                    SaveSize: 0)
+                    SaveSize: 0L)
                 ;
 
             #endregion
             #region Get Bones SavGz
 
-            public async Task<byte[]> GetBonesSavGz(string BonesID)
+            public async Task<byte[]> GetBonesSavGzAsync(string BonesID)
             {
                 if (!IsRunning)
                     return null;
@@ -1967,7 +1979,7 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
+                    Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
                     return null;
                 }
 
@@ -1983,19 +1995,19 @@ namespace UD_Bones_Folder.Mod
                         {
                             if ((await streamReader.ReadAllBytesAsync()) is byte[] rawBuffer)
                             {
-                                Utils.Log($"{nameof(GetBonesSavGz)} got a SaveBonesSavGz from {ToString()} ({Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name)})" +
+                                Utils.Log($"{nameof(GetBonesSavGzAsync)} got a SaveBonesSavGz from {ToString()} ({Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name)})" +
                                     $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                                 return rawBuffer;
                             }
                         }
                         catch (Exception x)
                         {
-                            Utils.Error($"{nameof(GetBonesSavGz)} failed to get a Bones SavGz from {ToString()}" +
+                            Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
                                 $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})", x);
                             return null;
                         }
                     }
-                    Utils.Warn($"{nameof(GetBonesSavGz)} failed to get a Bones SavGz from {ToString()}" +
+                    Utils.Warn($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
                         $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
                 }
                 catch (WebException x)
@@ -2006,7 +2018,7 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"{nameof(GetBonesSavGz)} failed to get a Bones SavGz from {ToString()}", x);
+                    Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}", x);
                 }
                 return null;
             }
@@ -2014,13 +2026,13 @@ namespace UD_Bones_Folder.Mod
             #endregion
             #region Post Downlaod Bones File
 
-            public async Task<bool> PostDownloadBones(string BonesID, FileLocationData LocationData)
+            /*public async Task<bool> PostDownloadBones(string BonesID, FileLocationData LocationData)
             {
                 if (!IsRunning)
                     return false;
 
-                /*if (Enabled)        // remove this to start testing again.
-                    return false;*/
+                *//*if (Enabled)        // remove this to start testing again.
+                    return false;*//*
 
                 if (BonesID.IsNullOrEmpty()
                     || Config is null
@@ -2047,7 +2059,7 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = streamReader.ReadToEnd();
@@ -2118,10 +2130,10 @@ namespace UD_Bones_Folder.Mod
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"{nameof(GetBonesSavGz)} failed to get a bones file from {uRI}", x);
+                    Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a bones file from {uRI}", x);
                 }
                 return false;
-            }
+            }*/
 
             #endregion
             #region Put Bones Stats
@@ -2161,7 +2173,7 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
                     using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                     {
                         var result = await streamReader.ReadToEndAsync();
