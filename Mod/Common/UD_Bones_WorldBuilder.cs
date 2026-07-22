@@ -51,27 +51,10 @@ namespace XRL.World.WorldBuilders
 
             BonesManager.MutableLocations = AllMutableLocations();
         }
-        
-        public class SerializeEachLocationVerbose : SerializeEachLocation
-        {
-            public string Name;
-            public override void WriteEach(SerializationWriter Writer, Location2D Element)
-            {
-                //Utils.Log($"{nameof(SerializeEachLocationVerbose)}.{nameof(WriteEach)}({Name}: {Element})");
-                Writer.Write(Element);
-            }
 
-            public override Location2D ReadEach(SerializationReader Reader)
-            {
-                var value = Reader.ReadLocation2D();
-                Utils.Log($"{nameof(SerializeEachLocationVerbose)}.{nameof(ReadEach)}({Name}: {value})");
-                return value;
-            }
-        }
-
-        public SerializeableSet<Location2D> AllMutableLocations()
+        public MutableLocationsSet AllMutableLocations()
         {
-            var mutableLocations = new SerializeableSet<Location2D>(new SerializeEachLocationVerbose() { Name = nameof(AllMutableLocations) });
+            var mutableLocations = new MutableLocationsSet();
 
             foreach (var parasangs in (Builder?.worldInfo?.terrainLocations?.Values).IteratorSafe())
                 foreach (var parasang in parasangs.IteratorSafe())

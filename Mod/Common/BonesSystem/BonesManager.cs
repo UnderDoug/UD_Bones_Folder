@@ -125,7 +125,7 @@ namespace UD_Bones_Folder.Mod
         public EmbarkBuilder EmbarkBuilder;
 
         [NonSerialized]
-        public SerializeableSet<Location2D> MutableLocations;
+        public MutableLocationsSet MutableLocations;
 
         #endregion
         #region Instance Caches
@@ -266,7 +266,7 @@ namespace UD_Bones_Folder.Mod
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(FailedToLoadBones)})");
             FailedToLoadBones = Reader.ReadList<string>();
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(MutableLocations)})");
-            MutableLocations = Reader.ReadComposite<SerializeableSet<Location2D>>();
+            MutableLocations = Reader.ReadComposite<MutableLocationsSet>();
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)} - Finished!");
         }
 
@@ -421,11 +421,11 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
-                        Utils.Error($"{nameof(SaveBonesFileAsync)} failed to upload Bones with BonesID {SaveBonesJSON.ID}", x);
+                        Utils.Error($"{nameof(SaveBonesFileAsync)} failed to upload Bones with BonesID {{{SaveBonesJSON.ID}}}", x);
                     }
                 }
                 else
-                    Utils.Warn($"{nameof(BonesSavGz)} is null or empty for BonesID {SaveBonesJSON.ID}. Upload aborted.");
+                    Utils.Warn($"{nameof(BonesSavGz)} is null or empty for BonesID {{{SaveBonesJSON.ID}}}. Upload aborted.");
             }
             return null;
         }
@@ -455,7 +455,7 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(SaveBonesFileAsync)} failed to save Bones with BonesID {SaveBonesJSON.ID}", x);
+                Utils.Error($"{nameof(SaveBonesFileAsync)} failed to save Bones with BonesID {{{SaveBonesJSON.ID}}}", x);
             }
 
             if (UploadFile)
@@ -1331,11 +1331,11 @@ namespace UD_Bones_Folder.Mod
             {
                 if (!MissingBlueprintReplacements.TryGetValue(key, out var replacementEntry))
                 {
-                    Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
-                    Utils.Log(JsonConvert.SerializeObject(BlueprintSpec, Formatting.Indented));
+                    //Utils.Log($"{nameof(RequireReplacementEntryForBlueprintSpec)} for {key}");
+                    //Utils.Log(JsonConvert.SerializeObject(BlueprintSpec, Formatting.Indented));
                     if (BlueprintSpec.GetOrderedSimilarityRecords() is not IEnumerable<BlueprintSpec.SimilarityRecord> orderedSimilarityRecords)
                     {
-                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(orderedSimilarityRecords)} is null");
+                        //Utils.Log($"{1.Indent()}[{CROSS}] {nameof(orderedSimilarityRecords)} is null");
                         return CacheDefaultReplacementEntryForKey(key);
                     }
 
@@ -1343,7 +1343,7 @@ namespace UD_Bones_Folder.Mod
                     
                     if (similarityRecords.IsNullOrEmpty())
                     {
-                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(similarityRecords)} is empty");
+                        //Utils.Log($"{1.Indent()}[{CROSS}] {nameof(similarityRecords)} is empty");
                         return CacheDefaultReplacementEntryForKey(key);
                     }
 
@@ -1365,7 +1365,7 @@ namespace UD_Bones_Folder.Mod
                     }
 
                     var specsByWeight = new Dictionary<string, int>();
-                    Utils.Log($"{1.Indent()}{key} shortlist ({similarityRecords.Count}):");
+                    //Utils.Log($"{1.Indent()}{key} shortlist ({similarityRecords.Count}):");
                     foreach (var similarityRecord in similarityRecords)
                     {
                         if (similarityRecord.ToString() is not string specWeightKey)
@@ -1376,12 +1376,12 @@ namespace UD_Bones_Folder.Mod
 
                         specsByWeight[specWeightKey] += similarityRecord.GetWeight();
 
-                        Utils.Log($"{2.Indent()}{key} is {similarityRecord.DebugString()}");
+                        //Utils.Log($"{2.Indent()}{key} is {similarityRecord.DebugString()}");
                     }
 
                     if (specsByWeight.IsNullOrEmpty())
                     {
-                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(specsByWeight)} is null or empty");
+                        //Utils.Log($"{1.Indent()}[{CROSS}] {nameof(specsByWeight)} is null or empty");
                         return CacheDefaultReplacementEntryForKey(key);
                     }
 
@@ -1404,7 +1404,7 @@ namespace UD_Bones_Folder.Mod
 
                     if (alternativeBlueprint == null)
                     {
-                        Utils.Log($"{1.Indent()}[{CROSS}] {nameof(alternativeBlueprint)} is null");
+                        //Utils.Log($"{1.Indent()}[{CROSS}] {nameof(alternativeBlueprint)} is null");
                         return CacheDefaultReplacementEntryForKey(key);
                     }
 
@@ -1428,7 +1428,7 @@ namespace UD_Bones_Folder.Mod
                             tile = alternativeForTile.GetRenderable()?.Tile;
                     }
                     replacementEntry = ReplacementEntry.CreateFor(key, alternativeBlueprint.Name, tile);
-                    Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
+                    //Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
                     MissingBlueprintReplacements[key] = replacementEntry;
                 }
                 //Utils.Log(JsonConvert.SerializeObject(replacementEntry, Formatting.Indented));
@@ -2032,7 +2032,7 @@ namespace UD_Bones_Folder.Mod
                             }
                             catch (Exception x)
                             {
-                                Utils.Error($"Failed to load {nameof(BonesData)} for {nameof(SaveBonesInfo)}.{nameof(pickedBones.ID)} {pickedBones.ID}", x);
+                                Utils.Error($"Failed to load {nameof(BonesData)} for {nameof(SaveBonesInfo)}.{nameof(pickedBones.ID)} {{{pickedBones.ID}}}", x);
                             }
                         }
                     }

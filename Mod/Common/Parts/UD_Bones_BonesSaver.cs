@@ -79,7 +79,7 @@ namespace XRL.World.Parts
 
         public static GameObject AscendLunarRegent(
             GameObject Player,
-            Cell TargetCell
+            Cell TargetCell = null
             )
         {
             if (Player == null)
@@ -132,11 +132,33 @@ namespace XRL.World.Parts
 
                 if (TargetCell == null)
                 {
-                    lunarRegent.Obliterate();
+                    lunarRegent.Release();
                     return null;
                 }
 
-                TargetCell.AddObject(lunarRegent);
+                TargetCell.AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
+
+                if (lunarRegent.CurrentCell == null)
+                {
+                    Utils.Warn($"Failed to place {nameof(lunarRegent)} in {nameof(TargetCell)}");
+                    using var nearbyCells = ScopeDisposedList<Cell>.GetFromPoolFilledWith(TargetCell.GetLocalAdjacentCellsAtRadius(Radius: 3, includeSelf: false));
+                    var nearbyCount = nearbyCells.Count;
+                    while (lunarRegent.CurrentCell == null
+                        && !nearbyCells.IsNullOrEmpty())
+                    {
+                        nearbyCells.ShuffleInPlace();
+                        nearbyCells.TakeAt(0).AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
+                    }
+
+                    if (lunarRegent.CurrentCell == null)
+                        Utils.Warn($"Failed to place {nameof(lunarRegent)} in any of {nearbyCount} {nameof(nearbyCells)}");
+                }
+
+                if (lunarRegent.CurrentCell == null)
+                {
+                    lunarRegent.Release();
+                    return null;
+                }
 
                 lunarRegent.MakeActive();
 
@@ -179,7 +201,7 @@ namespace XRL.World.Parts
                     && !currentZone.IsWorldMap()
                     && !currentZone.GetZoneWorld().EqualsNoCase("Interior"))
                 {
-                    if (AscendLunarRegent(ParentObject, ParentObject.CurrentCell) is not GameObject lunarRegent)
+                    if (AscendLunarRegent(ParentObject) is not GameObject lunarRegent)
                     {
                         Utils.Warn($"Failed to ascend player to the Lunar Throne, unable to save bones.");
                         return false;
@@ -433,12 +455,13 @@ namespace XRL.World.Parts
 
                 //lunarRegentPart.Onset();
 
-                if (GameObject.Create("Lunar Face") is GameObject lunarRegentMask)
+                if (UD_Bones_LunarFace.CreateNew(out UD_Bones_LunarFace lunarFace) is GameObject lunarRegentMask)
                 {
+                    lunarRegentMask.IsGiganticEquipment = lunarRegent.IsGiganticCreature;
                     if (!lunarRegent.ReceiveObject(lunarRegentMask))
                         lunarRegentMask?.Obliterate();
                     else
-                    if (lunarRegentMask.TryGetPart(out UD_Bones_LunarFace lunarFace))
+                    if (lunarFace != null)
                         lunarFace.TryBeWorn();
                     else
                         Utils.Warn($"Strange unequippable {lunarRegentMask?.DebugName ?? "NO_MASK_OBJECT"} without {nameof(UD_Bones_LunarFace)} part...");
@@ -600,6 +623,11 @@ namespace XRL.World.Parts
                 if (Utils.TryGetEmbarkBuilderModule(out QudCustomizeCharacterModule customizeCharacterModule)
                     && customizeCharacterModule?.data?.pet is string petBlueprint)
                     PreparePetForBonesMode(petBlueprint, The.Player);
+
+                if (!willDie
+                    && The.Player.TryGetPart(out UD_Bones_BonesSaver bonesSaver))
+                    bonesSaver.AddInstantDieAbility(Silent: true);
+
             }
 
             if (The.Player.Level < MinimumLevelForBones)

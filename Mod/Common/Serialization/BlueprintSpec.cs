@@ -1444,8 +1444,8 @@ namespace UD_Bones_Folder.Mod
 
         public IEnumerable<SimilarityRecord> GetOrderedSimilarityRecords()
         {
-            Utils.Log($"{nameof(GetOrderedSimilarityRecords)} for {Blueprint ?? "NULL"} ({nameof(Utils.CachedBlueprintSpecs)}: {(Utils.CachedBlueprintSpecs?.Count)?.ToString() ?? "null"})");
-            List<SimilarityRecord> list = null;
+            //Utils.Log($"{nameof(GetOrderedSimilarityRecords)} for {Blueprint ?? "NULL"} ({nameof(Utils.CachedBlueprintSpecs)}: {(Utils.CachedBlueprintSpecs?.Count)?.ToString() ?? "null"})");
+            //List<SimilarityRecord> list = null;
 
             foreach (var validSpec in (Utils.CachedBlueprintSpecs?.Values).IteratorSafe())
             {
@@ -1454,8 +1454,9 @@ namespace UD_Bones_Folder.Mod
                 {
                     if (!similarityRecord.IsEmpty())
                     {
-                        list ??= new();
-                        list.Add(similarityRecord);
+                        yield return similarityRecord;
+                        /*list ??= new();
+                        list.Add(similarityRecord);*/
                         //Utils.Log($"{3.Indent()}{similarityRecord.DebugString()}");
                     }
                     /*else
@@ -1466,11 +1467,11 @@ namespace UD_Bones_Folder.Mod
                 //Utils.Log($"{1.Indent()}{Blueprint} is {similarityRecord.DebugString()}");
             }
 
-            if (list.IsNullOrEmpty())
+            /*if (list.IsNullOrEmpty())
                 return list.IteratorSafe();
 
             list.StableSortInPlace(SimilarityComparer);
-            return list;
+            return list;*/
         }
 
         public void Dispose()

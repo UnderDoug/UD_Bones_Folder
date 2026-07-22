@@ -404,7 +404,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static void OptionallyPerformWithoutMetrics(Action Action)
-            => OptionallyPerformWithoutMetrics(Action, WithoutMetricsWhen: true) // Change true to an eventual new option.
+            => OptionallyPerformWithoutMetrics(Action, WithoutMetricsWhen: !Options.DebugEnableSilencedLogging) // Change true to an eventual new option.
             ;
 
         public static void PerformWithoutLogging(Action Action)
@@ -430,7 +430,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static void OptionallyPerformWithoutLogging(Action Action)
-            => OptionallyPerformWithoutLogging(Action, WithoutLoggingWhen: true) // Change true to an eventual new option.
+            => OptionallyPerformWithoutLogging(Action, WithoutLoggingWhen: !Options.DebugEnableSilencedLogging) // Change true to an eventual new option.
             ;
 
         public static void PerformSilently(Action Action)
@@ -447,7 +447,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static void OptionallyPerformSilently(Action Action)
-            => OptionallyPerformSilently(Action, SilentlyWhen: true) // Change true to an eventual new option.
+            => OptionallyPerformSilently(Action, SilentlyWhen: !Options.DebugEnableSilencedLogging)
             ;
 
         public static void StartMetricsOff(
@@ -458,7 +458,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void FinalizeReadMetricsOff(this SerializationReader Reader)
-            => OptionallyPerformSilently(() => Reader.FinalizeRead())
+            => OptionallyPerformSilently(() => Reader.FinalizeRead(), !Options.DebugEnableFinalizeDeserializationLogging)
             ;
 
         public static void WriteCompositeHashSet<T>(this SerializationWriter Writer, HashSet<T> CompositeHashSet)

@@ -69,9 +69,9 @@ namespace XRL.World.Parts
                 if (LunarRegent != null)
                 {
                     string lunarRegentName = $"=subject.RegalTitle= {LunarRegent.BaseDisplayName}"
-                            .StartReplace()
-                            .AddObject(LunarRegent)
-                            .ToString();
+                        .StartReplace()
+                        .AddObject(LunarRegent)
+                        .ToString();
 
                     lunarReliquary.DisplayName = lunarReliquary.Render.DisplayName.Replace("@@LunarRegent@@", Grammar.MakePossessive(lunarRegentName));
                 }

@@ -133,7 +133,16 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             out CrossGameObject CrossGameObject
             )
         {
-            CrossGameObject = CrossGameObject.CreateFrom(GameObject);
+            try
+            {
+                CrossGameObject = CrossGameObject.CreateFrom(GameObject);
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"{nameof(PseudoGameObject)} Failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                CrossGameObject = null;
+                return null;
+            }
 
             var clone = CrossGameObject.Clone;
 

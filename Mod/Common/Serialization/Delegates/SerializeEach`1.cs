@@ -14,6 +14,12 @@ namespace UD_Bones_Folder.Mod.Serialization.Delegates
         public SerializeEach()
         { }
 
+        public virtual void Write(SerializationWriter Writer)
+        { }
+
+        public virtual void Read(SerializationReader Reader)
+        { }
+
         public virtual void WriteEach(SerializationWriter Writer, T Element)
         {
             Writer.WriteObject(Element);

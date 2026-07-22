@@ -18,6 +18,34 @@
     </helptext>
   </option-->
   <option
+        ID="UD_Bones_Folder_DebugEnableFinalizeDeserializationLogging"
+        DisplayText="{{Y|Bones}}: Enable logging of deserialization errors during {{C|FinalizeRead}} when loading bones."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, metrics won't be turned off during the {{C|FinalizeRead}} portion of bones deserialization.
+      
+      {{r|Expect the log to quickly fill up.}} Loading bones files with disparate mod configurations results in a lot of non-fatal deserialization errors. They're accounted for in other ways and are an unfortunate trade off to maximise the amount of bones files made available to a given run.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_DebugEnableSilencedLogging"
+        DisplayText="{{Y|Bones}}: Enable logging of otherwise silenced processes."
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, metrics won't be turned off during during times they otherwise would.
+      
+      {{r|Expect the log to quickly fill up.}} The main location this will get verbose is when attempting to discern whether a blueprint or tile are missing for a loaded bones file.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_DebugEnableBadWordFilterLogging"
         DisplayText="{{Y|Bones}}: Enable logging the bad word filter results to the log."
         Category="Debug"

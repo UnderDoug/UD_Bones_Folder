@@ -40,6 +40,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public const string BONES_MODE = "UD_Bones_Bones";
 
+        public const string BONES_MODE_BEFORE_SHED_POUNDS_EVENT = "UD_Bones_BonesModeModule_BeforeShedPounds";
+
         public static int MinimumLevelForBones => UD_Bones_BonesSaver.MinimumLevelForBones;
         public static int MaximumLevelForBonesMode => 80;
         public static int LevelRollDisadvantage => Options.BonesMode_ProgressionSlant;
@@ -429,8 +431,6 @@ namespace UD_Bones_Folder.Mod.UI
 
                 PerformVeryIntelligentPointAssignment(Player);
 
-                LearnDataDisksIfPossible(Player);
-
                 // AdvanceRapidly(Player); // this might be happening automatically
 
                 GrowLimbs(Player);
@@ -447,7 +447,12 @@ namespace UD_Bones_Folder.Mod.UI
 
                 InstallSomeCells(Player);
 
+                if (Player.HasRegisteredEvent(BONES_MODE_BEFORE_SHED_POUNDS_EVENT))
+                    Player.FireEvent(new Event(BONES_MODE_BEFORE_SHED_POUNDS_EVENT));
+
                 Player.Brain?.PerformReequip(Silent: true, Initial: true);
+
+                LearnDataDisksIfPossible(Player);
 
                 ShedAFewPounds(Player);
 

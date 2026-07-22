@@ -1215,7 +1215,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.PerformSilently(() => inventoryObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.OptionallyPerformSilently(() => inventoryObject.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1227,7 +1227,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.PerformSilently(() => installedCybernetic.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.OptionallyPerformSilently(() => installedCybernetic.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1239,7 +1239,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.PerformSilently(() => contentsObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.OptionallyPerformSilently(() => contentsObject.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1256,7 +1256,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
-                            SerializationExtensions.PerformSilently(() => part.ApplyRegistrar(Object, Active));
+                            SerializationExtensions.OptionallyPerformSilently(() => part.ApplyRegistrar(Object, Active));
                         }
                         catch (Exception x)
                         {
@@ -1274,7 +1274,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
-                            SerializationExtensions.PerformSilently(() => effect.ApplyRegistrar(Object, Active));
+                            SerializationExtensions.OptionallyPerformSilently(() => effect.ApplyRegistrar(Object, Active));
                         }
                         catch (Exception x)
                         {
@@ -1431,12 +1431,12 @@ namespace UD_Bones_Folder.Mod
             {
                 if (!BonesObject.TryGetPart(out UD_Bones_FeverWarped feverWarped))
                 {
-                    Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, added");
+                    //Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, added");
                     BonesObject.AddPart(UD_Bones_FeverWarped.NewWithBonesID(BonesID, warpFlags));
                 }
                 else
                 {
-                    Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
+                    //Utils.Log($"{nameof(FeverWarp)}({BonesObject.DebugName}): {true}, adjusted");
                     feverWarped.Flags = warpFlags;
                     if (feverWarped.BonesID == The.Game.GameID)
                         feverWarped.OverrideBonesID(BonesID);
@@ -2285,10 +2285,19 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static int Fibonacci(this int N)
-            => (N > 1)
-            ? Fibonacci(N - 1) + Fibonacci(N - 2)
-            : N
-            ;
+        {
+            if (N == 0)
+                return 0;
+
+            int first = 0,
+                second = 1
+                ;
+
+            for (int i = 1; i < N; i++)
+                (first, second) = (second, first + second);
+
+            return second;
+        }
 
         public static string GetBonesWorldZoneID(this Zone Z)
             => ZoneID.Assemble(Const.BONES_WORLD, Z.wX, Z.wY, Z.X, Z.Y, Z.Z)

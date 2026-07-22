@@ -34,6 +34,8 @@ namespace UD_Bones_Folder.Mod
     {
         #region Debug Settings
 
+        [OptionFlag] public static bool DebugEnableFinalizeDeserializationLogging;
+        [OptionFlag] public static bool DebugEnableSilencedLogging;
         [OptionFlag] public static bool DebugEnableBadWordFilterLogging;
         [OptionFlag] public static bool DebugEnableBadWordFilterForLocalBones;
 

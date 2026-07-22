@@ -757,7 +757,7 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             bool textureNull = false;
-            SerializationExtensions.PerformSilently(delegate()
+            SerializationExtensions.OptionallyPerformSilently(delegate()
             {
                 textureNull = SpriteManager.GetTextureInfo(Tile, false) == null;
             });
@@ -765,7 +765,7 @@ namespace UD_Bones_Folder.Mod
                 return false;
 
             bool textureInvalid = false;
-            SerializationExtensions.PerformSilently(delegate()
+            SerializationExtensions.OptionallyPerformSilently(delegate()
             {
                 textureInvalid = SpriteManager.GetTextureInfo(Tile) == InvalidTextureInfo;
             });
@@ -824,7 +824,7 @@ namespace UD_Bones_Folder.Mod
                 }
 
                 bool textureNull = false;
-                SerializationExtensions.PerformSilently(delegate ()
+                SerializationExtensions.OptionallyPerformSilently(delegate ()
                 {
                     textureNull = SpriteManager.GetTextureInfo(Tile, false) == null;
                 });
@@ -832,7 +832,7 @@ namespace UD_Bones_Folder.Mod
                     return false;
 
                 bool textureInvalid = false;
-                SerializationExtensions.PerformSilently(delegate ()
+                SerializationExtensions.OptionallyPerformSilently(delegate ()
                 {
                     textureInvalid = SpriteManager.GetTextureInfo(Tile) == InvalidTextureInfo;
                 });

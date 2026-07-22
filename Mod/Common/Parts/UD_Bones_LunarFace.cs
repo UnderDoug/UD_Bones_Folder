@@ -27,6 +27,38 @@ namespace XRL.World.Parts
             : base()
         { }
 
+        public static GameObject CreateNew(out UD_Bones_LunarFace LunarFace, string BonesID = null)
+        {
+            var maskObject = GameObject.Create("Lunar Face");
+            LunarFace = maskObject.GetPart<UD_Bones_LunarFace>();
+            if (!BonesID.IsNullOrEmpty())
+                LunarFace?.OverrideBonesID(BonesID);
+            return maskObject;
+        }
+
+        public static GameObject CreateNew(string BonesID = null)
+            => CreateNew(out _, BonesID)
+            ;
+
+        public static bool TryMatchSize(GameObject Holder, GameObject LunarFace)
+        {
+            if (Holder == null
+                || LunarFace.GetPart<UD_Bones_LunarFace>() is not UD_Bones_LunarFace lunarFacePart)
+                return false;
+
+            if (Holder.IsGiganticCreature != LunarFace.IsGiganticEquipment)
+            {
+                var newMask = CreateNew(out var newLunarFacePart, LunarFace.GetBonesID());
+                if (Holder.IsGiganticCreature)
+                    newMask.IsGiganticEquipment = true;
+
+                newMask.RemovePart(newLunarFacePart);
+                newMask.AddPart(lunarFacePart);
+                ReplaceInContextEvent.Send(LunarFace, newMask);
+            }
+            return true;
+        }
+
         public bool TryBeWorn()
         {
             if (ParentObject == null)
@@ -41,9 +73,11 @@ namespace XRL.World.Parts
                 && !holder.IsPlayer()
                 && holder.TryGetPart(out UD_Bones_LunarRegent lunarRegent))
             {
+                TryMatchSize(holder, ParentObject);
                 //Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
                 if (holder.FindEquippedItem(go => go.Blueprint == ParentObject.Blueprint) == null)
                 {
+
                     //Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
                     string slot = ParentObject?.GetPart<Armor>()?.WornOn ?? "Face";
                     if (holder.Body.LoopPart(slot) is IEnumerable<BodyPart> bodyParts)
@@ -90,6 +124,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
             || ID == BeforeBeginTakeActionEvent.ID
+            || ID == TookEvent.ID
             || ID == EquippedEvent.ID
             || ID == GetIntrinsicValueEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
@@ -110,6 +145,15 @@ namespace XRL.World.Parts
         public override bool HandleEvent(BeforeBeginTakeActionEvent E)
         {
             TryBeWorn();
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(TookEvent E)
+        {
+            if (E.Item == ParentObject
+                && E.Actor != null)
+                TryMatchSize(E.Actor, ParentObject);
+
             return base.HandleEvent(E);
         }
 
