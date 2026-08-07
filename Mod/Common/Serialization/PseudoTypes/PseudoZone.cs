@@ -922,10 +922,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 Zone.AddPart(zonePart, true);
             }
 
-            // Event.PinCurrentPool();
+            Event.PinCurrentPool();
             foreach (var cell in Zone.LoopCells())
             {
-                // Event.ResetPool();
+                Event.ResetToPin();
                 try
                 {
                     if (!TryGetCell(cell, out PseudoCell pseudoCell))
@@ -949,7 +949,7 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 }
                 finally
                 {
-                    // Event.ResetToPin();
+                    Event.ResetToPin();
                 }
             }
             return LunarRegent != null;

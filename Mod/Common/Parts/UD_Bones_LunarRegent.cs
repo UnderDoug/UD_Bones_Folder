@@ -548,7 +548,6 @@ namespace XRL.World.Parts
             Event.PinCurrentPool();
             try
             {
-                Event.ResetPool();
                 WantsThreePointLanding = false;
                 int forceLevel = 4;
                 if (currentCell.GetLocalAdjacentCells() is List<Cell> adjacentCells)
