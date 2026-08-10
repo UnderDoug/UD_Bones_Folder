@@ -77,6 +77,10 @@ namespace XRL.World.Parts
                 MetricsManager.LogCallingModError($"Failed to add {nameof(UD_Bones_BonesSaver)} to player.");
         }
 
+        public void mutate(GameObject player)
+            => PreparePlayer(player)
+            ;
+
         public static GameObject AscendLunarRegent(
             GameObject Player,
             Cell TargetCell = null
@@ -174,10 +178,6 @@ namespace XRL.World.Parts
             }
         }
 
-        public void mutate(GameObject player)
-            => PreparePlayer(player)
-            ;
-
         public static void BonesExceptionCleanUp(GameObject Player)
             => TidyLunarObjectsEvent.SendGameID(Player, Context: "Exception")
             ;
@@ -227,11 +227,11 @@ namespace XRL.World.Parts
             return false;
         }
 
-        private bool AddInstantDieAbility(bool Silent = false)
+        private static bool AddInstantDieAbility(GameObject Who, ref Guid MakeBonesActivatedAbilityID, bool Silent = false)
         {
             if (MakeBonesActivatedAbilityID.IsEmptyOrDefault())
             {
-                MakeBonesActivatedAbilityID = ParentObject.AddActivatedAbility(
+                MakeBonesActivatedAbilityID = Who.AddActivatedAbility(
                     Name: "Make Bones",
                     Command: COMMAND_MAKE_BONES,
                     Class: "System",
@@ -246,6 +246,10 @@ namespace XRL.World.Parts
             }
             return !MakeBonesActivatedAbilityID.IsEmptyOrDefault();
         }
+
+        private bool AddInstantDieAbility(bool Silent = false)
+            => AddInstantDieAbility(ParentObject, ref MakeBonesActivatedAbilityID, Silent)
+            ;
 
         private bool RemoveInstantDieAbility()
             => MakeBonesActivatedAbilityID.IsEmptyOrDefault()
@@ -474,12 +478,19 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(AfterPlayerBodyChangeEvent E)
         {
+            if (!base.HandleEvent(E))
+                return false;
+
             if (!MakeBonesActivatedAbilityID.IsEmptyOrDefault())
             {
                 E.OldBody.RemoveActivatedAbility(ref MakeBonesActivatedAbilityID);
-                AddInstantDieAbility(Silent: true);
+                // AddInstantDieAbility(Silent: true);
+                AddInstantDieAbility(E.NewBody, ref MakeBonesActivatedAbilityID, Silent: true);
+
+                if (E.NewBody != ParentObject)
+                    ParentObject = E.NewBody;
             }
-            return base.HandleEvent(E);
+            return true;
         }
 
         public override bool HandleEvent(EnteringZoneEvent E)
