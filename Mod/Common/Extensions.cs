@@ -52,7 +52,10 @@ namespace UD_Bones_Folder.Mod
     {
         public static string MakeDeathReasonThirdPersion(this string DeathReason, string Default = "You died under mysterious circumstances!")
         {
-            string deathReason = DeathReason ?? Default;
+            string deathReason = DeathReason;
+
+            if (deathReason.IsNullOrEmpty())
+                deathReason = Default;
 
             if (deathReason.EndsWith(".")
                 || deathReason.EndsWith("!"))
