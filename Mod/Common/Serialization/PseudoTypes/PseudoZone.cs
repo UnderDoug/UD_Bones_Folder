@@ -893,10 +893,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                     Zone.MissileMap[i][j] = MissileMapType.Empty;
             }
 
-            Zone.LightMap = new LightLevel[Width * Height];
-            Zone.ExploredMap = new bool[Width * Height];
-            Zone.FakeUnexploredMap = null;
-            Zone.VisibilityMap = new bool[Width * Height];
+            int cellCount = Width * Height;
+            Zone.LightMap = new LightLevel[cellCount];
+            Zone.ExploredMap = new bool[cellCount];
+            Zone.VisibilityMap = new bool[cellCount];
             Zone.ReachableMap = new bool[Width, Height];
 
             Zone.NavigationMap = new NavigationWeight[Width, Height];

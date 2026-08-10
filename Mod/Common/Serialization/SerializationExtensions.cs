@@ -335,7 +335,6 @@ namespace UD_Bones_Folder.Mod
 
             Zone.LightMap = new LightLevel[0];
             Zone.ExploredMap = new bool[0];
-            Zone.FakeUnexploredMap = new bool[0];
             Zone.VisibilityMap = new bool[0];
             Zone.ReachableMap = new bool[0, 0];
             Zone.NavigationMap = new NavigationWeight[0, 0];
