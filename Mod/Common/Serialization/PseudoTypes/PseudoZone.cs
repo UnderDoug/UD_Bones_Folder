@@ -617,13 +617,21 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 || cell.Objects[I] is not PseudoGameObject pseudoGameObject)
                 return null;
 
-            if (!Extract)
-                return pseudoGameObject.GameObject;
-            else
-            if (BonesInfo != null)
-                return pseudoGameObject.PerformExtraction(BonesInfo, YieldObjects(), DestinationObjects.IteratorSafe(), out _);
-            else
+            try
+            {
+                if (!Extract)
+                    return pseudoGameObject.GameObject;
+                else
+                if (BonesInfo != null)
+                    return pseudoGameObject.PerformExtraction(BonesInfo, YieldObjects(), DestinationObjects.IteratorSafe(), out _);
+                else
+                    return null;
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(PseudoCell)}.{nameof(GetAtAddress)} failed to {(Extract ? nameof(Extract) : "get")} {nameof(PseudoGameObject.GameObject)} from {Address}", x);
                 return null;
+            }
         }
 
         public CoalescibleSet<GameObject> GetAtAddresses(
