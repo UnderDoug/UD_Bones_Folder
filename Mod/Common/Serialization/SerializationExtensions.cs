@@ -127,7 +127,7 @@ namespace UD_Bones_Folder.Mod
             )
         {
             GameObject go = null;
-            OptionallyPerformSilently(() => go = Reader.ReadGameObject(Forensics));
+            PerformOptionallySilently(() => go = Reader.ReadGameObject(Forensics));
             return go;
         }
 
@@ -362,7 +362,7 @@ namespace UD_Bones_Folder.Mod
 
             Type type = null;
 
-            OptionallyPerformSilently(() => type = Reader.ReadTokenizedType());
+            PerformOptionallySilently(() => type = Reader.ReadTokenizedType());
 
             Globals.ForceMetricsOff = forceMetricsOff;
 
@@ -372,7 +372,7 @@ namespace UD_Bones_Folder.Mod
                 return null;
             }
 
-            OptionallyPerformSilently(() => Reader.ReadTypeFields(zone, type));
+            PerformOptionallySilently(() => Reader.ReadTypeFields(zone, type));
             zone.Built = false;
             zone.ReadBonesZone(Reader);
             zone.Built = true;
@@ -394,7 +394,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static void OptionallyPerformWithoutMetrics(Action Action, bool WithoutMetricsWhen)
+        public static void PerformOptionallyWithoutMetrics(Action Action, bool WithoutMetricsWhen)
         {
             if (WithoutMetricsWhen)
                 PerformWithoutMetrics(Action);
@@ -402,8 +402,8 @@ namespace UD_Bones_Folder.Mod
                 Action?.Invoke();
         }
 
-        public static void OptionallyPerformWithoutMetrics(Action Action)
-            => OptionallyPerformWithoutMetrics(Action, WithoutMetricsWhen: !Options.DebugEnableSilencedLogging) // Change true to an eventual new option.
+        public static void PerformOptionallyWithoutMetrics(Action Action)
+            => PerformOptionallyWithoutMetrics(Action, WithoutMetricsWhen: !Options.DebugEnableSilencedLogging)
             ;
 
         public static void PerformWithoutLogging(Action Action)
@@ -420,7 +420,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static void OptionallyPerformWithoutLogging(Action Action, bool WithoutLoggingWhen)
+        public static void PerformOptionallyWithoutLogging(Action Action, bool WithoutLoggingWhen)
         {
             if (WithoutLoggingWhen)
                 PerformWithoutLogging(Action);
@@ -428,8 +428,8 @@ namespace UD_Bones_Folder.Mod
                 Action?.Invoke();
         }
 
-        public static void OptionallyPerformWithoutLogging(Action Action)
-            => OptionallyPerformWithoutLogging(Action, WithoutLoggingWhen: !Options.DebugEnableSilencedLogging) // Change true to an eventual new option.
+        public static void PerformOptionallyWithoutLogging(Action Action)
+            => PerformOptionallyWithoutLogging(Action, WithoutLoggingWhen: !Options.DebugEnableSilencedLogging)
             ;
 
         public static void PerformSilently(Action Action)
@@ -437,7 +437,7 @@ namespace UD_Bones_Folder.Mod
                 => PerformWithoutLogging(Action))
             ;
 
-        public static void OptionallyPerformSilently(Action Action, bool SilentlyWhen)
+        public static void PerformOptionallySilently(Action Action, bool SilentlyWhen)
         {
             if (SilentlyWhen)
                 PerformSilently(Action);
@@ -445,19 +445,19 @@ namespace UD_Bones_Folder.Mod
                 Action?.Invoke();
         }
 
-        public static void OptionallyPerformSilently(Action Action)
-            => OptionallyPerformSilently(Action, SilentlyWhen: !Options.DebugEnableSilencedLogging)
+        public static void PerformOptionallySilently(Action Action)
+            => PerformOptionallySilently(Action, SilentlyWhen: !Options.DebugEnableSilencedLogging)
             ;
 
         public static void StartMetricsOff(
             this SerializationReader Reader,
             bool SerializePlayer = false
             )
-            => OptionallyPerformSilently(() => Reader.Start(SerializePlayer))
+            => PerformOptionallySilently(() => Reader.Start(SerializePlayer))
             ;
 
         public static void FinalizeReadMetricsOff(this SerializationReader Reader)
-            => OptionallyPerformSilently(() => Reader.FinalizeRead(), !Options.DebugEnableFinalizeDeserializationLogging)
+            => PerformOptionallySilently(() => Reader.FinalizeRead(), !Options.DebugEnableFinalizeDeserializationLogging)
             ;
 
         public static void WriteCompositeHashSet<T>(this SerializationWriter Writer, HashSet<T> CompositeHashSet)

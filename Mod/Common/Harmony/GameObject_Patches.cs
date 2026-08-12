@@ -1,4 +1,4 @@
-﻿using System;
+﻿/*using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -11,7 +11,7 @@ using XRL.World;
 
 namespace UD_Bones_Folder.Mod.Harmony
 {
-    [HarmonyPatch(typeof(global::Extensions))]
+    [HarmonyPatch(typeof(GameObject))]
     public static class GameObject_Patches
     {
         [HarmonyPatch(
@@ -79,11 +79,12 @@ namespace UD_Bones_Folder.Mod.Harmony
                 return;
 
             foreach (var item in Other)
-                Dictionary[item.Key] = item.Value;
+                if (!Dictionary.ContainsKey(item.Key))
+                    Dictionary.Add(item.Key, item.Value);
         }
 
         public static void AddRangeSafe(this IDictionary<string, Guid> Dictionary, IReadOnlyDictionary<string, Guid> Other)
             => AddRangeSafe<string, Guid>(Dictionary, Other)
             ;
     }
-}
+}*/

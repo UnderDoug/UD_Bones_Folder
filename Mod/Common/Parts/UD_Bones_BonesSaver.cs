@@ -91,91 +91,79 @@ namespace XRL.World.Parts
 
             TargetCell ??= Player.CurrentCell;
 
-            var beforeEvent = BeforeCreateLunarRegentEvent.FromPool();
-            var getEvent = GetLunarRegentEvent.FromPool();
-            var afterEvent = AfterCreatedLunarRegentEvent.FromPool();
+            if (!BeforeCreateLunarRegentEvent.Check(Player, out string blockedMessage, Context: nameof(AscendLunarRegent)))
+            {
+                string forReasons = null;
+                if (!blockedMessage.IsNullOrEmpty())
+                    forReasons = $" for the following reasons: {blockedMessage}";
+                Utils.Info($"Creation of Lunar Regent blocked{forReasons}.");
+                return null;
+            }
+
+            if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
+                return null;
+
+            GameObject lunarRegent = null;
             try
             {
-                if (!BeforeCreateLunarRegentEvent.Check(Player, out string blockedMessage, Context: nameof(AscendLunarRegent)))
-                {
-                    string forReasons = null;
-                    if (!blockedMessage.IsNullOrEmpty())
-                        forReasons = $" for the following reasons: {blockedMessage}";
-                    Utils.Info($"Creation of Lunar Regent blocked{forReasons}.");
-                    return null;
-                }
+                lunarRegent = Player.DeepCopy(CopyEffects: true, CopyID: false);
+                lunarRegent.RemoveIntProperty("Renamed");
+                lunarRegent.RemoveStringProperty("OriginalPlayerBody");
+                lunarRegent.SetStringProperty("CloneOfGenes", Player.GeneID);
 
-                if (!Player.CanBeReplicated(Player, BonesManager.BonesFileName, Temporary: false))
-                    return null;
+                WasReplicatedEvent.Send(Player, Player, lunarRegent, nameof(AscendLunarRegent));
+                ReplicaCreatedEvent.Send(lunarRegent, Player, Player, nameof(AscendLunarRegent));
 
-                GameObject lunarRegent = null;
-                try
-                {
-                    lunarRegent = Player.DeepCopy(CopyEffects: true, CopyID: false);
-                    lunarRegent.RemoveIntProperty("Renamed");
-                    lunarRegent.RemoveStringProperty("OriginalPlayerBody");
-                    lunarRegent.SetStringProperty("CloneOfGenes", Player.GeneID);
-
-                    WasReplicatedEvent.Send(Player, Player, lunarRegent, nameof(AscendLunarRegent));
-                    ReplicaCreatedEvent.Send(lunarRegent, Player, Player, nameof(AscendLunarRegent));
-
-                    lunarRegent = GetLunarRegentEvent.GetFor(
-                        Player: Player,
-                        TargetCell: TargetCell,
-                        LunarRegent: lunarRegent,
-                        Context: nameof(AscendLunarRegent));
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
-                    return null;
-                }
-
-                if (lunarRegent == null)
-                    return null;
-
-                if (TargetCell == null)
-                {
-                    lunarRegent.Release();
-                    return null;
-                }
-
-                TargetCell.AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
-
-                if (lunarRegent.CurrentCell == null)
-                {
-                    Utils.Warn($"Failed to place {nameof(lunarRegent)} in {nameof(TargetCell)}");
-                    using var nearbyCells = ScopeDisposedList<Cell>.GetFromPoolFilledWith(TargetCell.GetLocalAdjacentCellsAtRadius(Radius: 3, includeSelf: false));
-                    var nearbyCount = nearbyCells.Count;
-                    while (lunarRegent.CurrentCell == null
-                        && !nearbyCells.IsNullOrEmpty())
-                    {
-                        nearbyCells.ShuffleInPlace();
-                        nearbyCells.TakeAt(0).AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
-                    }
-
-                    if (lunarRegent.CurrentCell == null)
-                        Utils.Warn($"Failed to place {nameof(lunarRegent)} in any of {nearbyCount} {nameof(nearbyCells)}");
-                }
-
-                if (lunarRegent.CurrentCell == null)
-                {
-                    lunarRegent.Release();
-                    return null;
-                }
-
-                lunarRegent.MakeActive();
-
-                AfterCreatedLunarRegentEvent.Send(Player, lunarRegent, Context: nameof(AscendLunarRegent));
-
-                return lunarRegent;
+                lunarRegent = GetLunarRegentEvent.GetFor(
+                    Player: Player,
+                    TargetCell: TargetCell,
+                    LunarRegent: lunarRegent,
+                    Context: nameof(AscendLunarRegent));
             }
-            finally
+            catch (Exception x)
             {
-                BeforeCreateLunarRegentEvent.ResetTo(ref beforeEvent);
-                GetLunarRegentEvent.ResetTo(ref getEvent);
-                AfterCreatedLunarRegentEvent.ResetTo(ref afterEvent);
+                Utils.Error($"{nameof(GameObject.DeepCopy)} of {nameof(Player)} for Lunar Regent Ascention", x);
+                return null;
             }
+
+            if (lunarRegent == null)
+                return null;
+
+            if (TargetCell == null)
+            {
+                lunarRegent.Release();
+                return null;
+            }
+
+            TargetCell.AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
+
+            if (lunarRegent.CurrentCell == null)
+            {
+                Utils.Warn($"Failed to place {nameof(lunarRegent)} in {nameof(TargetCell)}");
+                using var nearbyCells = ScopeDisposedList<Cell>.GetFromPoolFilledWith(TargetCell.GetLocalAdjacentCellsAtRadius(Radius: 3, includeSelf: false));
+                var nearbyCount = nearbyCells.Count;
+                while (lunarRegent.CurrentCell == null
+                    && !nearbyCells.IsNullOrEmpty())
+                {
+                    nearbyCells.ShuffleInPlace();
+                    nearbyCells.TakeAt(0).AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
+                }
+
+                if (lunarRegent.CurrentCell == null)
+                    Utils.Warn($"Failed to place {nameof(lunarRegent)} in any of {nearbyCount} {nameof(nearbyCells)}");
+            }
+
+            if (lunarRegent.CurrentCell == null)
+            {
+                lunarRegent.Release();
+                return null;
+            }
+
+            lunarRegent.MakeActive();
+
+            AfterCreatedLunarRegentEvent.Send(Player, lunarRegent, Context: nameof(AscendLunarRegent));
+
+            return lunarRegent;
         }
 
         public static void BonesExceptionCleanUp(GameObject Player)

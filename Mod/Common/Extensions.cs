@@ -45,6 +45,7 @@ using HarmonyLib;
 using System.Reflection.Emit;
 using System.Reflection;
 using XRL.World.Effects;
+using static UD_Bones_Folder.Mod.SaveBonesInfo;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -227,7 +228,7 @@ namespace UD_Bones_Folder.Mod
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
                 Turn = Game.Turns,
                 SaveTime = $"{localTimeNow.ToLongDateString()} at {localTimeNow.ToLongTimeString()}",
-                ModsEnabled = ModManager.GetRunningMods().ToList(),
+                ModsEnabled = ModRecord.GetRunningMods().Select(r => r.ToPairString()).ToList(),
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
@@ -1218,7 +1219,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.OptionallyPerformSilently(() => inventoryObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.PerformOptionallySilently(() => inventoryObject.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1230,7 +1231,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.OptionallyPerformSilently(() => installedCybernetic.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.PerformOptionallySilently(() => installedCybernetic.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1242,7 +1243,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        SerializationExtensions.OptionallyPerformSilently(() => contentsObject.ApplyRegistrar(Active, Recursive, Depth + 1));
+                        SerializationExtensions.PerformOptionallySilently(() => contentsObject.ApplyRegistrar(Active, Recursive, Depth + 1));
                     }
                     catch (Exception x)
                     {
@@ -1259,7 +1260,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
-                            SerializationExtensions.OptionallyPerformSilently(() => part.ApplyRegistrar(Object, Active));
+                            SerializationExtensions.PerformOptionallySilently(() => part.ApplyRegistrar(Object, Active));
                         }
                         catch (Exception x)
                         {
@@ -1277,7 +1278,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
-                            SerializationExtensions.OptionallyPerformSilently(() => effect.ApplyRegistrar(Object, Active));
+                            SerializationExtensions.PerformOptionallySilently(() => effect.ApplyRegistrar(Object, Active));
                         }
                         catch (Exception x)
                         {
@@ -1480,7 +1481,7 @@ namespace UD_Bones_Folder.Mod
 
             bool blueprintExists = true;
 
-            SerializationExtensions.OptionallyPerformWithoutMetrics(delegate()
+            SerializationExtensions.PerformOptionallyWithoutMetrics(delegate()
             {
                 try
                 {
@@ -1520,7 +1521,7 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            bool tileExists = true; SerializationExtensions.OptionallyPerformWithoutMetrics(delegate ()
+            bool tileExists = true; SerializationExtensions.PerformOptionallyWithoutMetrics(delegate ()
             {
                 try
                 {
@@ -2279,6 +2280,19 @@ namespace UD_Bones_Folder.Mod
             int unavailableCount = UnavailableMods.Count();
             return UnavailableMods
                 .Select(ModManager.GetModTitle)
+                    .Aggregate(
+                        seed: SB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
+                            .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),
+                        func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
+                    .AppendLine().AppendColored("w", "You won't be able to enable these mods as they are missing outright.")
+                    ;
+        }
+
+        public static StringBuilder AppendUnavailableMods(this StringBuilder SB, IEnumerable<ModRecord> UnavailableMods)
+        {
+            int unavailableCount = UnavailableMods.Count();
+            return UnavailableMods
+                .Select(r => r.ToString())
                     .Aggregate(
                         seed: SB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
                             .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),

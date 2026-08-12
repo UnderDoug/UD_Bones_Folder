@@ -68,6 +68,111 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public class ModRecord
+        {
+            public class EqualityComparer : EqualityComparer<ModRecord>
+            {
+                public override bool Equals(ModRecord x, ModRecord y)
+                    => x == null
+                        || y == null
+                    ? (x == null) == (y == null)
+                    : x.ID == y.ID
+                    ;
+
+                public override int GetHashCode(ModRecord obj)
+                    => (obj?.ID?.GetHashCode() ?? 0)
+                    ;
+            }
+
+            public static EqualityComparer EQComp = new();
+
+            public string ID;
+            public string DisplayName;
+
+            public string GetDisplayName()
+            {
+                if (ID == null)
+                    return null;
+
+                if (ID == string.Empty)
+                    return ID;
+
+                if (!DisplayName.IsNullOrEmpty())
+                    return DisplayName;
+
+                return ModManager.GetModTitle(ID);
+            }
+
+            public override string ToString()
+                => GetDisplayName() is string displayName
+                    && displayName != ID
+                ? $"{displayName} ({ID})"
+                : ID
+                ;
+
+            public static ModRecord Parse(string String)
+            {
+                if (String == null)
+                    return null;
+
+                if (String == string.Empty
+                    || String.Split(";;") is not string[] pair
+                    || pair.Length < 2)
+                    return new ModRecord
+                    {
+                        ID = String,
+                        DisplayName = ModManager.GetModTitle(String),
+                    };
+
+                return new ModRecord
+                {
+                    ID = pair[0],
+                    DisplayName = pair[1],
+                };
+            }
+
+            public static IEnumerable<ModRecord> FromModIDs(IEnumerable<string> ModIDs)
+            {
+                foreach (var modID in ModIDs.IteratorSafe())
+                    yield return Parse(modID);
+            }
+
+            public static IEnumerable<ModRecord> GetRunningMods(Predicate<ModRecord> Where = null)
+            {
+                foreach (var modID in ModManager.GetRunningMods().IteratorSafe())
+                    if (Parse(modID) is ModRecord modRecord
+                        && Where?.Invoke(modRecord) is not false)
+                        yield return modRecord;
+            }
+
+            public static IEnumerable<ModRecord> GetAvailableMods(Predicate<ModRecord> Where = null)
+            {
+                foreach (var modID in ModManager.GetAvailableMods().IteratorSafe())
+                    if (Parse(modID) is ModRecord modRecord
+                        && Where?.Invoke(modRecord) is not false)
+                        yield return modRecord;
+            }
+
+            public string ToPairString()
+            {
+                if (ID == null)
+                    return null;
+
+                return !DisplayName.IsNullOrEmpty()
+                    ? $"{ID};;{DisplayName}"
+                    : ID
+                    ;
+            }
+
+            public static explicit operator string(ModRecord Operand)
+                => Operand?.ToPairString()
+                ;
+
+            public static explicit operator ModRecord(string Operand)
+                => Parse(Operand)
+                ;
+        }
+
         public class ModsDifferInfo
         {
             public bool IsDummy;
@@ -134,7 +239,7 @@ namespace UD_Bones_Folder.Mod
 
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
 
-        public static int BaseBonesWeight = 50;
+        public static int BaseBonesWeight = 1000;
 
         public static IRenderable NonePleaseIcon = new BonesRender(
                 Blueprint: GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"),
@@ -208,6 +313,11 @@ namespace UD_Bones_Folder.Mod
         private bool? _IsMad;
         public bool IsMad => _IsMad ??= (GetBonesJSON()?.IsCharIconSwapped() is true)
             || !GameObjectFactory.Factory.HasBlueprint(GetBonesJSON()?.Blueprint ?? "MISSING_BLUEPRINT")
+            ;
+
+        public IEnumerable<ModRecord> EnabledMods
+            => ModsEnabled?.Select(s => ModRecord.Parse(s))
+            ?? Enumerable.Empty<ModRecord>()
             ;
 
         private ModsDifferInfo _ModsDiffer;
@@ -1038,7 +1148,7 @@ namespace UD_Bones_Folder.Mod
         public async Task<bool> TryRestoreModsAsync()
         {
             await The.UiContext;
-            if (await RestoreModsLoadedAsync(ModsEnabled))
+            if (await RestoreModsLoadedAsync())
             {
                 var goToBones = Task.Run(() =>
                 {
@@ -1051,30 +1161,36 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public async Task<bool> RestoreModsLoadedAsync(List<string> Enabled)
+        public async Task<bool> RestoreModsLoadedAsync()
         {
-            using var loadedMods = ScopeDisposedList<string>.GetFromPool();
-            if (ModManager.GetRunningMods() is IEnumerable<string> runningMods)
-                loadedMods.AddRange(runningMods);
-            else
-            {
-                Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
+            var enabledMods = EnabledMods;
+
+            if (enabledMods.IsNullOrEmpty())
                 return false;
-            }
 
-            using var bonesHasButNotAvailable = ScopeDisposedList<string>.GetFromPoolFilledWith(Enabled.Except(ModManager.GetAvailableMods()));
-            using var loadedButBonesMissing = ScopeDisposedList<string>.GetFromPoolFilledWith(loadedMods.Except(Enabled));
+            var loadedMods = ModRecord.GetRunningMods();
 
-            using var bonesHasButNotLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
-                items: Enabled
-                    .Except(loadedMods)
-                    .Except(bonesHasButNotAvailable));
+            using var bonesHasButNotAvailable = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            var availableMods = ModRecord.GetAvailableMods();
+            bonesHasButNotAvailable.RemoveAll(r => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
 
-            using var bothHaveLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
-                items: Enabled
-                    .Except(bonesHasButNotLoaded)
-                    .Except(bonesHasButNotAvailable)
-                    .Except(loadedButBonesMissing));
+            using var loadedButBonesMissing = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(loadedMods);
+            loadedButBonesMissing.RemoveAll(r => enabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
+
+            using var bonesHasButNotLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            bonesHasButNotLoaded.RemoveAll(delegate (ModRecord r)
+            {
+                return loadedMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
+            });
+
+            using var bothHaveLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            bothHaveLoaded.RemoveAll(delegate (ModRecord r)
+            {
+                return bonesHasButNotLoaded.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || loadedButBonesMissing.Any(ar => ModRecord.EQComp.Equals(r, ar));
+            });
 
             UIUtils.CascadableResult result = UIUtils.CascadableResult.Continue;
             var sB = Event.NewStringBuilder();
@@ -1084,7 +1200,7 @@ namespace UD_Bones_Folder.Mod
                 || !loadedButBonesMissing.IsNullOrEmpty()
                 || !bonesHasButNotLoaded.IsNullOrEmpty())
             {
-                using var options = new PickOptionDataSetAsync<IEnumerable<string>, UIUtils.CascadableResult>();
+                using var options = new PickOptionDataSetAsync<IEnumerable<ModRecord>, UIUtils.CascadableResult>();
                 do
                 {
                     if (!bonesHasButNotAvailable.IsNullOrEmpty())
@@ -1102,7 +1218,7 @@ namespace UD_Bones_Folder.Mod
                     if (!loadedButBonesMissing.IsNullOrEmpty())
                     {
                         loadedButBonesMissing
-                            .Select(ModManager.GetModTitle)
+                            .Select(r => r.ToString())
                             .Aggregate(
                                 seed: sB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
                                     .AppendColored("yellow", "disabled").Append(" in this bones file:"),
@@ -1112,7 +1228,7 @@ namespace UD_Bones_Folder.Mod
                     if (!bonesHasButNotLoaded.IsNullOrEmpty())
                     {
                         bonesHasButNotLoaded
-                            .Select(ModManager.GetModTitle)
+                            .Select(r => r.ToString())
                             .Aggregate(
                                 seed: sB.AppendLine().Append("These ").AppendColored("black", "disabled").Append(" mods are ").AppendColored("red", "enabled").Append(" in this bones file:"),
                                 func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
@@ -1121,7 +1237,7 @@ namespace UD_Bones_Folder.Mod
                     if (!bothHaveLoaded.IsNullOrEmpty())
                     {
                         bothHaveLoaded
-                            .Select(ModManager.GetModTitle)
+                            .Select(r => r.ToString())
                             .Aggregate(
                                 seed: sB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
                                     .AppendColored("green", "enabled").Append(" in this bones file:"),
@@ -1138,7 +1254,7 @@ namespace UD_Bones_Folder.Mod
                     options.Clear(Dispose: true);
                     if (!bonesHasButNotLoaded.IsNullOrEmpty())
                     {
-                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        options.Add(new PickOptionDataAsync<IEnumerable<ModRecord>, UIUtils.CascadableResult>
                         {
                             Element = bonesHasButNotLoaded,
                             Text = "Restart {{yellow|adding enabled}} mods from bones file's mod configuration",
@@ -1153,7 +1269,7 @@ namespace UD_Bones_Folder.Mod
                     }
                     if (!loadedButBonesMissing.IsNullOrEmpty())
                     {
-                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        options.Add(new PickOptionDataAsync<IEnumerable<ModRecord>, UIUtils.CascadableResult>
                         {
                             Element = loadedButBonesMissing,
                             Text = "Restart {{red|using}} bones file's {{red|entire}} (available) mod configuration",
@@ -1177,13 +1293,13 @@ namespace UD_Bones_Folder.Mod
                         var sB2 = Event.NewStringBuilder()
                             .Append("Show ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
                             .AppendThings(unavailableCount, " mod").Append(" ").AppendColored("red", "enabled").Append(" in this bones file");
-                        options.Add(new PickOptionDataAsync<IEnumerable<string>, UIUtils.CascadableResult>
+                        options.Add(new PickOptionDataAsync<IEnumerable<ModRecord>, UIUtils.CascadableResult>
                         {
                             Element = bonesHasButNotAvailable,
                             Text = Event.FinalizeString(sB2),
                             Hotkey = 'x',
                             Icon = UnavailableModsIcon,
-                            Callback = async delegate (IEnumerable<string> element)
+                            Callback = async delegate (IEnumerable<ModRecord> element)
                             {
                                 string message = Event.FinalizeString(Event.NewStringBuilder().AppendUnavailableMods(element));
 
@@ -1206,7 +1322,7 @@ namespace UD_Bones_Folder.Mod
                             DefaultSelected: !options.IsNullOrEmpty() ? 0 : -1,
                             OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                             OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
-                            FinalSelectedCallback: async delegate (PickOptionData<IEnumerable<string>, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
+                            FinalSelectedCallback: async delegate (PickOptionData<IEnumerable<ModRecord>, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
                             {
                                 var result = await r?.AwaitResultIfNotIsCompletedSuccessfully();
                                 if (result is UIUtils.CascadableResult.Continue)
@@ -1234,7 +1350,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static async Task<UIUtils.CascadableResult> AskRestoreModsAsync(SaveBonesInfo SaveBonesInfo)
-            => (await SaveBonesInfo.RestoreModsLoadedAsync(SaveBonesInfo.ModsEnabled))
+            => (await SaveBonesInfo.RestoreModsLoadedAsync())
             ? UIUtils.CascadableResult.Cancel
             : UIUtils.CascadableResult.Continue
             ;
@@ -1261,6 +1377,10 @@ namespace UD_Bones_Folder.Mod
                 ;
         }
 
+        public static UIUtils.CascadableResult EnableMods(IEnumerable<ModRecord> ModsToEnable)
+            => EnableMods(ModsToEnable.Select(r => r.ID))
+            ;
+
         public static UIUtils.CascadableResult DisableMods(IEnumerable<string> ModsToDisable)
         {
             if (ModsToDisable.IsNullOrEmpty())
@@ -1283,6 +1403,10 @@ namespace UD_Bones_Folder.Mod
                 ;
         }
 
+        public static UIUtils.CascadableResult DisableMods(IEnumerable<ModRecord> ModsToDisable)
+            => DisableMods(ModsToDisable.Select(r => r.ID))
+            ;
+
         public ModsDifferInfo GetModsDifferInfo()
         {
             if (IsDummy)
@@ -1293,28 +1417,24 @@ namespace UD_Bones_Folder.Mod
                 };
             }
 
-            using var loadedMods = ScopeDisposedList<string>.GetFromPool();
-
-            if (ModManager.GetRunningMods() is IEnumerable<string> runningMods)
-                loadedMods.AddRange(runningMods);
-            else
-            {
-                Utils.Error("Failed to get running mods", new InvalidOperationException("Impossibly empty running mods list"));
-                return new ModsDifferInfo
-                {
-                    UnavailableWhereBonesEnabled = -1,
-                };
-            }
-
             ModsEnabled ??= new();
+            var enabledMods = EnabledMods;
 
-            using var bonesHasButNotAvailable = ScopeDisposedList<string>.GetFromPoolFilledWith(ModsEnabled.Except(ModManager.GetAvailableMods()));
-            using var loadedButBonesMissing = ScopeDisposedList<string>.GetFromPoolFilledWith(loadedMods.Except(ModsEnabled));
+            using var loadedMods = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(ModRecord.GetRunningMods());
 
-            using var bonesHasButNotLoaded = ScopeDisposedList<string>.GetFromPoolFilledWith(
-                items: ModsEnabled
-                    .Except(loadedMods)
-                    .Except(bonesHasButNotAvailable));
+            using var bonesHasButNotAvailable = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            var availableMods = ModRecord.GetAvailableMods();
+            bonesHasButNotAvailable.RemoveAll(r => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
+
+            using var loadedButBonesMissing = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(loadedMods);
+            loadedButBonesMissing.RemoveAll(r => enabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
+
+            using var bonesHasButNotLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            bonesHasButNotLoaded.RemoveAll(delegate (ModRecord r)
+            {
+                return loadedMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
+            });
 
             return new ModsDifferInfo
             {

@@ -1101,7 +1101,7 @@ namespace UD_Bones_Folder.Mod
                         SaveBonesInfo.BonesSpec = bonesSpec;
 
                     if (reader.Errors > 0)
-                        SerializationExtensions.OptionallyPerformSilently(() => DisplayLoadError(reader, "bones file", reader.Errors));
+                        SerializationExtensions.PerformOptionallySilently(() => DisplayLoadError(reader, "bones file", reader.Errors));
                 }
                 catch (Exception x)
                 {
