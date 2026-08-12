@@ -179,6 +179,7 @@ namespace UD_Bones_Folder.Mod
             public int UnavailableWhereBonesEnabled;
             public int EnabledWhereBonesDisabled;
             public int DisabledWhereBonesEnabled;
+            public int MatchingMods;
             public int DifferLevel
             {
                 get
@@ -815,12 +816,9 @@ namespace UD_Bones_Folder.Mod
 
             saveWeight += ModsDiffer.EnabledWhereBonesDisabled * -1;
             saveWeight += ModsDiffer.DisabledWhereBonesEnabled * -2;
-
-            foreach (var runningMod in BonesManager.RunningMods)
-                if (ModsEnabled.Contains(runningMod))
-                    saveWeight += 1;
-
             saveWeight += ModsDiffer.UnavailableWhereBonesEnabled * -4;
+
+            saveWeight += ModsDiffer.MatchingMods * 3;
 
             /*if (Stats.Encountered is BonesStatSet encountered)
             {
@@ -832,10 +830,10 @@ namespace UD_Bones_Folder.Mod
                 && Utils.ModVersion is XRL.Version modVersion)
             {
                 if (modVersion < saveVersion)
-                    saveWeight = 0;
+                    return null;
 
                 if (modVersion.Build != saveVersion.Build)
-                    saveWeight = 0;
+                    return null;
 
                 int versionDiff = Math.Max(0, modVersion.Revision - saveVersion.Revision);
 
@@ -1436,11 +1434,20 @@ namespace UD_Bones_Folder.Mod
                     || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
             });
 
+            using var bothHaveLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            bothHaveLoaded.RemoveAll(delegate (ModRecord r)
+            {
+                return bonesHasButNotLoaded.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                    || loadedButBonesMissing.Any(ar => ModRecord.EQComp.Equals(r, ar));
+            });
+
             return new ModsDifferInfo
             {
                 UnavailableWhereBonesEnabled = bonesHasButNotAvailable.Count,
                 EnabledWhereBonesDisabled = loadedButBonesMissing.Count,
                 DisabledWhereBonesEnabled = bonesHasButNotLoaded.Count,
+                MatchingMods = bothHaveLoaded.Count,
             };
         }
 

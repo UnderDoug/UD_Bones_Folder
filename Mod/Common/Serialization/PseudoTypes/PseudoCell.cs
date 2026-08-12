@@ -344,62 +344,70 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
                 if (AddWhenNot?.Invoke(Objects[i]?.GameObject) is true)
                     continue;
 
-                if (Objects[i].PerformExtraction(
-                    BonesInfo: BonesInfo,
-                    OriginObjects: ParentZone.YieldObjects(),
-                    DestinationObjects: Cell.ParentZone.YieldObjects(),
-                    CrossGameObject: out var crossGameObject) is GameObject bonesObject)
+                try
                 {
-                    string bonesObjectDebugName = bonesObject.DebugName;
-                    string catchFlag = "top";
-                    try
+                    if (Objects[i].PerformExtraction(
+                        BonesInfo: BonesInfo,
+                        OriginObjects: ParentZone.YieldObjects(),
+                        DestinationObjects: Cell.ParentZone.YieldObjects(),
+                        CrossGameObject: out var crossGameObject) is GameObject bonesObject)
                     {
-                        CrossGameObjects.Add(crossGameObject);
-
-                        if (bonesObject.IsLunarRegent(BonesID))
+                        string bonesObjectDebugName = bonesObject.DebugName;
+                        string catchFlag = "top";
+                        try
                         {
-                            if (LunarRegent != null
-                                && LunarRegent != bonesObject)
+                            CrossGameObjects.Add(crossGameObject);
+
+                            if (bonesObject.IsLunarRegent(BonesID))
                             {
-                                Utils.Warn($"Probable error loading {{{BonesID}}} {nameof(LunarRegent)} {bonesObject.DebugName}, " +
-                                    $"{nameof(LunarRegent)} already assigned {LunarRegent.DebugName}");
+                                if (LunarRegent != null
+                                    && LunarRegent != bonesObject)
+                                {
+                                    Utils.Warn($"Probable error loading {{{BonesID}}} {nameof(LunarRegent)} {bonesObject.DebugName}, " +
+                                        $"{nameof(LunarRegent)} already assigned {LunarRegent.DebugName}");
+                                }
+                                LunarRegent = bonesObject;
                             }
-                            LunarRegent = bonesObject;
-                        }
 
-                        if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                            if (bonesObject.TryGetPart(out UD_Bones_LunarRegent lunarRegentPart))
+                            {
+                                LunarParties ??= new();
+                                if (!LunarParties.TryGetValue(lunarRegentPart.BonesID, out var lunarParty))
+                                    lunarParty = LunarParties[lunarRegentPart.BonesID] = new();
+
+                                lunarParty.SetLunarRegent(bonesObject);
+                            }
+                            else
+                            if (bonesObject.TryGetPart(out UD_Bones_LunarCourtier lunarCoutierPart))
+                            {
+                                LunarParties ??= new();
+                                if (!LunarParties.TryGetValue(lunarCoutierPart.BonesID, out var lunarParty))
+                                    lunarParty = LunarParties[lunarCoutierPart.BonesID] = new();
+
+                                lunarParty.LunarCourtiers ??= new();
+                                lunarParty.LunarCourtiers.Add(bonesObject);
+                            }
+
+                            catchFlag = nameof(Cell.AddObject);
+                            Cell.AddObject(bonesObject, System: true, Silent: true);
+
+                            catchFlag = nameof(GameObject.MakeActive);
+                            bonesObject.MakeActive();
+
+                            catchFlag = nameof(GameObject.ForfeitTurn);
+                            bonesObject.ForfeitTurn();
+                        }
+                        catch (Exception x)
                         {
-                            LunarParties ??= new();
-                            if (!LunarParties.TryGetValue(lunarRegentPart.BonesID, out var lunarParty))
-                                lunarParty = LunarParties[lunarRegentPart.BonesID] = new();
-
-                            lunarParty.SetLunarRegent(bonesObject);
+                            Utils.Error($"{nameof(Objects)}[{i}] ({catchFlag}): {bonesObjectDebugName}", x);
                         }
-                        else
-                        if (bonesObject.TryGetPart(out UD_Bones_LunarCourtier lunarCoutierPart))
-                        {
-                            LunarParties ??= new();
-                            if (!LunarParties.TryGetValue(lunarCoutierPart.BonesID, out var lunarParty))
-                                lunarParty = LunarParties[lunarCoutierPart.BonesID] = new();
-
-                            lunarParty.LunarCourtiers ??= new();
-                            lunarParty.LunarCourtiers.Add(bonesObject);
-                        }
-
-                        catchFlag = nameof(Cell.AddObject);
-                        Cell.AddObject(bonesObject, System: true, Silent: true);
-
-                        catchFlag = nameof(GameObject.MakeActive);
-                        bonesObject.MakeActive();
-
-                        catchFlag = nameof(GameObject.ForfeitTurn);
-                        bonesObject.ForfeitTurn();
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Error($"{nameof(Objects)}[{i}] ({catchFlag}): {bonesObjectDebugName}", x);
                     }
                 }
+                catch (Exception x)
+                {
+                    Utils.Error($"{nameof(Objects)}[{i}].{nameof(PseudoGameObject.PerformExtraction)}: {Objects[i]?.GameObject?.DebugName ?? "MISSING_ORIGIN_OBJECT"}", x);
+                }
+                
             }
             return true;
         }

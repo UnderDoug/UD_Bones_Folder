@@ -114,8 +114,7 @@ namespace UD_Bones_Folder.Mod
             private set => _System = value;
         }
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = false)]
-        private static List<string> _RunningMods = null;
+        private static IEnumerable<string> _RunningMods = null;
         public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
 
         [GameBasedStaticCache(CreateInstance = false)]
@@ -928,21 +927,24 @@ namespace UD_Bones_Folder.Mod
                     {
                         if (versionNumber != XRLGame.SaveVersion)
                         {
-                            if (SaveBonesInfo.IsOnline)
-                                throw new InvalidOperationException("Bones file is online and can't be upgraded (yet)");
+                            /*if (SaveBonesInfo.IsOnline)
+                                throw new InvalidOperationException("Bones file is online and can't be upgraded (yet)");*/
 
-                            if ((await SaveBonesInfo.GetBonesFilePathAsync()) is string bonesPath)
+                            if (!SaveBonesInfo.IsOnline)
                             {
-                                // need to put code here that maybe tries to upgrade the file locally?
-                                string backupPath = bonesPath + $"_upgradebackup_{versionNumber}.gz";
-                                if (!File.Exists(backupPath))
+                                if ((await SaveBonesInfo.GetBonesFilePathAsync()) is string bonesPath)
                                 {
-                                    File.Copy(bonesPath, backupPath);
-                                    string cacheDBPath = Path.Combine(SaveBonesInfo.Directory, "Cache.db");
-                                    string cacheDBBackupPath = cacheDBPath + $"_upgradebackup_{versionNumber}.gz";
-                                    if (File.Exists(cacheDBPath)
-                                        && !File.Exists(cacheDBBackupPath))
-                                        File.Copy(cacheDBPath, cacheDBBackupPath);
+                                    // need to put code here that maybe tries to update the save version of the bones file if successful?
+                                    string backupPath = bonesPath + $"_upgradebackup_{versionNumber}.gz";
+                                    if (!File.Exists(backupPath))
+                                    {
+                                        File.Copy(bonesPath, backupPath);
+                                        string cacheDBPath = Path.Combine(SaveBonesInfo.Directory, "Cache.db");
+                                        string cacheDBBackupPath = cacheDBPath + $"_upgradebackup_{versionNumber}.gz";
+                                        if (File.Exists(cacheDBPath)
+                                            && !File.Exists(cacheDBBackupPath))
+                                            File.Copy(cacheDBPath, cacheDBBackupPath);
+                                    }
                                 }
                             }
                         }

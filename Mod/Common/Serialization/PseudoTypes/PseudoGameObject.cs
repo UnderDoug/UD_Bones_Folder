@@ -137,9 +137,31 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             {
                 CrossGameObject = CrossGameObject.CreateFrom(GameObject);
             }
+            catch (NullReferenceException x)
+            {
+                if (x.StackTrace.Split("\n  at ") is not string[] stackTraceLines)
+                    throw x;
+
+                if (!stackTraceLines[0].Contains(Utils.CallChain(nameof(Inventory), nameof(Inventory.DeepCopy))))
+                    throw x;
+
+                Utils.Warn($"{nameof(PseudoGameObject)} failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}, likely due to inventory issue. Reattempting with potential fix.");
+                try
+                {
+                    GameObject.PerformActionRecursively(go => go.RequirePart<Physics>());
+                    CrossGameObject = CrossGameObject.CreateFrom(GameObject);
+                }
+                catch (Exception x2)
+                {
+                    Utils.Warn($"{nameof(PseudoGameObject)} failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}", x2);
+                    CrossGameObject = null;
+                    return null;
+                }
+
+            }
             catch (Exception x)
             {
-                Utils.Warn($"{nameof(PseudoGameObject)} Failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}", x);
+                Utils.Warn($"{nameof(PseudoGameObject)} failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}", x);
                 CrossGameObject = null;
                 return null;
             }
