@@ -1376,7 +1376,7 @@ namespace UD_Bones_Folder.Mod
                     catch (Exception x)
                     {
                         responseInfo.Success = false;
-                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                        responseInfo.Message = x.Message;
 
                         Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
                         return responseInfo;
@@ -1456,7 +1456,7 @@ namespace UD_Bones_Folder.Mod
                                 PendingSavGz.Dispose();
 
                             responseInfo.Success = false;
-                            responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                            responseInfo.Message = x.Message;
 
                             return responseInfo;
                         }
@@ -1465,7 +1465,7 @@ namespace UD_Bones_Folder.Mod
                     catch (Exception x)
                     {
                         responseInfo.Success = false;
-                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                        responseInfo.Message = x.Message;
 
                         Utils.ErrorOnce($"Failed receiving PUT response for {uRI} ({x.GetType().ToStringWithGenerics()})", x);
                         return responseInfo;
@@ -1514,7 +1514,7 @@ namespace UD_Bones_Folder.Mod
                         PendingSavGz.Token = Guid.Empty;
                         Utils.Warn($"{nameof(Host)}.{nameof(TryUploadBonesAsync)}", x);
 
-                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                        responseInfo.Message = x.Message;
                     }
 
                     if (PendingSavGz.Token.IsEmptyOrDefault())
@@ -1530,14 +1530,14 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
-                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                        responseInfo.Message = x.Message;
 
                         return responseInfo;
                     }
                 }
                 catch (Exception x)
                 {
-                    responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+                    responseInfo.Message = x.Message;
 
                     Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {PendingSavGz.BonesID}", x);
                     return responseInfo;
