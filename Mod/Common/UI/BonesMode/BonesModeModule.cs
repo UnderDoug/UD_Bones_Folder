@@ -942,23 +942,24 @@ namespace UD_Bones_Folder.Mod.UI
                 int lastRemainingPoints = 0;
                 int lastPointsToSpend = 0;
                 int attempts = 0;
+                string pointSpendSeed = $"{nameof(GameObject.RandomlySpendPoints)}::{Player.BaseID}";
                 while (Player.Stat("MP") > 0
                     && totalSpent < maxPointsToSpend
                     && ++attempts < maxAttempts)
                 {
-                    int stuckPoints = Player.Stat("MP");
+                    int remainingPoints = Player.Stat("MP");
 
-                    int maxPointSpend = Math.Clamp(stuckPoints, 1, 4);
-                    int pointsToSpend = SeededRandom($"{nameof(GameObject.RandomlySpendPoints)}::{Player.BaseID}", 1, maxPointSpend, attempts);
+                    int maxPointSpend = Math.Clamp(remainingPoints, 1, 4);
+                    int pointsToSpend = SeededRandom(pointSpendSeed, 1, maxPointSpend, attempts);
 
-                    if (lastRemainingPoints == stuckPoints)
+                    if (lastRemainingPoints == remainingPoints)
                         pointsToSpend += lastPointsToSpend;
 
                     lastPointsToSpend = pointsToSpend;
-                    lastRemainingPoints = stuckPoints;
+                    lastRemainingPoints = remainingPoints;
                     totalSpent += pointsToSpend;
 
-                    if (maxPointSpend == 4
+                    if (pointsToSpend == 4
                         && MutationsAPI.RandomlyMutate(
                             go: Player,
                             rng: SeededGenerator($"{nameof(SpendMutationPointsInSmallChunks)}::{Player.BaseID}", attempts),
