@@ -713,50 +713,49 @@ namespace UD_Bones_Folder.Mod
 
         public async Task<string> GetBonesFilePathAsync()
         {
-            if (!IsOnline)
+            if (IsOnline)
+                return null;
+
+            string bonesPath = null;
+            int attempts = 0;
+            int setCount = FileLocationDataSet.Count;
+            while (FileLocationData != null
+                && attempts++ < setCount
+                && FileLocationData.Type.IsFile())
             {
-                string bonesPath = null;
-                int attempts = 0;
-                int setCount = FileLocationDataSet.Count;
-                while (FileLocationData != null
-                    && attempts++ < setCount
-                    && FileLocationData.Type.IsFile())
+                var fileLocationData = FileLocationData;
+                bonesPath = FullBonesPathSavGz;
+                if (!await File.ExistsAsync(bonesPath))
                 {
-                    var fileLocationData = FileLocationData;
-                    bonesPath = FullBonesPathSavGz;
+                    bonesPath = FullBonesPathSav;
                     if (!await File.ExistsAsync(bonesPath))
                     {
-                        bonesPath = FullBonesPathSav;
-                        if (!await File.ExistsAsync(bonesPath))
-                        {
-                            Utils.Error($"No saved bones exist. ({DisplayDirectory})");
+                        Utils.Error($"No saved bones exist. ({DisplayDirectory})");
 
-                            try
+                        try
+                        {
+                            if (!FileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
                             {
-                                if (!FileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
-                                {
-                                    FileLocationDataSet.Remove(fld);
-                                    BonesManager.ClearHasSaveBones();
-                                }))
-                                {
-                                    Utils.Warn($"Failed to delete empty bones directory. ({DisplayDirectory})");
-                                }
-                            }
-                            catch (Exception x)
-                            {
-                                Utils.Error($"Deleting empty bones directory failed ({DisplayDirectory})", x);
-                            }
-                            finally
-                            {
-                                FileLocationDataSet.Remove(fileLocationData);
+                                FileLocationDataSet.Remove(fld);
                                 BonesManager.ClearHasSaveBones();
+                            }))
+                            {
+                                Utils.Warn($"Failed to delete empty bones directory. ({DisplayDirectory})");
                             }
+                        }
+                        catch (Exception x)
+                        {
+                            Utils.Error($"Deleting empty bones directory failed ({DisplayDirectory})", x);
+                        }
+                        finally
+                        {
+                            FileLocationDataSet.Remove(fileLocationData);
+                            BonesManager.ClearHasSaveBones();
                         }
                     }
                 }
-                return bonesPath;
             }
-            return null;
+            return bonesPath;
         }
 
         public string GetBonesFilePath()

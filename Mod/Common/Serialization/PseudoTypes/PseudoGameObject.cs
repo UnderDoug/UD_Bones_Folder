@@ -139,7 +139,8 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             }
             catch (NullReferenceException x)
             {
-                if (x.StackTrace.Split("\n  at ") is not string[] stackTraceLines)
+                if (x.GetStackTraceLines() is not string[] stackTraceLines
+                    || stackTraceLines.IsNullOrEmpty())
                     throw x;
 
                 if (!stackTraceLines[0].Contains(Utils.CallChain(nameof(Inventory), nameof(Inventory.DeepCopy))))
