@@ -1426,7 +1426,7 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
-        public static async Task<List<Host>> UploadBonesAsync(
+        public static async Task<List<ResponseInfo>> UploadBonesAsync(
             string BonesID,
             SaveBonesJSON SaveBonesJSON,
             byte[] SavGz
@@ -1434,25 +1434,22 @@ namespace UD_Bones_Folder.Mod
         {
             try
             {
-                List<Host> successfulHosts = null;
+                List<ResponseInfo> successfulHosts = null;
                 foreach (var host in AllEnabledHosts().IteratorSafe())
                 {
                     try
                     {
-                        if (await host.TryUploadBonesAsync(
+                        var responseInfo = await host.TryUploadBonesAsync(
                             SaveBonesJSON: SaveBonesJSON,
                             PendingSavGz: new PendingSavGz
                             {
                                 ParentHost = host,
                                 BonesID = BonesID,
                                 SavGz = SavGz,
-                            }))
-                        {
-                            successfulHosts ??= new();
-                            successfulHosts.Add(host);
-                        }
-                        else
-                            Utils.Warn($"Failed to upload bones to {host}");
+                            });
+
+                        successfulHosts ??= new();
+                        successfulHosts.Add(responseInfo);
                     }
                     catch (Exception x)
                     {
@@ -1474,7 +1471,8 @@ namespace UD_Bones_Folder.Mod
             SaveBonesJSON SaveBonesJSON,
             byte[] SavGz
             )
-            => !(await UploadBonesAsync(BonesID, SaveBonesJSON, SavGz)).IsNullOrEmpty()
+            => (await UploadBonesAsync(BonesID, SaveBonesJSON, SavGz)) is List<ResponseInfo> responseInfos
+            && responseInfos.Any(ri => ri.Success)
             ;
 
         public static List<SaveBonesInfo> GetBonesInfos()

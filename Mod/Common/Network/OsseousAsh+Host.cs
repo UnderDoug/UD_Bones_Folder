@@ -57,62 +57,63 @@ namespace UD_Bones_Folder.Mod
                 public bool Success;
                 public bool ForceDispose;
 
-                public bool CheckValid(bool IgnoreToken = false, bool Silent = false)
+                public ResponseInfo CheckValid(bool IgnoreToken = false, bool Silent = false)
                 {
+                    var responseInfo = new ResponseInfo
+                    {
+                        Host = ParentHost,
+                        Success = true,
+                    };
+
                     if (ParentHost == null)
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(ParentHost)} is null.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(ParentHost)} is null.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (BonesID.IsNullOrEmpty())
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(BonesID)} is null or empty.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(BonesID)} is null or empty.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (!IgnoreToken
                         && Token.IsEmptyOrDefault())
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(Token)} is empty or default {{{BonesID}}}.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(Token)} is empty or default {{{BonesID}}}.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (SavGz.IsNullOrEmpty())
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is null or empty {{{BonesID}}}.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is null or empty {{{BonesID}}}.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (SavGz.Length > MaxFileSizeInBytes)
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is {SavGz.FormatBytes()}, limit is {MaxFileSizeInBytes.FormatBytes()} {{{BonesID}}}.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(SavGz)} is {SavGz.FormatBytes()}, limit is {MaxFileSizeInBytes.FormatBytes()} {{{BonesID}}}.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (Success)
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(Success)} is {Success}.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(Success)} is {Success}.";
+                        responseInfo.Success = false;
                     }
-
+                    else
                     if (ForceDispose)
                     {
-                        if (!Silent)
-                            Utils.Warn($"{nameof(PendingSavGz)} Invalid; {nameof(ForceDispose)} is {ForceDispose}.");
-                        return false;
+                        responseInfo.Message = $"{nameof(PendingSavGz)} Invalid; {nameof(ForceDispose)} is {ForceDispose}.";
+                        responseInfo.Success = false;
                     }
 
-                    /*if (!Silent)
-                        Utils.Info($"{nameof(PendingSavGz)} is Valid; {{{BonesID}}}.");*/
+                    if (!Silent
+                        && !responseInfo.Success
+                        && !responseInfo.Message.IsNullOrEmpty())
+                        Utils.Warn(responseInfo.Message);
 
-                    return true;
+                    return responseInfo;
                 }
 
                 public async Task<bool> RetryUpload(bool ForceDispose = false)
@@ -131,7 +132,7 @@ namespace UD_Bones_Folder.Mod
                     if (exceededTimeLimit)
                         this.ForceDispose = true;
                     else
-                    if (await ParentHost.PutBonesSavGz(this))
+                    if ((await ParentHost.PutBonesSavGz(this)).Success)
                         Success = true;
 
                     if (!this.ForceDispose
@@ -188,6 +189,14 @@ namespace UD_Bones_Folder.Mod
                     else
                         RetryUpload(ForceDispose: true).Wait();
                 }
+            }
+
+            public struct ResponseInfo
+            {
+                public Host Host;
+                public HttpStatusCode StatusCode;
+                public bool Success;
+                public string Message;
             }
 
             public static Host DefaultHost => new Host
@@ -1184,13 +1193,8 @@ namespace UD_Bones_Folder.Mod
                     return Guid.Empty;
                 }
 
-                if (!PendingSavGz.CheckValid(IgnoreToken: true, Silent: false))
-                {
-                    if (!Silent)
-                        Utils.Warn($"{nameof(PendingSavGz)} is invalid");
-
+                if (!PendingSavGz.CheckValid(IgnoreToken: true, Silent: false).Success)
                     return Guid.Empty;
-                }
 
                 if (GetSaveBonesInfo(PendingSavGz.BonesID) is SaveBonesInfo existingBonesInfo)
                 {
@@ -1308,27 +1312,39 @@ namespace UD_Bones_Folder.Mod
                     period: 45000);
             }
 
-            public async Task<bool> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
+            public async Task<ResponseInfo> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
             {
+                var responseInfo = new ResponseInfo
+                {
+                    Host = this,
+                    Success = false,
+                };
+
                 if (PendingSavGz == null)
                 {
+                    responseInfo.Message = $"{nameof(PendingSavGz)} is null";
+
                     if (!Silent)
-                        Utils.Warn($"{nameof(PendingSavGz)} is null");
-                    return false;
+                        Utils.Warn(responseInfo.Message);
+                    return responseInfo;
                 }
 
-                if (!PendingSavGz.CheckValid(Silent: Silent))
-                    return false;
+                responseInfo = PendingSavGz.CheckValid(Silent: Silent);
+                if (!responseInfo.Success)
+                    return responseInfo;
 
                 bool setUpTimer = PendingSavGz.Timer == null;
                 try
                 {
                     if (!IsRunning)
                     {
+                        responseInfo.StatusCode = HttpStatusCode.InternalServerError;
+                        responseInfo.Success = false;
+                        responseInfo.Message = $"{ToString()} is not running";
                         if (!Silent)
-                            Utils.Warn($"{ToString()} is not running");
+                            Utils.Warn(responseInfo.Message);
 
-                        return false;
+                        return responseInfo;
                     }
 
                     string uRI = BonesSavGzPutRoute(PendingSavGz.BonesID);
@@ -1359,15 +1375,22 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
+                        responseInfo.Success = false;
+                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+
                         Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
-                        return false;
+                        return responseInfo;
                     }
 
                     if (httpReq == null)
                     {
+                        responseInfo.Success = false;
+                        responseInfo.Message = $"{nameof(httpReq)} for {ToString()} is null";
+
                         if (!Silent)
-                            Utils.Warn($"{nameof(httpReq)} for {ToString()} is null");
-                        return false;
+                            Utils.Warn(responseInfo.Message);
+
+                        return responseInfo;
                     }
 
                     try
@@ -1376,42 +1399,51 @@ namespace UD_Bones_Folder.Mod
                         using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
                         {
                             var result = await streamReader.ReadToEndAsync();
+                            responseInfo.StatusCode = httpRes.StatusCode;
                             if (httpRes.StatusCode == HttpStatusCode.Created)
                             {
                                 if (JObject.Parse(result) is JObject jObject
                                     && jObject["success"].ToObject<bool>())
                                 {
-                                    Utils.Info($"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"" +
-                                        $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
+                                    responseInfo.Message = $"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"";
+                                    Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
 
                                     setUpTimer = false;
 
                                     PendingSavGz.Success = true;
+                                    responseInfo.Success = true;
                                     if (PendingSavGz.Timer == null)
                                         PendingSavGz.Dispose();
 
-                                    return true;
+                                    return responseInfo;
                                 }
                                 else
                                 {
-                                    if (!Silent)
-                                        Utils.Warn($"{nameof(TryUploadBonesAsync)} received expected response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}), " +
-                                            $"but {nameof(result)} was malformed\n{JObject.Parse(result)?.ToString() ?? result?.ToString() ?? $"{nameof(result)} null"}");
+                                    responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received expected response from server at \"{ToString()}\": " +
+                                        $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}), but {nameof(result)} was malformed";
 
-                                    return false;
+                                    if (!Silent)
+                                        Utils.Warn($"{responseInfo.Message}\n{JObject.Parse(result)?.ToString() ?? result?.ToString() ?? $"{nameof(result)} null"}");
+
+                                    return responseInfo;
                                 }
                             }
                             else
                             {
-                                Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
-                                    $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
+                                responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": " +
+                                    $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}) instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})";
+
+                                Utils.Warn(responseInfo.Message);
                             }
                         }
 
+                        responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": " +
+                            $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}), but somehow fell through without an error.";
+
                         if (!Silent)
-                            Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}), " +
-                                $"but somehow fell through without an error.");
-                        return false;
+                            Utils.Warn(responseInfo.Message);
+
+                        return responseInfo;
                     }
                     catch (WebException x)
                     {
@@ -1423,14 +1455,20 @@ namespace UD_Bones_Folder.Mod
                             if (PendingSavGz.Timer == null)
                                 PendingSavGz.Dispose();
 
-                            return false;
+                            responseInfo.Success = false;
+                            responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+
+                            return responseInfo;
                         }
                         throw x;
                     }
                     catch (Exception x)
                     {
+                        responseInfo.Success = false;
+                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+
                         Utils.ErrorOnce($"Failed receiving PUT response for {uRI} ({x.GetType().ToStringWithGenerics()})", x);
-                        return false;
+                        return responseInfo;
                     }
                 }
                 finally
@@ -1449,10 +1487,20 @@ namespace UD_Bones_Folder.Mod
                 }
             }
 
-            public async Task<bool> TryUploadBonesAsync(SaveBonesJSON SaveBonesJSON, PendingSavGz PendingSavGz)
+            public async Task<ResponseInfo> TryUploadBonesAsync(SaveBonesJSON SaveBonesJSON, PendingSavGz PendingSavGz)
             {
+                var responseInfo = new ResponseInfo
+                {
+                    Host = this,
+                    Success = false,
+                };
+
                 if (!IsRunning)
-                    return false;
+                {
+                    responseInfo.StatusCode = HttpStatusCode.InternalServerError;
+                    responseInfo.Message = $"Server is not running";
+                    return responseInfo;
+                }
 
                 try
                 {
@@ -1465,24 +1513,34 @@ namespace UD_Bones_Folder.Mod
                     {
                         PendingSavGz.Token = Guid.Empty;
                         Utils.Warn($"{nameof(Host)}.{nameof(TryUploadBonesAsync)}", x);
+
+                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
                     }
 
                     if (PendingSavGz.Token.IsEmptyOrDefault())
-                        return false;
+                    {
+                        responseInfo.Success = false;
+                        responseInfo.Message ??= $"Missing or invalid auth token";
+                        return responseInfo;
+                    }
 
                     try
                     {
                         return await PutBonesSavGz(PendingSavGz);
                     }
-                    catch
+                    catch (Exception x)
                     {
-                        return false;
+                        responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+
+                        return responseInfo;
                     }
                 }
                 catch (Exception x)
                 {
+                    responseInfo.Message = x.GetFirstStackTraceLineOrDefault();
+
                     Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {PendingSavGz.BonesID}", x);
-                    return false;
+                    return responseInfo;
                 }
             }
 

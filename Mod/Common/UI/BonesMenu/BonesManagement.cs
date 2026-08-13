@@ -988,26 +988,52 @@ namespace UD_Bones_Folder.Mod.UI
                     catchFlag = "BonesManager.UploadBonesFileAsync";
                     //Utils.Log(catchFlag);
 
-                    if ((await BonesManager.UploadBonesFileAsync(saveBonesJSON, savGz)) is List<OsseousAsh.Host> successFullHosts)
+                    if ((await BonesManager.UploadBonesFileAsync(saveBonesJSON, savGz)) is List<OsseousAsh.Host.ResponseInfo> responseInfos)
                     {
-                        foreach (var host in successFullHosts)
+                        if (!responseInfos.Any(ri => ri.Success))
+                        {
+                            string failures = responseInfos.Aggregate(
+                                seed: null,
+                                func: delegate (string acc, OsseousAsh.Host.ResponseInfo next)
+                                {
+                                    if (!acc.IsNullOrEmpty())
+                                        acc += "\n";
+                                    acc += $"{Const.NBSP}{Const.NBSP}{Const.CROSS.Colored("red")}{Const.NBSP}{next.Host?.ToString() ?? "MISSING_HOST"} - {next.Message ?? "Unkown"}";
+                                    return acc;
+                                })
+                                ?? $"{Const.NBSP}{Const.NBSP}{Const.CROSS.Colored("red")}{Const.NBSP}No hosts.";
+                            await Popup.ShowAsync($"Something whent wrong uploading {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones:\n{failures}");
+                            return UIUtils.CascadableResult.Continue;
+                        }
+
+                        foreach (var responseInfo in responseInfos)
+                            if (responseInfo.Host is OsseousAsh.Host host)
                             BonesInfo.FileLocationDataSet.Add(FileLocationData.NewOnline(host));
 
                         catchFlag = "successFullHosts.Aggregate";
                         //Utils.Log(catchFlag);
-                        string hostsString = successFullHosts.Aggregate(
-                            seed: (string)null,
-                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{Const.NBSP}{Const.NBSP}{Const.DF.Colored("green")}{Const.NBSP}{n}"));
+                        string hostsString = responseInfos
+                            .Where(ri => ri.Host != null && ri.Success)
+                            .Select(ri => ri.Host)
+                            .Aggregate(
+                                seed: (string)null,
+                                func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{Const.NBSP}{Const.NBSP}{Const.DF.Colored("green")}{Const.NBSP}{n}"));
 
                         catchFlag = "Popup.ShowAsync";
                         //Utils.Log(catchFlag);
                         await Popup.ShowAsync($"Uploaded {BonesInfo.Name.StartReplace()} to the following hosts:\n{hostsString}");
                         return UIUtils.CascadableResult.Continue;
                     }
-                }
+                    catchFlag = "Fell Through Upload";
 
-                // Utils.Log("Fell Through");
-                await Popup.ShowAsync($"Something whent wrong, {BonesInfo.Name.StartReplace()} bones appears to be missing save data.");
+                    // Utils.Log(catchFlag);
+                    await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones failed to upload.");
+                    return UIUtils.CascadableResult.Continue;
+                }
+                catchFlag = "Fell Through Data";
+
+                // Utils.Log(catchFlag);
+                await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
                 return UIUtils.CascadableResult.Continue;
             }
             catch (Exception x)

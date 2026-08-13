@@ -3016,6 +3016,17 @@ namespace UD_Bones_Folder.Mod
             return $"{bytesDouble:0.#} {suffix[i]}";
         }
 
+        public static string[] GetStackTraceLines(this Exception X)
+            => X?.StackTrace?.Split("\n  at ")
+            ;
+
+        public static string GetFirstStackTraceLineOrDefault(this Exception X)
+            => X?.GetStackTraceLines() is string[] stackTraceLines
+                && !stackTraceLines.IsNullOrEmpty()
+            ? stackTraceLines[0]
+            : null
+            ;
+
         #region Harmony
 
         #region Transpilation

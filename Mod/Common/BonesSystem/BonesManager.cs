@@ -405,7 +405,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static async Task<List<OsseousAsh.Host>> UploadBonesFileAsync(
+        public static async Task<List<OsseousAsh.Host.ResponseInfo>> UploadBonesFileAsync(
             SaveBonesJSON SaveBonesJSON,
             byte[] BonesSavGz
             )
