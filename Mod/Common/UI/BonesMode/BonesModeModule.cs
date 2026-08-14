@@ -2315,25 +2315,46 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 GetTierAndOverTier(Player, out int tier, out List<int> overTier);
 
-                int maxTier = Math.Max(1, tier + (overTier.Count / 2));
-                Location2D randomZone = null;
-                int zoneTries = 0;
-                while (randomZone == null
-                    && zoneTries++ < 25
-                    && maxTier > 0)
+                string randomZoneID = null;
+
+                string vortexSeed = Utils.CallChain(nameof(SpaceTimeVortex), nameof(SpaceTimeVortex.GetRandomDestinationZoneID));
+                if (SeededPerMyriadChance(vortexSeed, 9500))
                 {
-                    int zoneTier = Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 3, zoneTries));
-                    randomZone = WorldBuilder
-                        .PeekLocationOfTier(
-                            Tier: zoneTier,
-                            MutableOnly: false);
+                    int maxTier = Math.Max(1, tier + (overTier.Count / 2));
+                    Location2D randomZone = null;
+                    int zoneTries = 0;
+                    while (randomZone == null
+                        && zoneTries++ < 25
+                        && maxTier > 0)
+                    {
+                        int zoneTier = Tier.Constrain(GetNAdvantage(nameof(WorldBuilder.getLocationOfTier), 1, maxTier--, 3, zoneTries));
+                        randomZone = WorldBuilder
+                            .PeekLocationOfTier(
+                                Tier: zoneTier,
+                                MutableOnly: false);
+                    }
+
+                    randomZone ??= Location2D.Get(
+                        X: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_X, 1),
+                        Y: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_Y, 2));
+
+                    randomZoneID = WorldBuilder.ZoneIDFromXY("JoppaWorld", randomZone.X, randomZone.Y);
+                }
+                else
+                {
+                    randomZoneID = ZoneID.Assemble(
+                        World: "JoppaWorld",
+                        ParasangX: SeededRandom($"{vortexSeed}::ParasangX", 0, 79),
+                        ParasangY: SeededRandom($"{vortexSeed}::ParasangY", 0, 24),
+                        ZoneX: SeededRandom($"{vortexSeed}::ZoneX", 0, 2),
+                        ZoneY: SeededRandom($"{vortexSeed}::ZoneY", 0, 2),
+                        ZoneZ: SeededPerMyriadChance($"{vortexSeed}::ZoneZ:Surface", 5000)
+                            ? SeededRandom($"{vortexSeed}::ZoneZ", 10, 40)
+                            : 10
+                        );
                 }
 
-                randomZone ??= Location2D.Get(
-                    X: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_X, 1),
-                    Y: SeededRandom(nameof(JoppaWorldBuilder.ZoneIDFromXY), 0, Const.MAX_ZONE_Y, 2));
-
-                var zoneReq = new ZoneRequest(WorldBuilder.ZoneIDFromXY("JoppaWorld", randomZone.X, randomZone.Y));
+                var zoneReq = new ZoneRequest(randomZoneID);
 
                 int overtierCount = overTier.Count;
 
