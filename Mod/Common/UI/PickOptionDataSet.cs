@@ -108,7 +108,7 @@ namespace UD_Bones_Folder.Mod.UI
         public void Clear(bool Dispose)
         {
             if (Dispose)
-                foreach (var element in this)
+                foreach (var element in this.IteratorSafe())
                     element.Dispose();
 
             Clear();

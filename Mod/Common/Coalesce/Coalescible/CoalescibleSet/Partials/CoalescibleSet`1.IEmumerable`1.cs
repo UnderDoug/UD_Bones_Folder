@@ -90,7 +90,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public IEnumerator<T> GetEnumerator()
+        public virtual IEnumerator<T> GetEnumerator()
             => new Enumerator(this);
 
         IEnumerator IEnumerable.GetEnumerator()
