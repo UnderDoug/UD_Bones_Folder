@@ -11,6 +11,7 @@ namespace UD_Bones_Folder.Mod.Events
 {
     public class BeforeCreateLunarRegentEvent : ILunarObjectEvent<BeforeCreateLunarRegentEvent>
     {
+        protected GameObject Source;
         protected List<string> Messages;
         protected bool Blocked;
 
@@ -20,10 +21,19 @@ namespace UD_Bones_Folder.Mod.Events
         public override void Reset()
         {
             base.Reset();
-            Messages?.Clear();
+            Source = null;
             Messages = null;
             Blocked = false;
         }
+
+        public GameObject GetSource()
+            => Source
+            ;
+
+        public bool IsSource(GameObject Object)
+            => GetSource() is GameObject source
+            && source == Object
+            ;
 
         public void BlockCreation(string Reason = null)
         {
@@ -61,18 +71,22 @@ namespace UD_Bones_Folder.Mod.Events
         protected override Event GetStringyEvent()
             => GetStringyEvent(
                 ForEvent: this,
-                EventParams: new KeyValuePair<string, object>[1]
+                EventParams: new KeyValuePair<string, object>[4]
                 {
+                    new(nameof(Source), Source),
+                    new(nameof(Messages), Messages),
+                    new(nameof(Blocked), Blocked),
                     new(nameof(Context), Context),
                 })
             ;
 
 
-        protected static BeforeCreateLunarRegentEvent FromPool(string Context)
+        protected static BeforeCreateLunarRegentEvent FromPool(GameObject Source, string Context)
         {
             if (FromPool() is not BeforeCreateLunarRegentEvent E)
                 return null;
 
+            E.Source = Source;
             E.Context = Context;
 
             E.StringyEvent = E.GetStringyEvent();
@@ -88,6 +102,7 @@ namespace UD_Bones_Folder.Mod.Events
         {
             Success = false;
             if (FromPool(
+                Source: Player,
                 Context: Context) is not BeforeCreateLunarRegentEvent E)
                 return null;
 
