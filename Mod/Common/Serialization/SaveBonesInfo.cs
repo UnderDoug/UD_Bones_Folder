@@ -1200,6 +1200,7 @@ namespace UD_Bones_Folder.Mod
                 using var options = new PickOptionDataSetAsync<IEnumerable<ModRecord>, UIUtils.CascadableResult>();
                 do
                 {
+                    sB.Clear();
                     if (!bonesHasButNotAvailable.IsNullOrEmpty())
                     {
                         sB.AppendColored("red", "Attention").Append(": one or more mods enabled in this bones file are ")
