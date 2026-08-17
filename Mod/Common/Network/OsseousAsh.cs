@@ -508,8 +508,8 @@ namespace UD_Bones_Folder.Mod
             if (Options.EnableOsseousAshDownloads
                 || Options.EnableOsseousAshUploads)
             {
-                if (Hosts.FirstWithHostMatching(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is HostSet defaultHostCollection
-                    && defaultHostCollection.FirstOrDefault(h => h.SameAs(Host.DefaultHost, IgnoreDisabled: true)) is Host defaultHost)
+                if (Hosts.FirstWithHostMatching(h => h.SameAs(DefaultHost, IgnoreDisabled: true)) is HostSet defaultHostCollection
+                    && defaultHostCollection.FirstOrDefault(h => h.SameAs(DefaultHost, IgnoreDisabled: true)) is Host defaultHost)
                 {
                     defaultHost.Enabled = false;
                     defaultHostCollection.Write();
@@ -1479,8 +1479,10 @@ namespace UD_Bones_Folder.Mod
         {
             //Utils.Log($"{1.Indent()}GetBonesInfos");
             List<SaveBonesInfo> saveBonesInfos = null;
+            bool any = false;
             foreach (var host in AllHosts(h => h.Enabled).IteratorSafe())
             {
+                any = true;
                 //Utils.Log($"{1.Indent()}{host} - GetSaveBonesInfos");
                 if (host.GetSaveBonesInfos() is not IEnumerable<SaveBonesInfo> saveBonesInfosFromHost
                     || saveBonesInfosFromHost.IsNullOrEmpty())
@@ -1500,6 +1502,10 @@ namespace UD_Bones_Folder.Mod
                     saveBonesInfos.Add(hostedSaveBonesInfo);
                 }
             }
+
+            if (BonesManager.System is BonesManager system)
+                system.IgnoreCache = any;
+
             return saveBonesInfos;
         }
 

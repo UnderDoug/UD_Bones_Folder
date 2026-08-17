@@ -568,6 +568,8 @@ namespace UD_Bones_Folder.Mod.UI
             instance.gameObject.LogComponentTree($"{Utils.CallChain(nameof(BonesManagement), nameof(instance), nameof(instance.gameObject))} {instance.gameObject.name}");
             Utils.Log("=".ThisManyTimes(45));
             */
+            if (Options.EnableOsseousAshDownloads)
+                Loading.SetLoadingStatus(null);
         }
 
         public override void Hide()

@@ -161,6 +161,10 @@ namespace UD_Bones_Folder.Mod
         public List<string> Encountered = new();
         [NonSerialized]
         public List<string> FailedToLoadBones = new();
+        [NonSerialized]
+        private List<SaveBonesInfo> EligibleSaveBonesInfoCache;
+        [NonSerialized]
+        public bool IgnoreCache = false;
 
         public string SeededRandomPrefix => $"{MOD_PREFIX}{GameID}";
 
@@ -827,12 +831,29 @@ namespace UD_Bones_Folder.Mod
                 .IteratorSafe()
             ;
 
-        public async Task<IEnumerable<SaveBonesInfo>> GetEligibleSaveBonesInfoAsync(Predicate<SaveBonesInfo> Where = null)
-            => await GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible && (Where?.Invoke(bones) is not false))
+        public void ClearEligibleSaveBonesInfoCache()
+            => EligibleSaveBonesInfoCache = null
             ;
 
-        public IEnumerable<SaveBonesInfo> GetEligibleSaveBonesInfo(Predicate<SaveBonesInfo> Where = null)
-            => GetEligibleSaveBonesInfoAsync(Where)
+        public async Task<IEnumerable<SaveBonesInfo>> GetEligibleSaveBonesInfoAsync(
+            Predicate<SaveBonesInfo> Where = null,
+            bool IgnoreCache = true
+            )
+        {
+            if (IgnoreCache
+                || !Options.EnableOsseousAshDownloads
+                || !OsseousAsh.AllHosts(h => !h.Enabled || h.IsOnCooldown).IsNullOrEmpty()
+                || EligibleSaveBonesInfoCache == null)
+                EligibleSaveBonesInfoCache = new(await GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible && (Where?.Invoke(bones) is not false)));
+
+            return EligibleSaveBonesInfoCache;
+        }
+
+        public IEnumerable<SaveBonesInfo> GetEligibleSaveBonesInfo(
+            Predicate<SaveBonesInfo> Where = null,
+            bool IgnoreCache = true
+            )
+            => GetEligibleSaveBonesInfoAsync(Where, IgnoreCache)
                 .WaitResult()
                 .IteratorSafe()
             ;
@@ -1881,7 +1902,7 @@ namespace UD_Bones_Folder.Mod
                 && SaveBonesInfo.BonesSpec?.IsWithinSpec(playerSpec) is true
                 ;
 
-            if (GetEligibleSaveBonesInfo(notEncounteredAndWithinSpec) is IEnumerable<SaveBonesInfo> bonesInfos
+            if (GetEligibleSaveBonesInfo(notEncounteredAndWithinSpec, IgnoreCache) is IEnumerable<SaveBonesInfo> bonesInfos
                 && !bonesInfos.IsNullOrEmpty())
             {
                 var allocationType = allocation.Type;

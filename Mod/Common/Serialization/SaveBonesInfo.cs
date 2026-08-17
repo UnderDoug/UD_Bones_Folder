@@ -1051,16 +1051,26 @@ namespace UD_Bones_Folder.Mod
             if (IsCrematable)
             {
                 using var fileLocationDataList = ScopeDisposedList<FileLocationData>.GetFromPoolFilledWith(FileLocationDataSet);
-                foreach (var fileLocationData in fileLocationDataList)
+                try
                 {
-                    bool didCremate = fileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
+                    foreach (var fileLocationData in fileLocationDataList)
                     {
-                        FileLocationDataSet.Remove(fld);
+                        bool didCremate = fileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
+                        {
+                            FileLocationDataSet.Remove(fld);
+                        });
+                        if (didCremate)
+                        {
+                            WasCremated = true;
+                        }
+                    }
+                }
+                finally
+                {
+                    if (WasCremated)
+                    {
                         BonesManager.ClearHasSaveBones();
-                    });
-                    if (didCremate)
-                    {
-                        WasCremated = true;
+                        BonesManager.System.ClearEligibleSaveBonesInfoCache();
                     }
                 }
             }

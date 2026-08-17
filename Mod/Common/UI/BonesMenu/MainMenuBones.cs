@@ -99,6 +99,9 @@ namespace UD_Bones_Folder.Mod.UI
                 {
                     try
                     {
+                        if (Options.EnableOsseousAshDownloads)
+                            Loading.SetLoadingStatus($"Loading Bones...");
+
                         ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
                     }
                     finally
