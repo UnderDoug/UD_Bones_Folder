@@ -208,7 +208,7 @@ namespace UD_Bones_Folder.Mod
                 Enabled = false,
             };
 
-            private const int DEFAULT_TIMEOUT = 2200;
+            private const int DEFAULT_TIMEOUT = 3000;
 
             private static long SeverStatusCheckInterval => 300000;
 
