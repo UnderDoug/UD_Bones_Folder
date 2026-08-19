@@ -1811,7 +1811,6 @@ namespace UD_Bones_Folder.Mod
                 if (reportType != Report.ReportTypes.Other)
                     reportTypeText = $"They are {reportType.ToString().ToLower()}";
 
-                options.Clear(Dispose: true);
                 options.Add(new PickOptionDataAsync<Report.ReportTypes, Report.ReportTypes>
                 {
                     Element = reportType,
