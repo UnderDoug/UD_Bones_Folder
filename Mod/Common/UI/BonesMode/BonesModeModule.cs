@@ -1918,7 +1918,8 @@ namespace UD_Bones_Folder.Mod.UI
                         && go.HasPart<EnergyCellSocket>())
                         go.SplitStack(Count: 1, OwningObject: Player, NoRemove: true);
 
-                    if (!go.TryGetPart(out EnergyCellSocket cellSocket))
+                    if (!go.TryGetPart(out EnergyCellSocket cellSocket)
+                        || cellSocket.Cell != null)
                         return;
 
                     energyCells.ShuffleInPlace(rnd);
