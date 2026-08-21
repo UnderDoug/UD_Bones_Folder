@@ -81,6 +81,28 @@ namespace UD_Bones_Folder.Mod.UI
 
         public static bool WishContext;
 
+
+        private List<SaveBonesInfo> _SaveBonesInfoCache;
+        private List<SaveBonesInfo> SaveBonesInfoCache
+        {
+            get
+            {
+                if (_SaveBonesInfoCache == null)
+                {
+                    if (BonesManager.GetSaveBonesInfoAsync(
+                            Where: IsBonesToShow,
+                            IncludeBlocked: IncludeBlocked,
+                            NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
+                        ).AwaitResult() is IEnumerable<SaveBonesInfo> bonesInfos
+                    && bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is IEnumerable<SaveBonesInfo> orderedBonesInfos)
+                    _SaveBonesInfoCache = new(orderedBonesInfos);
+                }
+                return _SaveBonesInfoCache;
+            }
+        }
+
+        public bool IgnoreCache = false;
+
         public SaveBonesInfo Preselected;
 
         public Image Background;
@@ -470,13 +492,8 @@ namespace UD_Bones_Folder.Mod.UI
 
             //Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
 
-            if (BonesManager.GetSaveBonesInfoAsync(
-                    Where: IsBonesToShow,
-                    IncludeBlocked: IncludeBlocked,
-                    NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
-                    ).WaitResult() is not IEnumerable<SaveBonesInfo> bonesInfos
-                || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
-                || SaveBonesInfosToUIElements(orderedBonesInfos) is not List<BonesInfoData> bareBones
+            if (SaveBonesInfoCache is not IEnumerable<SaveBonesInfo> cachedBonesInfos
+                || SaveBonesInfosToUIElements(cachedBonesInfos) is not List<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
                 || (Bones = new(bareBones)).IsNullOrEmpty())
             {
@@ -575,6 +592,8 @@ namespace UD_Bones_Folder.Mod.UI
         public override void Hide()
         {
             base.Hide();
+            _SaveBonesInfoCache?.Clear();
+            _SaveBonesInfoCache = null;
             DisableNavContext();
             gameObject.SetActive(value: false);
             Printed = false;
@@ -871,6 +890,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public void Exit()
         {
+            _SaveBonesInfoCache?.Clear();
+            _SaveBonesInfoCache = null;
             Printed = false;
             MetricsManager.LogEditorInfo("Exiting bones screen");
             CompletionSource?.TrySetResult(null);
@@ -1147,7 +1168,10 @@ namespace UD_Bones_Folder.Mod.UI
                     saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
 
             if (BonesInfo.FileLocationData == null)
+            {
+                SaveBonesInfoCache?.Remove(BonesInfo);
                 return UIUtils.CascadableResult.CancelSilent;
+            }
 
             return UIUtils.CascadableResult.Continue;
         }
@@ -1171,7 +1195,7 @@ namespace UD_Bones_Folder.Mod.UI
                 BeforeDeletion: () => DisableNavContext(),
                 AfterDeletion: delegate ()
                 {
-                    if (!bonesInfo.FileLocationDataSet.IsNullOrEmpty())
+                    if (bonesInfo.FileLocationData != null)
                     {
                         if (BonesScroller.selectionClones[selectedPos] is FrameworkUnityScrollChild selectionClone
                             && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
@@ -1182,6 +1206,8 @@ namespace UD_Bones_Folder.Mod.UI
                             saveRow.Update();
                         }
                     }
+                    else
+                        SaveBonesInfoCache?.Remove(bonesInfo);
 
                     EnableNavContext();
                 });
@@ -1190,13 +1216,8 @@ namespace UD_Bones_Folder.Mod.UI
                 if (BonesScroller.TryGetSelectionElementsAtIndex(selectedPos, Bones, out _, out bonesData, out SaveManagementRow saveRow))
                     saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
             
-            if (await BonesManager.GetSaveBonesInfoAsync(
-                    Where: IsBonesToShow,
-                    IncludeBlocked: IncludeBlocked,
-                    NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
-                    ) is not IEnumerable<SaveBonesInfo> bonesInfos
-                || bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is not IEnumerable<SaveBonesInfo> orderedBonesInfos
-                || SaveBonesInfosToUIElements(orderedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
+            if (SaveBonesInfoCache is not IEnumerable<SaveBonesInfo> cachedBonesInfos
+                || SaveBonesInfosToUIElements(cachedBonesInfos) is not IEnumerable<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
                 || (Bones = new(bareBones)).IsNullOrEmpty())
                 Exit();

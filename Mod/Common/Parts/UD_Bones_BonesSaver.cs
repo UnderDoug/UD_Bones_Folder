@@ -459,7 +459,14 @@ namespace XRL.World.Parts
                         Utils.Warn($"Strange unequippable {lunarRegentMask?.DebugName ?? "NO_MASK_OBJECT"} without {nameof(UD_Bones_LunarFace)} part...");
                 }
 
-                lunarRegent.Brain?.PerformEquip();
+                try
+                {
+                    lunarRegent.Brain?.PerformEquip();
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"Failed to {nameof(Brain.PerformEquip)} during {nameof(UD_Bones_BonesSaver)}.{nameof(HandleEvent)}({nameof(GetLunarRegentEvent)})", x);
+                }
             }
             return base.HandleEvent(E);
         }

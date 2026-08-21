@@ -90,18 +90,12 @@ namespace UD_Bones_Folder.Mod
             protected set => _WishContext = value;
         }
 
-        [GameBasedStaticCache]
-        private static List<string> _SaveGameIDs = null;
-
-        public static IEnumerable<string> SaveGameIDs => _SaveGameIDs ??= SavesAPI.GetSavedGameInfo()?.Result?.Select(info => info.ID)?.ToList();
-
         public static FileLocationData[] BonesPaths => new FileLocationData[]
         {
             BonesSaveSyncInfo,
             BonesSavePathInfo,
         };
 
-        // [GameBasedStaticCache(CreateInstance = false)]
         private static BonesManager _System;
         public static BonesManager System
         {
@@ -138,6 +132,11 @@ namespace UD_Bones_Folder.Mod
         [NonSerialized]
         protected Dictionary<string, string> BlueprintReplacementsByMissingBlueprint = new();
 
+        [NonSerialized]
+        private List<SaveBonesInfo> EligibleSaveBonesInfoCache;
+        [NonSerialized]
+        public bool IgnoreCache = false;
+
         #endregion
 
         [SerializeField]
@@ -161,10 +160,6 @@ namespace UD_Bones_Folder.Mod
         public List<string> Encountered = new();
         [NonSerialized]
         public List<string> FailedToLoadBones = new();
-        [NonSerialized]
-        private List<SaveBonesInfo> EligibleSaveBonesInfoCache;
-        [NonSerialized]
-        public bool IgnoreCache = false;
 
         public string SeededRandomPrefix => $"{MOD_PREFIX}{GameID}";
 
