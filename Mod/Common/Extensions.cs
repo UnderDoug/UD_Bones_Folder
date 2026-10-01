@@ -816,7 +816,7 @@ namespace UD_Bones_Folder.Mod
             Action<int> Action
             )
         {
-            for (int i = 0; i < Number; i++)
+            for (int i = 1; i < Number + 1; i++)
                 Action(i);
         }
 

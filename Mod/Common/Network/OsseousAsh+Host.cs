@@ -120,7 +120,7 @@ namespace UD_Bones_Folder.Mod
                     var timeSinceFirstTry = DateTime.UtcNow - UploadTime;
                     bool exceededTimeLimit = timeSinceFirstTry.TotalMilliseconds >= 180000;
 
-                    Utils.Info($"{DateTime.Now.Timestamp()} - {nameof(PendingSavGz)} attempting to {nameof(RetryUpload)} of {{{BonesID ?? "NO_BONES_ID"}}} to {ParentHost?.ToString() ?? "NO_HOST"}, time since first try: {timeSinceFirstTry.ValueUnits()}");
+                    Utils.InfoTimestamp($"{nameof(PendingSavGz)} attempting to {nameof(RetryUpload)} of {{{BonesID ?? "NO_BONES_ID"}}} to {ParentHost?.ToString() ?? "NO_HOST"}, time since first try: {timeSinceFirstTry.ValueUnits()}");
 
                     if (ParentHost == null)
                         this.ForceDispose = true;
@@ -154,7 +154,7 @@ namespace UD_Bones_Folder.Mod
                         var pendingSavGzs = ParentHost?.PendingSavGzs;
                         Dispose();
                         string pendingSavsCount = (pendingSavGzs?.Count)?.ToString() ?? "NO_DICTIONARY";
-                        Utils.Info($"{DateTime.Now.Timestamp()} - Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(ParentHost.PendingSavGzs)}: {pendingSavsCount}");
+                        Utils.InfoTimestamp($"Disposing of {nameof(PendingSavGz)} due to {dueTo}. {nameof(ParentHost.PendingSavGzs)}: {pendingSavsCount}");
                     }
 
                     return Success;
@@ -337,7 +337,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (!WrittenEnabled.HasValue)
                 {
-                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
                         $"{GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
                     ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                     return;
@@ -353,7 +353,7 @@ namespace UD_Bones_Folder.Mod
                         {
                             WrittenEnabled = null;
                             // ClearReportsCache();
-                            Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                            Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
                                 $"Connection re-established to {GetHostNameWithProtocol()} - Re-enabled");
                             ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                         }
@@ -362,13 +362,13 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
-                        Utils.Error($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
+                        Utils.ErrorTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
                         Enabled = false;  
                     }
                 }
                 else
                 {
-                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
                         $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
                     ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                 }
@@ -451,8 +451,7 @@ namespace UD_Bones_Folder.Mod
             {
                 if (!WrittenEnabled.HasValue)
                 {
-                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
-                        $"{GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
                     ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                     return;
                 }
@@ -466,8 +465,7 @@ namespace UD_Bones_Folder.Mod
                         if (IsRunning)
                         {
                             WrittenEnabled = null;
-                            Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
-                                $"{ReasonForOverride}");
+                            Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {ReasonForOverride}");
                             ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                         }
                         else
@@ -475,13 +473,13 @@ namespace UD_Bones_Folder.Mod
                     }
                     catch (Exception x)
                     {
-                        Utils.Error($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
+                        Utils.ErrorTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
                         Enabled = false;
                     }
                 }
                 else
                 {
-                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
                         $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
                     ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
                 }
@@ -503,7 +501,7 @@ namespace UD_Bones_Folder.Mod
 
                     string successMessage = $"Timer for {Host.GetHostNameWithProtocol()} set up successfully.";
                     if (Indent == 0)
-                        Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {successMessage}");
+                        Utils.InfoTimestamp($"[{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {successMessage}");
                     else
                         Utils.Log($"{Indent.Indent()}{successMessage}");
                 }
@@ -511,7 +509,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     string failureMessage = $"Timer for {Host.GetHostNameWithProtocol()} already exists.";
                     if (Indent == 0)
-                        Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {failureMessage}");
+                        Utils.InfoTimestamp($"[{nameof(HostID)}: {Host.HostID}] {nameof(SetupStatusCheckTimer)}: {failureMessage}");
                     /*else
                         Utils.Log($"{Indent.Indent()}{failureMessage}");*/
                 }
@@ -524,7 +522,7 @@ namespace UD_Bones_Folder.Mod
                     string inner = null;
                     if (X.InnerException is Exception iX)
                         inner = $" Inner: {iX}";
-                    Utils.Info($"{DateTime.Now.Timestamp()} - [{nameof(HostID)}: {HostID}{BuiltString}] Timed out getting status from {URI} ({GetTimeoutString(Timeout)}).{inner}");
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}{BuiltString}] Timed out getting status from {URI} ({GetTimeoutString(Timeout)}).{inner}");
                     if (IsBuilt)
                         SetupStatusCheckTimer(ref StatusCheckTimer, this, Indent: 1);
 
@@ -1300,7 +1298,7 @@ namespace UD_Bones_Folder.Mod
             private Timer GetPendingSavGzTimer(PendingSavGz PendingSavGz)
             {
                 string bonesID = PendingSavGz.BonesID;
-                Utils.Info($"{DateTime.Now.Timestamp()} - Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{bonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
+                Utils.InfoTimestamp($"Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{bonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
 
                 return new(GetPendingSavGzTimerCallback(PendingSavGz),
                     state: bonesID,
@@ -1739,7 +1737,7 @@ namespace UD_Bones_Folder.Mod
                                             break;
                                         }
                                     }
-                                    Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{Config?.ID}}} on server at \"{ToString()}\"" +
+                                    Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{Config?.ID}}} on server at {ToString()}" +
                                         $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
 
                                     return reports;

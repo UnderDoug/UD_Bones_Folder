@@ -16,6 +16,7 @@ using XRL.Core;
 using Genkit;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.Serialization.Delegates;
+using UD_Bones_Folder.Mod.UI;
 
 namespace XRL.World.WorldBuilders
 {
@@ -30,6 +31,32 @@ namespace XRL.World.WorldBuilders
 
         [GameBasedStaticCache(CreateInstance = false)]
         public static string BoneZoneID = null;
+
+        public override void OnBeforeMutableInit(JoppaWorldBuilder Builder)
+        {
+            if (Options.EnableOsseousAshDownloads)
+            {
+                Loading.SetLoadingStatus($"Loading Bones...");
+                foreach (var host in OsseousAsh.AllHosts(h => h.IsOnCooldown))
+                {
+                    string hostName = host.GetHostNameWithProtocol();
+                    try
+                    {
+                        host.ManuallyClearStatusCheckTimer(ReasonForOverride: $"{hostName} was cleared attempting to open {nameof(BonesManagement)} UI");
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.ErrorTimestamp($"Issue trying to clear timeout cooldown for {hostName}", x);
+                    }
+                    finally
+                    {
+                        if (host.IsOnCooldown)
+                            Utils.WarnTimestamp($"Failed to clear timeout cooldown for {hostName}.");
+                    }
+                }
+            }
+            base.OnBeforeMutableInit(Builder);
+        }
 
         public override void OnAfterBuild(JoppaWorldBuilder Builder)
         {
@@ -61,8 +88,8 @@ namespace XRL.World.WorldBuilders
                             yield return location;
         }
 
-        public LocationsSet AllImmutableLocations()
-            => new LocationsSet(YieldAllLocations(l => Builder.mutableMap.GetMutable(l) == 0))
+        public LocationSet AllImmutableLocations()
+            => new LocationSet(YieldAllLocations(l => Builder.mutableMap.GetMutable(l) == 0))
             ;
     }
 }

@@ -118,7 +118,7 @@ namespace UD_Bones_Folder.Mod
         public EmbarkBuilder EmbarkBuilder;
 
         [NonSerialized]
-        public LocationsSet ImmutableLocations;
+        public LocationSet ImmutableLocations;
 
         #endregion
         #region Instance Caches
@@ -284,7 +284,7 @@ namespace UD_Bones_Folder.Mod
             FailedToLoadBones = Reader.ReadList<string>();
 
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ImmutableLocations)})");
-            ImmutableLocations = Reader.ReadComposite<LocationsSet>();
+            ImmutableLocations = Reader.ReadComposite<LocationSet>();
             if (readVersion < AddedFieldReflectionSerialization)
             {
                 Utils.Log($"  {nameof(ImmutableLocations)}.{nameof(ImmutableLocations.InvertLocations)}()");

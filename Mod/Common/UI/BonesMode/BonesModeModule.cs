@@ -2497,22 +2497,22 @@ namespace UD_Bones_Folder.Mod.UI
                 int ticker = 1;
                 overTier.ForEach(i =>
                 {
-                    int num = i / 2;
-                    fakeElapsedTicks += toTicks(num * (long)(800000 + SeededRandom(nameof(XRLGame.WallTime), -getMargin(i), getMargin(i), i + ticker++)));
-                    double multi = 1.0 + (num / 10.0);
+                    int baseValue = i / 2;
+                    fakeElapsedTicks += toTicks(baseValue * (long)(800000 + SeededRandom(nameof(XRLGame.WallTime), -getMargin(i), getMargin(i), i + ticker++)));
+                    double multi = 1.0 + (baseValue / 10.0);
                     long newWallTime = (long)(fakeElapsedTicks * multi);
                     fakeElapsedTicks = newWallTime;
                 });
 
-                if (Game.WallTime != null)
+                if (Game.WallTime == null)
                 {
-                    Game._walltime += Game.WallTime.ElapsedTicks;
-                    Game.WallTime.Reset();
+                    Game.WallTime = new Stopwatch();
                     Game.WallTime.Start();
                 }
                 else
                 {
-                    Game.WallTime = new Stopwatch();
+                    Game._walltime += Game.WallTime.ElapsedTicks;
+                    Game.WallTime.Reset();
                     Game.WallTime.Start();
                 }
 
@@ -2522,6 +2522,8 @@ namespace UD_Bones_Folder.Mod.UI
                     Game.WallTime.SetFieldNaughty("started", Stopwatch.GetTimestamp() - fakeElapsedTicks);
                     Game.Turns += (long)Math.Round(toMilli(fakeElapsedTicks) * turnMulti);
                     Game.TimeTicks += (long)Math.Round(fakeElapsedTicks * (double)(Player.GetStat("Speed").BaseValue / 100.0));
+                    if (Player.CurrentZone is Zone zone)
+                        zone.LastPlayerPresence = Game.TimeTicks;
                 }
                 return true;
             }

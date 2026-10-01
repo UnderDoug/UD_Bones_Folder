@@ -100,7 +100,26 @@ namespace UD_Bones_Folder.Mod.UI
                     try
                     {
                         if (Options.EnableOsseousAshDownloads)
+                        {
                             Loading.SetLoadingStatus($"Loading Bones...");
+                            foreach (var host in OsseousAsh.AllHosts(h => h.IsOnCooldown))
+                            {
+                                string hostName = host.GetHostNameWithProtocol();
+                                try
+                                {
+                                    host.ManuallyClearStatusCheckTimer(ReasonForOverride: $"{hostName} was cleared attempting to open {nameof(BonesManagement)} UI");
+                                }
+                                catch (Exception x)
+                                {
+                                    Utils.ErrorTimestamp($"Issue trying to clear timeout cooldown for {hostName}", x);
+                                }
+                                finally
+                                {
+                                    if (host.IsOnCooldown)
+                                        Utils.WarnTimestamp($"Failed to clear timeout cooldown for {hostName}.");
+                                }
+                            }
+                        }
 
                         ReturnToBones = await NavigationController.instance.SuspendContextWhile(BonesManagement.instance.BonesMenu);
                     }

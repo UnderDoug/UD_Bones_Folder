@@ -13,18 +13,18 @@ using XRL.World.WorldBuilders;
 namespace UD_Bones_Folder.Mod.Serialization
 {
     [Serializable]
-    public class LocationsSet : SerializeableSet<Location2D>
+    public class LocationSet : SerializeableSet<Location2D>
     {
         public override WriteEach<Location2D> WriteEach => (w, e) => w.Write(e);
         public override ReadEach<Location2D> ReadEach => r => r.ReadLocation2D();
 
         #region Constructors
 
-        public LocationsSet()
+        public LocationSet()
             : base()
         { }
 
-        public LocationsSet(IEnumerable<Location2D> Source)
+        public LocationSet(IEnumerable<Location2D> Source)
             : base(Source)
         { }
 

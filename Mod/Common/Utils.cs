@@ -148,12 +148,20 @@ namespace UD_Bones_Folder.Mod
             => Error(ModInfo: null, Message)
             ;
 
+        public static void ErrorTimestamp(object Message)
+            => Error($"{DateTime.Now.Timestamp()} - {Message}")
+            ;
+
         public static void Error(ModInfo ModInfo, object Context, Exception X)
             => Error(ModInfo, $"{Context}: {X}")
             ;
 
         public static void Error(object Context, Exception X)
             => Error(ModInfo: null, Context, X)
+            ;
+
+        public static void ErrorTimestamp(object Context, Exception X)
+            => Error($"{DateTime.Now.Timestamp()} - {Context}", X)
             ;
 
         public static void ErrorOnce(ModInfo ModInfo, object Message)
@@ -196,12 +204,20 @@ namespace UD_Bones_Folder.Mod
             => Warn(ModInfo: null, Message)
             ;
 
+        public static void WarnTimestamp(object Message)
+            => Warn($"{DateTime.Now.Timestamp()} - {Message}")
+            ;
+
         public static void Warn(ModInfo ModInfo, object Context, Exception X)
             => Warn(ModInfo, $"{Context}: {X}")
             ;
 
         public static void Warn(object Context, Exception X)
             => Warn(ModInfo: null, Context, X)
+            ;
+
+        public static void WarnTimestamp(object Context, Exception X)
+            => Warn($"{DateTime.Now.Timestamp()} - {Context}", X)
             ;
 
         public static void Warn(ModInfo ModInfo, object Message, StackTrace WithTrace)
@@ -254,6 +270,10 @@ namespace UD_Bones_Folder.Mod
 
         public static void Info(object Message)
             => MetricsManager.LogModInfo(ThisMod, Message)
+            ;
+
+        public static void InfoTimestamp(object Message)
+            => Info($"{DateTime.Now.Timestamp()} - {Message}")
             ;
 
         public static void Log(object Message)
