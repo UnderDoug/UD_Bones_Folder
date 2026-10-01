@@ -99,9 +99,9 @@ namespace UD_Bones_Folder.Mod
                         {
                             "Widget",
                             "DataBucket",
-                            "Lunar Regent",
-                            "Lunar Face",
-                            "Lunar Reliquary",
+                            LUNAR_REGENT_BLUEPRINT,
+                            LUNAR_FACE_BLUEPRINT,
+                            LUNAR_RELIQUARY_BLUEPRINT,
                             "BaseNephal",
                         }))
                         continue;
@@ -990,5 +990,18 @@ namespace UD_Bones_Folder.Mod
             }
             return CachedValues;
         }
+
+        public static int GetSultanPeriodByMaskBlueprint(string Blueprint)
+            => Blueprint switch
+            {
+                "The Nil Face" => 6,
+                "The Olive Face" => 5,
+                "The Levant Face" => 4,
+                "The Earth Face" => 3,
+                "The Shemesh Face" => 2,
+                "The Kesil Face" => 1,
+                _ => 0,
+            }
+            ;
     }
 }

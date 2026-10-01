@@ -33,7 +33,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_DebugEnableSilencedLogging"
-        DisplayText="{{Y|Bones}}: Enable logging of otherwise silenced processes."
+        DisplayText="{{Y|Bones}}: Enable logging of otherwise silenced processes"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -46,8 +46,22 @@
     </helptext>
   </option>
   <option
+        ID="UD_Bones_Folder_DebugEnableDebugInternalsVomitOnFailedAscention"
+        DisplayText="{{Y|Bones}}: Enable logging of debug internals if player ascention fails"
+        Category="Debug"
+        Type="Checkbox"
+        Default="No">
+    <helptext>
+      When enabled, if the player's ascent fails during death, the &quot;{{C|DebugInternals}}&quot; of the &quot;invalid&quot; Lunar Regent will be dumped into the logs.
+
+      Search the logs for &quot;GetDebugInternalsEvent for lunarRegent&quot; to find the output.
+
+      The default is {{w|Disabled}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_DebugEnableBadWordFilterLogging"
-        DisplayText="{{Y|Bones}}: Enable logging the bad word filter results to the log."
+        DisplayText="{{Y|Bones}}: Enable logging the bad word filter results to the log"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -61,7 +75,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_DebugEnableBadWordFilterForLocalBones"
-        DisplayText="{{Y|Bones}}: Enable the bad word filter for non-online bones files."
+        DisplayText="{{Y|Bones}}: Enable the bad word filter for non-online bones files"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -75,7 +89,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_DebugEnableBadWordFilterTestWords"
-        DisplayText="{{Y|Bones}}: Enable the bad word filter test words."
+        DisplayText="{{Y|Bones}}: Enable the bad word filter test words"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -96,7 +110,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_DebugEnableNoHoarding"
-        DisplayText="{{Y|Bones}}: Pause hoarding bones (saving new bones files)."
+        DisplayText="{{Y|Bones}}: Pause hoarding bones (saving new bones files)"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -108,7 +122,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_DebugEnableNoExhuming"
-        DisplayText="{{Y|Bones}}: Pause exhuming {{rainbow|Lunar Regent}}s (loading bones files)."
+        DisplayText="{{Y|Bones}}: Pause exhuming {{rainbow|Lunar Regent}}s (loading bones files)"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -121,7 +135,7 @@
   <option
         ID="UD_Bones_Folder_DebugEnablePickingBones"
         Requires="UD_Bones_Folder_DebugEnableNoExhuming==Yes"
-        DisplayText="{{Y|Bones}}: Pick which {{rainbow|Lunar Regent}} to exhume (pick bones file)."
+        DisplayText="{{Y|Bones}}: Pick which {{rainbow|Lunar Regent}} to exhume (pick bones file)"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -136,7 +150,7 @@
   <option
         ID="UD_Bones_Folder_DebugEnableForcePickingBones"
         Requires="UD_Bones_Folder_DebugEnablePickingBones==Yes"
-        DisplayText="{{Y|Bones}}: Be asked every zone to pick which {{rainbow|Lunar Regent}} to exhume (force pick bones file)."
+        DisplayText="{{Y|Bones}}: Be asked every zone to pick which {{rainbow|Lunar Regent}} to exhume (force pick bones file)"
         Category="Debug"
         Type="Checkbox"
         Default="No">
@@ -151,7 +165,7 @@
   <option
         ID="UD_Bones_Folder_DebugEnableIgnoreAllowReallyDie"
         Requires="OptionAllowReallydie==Yes"
-        DisplayText="{{Y|Bones}}: Override the debug option &quot;Get prompted to confirm deaths&quot; when &quot;forcing&quot; the &quot;make bones&quot; wish."
+        DisplayText="{{Y|Bones}}: Override the debug option &quot;Get prompted to confirm deaths&quot; when &quot;forcing&quot; the &quot;make bones&quot; wish"
         Category="Debug"
         Type="Checkbox"
         Default="Yes">
@@ -258,7 +272,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_ChosenPermyriadChance"
-        DisplayText="Choose chance per zone that bones can be encountered."
+        DisplayText="Choose chance per zone that bones can be encountered"
         Category="Mod: Bones"
         Type="Combo"
         Default="200"
@@ -305,7 +319,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_ModerationMinimumSeverityLevel"
-        DisplayText="Choose profanity filter minimum severity level for {{Y|online}} bones files."
+        DisplayText="Choose profanity filter minimum severity level for {{Y|online}} bones files"
         Category="Mod: Bones"
         Type="Combo"
         Default="3"
@@ -331,7 +345,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_BonesMode_ProgressionSlant"
-        DisplayText="Choose rough direction you'd like Bones Mode characters' level to be slanted."
+        DisplayText="Choose rough direction you'd like Bones Mode characters' level to be slanted"
         Category="Mod: Bones"
         Type="Combo"
         Default="2"
@@ -359,7 +373,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_EnableFlashingLightEffects"
-        DisplayText="Enable flashing light effects."
+        DisplayText="Enable flashing light effects"
         Category="Mod: Bones"
         Type="Checkbox"
         Default="Yes">
@@ -373,7 +387,7 @@
   </option>
   <option
         ID="UD_Bones_Folder_EnableBonesFromEarlierModVersions"
-        DisplayText="Enable bones from earlier version of the mod to load (provided it's possible)."
+        DisplayText="Enable bones from earlier version of the mod to load (provided it's possible)"
         Category="Mod: Bones"
         Type="Checkbox"
         Default="No">

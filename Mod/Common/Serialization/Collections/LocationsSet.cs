@@ -8,22 +8,23 @@ using Genkit;
 using UD_Bones_Folder.Mod.Serialization.Delegates;
 
 using XRL.World;
+using XRL.World.WorldBuilders;
 
 namespace UD_Bones_Folder.Mod.Serialization
 {
     [Serializable]
-    public class MutableLocationsSet : SerializeableSet<Location2D>
+    public class LocationsSet : SerializeableSet<Location2D>
     {
         public override WriteEach<Location2D> WriteEach => (w, e) => w.Write(e);
         public override ReadEach<Location2D> ReadEach => r => r.ReadLocation2D();
 
         #region Constructors
 
-        public MutableLocationsSet()
+        public LocationsSet()
             : base()
         { }
 
-        public MutableLocationsSet(IEnumerable<Location2D> Source)
+        public LocationsSet(IEnumerable<Location2D> Source)
             : base(Source)
         { }
 
@@ -41,5 +42,14 @@ namespace UD_Bones_Folder.Mod.Serialization
         }
 
         #endregion
+
+        public void InvertLocations()
+        {
+            var newItems = UD_Bones_WorldBuilder.YieldAllLocations(l => !Items.Contains(l));
+            Clear();
+            EnsureCapacity(newItems.Count());
+            foreach (var item in newItems)
+                Add(item);
+        }
     }
 }

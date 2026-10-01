@@ -48,9 +48,19 @@ namespace XRL.World.Parts
             "from remembering something embarassing you did just recently.",
             "from the strain of getting to Qud.",
             "from %t disapproving stare.",
+            "from %t Lying...",
+            "from Physical Attacks That Hit You.",
         };
 
         private const string COMMAND_MAKE_BONES = "CMD_UD_Bones_MakeBones";
+
+        private static string BonesIconTile => "Items/sw_bones_1.bmp,Items/sw_bones_2.bmp,Items/sw_bones_3.bmp,Items/sw_bones_4.bmp,Items/sw_bones_5.bmp,Items/sw_bones_6.bmp,Items/sw_bones_7.bmp,Items/sw_bones_8.bmp".CachedCommaExpansion().GetRandomElementCosmetic();
+        private static Renderable BonesIcon => new(
+            Tile: BonesIconTile,
+            RenderString: "X",
+            ColorString: "&y",
+            TileColor: "&y",
+            DetailColor: 'Y');
 
         private static bool WishContext;
 
@@ -135,6 +145,12 @@ namespace XRL.World.Parts
                 return null;
             }
 
+            if (lunarRegent.IsInGraveyard())
+            {
+                lunarRegent.Flags &= ~GameObject.FLAG_GRAVEYARD;
+                Graveyard.Get().Objects.Remove(lunarRegent);
+            }
+
             TargetCell.AddObject(lunarRegent, System: true, Silent: true, Repaint: false, Ignore: The.Player);
 
             if (lunarRegent.CurrentCell == null)
@@ -155,6 +171,11 @@ namespace XRL.World.Parts
 
             if (lunarRegent.CurrentCell == null)
             {
+                if (Options.DebugEnableDebugInternalsVomitOnFailedAscention)
+                {
+                    Utils.Log($"{nameof(GetDebugInternalsEvent)} for {nameof(lunarRegent)}:");
+                    Utils.Log(GetDebugInternalsEvent.GetFor(lunarRegent));
+                }
                 lunarRegent.Release();
                 return null;
             }
@@ -225,12 +246,7 @@ namespace XRL.World.Parts
                     Class: "System",
                     Description: "Instantly die, making a bones file in the process",
                     Silent: Silent,
-                    UITileDefault: new Renderable(
-                        Tile: "Items/sw_bones_1.bmp,Items/sw_bones_2.bmp,Items/sw_bones_3.bmp,Items/sw_bones_4.bmp,Items/sw_bones_5.bmp,Items/sw_bones_6.bmp,Items/sw_bones_7.bmp,Items/sw_bones_8.bmp".CachedCommaExpansion().GetRandomElementCosmetic(),
-                        RenderString: "X",
-                        ColorString: "&y",
-                        TileColor: "&y",
-                        DetailColor: 'Y'));
+                    UITileDefault: BonesIcon);
             }
             return !MakeBonesActivatedAbilityID.IsEmptyOrDefault();
         }
@@ -238,6 +254,12 @@ namespace XRL.World.Parts
         private bool AddInstantDieAbility(bool Silent = false)
             => AddInstantDieAbility(ParentObject, ref MakeBonesActivatedAbilityID, Silent)
             ;
+
+        private void UpdateInstantDieAbilityIcon()
+        {
+            if (ParentObject.GetActivatedAbility(MakeBonesActivatedAbilityID) is ActivatedAbilityEntry instantDieAbility)
+                instantDieAbility.UITileDefault = BonesIcon;
+        }
 
         private bool RemoveInstantDieAbility()
             => MakeBonesActivatedAbilityID.IsEmptyOrDefault()
@@ -398,6 +420,7 @@ namespace XRL.World.Parts
             => base.WantEvent(ID, Cascade)
             || ID == AfterDieEvent.ID
             || ID == CommandEvent.ID
+            || ID == BeforeAbilityManagerOpenEvent.ID
             || ID == AfterPlayerBodyChangeEvent.ID
             || ID == GetDebugInternalsEvent.ID
             ;
@@ -531,8 +554,15 @@ namespace XRL.World.Parts
         {
             if (E.Command == COMMAND_MAKE_BONES)
             {
+                UpdateInstantDieAbilityIcon();
                 MakeBones_WishHandler("die ability");
             }
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(BeforeAbilityManagerOpenEvent E)
+        {
+            UpdateInstantDieAbilityIcon();
             return base.HandleEvent(E);
         }
 

@@ -30,7 +30,7 @@ namespace XRL.World.Parts
         : IScribedPart
         , IModEventHandler<LoadLunarRegentEvent>
     {
-        public const string BASE_BROKEN_LUNAR_REGENT = "Base Broken Lunar Regent";
+        public const string BASE_BROKEN_LUNAR_REGENT = "UD Base Broken Lunar Regent";
 
         private static IEnumerable<SaveBonesInfo> CachedSaveBonesInfo;
 
@@ -98,7 +98,7 @@ namespace XRL.World.Parts
         public bool IsReliquaryOfThisRegent(GameObject GameObject)
             => GameObject.TryGetPart(out UD_Bones_LunarReliquary reliquaryPart)
             && reliquaryPart.BonesID == BonesID
-            && GameObject.GetBlueprint().InheritsFromSafe("Lunar Reliquary")
+            && GameObject.GetBlueprint().InheritsFromSafe(Const.LUNAR_RELIQUARY_BLUEPRINT)
             ;
 
         public static string GetANonLegendaryCreatureBlueprint(Predicate<GameObjectBlueprint> Where = null, Random Rnd = null, int? AroundLevel = null)

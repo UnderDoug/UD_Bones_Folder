@@ -22,11 +22,12 @@ namespace UD_Bones_Folder.Mod.UI
             Cancel,
             CancelSilent,
         }
+
         public static List<QudMenuItem> _BackButton = new List<QudMenuItem>
         {
             new QudMenuItem
             {
-                text = "{{y|Back}}",
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("V Negative", XRL.UI.Options.ModernUI) + "]}} {{y|Back}}",
                 command = "option:-2",
                 hotkey = "N,V Negative"
             },
@@ -36,8 +37,18 @@ namespace UD_Bones_Folder.Mod.UI
         {
             new QudMenuItem
             {
-                text = "{{y|Back}}",
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("Cancel", XRL.UI.Options.ModernUI) + "]}} {{y|Back}}",
                 command = "option:-2",
+                hotkey = "N,V Negative,Cancel"
+            },
+        };
+
+        public static List<QudMenuItem> _ExitButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("Cancel", XRL.UI.Options.ModernUI) + "]}} {{y|Exit}}",
+                command = "option:-1",
                 hotkey = "N,V Negative,Cancel"
             },
         };
@@ -46,7 +57,7 @@ namespace UD_Bones_Folder.Mod.UI
         {
             new QudMenuItem
             {
-                text = "{{y|Save}}",
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("Accept", XRL.UI.Options.ModernUI) + "]}} {{y|Save}}",
                 command = "option:-3",
                 hotkey = "Accept"
             },
@@ -56,7 +67,7 @@ namespace UD_Bones_Folder.Mod.UI
         {
             new QudMenuItem
             {
-                text = "{{y|Confirm}}",
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("Accept", XRL.UI.Options.ModernUI) + "]}} {{y|Confirm}}",
                 command = "option:-4",
                 hotkey = "Accept"
             },

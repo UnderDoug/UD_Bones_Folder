@@ -159,6 +159,7 @@ namespace UD_Bones_Folder.Mod
                     return null;
 
                 return !DisplayName.IsNullOrEmpty()
+                        && ID != DisplayName
                     ? $"{ID};;{DisplayName}"
                     : ID
                     ;
@@ -243,7 +244,7 @@ namespace UD_Bones_Folder.Mod
         public static int BaseBonesWeight = 1000;
 
         public static IRenderable NonePleaseIcon = new BonesRender(
-                Blueprint: GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"),
+                Blueprint: GameObjectFactory.Factory.GetBlueprintIfExists("UD The Lunar Face"),
                 HFlip: false)
             .SetTileColor("&K")
             .SetDetailColor('K');
@@ -483,64 +484,71 @@ namespace UD_Bones_Folder.Mod
             return $"{output}{additionsString}";
         }
 
-        public string GetName(bool IncludeVersionWarning)
+        public string GetVersionWarning()
         {
-            string name = $"{(IsMad ? "Mad " : null)}{Name}"
-                .StartReplace()
-                .ToString();
-
-            if (IncludeVersionWarning)
+            string versionString = null;
+            if (GetBonesJSON() is SaveBonesJSON saveBonesJSON)
             {
-                if (GetBonesJSON() is SaveBonesJSON saveBonesJSON)
+                string versionColor = null;
+                if (saveBonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
                 {
-                    string versionString = null;
-                    string versionColor = null;
-                    if (saveBonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
-                    {
-                        versionString = $"Incompatible Version".Colored("R");
-                        versionColor = "R";
-                    }
-                    else
-                    if (saveBonesJSON.SaveVersion < XRLGame.SaveVersion)
-                    {
-                        versionString = $"Older Version".Colored("R");
-                        versionColor = "R";
-                    }
-                    else
-                    if (saveBonesJSON.SaveVersion > XRLGame.SaveVersion)
-                    {
-                        versionString = $"Newer Version".Colored("r");
-                        versionColor = "r";
-                    }
-
-                    if (!versionString.IsNullOrEmpty())
-                    {
-                        versionString = $"{versionString} ({saveBonesJSON.GameVersion})".Colored(versionColor);
-                        name = $"{versionString} {name}";
-                    }
+                    versionString = $"Incompatible Version".Colored("R");
+                    versionColor = "R";
                 }
+                else
+                if (saveBonesJSON.SaveVersion < XRLGame.SaveVersion)
+                {
+                    versionString = $"Older Version".Colored("R");
+                    versionColor = "R";
+                }
+                else
+                if (saveBonesJSON.SaveVersion > XRLGame.SaveVersion)
+                {
+                    versionString = $"Newer Version".Colored("r");
+                    versionColor = "r";
+                }
+
+                if (!versionString.IsNullOrEmpty())
+                    versionString = $"{versionString} ({saveBonesJSON.GameVersion})".Colored(versionColor);
             }
-            return name;
+            return versionString;
         }
 
         public string GetName()
-            => GetName(false)
+            => $"{(IsMad ? "Mad " : null)}{Name}"
+                .StartReplace()
+                .ToString()
             ;
 
         public XRL.Version GetModVersion()
             => new(ModVersion)
             ;
 
+        public IEnumerable<string> GetBonesMenuDataRowStrings(bool IncludeVersionWarning = false)
+        {
+            yield return $"{GetName()} :: {Description}".Colored("W");
+            yield return ColorUtility.CapitalizeExceptFormatting(Info);
+            yield return $"{DeathReason} on {GetSaveTimeString()}";
+            yield return $"{Size} {"{" + ID + "} "}".Colored("K");
+
+            if (IncludeVersionWarning)
+                yield return GetVersionWarning();
+        }
+
         public string GetBonesMenuDataRowString(int N, bool IncludeVersionWarning)
-            => N switch
+        {
+            var rowStrings = GetBonesMenuDataRowStrings(IncludeVersionWarning);
+            var rowStringsCount = rowStrings.Count();
+            if (N < rowStringsCount
+                && N >= 0)
             {
-                0 => $"{GetName(IncludeVersionWarning: IncludeVersionWarning)}::{Description}".Colored("W"),
-                1 => ColorUtility.CapitalizeExceptFormatting(Info),
-                2 => $"{DeathReason} on {GetSaveTimeString()}",
-                3 => $"{Size} {"{" + ID + "} "}".Colored("K"),
-                _ => throw new ArgumentOutOfRangeException(nameof(N), "Must be between 0 and 3 inclusive."),
+                int i = 0;
+                foreach (var rowString in rowStrings)
+                    if (N == i++)
+                        return rowString;
             }
-            ;
+            throw new ArgumentOutOfRangeException(nameof(N), $"Must be between 0 and {rowStringsCount - 1} inclusive.");
+        }
 
         public string GetBonesMenuDataRowString(int N)
             => GetBonesMenuDataRowString(N, IncludeVersionWarning: false)

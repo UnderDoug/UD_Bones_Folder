@@ -5,13 +5,9 @@ using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-
 using Platform.IO;
-
-using UnityEngine;
 
 using XRL;
 using XRL.UI;

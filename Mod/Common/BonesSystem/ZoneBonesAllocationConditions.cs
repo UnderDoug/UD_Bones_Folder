@@ -73,7 +73,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         }
 
         [ZoneBonesAllocationSpecCondition(WhenTrue = ZoneBonesAllocation.AllocationTypes.Bubble)]
-        public static bool IsNotMutableZone(Zone Z)
+        public static bool IsImmutableZone(Zone Z)
         {
             if (Z == null)
                 return false;
@@ -81,11 +81,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             if (Z.Z != 10)
                 return false;
 
-            if (!BonesManager.MutableLocations.IsNullOrEmpty()
-                && !BonesManager.MutableLocations.Contains(Z.ResolvedLocation))
-                return true;
+            if (BonesManager.ImmutableLocations.IsNullOrEmpty()
+                || BonesManager.ImmutableLocations.Contains(Z.ResolvedLocation))
+                return false;
 
-            return false;
+            return true;
         }
     }
 }

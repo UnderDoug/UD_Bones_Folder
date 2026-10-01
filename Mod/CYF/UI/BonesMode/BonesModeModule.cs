@@ -82,6 +82,7 @@ namespace UD_Bones_Folder.Mod.UI
                         {
                             modelData.model = playerModels
                                 .Where(m => m.Category == ModelType.Preset || m.Category == ModelType.Expansion)
+                                .Where(m => !m.Tile.IsNullOrEmpty())
                                 .IteratorSafe()
                                 .GetRandomElement(SeededGenerator(nameof(RandomizeTileIfChooseYourFighter)));
                         }

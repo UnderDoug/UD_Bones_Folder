@@ -131,7 +131,7 @@ namespace UD_Bones_Folder.Mod.UI
                 return;
             }
 
-            TextSkins[0].SetText($"{bonesInfo.Name}::{bonesInfo.Description}".Colored("W"));
+            TextSkins[0].SetText($"{bonesInfo.Name} :: {bonesInfo.Description}".Colored("W"));
             TextSkins[1].SetText($"{"Location:".Colored("C")} {bonesInfo.Info}");
             TextSkins[2].SetText($"{"Last saved:".Colored("C")} {bonesInfo.GetSaveTimeString()}");
             TextSkins[3].SetText($"{bonesInfo.Size} {{{bonesInfo.ID}}}".Colored("K"));

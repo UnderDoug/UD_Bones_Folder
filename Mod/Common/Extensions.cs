@@ -172,7 +172,6 @@ namespace UD_Bones_Folder.Mod
             string zoneTerrainType = zone.Z > 10 ? "underground" : terrainObject.Blueprint;
 
             string location = null;
-
             if (zone.Z > 10)
                 location += $"{zoneTerrainType}, ";
 
@@ -224,7 +223,7 @@ namespace UD_Bones_Folder.Mod
                 FColor = tileColor,
                 DColor = detailColor,
 
-                Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID)}",
+                Location = $"{location}{LoreGenerator.GenerateLandmarkDirectionsTo(zoneID, The.Game.AlternateStart)}",
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
                 Turn = Game.Turns,
                 SaveTime = $"{localTimeNow.ToLongDateString()} at {localTimeNow.ToLongTimeString()}",
@@ -810,6 +809,15 @@ namespace UD_Bones_Folder.Mod
                 seed = func(seed, i);
 
             return seed;
+        }
+
+        public static void ForEach(
+            this int Number,
+            Action<int> Action
+            )
+        {
+            for (int i = 0; i < Number; i++)
+                Action(i);
         }
 
         public static string ThisManyTimes(this string @string, int Times = 1)
@@ -1508,9 +1516,9 @@ namespace UD_Bones_Folder.Mod
                         {
                             "Widget",
                             "DataBucket",
-                            "Lunar Regent",
-                            "Lunar Face",
-                            "Lunar Reliquary",
+                            Const.LUNAR_REGENT_BLUEPRINT,
+                            Const.LUNAR_FACE_BLUEPRINT,
+                            Const.LUNAR_RELIQUARY_BLUEPRINT,
                             "BaseNephal",
                         }))
                         return false;
@@ -2953,6 +2961,12 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static void Sanitize_Kernelmethod_ResurrectingPets_Pet(this GameObject BonesObject)
+        {
+            if (BonesObject.HasPart("Kernelmethod_ResurrectingPets_Pet"))
+                BonesObject.RemovePart("Kernelmethod_ResurrectingPets_Pet");
+        }
+
         public static void NewGeneID(this GameObject Object)
         {
             if (The.Game == null)
@@ -3027,8 +3041,45 @@ namespace UD_Bones_Folder.Mod
             : null
             ;
 
-        #region Harmony
+        public static V SetFieldNaughty<T, V>(this T Object, string Field, V Value)
+        {
+            var type = typeof(T);
+            var valueType = typeof(V);
+            try
+            {
+                if (Field.IsNullOrEmpty())
+                    throw new ArgumentException(nameof(Field), "Cannot be null or empty string");
 
+                var field = type.GetField(Field, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+                    ?? throw new ArgumentOutOfRangeException(nameof(Field), $"Field \"{Field}\" was not found in {nameof(Type)} {type}");
+
+                if (!field.FieldType.IsAssignableFrom(valueType))
+                    throw new InvalidCastException($"{Field} field in {nameof(Type)} {type} is {field.FieldType}, to which {valueType} cannot be cast");
+
+                field.SetValue(Object, Value);
+                if (field.GetValue(Object) is V value)
+                    Utils.Info($"{type}.{nameof(SetFieldNaughty)}({nameof(Field)}: {Field})");
+
+                return Value;
+            }
+            catch (ArgumentOutOfRangeException x)
+            {
+                Utils.Error(nameof(SetFieldNaughty), x);
+                return default;
+            }
+            catch (InvalidCastException x)
+            {
+                Utils.Error(nameof(SetFieldNaughty), x);
+                return default;
+            }
+        }
+
+        public static IEnumerable<T> InEnumerable<T>(this T Value)
+        {
+            yield return Value;
+        }
+
+        #region Harmony
         #region Transpilation
 
         public static bool IsEndOfSection(this OpCode OpCode)
@@ -3210,7 +3261,6 @@ namespace UD_Bones_Folder.Mod
             ;
 
         #endregion
-
         #endregion
     }
 }

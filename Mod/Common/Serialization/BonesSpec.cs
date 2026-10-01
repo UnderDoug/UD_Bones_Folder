@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Platform.IO;
 
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using UD_Bones_Folder.Mod.UI;
 
 using UnityEngine;
 
@@ -32,6 +33,8 @@ namespace UD_Bones_Folder.Mod
         [Serializable]
         public enum ApproxDepth
         {
+            /// <summary>Any</summary>
+            Wildcard = -1,
             /// <summary>Strata 0-9</summary>
             Sky,
             /// <summary>Stratum 10</summary>
@@ -46,7 +49,23 @@ namespace UD_Bones_Folder.Mod
             CryoClone,
         }
 
+        public class ApproxDepthEqualityComparer : EqualityComparer<ApproxDepth>
+        {
+            public override bool Equals(ApproxDepth x, ApproxDepth y)
+                => x == ApproxDepth.Wildcard
+                || y == ApproxDepth.Wildcard
+                || x == y
+                ;
+
+            public override int GetHashCode(ApproxDepth obj)
+                => obj.GetHashCode()
+                ;
+        }
+
+        public static ApproxDepthEqualityComparer DefaultApproxDepthEqualityComparer = new();
+
         public static string MissingTerrainType => "Mystery";
+        public static string Wildcard => "*";
 
         public string BonesID;
 
@@ -97,6 +116,9 @@ namespace UD_Bones_Folder.Mod
                     TerrainTravelClass = "Underground";
                 }
             }
+
+            if (LunarRegent?.IsPlayer() is true)
+                PerformWildCarding();
         }
 
         public BonesSpec(
@@ -127,7 +149,45 @@ namespace UD_Bones_Folder.Mod
                     TerrainTravelClass = "Underground";
                 }
             }
+
+            if (LunarRegent?.IsPlayer() is true)
+                PerformWildCarding();
         }
+
+        private bool SeededPerMyriadChance(string Field, int Chance)
+            => BonesModeModule.SeededPerMyriadChance($"{nameof(BonesSpec)}::{ZoneID}::{Field}", Chance)
+            ;
+
+        private void PerformWildCarding()
+        {
+            if (ZoneID.IsNullOrEmpty())
+                return;
+
+            int originalTier = ZoneTier;
+
+            if (SeededPerMyriadChance(nameof(ZoneZ), originalTier * 50))
+                ZoneZ = -1;
+
+            if (SeededPerMyriadChance(nameof(ZoneTier), originalTier * 200))
+                ZoneTier = -1;
+
+            if (SeededPerMyriadChance(nameof(ZoneTerrainType), originalTier * 50))
+                ZoneTerrainType = Wildcard;
+
+            if (SeededPerMyriadChance(nameof(RegionTier), originalTier * 200))
+                RegionTier = -1;
+
+            if (SeededPerMyriadChance(nameof(TerrainTravelClass), originalTier * 50))
+                TerrainTravelClass = Wildcard;
+
+            if (SeededPerMyriadChance(nameof(Level), originalTier * 100))
+                Level = -1;
+        }
+
+        public static bool EitherWildcard<T>(T X, T Y, T Wildcard)
+            => X?.Equals(Wildcard) is true
+            || Y?.Equals(Wildcard) is true
+            ;
 
         public bool SameAs(BonesSpec Other)
             => Other != null
@@ -154,14 +214,15 @@ namespace UD_Bones_Folder.Mod
                 >= 21 => ApproxDepth.Deep,
                 >= 11 => ApproxDepth.Shallow,
                 10 => ApproxDepth.Surface,
-                _ => ApproxDepth.Sky,
+                >= 0 => ApproxDepth.Sky,
+                _ => ApproxDepth.Wildcard,
             };
 
         public ApproxDepth GetApproxDepth()
             => GetApproxDepth(ZoneZ);
 
         public static bool ZoneStrataWithinThreshold(int ZoneZ, int SpecZ)
-            => GetApproxDepth(ZoneZ) == GetApproxDepth(SpecZ)
+            => DefaultApproxDepthEqualityComparer.Equals(GetApproxDepth(ZoneZ), GetApproxDepth(SpecZ))
             ;
 
         public static bool IsWithinLevel(int Level, int SpecLevel)
@@ -180,23 +241,28 @@ namespace UD_Bones_Folder.Mod
             if (SameAs(PlayerSpec))
                 return true;
 
-            if (!IsWithinLevel(Level, PlayerSpec.Level))
+            if (!EitherWildcard(Level, PlayerSpec.Level, -1)
+                && !IsWithinLevel(Level, PlayerSpec.Level))
                 return false;
 
             if (!ZoneStrataWithinThreshold(ZoneZ, PlayerSpec.ZoneZ))
                 return false;
 
-            if (Math.Abs(ZoneTier - PlayerSpec.ZoneTier) > 5)
+            if (!EitherWildcard(ZoneTier, PlayerSpec.ZoneTier, -1)
+                && Math.Abs(ZoneTier - PlayerSpec.ZoneTier) > 5)
                 return false;
 
-            if (ZoneTerrainType != PlayerSpec.ZoneTerrainType)
+            if (!EitherWildcard(ZoneTerrainType, PlayerSpec.ZoneTerrainType, Wildcard)
+                && ZoneTerrainType != PlayerSpec.ZoneTerrainType)
                 return false;
 
-            if (RegionTier != PlayerSpec.RegionTier)
+            if (!EitherWildcard(RegionTier, PlayerSpec.RegionTier, -1)
+                && RegionTier != PlayerSpec.RegionTier)
                 return false;
 
-            if (!TerrainTravelClass.IsNullOrEmpty()
-                && !PlayerSpec.TerrainTravelClass.IsNullOrEmpty()
+            if (!EitherWildcard(TerrainTravelClass, PlayerSpec.TerrainTravelClass, Wildcard)
+                && !EitherWildcard(TerrainTravelClass, PlayerSpec.TerrainTravelClass, "")
+                && !EitherWildcard(TerrainTravelClass, PlayerSpec.TerrainTravelClass, null)
                 && TerrainTravelClass != PlayerSpec.TerrainTravelClass)
                 return false;
 
@@ -204,7 +270,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public bool IsWithinSpec(Zone Zone)
-            => IsWithinSpec(new BonesSpec(The.Player, Zone))
+            => IsWithinSpec(GetPlayerSpec(Zone))
             ;
     }
 }

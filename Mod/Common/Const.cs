@@ -42,7 +42,9 @@ namespace UD_Bones_Folder.Mod
 
         public const string REPORT_LOADED_BONES_COMMAND = "Cmd_" + MOD_PREFIX + "ReportLoadedBonesID";
 
-        public const string LUNAR_RELIQUARY_BLUEPRINT = "Lunar Reliquary";
+        public const string LUNAR_REGENT_BLUEPRINT = "UD Lunar Regent";
+        public const string LUNAR_RELIQUARY_BLUEPRINT = "UD Lunar Reliquary";
+        public const string LUNAR_FACE_BLUEPRINT = "UD The Lunar Face";
         public const string LUNAR_RELIQUARY_TRIGGERED = "UD_Bones_Reliquary_Triggered";
 
         public const string ORIGINAL_RECALL_STORY_PROP = MOD_PREFIX + "Original_Recall_Story";

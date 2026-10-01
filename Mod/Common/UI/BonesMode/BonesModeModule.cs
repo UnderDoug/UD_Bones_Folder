@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -270,8 +271,28 @@ namespace UD_Bones_Folder.Mod.UI
                                 customizeCharacterModule.setData(new());
 
                             if (SeededPerMyriadChance(nameof(Gender), 5000))
-                                customizeCharacterModule.data.gender = Gender.GetAllGenericPersonal()
-                                    .GetRandomElement(SeededGenerator(nameof(Gender), 1));
+                            {
+                                var genderRnd = SeededGenerator(nameof(Gender));
+
+                                if (SeededPerMyriadChance(nameof(Gender), 8000))
+                                {
+                                    IEnumerable<Gender> genderSets = SeededPerMyriadChance(nameof(Gender), 9000, 1)
+                                        ? Gender.GetAllPersonal()
+                                        : Gender.Generate(PluralChance: 5).InEnumerable()
+                                        ;
+
+                                    customizeCharacterModule.data.gender = genderSets.GetRandomElement(genderRnd);
+                                }
+                                else
+                                {
+                                    IEnumerable<PronounSet> pronounSets = SeededPerMyriadChance(nameof(Gender), 9000, 1)
+                                        ? PronounSet.GetAllPersonal()
+                                        : PronounSet.Generate(PluralChance: 5).InEnumerable()
+                                        ;
+
+                                    customizeCharacterModule.data.pronounSet = pronounSets.GetRandomElement(genderRnd);
+                                }
+                            }
 
                             var scrollContext = customizeCharacterModuleWindow.prefabComponent.scrollContext;
                             var scrollContextData = scrollContext?.data;
@@ -353,6 +374,8 @@ namespace UD_Bones_Folder.Mod.UI
                         bonesSaver.PetBlueprint = info.getData<QudCustomizeCharacterModuleData>()?.pet;
                     }
                     SimulateBeingSomewhereCool(player, worldBuilder, Silent: true);
+
+                    TakeTheScenicRoute(player, game);
                 }
             }
             return base.handleBootEvent(id, game, info, element);
@@ -603,6 +626,12 @@ namespace UD_Bones_Folder.Mod.UI
                         GetIntimateWithPaxKlanq(Player, 2000);
                     }
                     Player.ReceivePopulation($"UD_Bones_BonesMode_Tier {Tier.Constrain(modifiedTier - 1)}");
+                }
+                if (modifiedTier >= 7)
+                {
+                    if (Player.FindObjectInInventory(go => go.HasPart<SultanMask>()) is GameObject sultanMaskObject
+                        && sultanMaskObject.TryGetPart(out SultanMask sultanMask))
+                        The.Game.SetIntGameState("RobberChimesTriggered", sultanMask.Period + 1);
                 }
                 if (modifiedTier >= 6)
                 {
@@ -1583,7 +1612,9 @@ namespace UD_Bones_Folder.Mod.UI
                             && bodyParts.TakeAt(0) is BodyPart nextPart)
                         {
                             var rnd = SeededGenerator(Utils.CallChain(nameof(BodyPart), nameof(BodyPart.Implant), nameof(matchesSpec)), implantLoops);
+
                             GameObject implant = Player.GetInventoryAndEquipment(
+                                    // player inventory, unique
                                     Filter: delegate(GameObject go)
                                     {
                                         return !Player.GetInstalledCybernetics().Contains(go)
@@ -1595,6 +1626,7 @@ namespace UD_Bones_Folder.Mod.UI
                                     }
                                     ).GetRandomElement(rnd)
                                 ?? EncountersAPI.GetAnItem(
+                                    // generated, unique
                                     filter: model => matchesSpec(
                                         Model: model,
                                         NextPart: nextPart,
@@ -1602,6 +1634,7 @@ namespace UD_Bones_Folder.Mod.UI
                                         ExcludeInstalled : true)
                                     )
                                 ?? Player.GetInventoryAndEquipment(
+                                    // player inventory, duplicates allowed, exclude starter
                                     Filter: delegate (GameObject go)
                                     {
                                         return !Player.GetInstalledCybernetics().Contains(go)
@@ -1614,6 +1647,7 @@ namespace UD_Bones_Folder.Mod.UI
                                     }
                                     ).GetRandomElement(rnd)
                                 ?? Player.GetInventoryAndEquipment(
+                                    // player inventory, duplicates allowed, include starter
                                     Filter: delegate (GameObject go)
                                     {
                                         return !Player.GetInstalledCybernetics().Contains(go)
@@ -1625,6 +1659,7 @@ namespace UD_Bones_Folder.Mod.UI
                                     }
                                     ).GetRandomElement(rnd)
                                 ?? EncountersAPI.GetAnItem(
+                                    // generated, duplicates allowed
                                     filter: model => matchesSpec(
                                         Model: model,
                                         NextPart: nextPart,
@@ -2425,5 +2460,76 @@ namespace UD_Bones_Folder.Mod.UI
         public static bool SimulateBeingSomewhereCool(GameObject Player, bool Silent = false)
             => SimulateBeingSomewhereCool(Player, UD_Bones_WorldBuilder.Builder, Silent)
             ;
+
+        public static bool TakeTheScenicRoute(GameObject Player, XRLGame Game)
+        {
+            try
+            {
+                GetTierAndOverTier(Player, out int tier, out List<int> overTier);
+
+                int baseMargin = 50000;
+
+                int getMargin(int tier)
+                    => (9 - tier) * baseMargin
+                    ;
+
+                double turnMulti = 0.002721;
+
+                long ticksPerMillisecond = Stopwatch.Frequency / 1000;
+
+                long toTicks(long Milliseconds)
+                    => Milliseconds * ticksPerMillisecond
+                    ;
+
+                long toMilli(long Ticks)
+                    => Ticks / ticksPerMillisecond
+                    ;
+
+                long fakeElapsedTicks = 0L;
+                tier.ForEach(i =>
+                {
+                    fakeElapsedTicks += toTicks(i * (long)(1200000 + SeededRandom(nameof(XRLGame.WallTime), -getMargin(i), getMargin(i), i)));
+                    double multi = 1.0 + (i / 10.0);
+                    long newWallTime = (long)(fakeElapsedTicks * multi);
+                    fakeElapsedTicks = newWallTime;
+                });
+
+                int ticker = 1;
+                overTier.ForEach(i =>
+                {
+                    int num = i / 2;
+                    fakeElapsedTicks += toTicks(num * (long)(800000 + SeededRandom(nameof(XRLGame.WallTime), -getMargin(i), getMargin(i), i + ticker++)));
+                    double multi = 1.0 + (num / 10.0);
+                    long newWallTime = (long)(fakeElapsedTicks * multi);
+                    fakeElapsedTicks = newWallTime;
+                });
+
+                if (Game.WallTime != null)
+                {
+                    Game._walltime += Game.WallTime.ElapsedTicks;
+                    Game.WallTime.Reset();
+                    Game.WallTime.Start();
+                }
+                else
+                {
+                    Game.WallTime = new Stopwatch();
+                    Game.WallTime.Start();
+                }
+
+                fakeElapsedTicks -= Game._walltime;
+                if (fakeElapsedTicks > 0)
+                {
+                    Game.WallTime.SetFieldNaughty("started", Stopwatch.GetTimestamp() - fakeElapsedTicks);
+                    Game.Turns += (long)Math.Round(toMilli(fakeElapsedTicks) * turnMulti);
+                    Game.TimeTicks += (long)Math.Round(fakeElapsedTicks * (double)(Player.GetStat("Speed").BaseValue / 100.0));
+                }
+                return true;
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"Issue advancing game clock to progression-based value", x);
+                return false;
+            }
+        }
     }
 }

@@ -19,6 +19,8 @@ namespace XRL.World.Parts
     [Serializable]
     public class UD_Bones_LunarFace : UD_Bones_BaseLunarPart
     {
+        public string FaceManager => $"{nameof(UD_Bones_LunarFace)}::{ParentObject.ID}";
+
         protected string TileColor;
         protected string DetailColor;
         public override bool CanBeFragile => false;
@@ -29,7 +31,7 @@ namespace XRL.World.Parts
 
         public static GameObject CreateNew(out UD_Bones_LunarFace LunarFace, string BonesID = null)
         {
-            var maskObject = GameObject.Create("Lunar Face");
+            var maskObject = GameObject.Create("UD The Lunar Face");
             LunarFace = maskObject.GetPart<UD_Bones_LunarFace>();
             if (!BonesID.IsNullOrEmpty())
                 LunarFace?.OverrideBonesID(BonesID);
@@ -77,9 +79,14 @@ namespace XRL.World.Parts
                 //Utils.Log($"{Utils.CallChain(nameof(UD_Bones_LunarFace), nameof(TryBeWorn))}");
                 if (holder.FindEquippedItem(go => go.Blueprint == ParentObject.Blueprint) == null)
                 {
-
                     //Utils.Log($"{1.Indent()}{holder.DebugName} is {nameof(lunarRegent)} lacking {ParentObject.Blueprint}");
                     string slot = ParentObject?.GetPart<Armor>()?.WornOn ?? "Face";
+
+                    if (!holder.Body.HasPart("Face"))
+                    {
+                        var newFace = holder.Body.GetBody().AddPart("Face", Manager: FaceManager);
+                        newFace.Description = "face-like growth";
+                    }
                     if (holder.Body.LoopPart(slot) is IEnumerable<BodyPart> bodyParts)
                     {
                         //Utils.Log($"{2.Indent()}{slot} {nameof(bodyParts)}: {bodyParts.Count()}");
@@ -120,12 +127,19 @@ namespace XRL.World.Parts
             return false;
         }
 
+        public override void Register(GameObject Object, IEventRegistrar Registrar)
+        {
+            Registrar.Register(UnequippedEvent.ID, EventOrder.EXTREMELY_LATE);
+            base.Register(Object, Registrar);
+        }
+
         public override bool WantEvent(int ID, int Cascade)
             => base.WantEvent(ID, Cascade)
             || ID == GetDisplayNameEvent.ID
             || ID == BeforeBeginTakeActionEvent.ID
             || ID == TookEvent.ID
             || ID == EquippedEvent.ID
+            || ID == BeforeDismemberEvent.ID
             || ID == GetIntrinsicValueEvent.ID
             || ID == LunarObjectColorChangedEvent.ID
             || ID == GetDebugInternalsEvent.ID
@@ -167,6 +181,21 @@ namespace XRL.World.Parts
             else
             if (E.Actor.IsPlayer())
                 SetBonesIDTyped<UD_Bones_LunarFace>(The.Game?.GameID);
+
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(UnequippedEvent E)
+        {
+            ParentObject?.Equipped?.RemoveBodyPartsByManager(FaceManager);
+            return base.HandleEvent(E);
+        }
+
+        public override bool HandleEvent(BeforeDismemberEvent E)
+        {
+            if (E.IsObject
+                && E.Part?.Manager == FaceManager)
+                return false;
 
             return base.HandleEvent(E);
         }

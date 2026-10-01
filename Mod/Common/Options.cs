@@ -36,6 +36,7 @@ namespace UD_Bones_Folder.Mod
 
         [OptionFlag] public static bool DebugEnableFinalizeDeserializationLogging;
         [OptionFlag] public static bool DebugEnableSilencedLogging;
+        [OptionFlag] public static bool DebugEnableDebugInternalsVomitOnFailedAscention;
         [OptionFlag] public static bool DebugEnableBadWordFilterLogging;
         [OptionFlag] public static bool DebugEnableBadWordFilterForLocalBones;
 

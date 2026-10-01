@@ -4,19 +4,13 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Platform.IO;
 
 using ConsoleLib.Console;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Platform.IO;
-
 using Qud.UI;
-
-using UD_Bones_Folder.Mod.Serialization;
-
-using UnityEngine;
 
 using XRL;
 using XRL.Collections;
@@ -24,6 +18,8 @@ using XRL.UI;
 using XRL.World;
 using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
+
+using UD_Bones_Folder.Mod.Serialization;
 
 using static UD_Bones_Folder.Mod.Const;
 

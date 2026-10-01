@@ -256,6 +256,33 @@
       <object Blueprint="Yd Freehold Recoiler" Chance="25" />
     </group>
   </population>
+
+  <population Name="UD_Bones_BonesMode_TotalRandom">
+    <group Name="Items" Style="pickone">
+      <object Blueprint="$CALLBLUEPRINTMETHOD:Qud.API.EncountersAPI.GetAnItemBlueprint" Chance="100" />
+    </group>
+  </population>
+  <population Name="UD_Bones_BonesMode_TotalRandom 6">
+    <group Name="Chances" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_TotalRandom" Chance="50" />
+      <table Name="UD_Bones_BonesMode_TotalRandom" Chance="50" />
+      <table Name="UD_Bones_BonesMode_TotalRandom" Chance="50" />
+    </group>
+  </population>
+  <population Name="UD_Bones_BonesMode_TotalRandom 7">
+    <group Name="Chances" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_TotalRandom 6" Chance="100" />
+      <table Name="UD_Bones_BonesMode_TotalRandom 6" Chance="50" />
+      <table Name="UD_Bones_BonesMode_TotalRandom 6" Chance="50" />
+    </group>
+  </population>
+  <population Name="UD_Bones_BonesMode_TotalRandom 8">
+    <group Name="Chances" Style="pickeach">
+      <table Name="UD_Bones_BonesMode_TotalRandom 7" Chance="100" />
+      <table Name="UD_Bones_BonesMode_TotalRandom 7" Chance="50" />
+      <table Name="UD_Bones_BonesMode_TotalRandom 7" Chance="50" />
+    </group>
+  </population>
   
   <population Name="UD_Bones_BonesMode_Tomb_Melee">
     <group Name="Items" Style="pickone">
@@ -333,6 +360,7 @@
       <group Name="Explosives" Style="pickeach">
         <table Name="Explosives 3" Number="6-10" />
       </group>
+      <table Name="UD_Bones_BonesMode_TotalRandom 6" Number="1" />
       <object Blueprint="Urberry" Chance="100,50,25,1,1,1" />
       <object Blueprint="Bracelet3" Number="0-2" />
       <object Blueprint="BlazeTonic" Number="0-4" />
@@ -351,12 +379,12 @@
 
   <population Name="UD_Bones_BonesMode_SultanFace">
     <group Name="Masks" Style="pickone">
-      <object Blueprint="The Nil Face" Weight="6" />
-      <object Blueprint="The Olive Face" Weight="5" />
-      <object Blueprint="The Levant Face" Weight="4" />
-      <object Blueprint="The Earth Face" Weight="3" />
-      <object Blueprint="The Shemesh Face" Weight="2" />
-      <object Blueprint="The Kesil Face" Weight="1" />
+      <object Blueprint="The Nil Face" Weight="1" />
+      <object Blueprint="The Olive Face" Weight="2" />
+      <object Blueprint="The Levant Face" Weight="3" />
+      <object Blueprint="The Earth Face" Weight="4" />
+      <object Blueprint="The Shemesh Face" Weight="5" />
+      <object Blueprint="The Kesil Face" Weight="6" />
     </group>
   </population>
 
@@ -370,6 +398,7 @@
       </group>
       <table Name="UD_Bones_BonesMode_SultanFace" />
       <object Blueprint="Quantum Mote" />
+      <table Name="UD_Bones_BonesMode_TotalRandom 7" Number="1" />
       <table Name="UD_Bones_BonesMode_Gemstones" Number="2d6" />
     </group>
   </population>
@@ -421,6 +450,7 @@
         <object Blueprint="Battle Axe8" Chance="100,50,1" />
         <object Blueprint="Dagger8" Chance="100,100,50,1" />
       </group>
+      <table Name="UD_Bones_BonesMode_TotalRandom 8" Number="1" />
       <table Name="UD_Bones_BonesMode_Gemstones" Number="2d18" />
     </group>
   </population>

@@ -118,7 +118,7 @@ namespace UD_Bones_Folder.Mod
         public EmbarkBuilder EmbarkBuilder;
 
         [NonSerialized]
-        public MutableLocationsSet MutableLocations;
+        public LocationsSet ImmutableLocations;
 
         #endregion
         #region Instance Caches
@@ -234,9 +234,11 @@ namespace UD_Bones_Folder.Mod
         }
 
         #region Serialization
+        public static XRL.Version AddedFieldReflectionSerialization => new(0, 0, 4, 2);
 
         public override void Write(SerializationWriter Writer)
         {
+            base.Write(Writer);
             Writer.WriteStringCompositeDictionary(MissingBlueprintReplacements);
             Writer.WriteOptimized(TileReplacementsByMissingBlueprint);
             Writer.WriteOptimized(BlueprintReplacementsByMissingBlueprint);
@@ -244,27 +246,51 @@ namespace UD_Bones_Folder.Mod
             Writer.Write(Alerted);
             Writer.Write(Encountered);
             Writer.Write(FailedToLoadBones);
-            Writer.WriteComposite(MutableLocations);
+            Writer.WriteComposite(ImmutableLocations);
         }
 
         public override void Read(SerializationReader Reader)
         {
+            var readVersion = Reader.ModVersions[MOD_ID];
+            if (readVersion < AddedFieldReflectionSerialization)
+            {
+                GameID ??= The.Game?.GameID;
+                Initialized = true;
+            }
+            else
+            {
+                base.Read(Reader);
+            }
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(MissingBlueprintReplacements)})");
             MissingBlueprintReplacements = Reader.ReadStringCompositeDictionary<ReplacementEntry>();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(TileReplacementsByMissingBlueprint)})");
             TileReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(BlueprintReplacementsByMissingBlueprint)})");
             BlueprintReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ZoneBones)})");
             ZoneBones = Reader.ReadStringCompositeDictionary<ZoneBonesAllocation>();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Alerted)})");
             Alerted = Reader.ReadDictionary<string, bool>();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Encountered)})");
             Encountered = Reader.ReadList<string>();
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(FailedToLoadBones)})");
             FailedToLoadBones = Reader.ReadList<string>();
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(MutableLocations)})");
-            MutableLocations = Reader.ReadComposite<MutableLocationsSet>();
+
+            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ImmutableLocations)})");
+            ImmutableLocations = Reader.ReadComposite<LocationsSet>();
+            if (readVersion < AddedFieldReflectionSerialization)
+            {
+                Utils.Log($"  {nameof(ImmutableLocations)}.{nameof(ImmutableLocations.InvertLocations)}()");
+                ImmutableLocations.InvertLocations();
+            }
+
             Utils.Log($"{nameof(BonesManager)}.{nameof(Read)} - Finished!");
         }
 
@@ -1889,7 +1915,7 @@ namespace UD_Bones_Folder.Mod
             if (The.Player is not GameObject player)
                 return;
 
-            var playerSpec = new BonesSpec(player, Z);
+            var playerSpec = BonesSpec.GetPlayerSpec(Z);
 
             bool notEncounteredAndWithinSpec(SaveBonesInfo SaveBonesInfo)
                 => !Encountered.Contains(SaveBonesInfo.ID)
@@ -1924,7 +1950,7 @@ namespace UD_Bones_Folder.Mod
                         if (canRollIt)
                             message = $"{message[..^1]}, or {rollIt}";
 
-                        var icon = new BonesRender(GameObjectFactory.Factory.GetBlueprintIfExists("Lunar Face"), HFlip: false, IsMad: true);
+                        var icon = new BonesRender(GameObjectFactory.Factory.GetBlueprintIfExists("UD The Lunar Face"), HFlip: false, IsMad: true);
 
                         if (bonesInfos.Any(b => b.IsMad))
                             icon.SetTile(MOON_KING_FEVER_TILE);

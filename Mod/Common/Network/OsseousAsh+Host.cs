@@ -5,19 +5,13 @@ using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Platform.IO;
 
 using ConsoleLib.Console;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using Platform.IO;
-
 using Qud.UI;
-
-using UD_Bones_Folder.Mod.UI;
-
-using UnityEngine;
 
 using XRL;
 using XRL.Collections;
@@ -27,6 +21,8 @@ using XRL.World;
 using XRL.World.Parts;
 using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
+
+using UD_Bones_Folder.Mod.UI;
 
 using static UD_Bones_Folder.Mod.Const;
 using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;

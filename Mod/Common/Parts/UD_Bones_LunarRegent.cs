@@ -790,7 +790,7 @@ namespace XRL.World.Parts
                     catchFlag = $"{nameof(GameObjectFactory.Factory.HasBlueprint)}";
                     if (!GameObjectFactory.Factory.HasBlueprint(lunarRegent.Blueprint))
                     {
-                        lunarRegent.Blueprint = "Lunar Regent";
+                        lunarRegent.Blueprint = Const.LUNAR_REGENT_BLUEPRINT;
                         IsMad = true;
                     }
 

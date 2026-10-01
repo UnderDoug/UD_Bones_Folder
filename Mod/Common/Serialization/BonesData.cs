@@ -489,7 +489,7 @@ namespace UD_Bones_Folder.Mod
 
                                 if (!GameObjectFactory.Factory.HasBlueprint(LunarRegent.Blueprint))
                                 {
-                                    LunarRegent.Blueprint = "Lunar Regent";
+                                    LunarRegent.Blueprint = Const.LUNAR_REGENT_BLUEPRINT;
                                     IsMad = true;
                                 }
 

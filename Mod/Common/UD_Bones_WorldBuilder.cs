@@ -49,20 +49,20 @@ namespace XRL.World.WorldBuilders
             if (WorldID != "JoppaWorld")
                 return;
 
-            BonesManager.MutableLocations = AllMutableLocations();
+            BonesManager.ImmutableLocations = AllImmutableLocations();
         }
 
-        public MutableLocationsSet AllMutableLocations()
+        public static IEnumerable<Location2D> YieldAllLocations(Predicate<Location2D> Where = null)
         {
-            var mutableLocations = new MutableLocationsSet();
-
             foreach (var parasangs in (Builder?.worldInfo?.terrainLocations?.Values).IteratorSafe())
                 foreach (var parasang in parasangs.IteratorSafe())
                     foreach (var location in parasang.YieldParasangZoneLocations().IteratorSafe())
-                        if (Builder.mutableMap.GetMutable(location) > 0)
-                            mutableLocations.Add(location);
-
-            return mutableLocations;
+                        if (Where?.Invoke(location) is not false)
+                            yield return location;
         }
+
+        public LocationsSet AllImmutableLocations()
+            => new LocationsSet(YieldAllLocations(l => Builder.mutableMap.GetMutable(l) == 0))
+            ;
     }
 }
