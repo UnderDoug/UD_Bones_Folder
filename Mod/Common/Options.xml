@@ -258,7 +258,7 @@
         DisplayText="{{Y|[}}Manage {{black|Osseous Ash}} hosts{{Y|]}}"
         Category="Mod: Bones"
         Type="Button"
-        OnClick="UD_Bones_Folder.Mod.OsseousAsh.ManageHostsOptionButtonAsync">
+        OnClick="UD_Bones_Folder.Mod.Options.ManageHostsOptionButtonAsync">
     <helptext>
       Use this menu to manage your {{black|Osseous Ash}} hosts. You can add new ones, modify them (including disabling them), migrate where the host details are stored, and delete hosts.
 

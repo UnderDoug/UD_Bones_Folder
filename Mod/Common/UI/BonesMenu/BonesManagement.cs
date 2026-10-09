@@ -12,6 +12,8 @@ using Platform.IO;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.OsseousAsh;
+
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -458,11 +460,11 @@ namespace UD_Bones_Folder.Mod.UI
             var result = UIUtils.CascadableResult.Continue;
             try
             {
-                using var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
+                using var options = new CascadablePickOptionDataSetAsync<SaveBonesInfo>(BonesInfo, UIUtils.CascadableResult.BackSilent, UIUtils.CascadableResult.CancelSilent);
                 do
                 {
                     sB.Clear();
-                    options.Clear(Dispose: true);
+                    options.ClearItems(Dispose: true);
 
                     BonesInfo.GetBonesMenuDataRowStrings(IncludeVersionWarning: true)
                         .Aggregate(
@@ -473,17 +475,15 @@ namespace UD_Bones_Folder.Mod.UI
                     sB.AppendLine().Append("Use the options below to manage these bones:")
                         .AppendLineEnd();
 
-                    options.Add(new()
+                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                     {
-                        Element = BonesInfo,
                         Text = "View stats",
                         Icon = BonesInfo.StatsIcon,
                         Hotkey = 's',
                         Callback = SaveBonesInfo.ShowBlurbAsync,
                     });
-                    options.Add(new()
+                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                     {
-                        Element = BonesInfo,
                         Text = "Manage relative mod configuration",
                         Icon = SaveBonesInfo.ManageConfigIcon,
                         Hotkey = 'm',
@@ -491,13 +491,12 @@ namespace UD_Bones_Folder.Mod.UI
                     });
 
                     if (Options.EnableOsseousAshUploads
-                        && BonesInfo.FileLocationDataSet.AnyHostsMissing(OsseousAsh.AllEnabledHosts()))
+                        && BonesInfo.FileLocationDataSet.AnyHostsMissing(Configuration.AllEnabledHosts()))
                     {
-                        options.Add(new()
+                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                         {
-                            Element = BonesInfo,
                             Text = $"Upload",
-                            Icon = OsseousAsh.UploadIcon,
+                            Icon = Configuration.UploadIcon,
                             Hotkey = 'u',
                             Callback = UploadBonesAsync,
                         });
@@ -507,20 +506,18 @@ namespace UD_Bones_Folder.Mod.UI
                         if (Options.EnableOsseousAshDownloads
                             && BonesInfo.FileLocationDataSet.IsOnlyOnline)
                         {
-                            options.Add(new()
+                            options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                             {
-                                Element = BonesInfo,
                                 Text = $"Download",
-                                Icon = OsseousAsh.DownloadIcon,
+                                Icon = Configuration.DownloadIcon,
                                 Hotkey = 'd',
                                 Callback = DownloadBonesAsync,
                             });
                         }
 
                         bool isBlocked = BonesInfo.IsBlocked;
-                        options.Add(new()
+                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                         {
-                            Element = BonesInfo,
                             Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
                             Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
                             Hotkey = 'b',
@@ -528,11 +525,10 @@ namespace UD_Bones_Folder.Mod.UI
                         });
                         if (!isBlocked)
                         {
-                            options.Add(new()
+                            options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                             {
-                                Element = BonesInfo,
                                 Text = "Report",
-                                Icon = OsseousAsh.ReportBonesIcon,
+                                Icon = Report.ReportBonesIcon,
                                 Hotkey = 'r',
                                 Callback = SaveBonesInfo.AskForBonesReportAsync,
                             });
@@ -540,9 +536,8 @@ namespace UD_Bones_Folder.Mod.UI
                     }
                     if (BonesInfo.IsCrematable)
                     {
-                        options.Add(new()
+                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                         {
-                            Element = BonesInfo,
                             Text = "Cremate",
                             Icon = new Renderable(
                                 Tile: "Mutations/spontaneous_combustion.bmp",
@@ -558,10 +553,7 @@ namespace UD_Bones_Folder.Mod.UI
                         OptionDataSet: options,
                         Title: $"Manage {Grammar.MakePossessive(BonesInfo.GetName())} Bones".Colored("yellow"),
                         Intro: sB.ToString(),
-                        IntroIcon: BonesInfo.FlippedRender,
-                        OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.BackSilent),
-                        OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
-                        FinalSelectedCallback: UIUtils.ShowEscancellepedAsync);
+                        IntroIcon: BonesInfo.FlippedRender);
 
                     //Utils.Log($"AskHowManageBones.result: {result}");
                 }
@@ -809,13 +801,13 @@ namespace UD_Bones_Folder.Mod.UI
                     catchFlag = "BonesManager.UploadBonesFileAsync";
                     //Utils.Log(catchFlag);
 
-                    if ((await BonesManager.UploadBonesFileAsync(saveBonesJSON, savGz)) is List<OsseousAsh.Host.ResponseInfo> responseInfos)
+                    if ((await BonesManager.UploadBonesFileAsync(saveBonesJSON, savGz)) is List<ResponseInfo> responseInfos)
                     {
                         if (!responseInfos.Any(ri => ri.Success))
                         {
                             string failures = responseInfos.Aggregate(
                                 seed: null,
-                                func: delegate (string acc, OsseousAsh.Host.ResponseInfo next)
+                                func: delegate (string acc, ResponseInfo next)
                                 {
                                     if (!acc.IsNullOrEmpty())
                                         acc += "\n";
@@ -828,7 +820,7 @@ namespace UD_Bones_Folder.Mod.UI
                         }
 
                         foreach (var responseInfo in responseInfos)
-                            if (responseInfo.Host is OsseousAsh.Host host)
+                            if (responseInfo.Host is Host host)
                             BonesInfo.FileLocationDataSet.Add(FileLocationData.NewOnline(host));
 
                         catchFlag = "successFullHosts.Aggregate";

@@ -10,13 +10,26 @@ using XRL.Language;
 using XRL.World;
 using XRL.World.Parts;
 
+using UD_Bones_Folder.Mod.OsseousAsh;
+
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
     public class BonesStats
     {
+        private static Configuration Config => Configuration.Instance;
+        public static Guid UserID => Config?.ID ?? Guid.Empty;
+        public static string Handle => Config?.Handle;
         public static string MissingLunarRegent => "this =LunarShader:Moon Sovran:*=, lost to time,";
+
+        public static string[] StatNames = new string[4]
+        {
+            nameof(Encountered),
+            nameof(Defeated),
+            nameof(Reclaimed),
+            nameof(Broken),
+        };
 
         [JsonProperty(nameof(LastEncountered))]
         protected long _LastEncountered;
@@ -63,12 +76,12 @@ namespace UD_Bones_Folder.Mod
             : this(Source?.Encountered, Source?.Defeated, Source?.Reclaimed, Source?.Broken)
         { }
 
-        public bool IncrementStat(ref BonesStatSet StatSet, Guid OsseousAshID)
-            => (StatSet ??= new()).IncrementStat(OsseousAshID);
+        public bool IncrementStat(ref BonesStatSet StatSet, Guid UserID)
+            => (StatSet ??= new()).IncrementStat(UserID);
 
-        public bool IncrementEncountered(Guid OsseousAshID)
+        public bool IncrementEncountered(Guid UserID)
         {
-            if (IncrementStat(ref Encountered, OsseousAshID))
+            if (IncrementStat(ref Encountered, UserID))
             {
                 LastEncountered = DateTime.Now.ToUniversalTime();
                 return true;
@@ -77,71 +90,71 @@ namespace UD_Bones_Folder.Mod
         }
 
         public bool IncrementEncountered()
-            => IncrementEncountered(OsseousAsh.Config.ID)
+            => IncrementEncountered(UserID)
             ;
 
-        public bool IncrementDefeated(Guid OsseousAshID)
-            => IncrementStat(ref Defeated, OsseousAshID)
+        public bool IncrementDefeated(Guid UserID)
+            => IncrementStat(ref Defeated, UserID)
             ;
 
         public bool IncrementDefeated()
-            => IncrementDefeated(OsseousAsh.Config.ID)
+            => IncrementDefeated(UserID)
             ;
 
-        public bool IncrementReclaimed(Guid OsseousAshID)
-            => IncrementStat(ref Reclaimed, OsseousAshID)
+        public bool IncrementReclaimed(Guid UserID)
+            => IncrementStat(ref Reclaimed, UserID)
             ;
 
         public bool IncrementReclaimed()
-            => IncrementReclaimed(OsseousAsh.Config.ID)
+            => IncrementReclaimed(UserID)
             ;
 
-        public bool IncrementBroken(Guid OsseousAshID)
-            => IncrementStat(ref Broken, OsseousAshID)
+        public bool IncrementBroken(Guid UserID)
+            => IncrementStat(ref Broken, UserID)
             ;
 
         public bool IncrementBroken()
-            => IncrementBroken(OsseousAsh.Config.ID)
+            => IncrementBroken(UserID)
             ;
 
-        public int GetStatValue(ref BonesStatSet StatSet, Guid OsseousAshID)
-            => (StatSet ??= new()).GetStatValue(OsseousAshID)
+        public int GetStatValue(ref BonesStatSet StatSet, Guid UserID)
+            => (StatSet ??= new()).GetStatValue(UserID)
             ;
 
-        public int GetEncounteredValue(Guid OsseousAshID)
-            => GetStatValue(ref Encountered, OsseousAshID)
+        public int GetEncounteredValue(Guid UserID)
+            => GetStatValue(ref Encountered, UserID)
             ;
 
-        public int GetDefeatedValue(Guid OsseousAshID)
-            => GetStatValue(ref Defeated, OsseousAshID)
+        public int GetDefeatedValue(Guid UserID)
+            => GetStatValue(ref Defeated, UserID)
             ;
 
-        public int GetReclaimedValue(Guid OsseousAshID)
-            => GetStatValue(ref Reclaimed, OsseousAshID)
+        public int GetReclaimedValue(Guid UserID)
+            => GetStatValue(ref Reclaimed, UserID)
             ;
 
-        public int GetBrokenValue(Guid OsseousAshID)
-            => GetStatValue(ref Broken, OsseousAshID)
+        public int GetBrokenValue(Guid UserID)
+            => GetStatValue(ref Broken, UserID)
             ;
 
-        public BonesStat GetStat(ref BonesStatSet StatSet, Guid OsseousAshID)
-            => (StatSet ??= new()).GetStat(OsseousAshID)
+        public BonesStat GetStat(ref BonesStatSet StatSet, Guid UserID)
+            => (StatSet ??= new()).GetStat(UserID)
             ;
 
-        public BonesStat GetEncountered(Guid OsseousAshID)
-            => GetStat(ref Encountered, OsseousAshID)
+        public BonesStat GetEncountered(Guid UserID)
+            => GetStat(ref Encountered, UserID)
             ;
 
-        public BonesStat GetDefeated(Guid OsseousAshID)
-            => GetStat(ref Defeated, OsseousAshID)
+        public BonesStat GetDefeated(Guid UserID)
+            => GetStat(ref Defeated, UserID)
             ;
 
-        public BonesStat GetReclaimed(Guid OsseousAshID)
-            => GetStat(ref Reclaimed, OsseousAshID)
+        public BonesStat GetReclaimed(Guid UserID)
+            => GetStat(ref Reclaimed, UserID)
             ;
 
-        public BonesStat GetBroken(Guid OsseousAshID)
-            => GetStat(ref Broken, OsseousAshID)
+        public BonesStat GetBroken(Guid UserID)
+            => GetStat(ref Broken, UserID)
             ;
 
         public int GetStatTotal(ref BonesStatSet StatSet)
@@ -164,27 +177,27 @@ namespace UD_Bones_Folder.Mod
             => GetStatTotal(ref Broken)
             ;
 
-        public double GetPercentOfStat(ref BonesStatSet StatSet, Guid OsseousAshID)
+        public double GetPercentOfStat(ref BonesStatSet StatSet, Guid UserID)
             => GetStatTotal(ref StatSet) is int statTotal
                 && statTotal != 0
-            ? GetStatValue(ref StatSet, OsseousAshID) / (double)statTotal
+            ? GetStatValue(ref StatSet, UserID) / (double)statTotal
             : 0
             ;
 
-        public double GetPercentOfEncountered(Guid OsseousAshID)
-            => GetPercentOfStat(ref Encountered, OsseousAshID)
+        public double GetPercentOfEncountered(Guid UserID)
+            => GetPercentOfStat(ref Encountered, UserID)
             ;
 
-        public double GetPercentOfDefeated(Guid OsseousAshID)
-            => GetPercentOfStat(ref Defeated, OsseousAshID)
+        public double GetPercentOfDefeated(Guid UserID)
+            => GetPercentOfStat(ref Defeated, UserID)
             ;
 
-        public double GetPercentOfReclaimed(Guid OsseousAshID)
-            => GetPercentOfStat(ref Reclaimed, OsseousAshID)
+        public double GetPercentOfReclaimed(Guid UserID)
+            => GetPercentOfStat(ref Reclaimed, UserID)
             ;
 
-        public double GetPercentOfBroken(Guid OsseousAshID)
-            => GetPercentOfStat(ref Broken, OsseousAshID)
+        public double GetPercentOfBroken(Guid UserID)
+            => GetPercentOfStat(ref Broken, UserID)
             ;
 
         private string GetPercentageString(double Amount)
@@ -193,8 +206,8 @@ namespace UD_Bones_Folder.Mod
         public string GetBlurb(string RegentName)
         {
             var sB = Event.NewStringBuilder();
-            var oAID = OsseousAsh.Config?.ID ?? Guid.Empty;
-            bool haveID = oAID != Guid.Empty;
+            var userID = UserID;
+            bool haveID = userID != Guid.Empty;
 
             RegentName = (RegentName ?? MissingLunarRegent).StartReplace().ToString();
 
@@ -216,7 +229,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (haveID)
                 {
-                    playerEncounters = GetEncounteredValue(oAID);
+                    playerEncounters = GetEncounteredValue(userID);
 
                     if (playerEncounters > 0)
                     {
@@ -237,7 +250,7 @@ namespace UD_Bones_Folder.Mod
                         }
                         else
                         {
-                            string percentEncountered = GetPercentageString(GetPercentOfEncountered(oAID));
+                            string percentEncountered = GetPercentageString(GetPercentOfEncountered(userID));
                             sB.AppendLine()
                                 .AppendLine().Append("You've personally encountered them in ")
                                 .AppendRule(playerEncounters.Things("different run")).Append(", ")
@@ -256,7 +269,7 @@ namespace UD_Bones_Folder.Mod
 
                     if (haveID)
                     {
-                        int playerTriumphs = GetDefeatedValue(oAID);
+                        int playerTriumphs = GetDefeatedValue(userID);
                         if (playerTriumphs > 0)
                         {
                             if (playerTriumphs > 3
@@ -272,7 +285,7 @@ namespace UD_Bones_Folder.Mod
                                     .AppendLine().Append("On ").AppendRule(playerTriumphs.Things("separate occasion")).Append(", ")
                                     .Append(RegentName).Append(" was defeated in an attempt to reclaim your run, ");
                             }
-                            string percentTriumphed = GetPercentageString(GetPercentOfDefeated(oAID));
+                            string percentTriumphed = GetPercentageString(GetPercentOfDefeated(userID));
                             sB.Append("accounting for ").AppendRule(percentTriumphed).Append(" of their total defeats.");
                         }
                         else
@@ -291,7 +304,7 @@ namespace UD_Bones_Folder.Mod
 
                     if (haveID)
                     {
-                        int playerDefeats = GetReclaimedValue(oAID);
+                        int playerDefeats = GetReclaimedValue(userID);
                         if (playerDefeats > 0)
                         {
                             if (playerDefeats > 3
@@ -307,7 +320,7 @@ namespace UD_Bones_Folder.Mod
                                     .AppendLine().Append(RegentName.Capitalize()).Append(" has successfully reclaimed ")
                                     .AppendRule(playerDefeats.ToString()).Append(" of your runs, ");
                             }
-                            string percentDefeats = GetPercentageString(GetPercentOfReclaimed(oAID));
+                            string percentDefeats = GetPercentageString(GetPercentOfReclaimed(userID));
                             sB.Append("representing ").AppendRule(percentDefeats).Append(" of the total runs they've reclaimed.");
                         }
                         else
@@ -327,14 +340,14 @@ namespace UD_Bones_Folder.Mod
 
                     if (haveID)
                     {
-                        int playerBreaks = GetBrokenValue(oAID);
+                        int playerBreaks = GetBrokenValue(userID);
                         if (playerBreaks > 0)
                         {
                             if (playerBreaks > 3
                                 && playerBreaks == playerEncounters)
                             {
                                 sB.AppendLine()
-                                    .AppendLine().Append("Mystical is the aura of ").Append(OsseousAsh.Config.Handle).Append(", for ")
+                                    .AppendLine().Append("Mystical is the aura of ").Append(Handle).Append(", for ")
                                     .Append(Grammar.MakePossessive(RegentName)).Append(" fever has broken in ").AppendRule("every run")
                                     .Append(" of yours they've arrived in; ").Append(playerBreaks.Things("time")).Append(" in total, ");
                             }
@@ -345,7 +358,7 @@ namespace UD_Bones_Folder.Mod
                                     .Append(" delusion was dispelled and their fever broken, ")
                                     ;
                             }
-                            string percentBroken = GetPercentageString(GetPercentOfBroken(oAID));
+                            string percentBroken = GetPercentageString(GetPercentOfBroken(userID));
                             sB.Append("making up ").AppendRule(percentBroken).Append(" of the worlds in which they've chosen a less dangerous path.");
                         }
                         else

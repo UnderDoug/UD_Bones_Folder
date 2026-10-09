@@ -182,14 +182,13 @@ namespace UD_Bones_Folder.Mod.UI
             PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[DefaultSelected];
             Task<TResult> optionCallBack;
             TResult result = default;
-            
+
             try
             {
                 return await NavigationController.instance.SuspendContextWhile(async delegate ()
                 {
                     var taskCompletionSource = new TaskCompletionSource<int>();
 
-                    //Utils.Log($"PickOption");
                     Popup.PickOption(
                         Title: Title,
                         Intro: Intro,
@@ -205,6 +204,8 @@ namespace UD_Bones_Folder.Mod.UI
 
                     choice = await taskCompletionSource.Task;
 
+                    var elements = OptionDataSet?.GetElements() ?? new List<T>();
+
                     if (choice < 0)
                     {
                         chosenOption = null;
@@ -214,7 +215,7 @@ namespace UD_Bones_Folder.Mod.UI
                     else
                     {
                         chosenOption = OptionDataSet[choice];
-                        optionCallBack = chosenOption.Invoke();
+                        optionCallBack = chosenOption.Invoke(elements.ElementAtOrDefault(choice));
                     }
 
                     result = await optionCallBack;
@@ -229,8 +230,38 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 Utils.Error(Utils.CallChain(nameof(NavigationController), nameof(NavigationController.SuspendContextWhile)), x);
             }
+            Utils.Log($"fall out return {nameof(result)}");
             return result;
         }
+
+        public static async Task<CascadableResult> PerformPickOptionAsync<T>(
+            CascadablePickOptionDataSetAsync<T> OptionDataSet,
+            string Title = "",
+            string Intro = null,
+            IRenderable IntroIcon = null,
+            IReadOnlyList<QudMenuItem> AdditionalButtons = null,
+            bool NoBackButton = false,
+            int DefaultSelected = 0,
+            bool RespectOptionNewlines = false,
+            Func<Task<CascadableResult>> OnBackCallback = null,
+            Func<Task<CascadableResult>> OnEscapeCallback = null,
+            Dictionary<int, Func<Task<CascadableResult>>> ButtonCallbacks = null,
+            Func<PickOptionData<T, Task<CascadableResult>>, Task<CascadableResult>, Task<CascadableResult>> FinalSelectedCallback = null
+            )
+            => await PerformPickOptionAsync<T, CascadableResult>(
+                OptionDataSet: OptionDataSet,
+                Title: Title,
+                Intro: Intro,
+                IntroIcon: IntroIcon,
+                AdditionalButtons: AdditionalButtons,
+                NoBackButton: NoBackButton,
+                DefaultSelected: DefaultSelected,
+                RespectOptionNewlines: RespectOptionNewlines,
+                OnBackCallback: OnBackCallback ?? (() => Task.Run(() => OptionDataSet?.DefaultOnBackResult ?? CascadableResult.CancelSilent)),
+                OnEscapeCallback: OnEscapeCallback ?? (() => Task.Run(() => OptionDataSet?.DefaultOnEscapeResult ?? CascadableResult.BackSilent)),
+                ButtonCallbacks: ButtonCallbacks,
+                FinalSelectedCallback: FinalSelectedCallback ?? ShowEscancellepedAsync)
+            ;
 
         public static TResult PerformPickOption<T, TResult>(
             PickOptionDataSet<T, TResult> OptionDataSet,
@@ -279,6 +310,8 @@ namespace UD_Bones_Folder.Mod.UI
                     RespectOptionNewlines: RespectOptionNewlines,
                     AllowEscape: true);
 
+                var elements = OptionDataSet.GetElements() ?? new List<T>();
+
                 if (choice < 0)
                 {
                     chosenOption = null;
@@ -287,7 +320,7 @@ namespace UD_Bones_Folder.Mod.UI
                 else
                 {
                     chosenOption = OptionDataSet[choice];
-                    result = chosenOption.Invoke();
+                    result = chosenOption.Invoke(elements.ElementAtOrDefault(choice));
                 }
 
                 if (FinalSelectedCallback != null)

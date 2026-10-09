@@ -10,7 +10,7 @@ using XRL.World.Effects;
 using UD_Bones_Folder.Mod;
 
 using UD_Bones_Folder.Mod.Events;
-using static UD_Bones_Folder.Mod.OsseousAsh;
+using UD_Bones_Folder.Mod.OsseousAsh;
 
 namespace XRL.World.Parts
 {
@@ -39,15 +39,15 @@ namespace XRL.World.Parts
 
         public override bool HandleEvent(GetInventoryActionsEvent E)
         {
-            E.Actions[ReportBonesInventoryAction.Name] = ReportBonesInventoryAction;
+            E.Actions[Report.InventoryAction.Name] = Report.InventoryAction;
             return base.HandleEvent(E);
         }
 
         public override bool HandleEvent(InventoryActionEvent E)
         {
-            if (E.Command == ReportBonesInventoryAction.Command)
+            if (E.Command == Report.InventoryAction.Command)
             {
-                if (TryReportBonesAsync(LoadedBonesID, ParentObject).WaitResult())
+                if (ServerUtils.TryReportBonesAsync(LoadedBonesID, ParentObject).WaitResult())
                 {
                     /*if (Config != null)
                     {

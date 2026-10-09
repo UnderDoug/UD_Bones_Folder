@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Platform.IO;
 
 using UD_Bones_Folder.Mod.Coalescence;
+using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.Serialization;
 
 using XRL;
@@ -114,7 +115,7 @@ namespace UD_Bones_Folder.Mod
 
         public LocationType Type;
         public string Path;
-        public OsseousAsh.Host Host;
+        public Host Host;
 
         public FileLocationData()
         { }
@@ -122,7 +123,7 @@ namespace UD_Bones_Folder.Mod
         public FileLocationData(
             LocationType Type,
             string Path,
-            OsseousAsh.Host Host
+            Host Host
             )
             : this()
         {
@@ -203,7 +204,7 @@ namespace UD_Bones_Folder.Mod
                 Path = Path,
             };
 
-        public static FileLocationData NewOnline(OsseousAsh.Host Host)
+        public static FileLocationData NewOnline(Host Host)
             => new FileLocationData
             {
                 Type = LocationType.Online,
@@ -214,7 +215,7 @@ namespace UD_Bones_Folder.Mod
             => new FileLocationData
             {
                 Type = LocationType.Online,
-                Host = new OsseousAsh.Host(HostName, AuthToken),
+                Host = new Host(HostName, AuthToken),
             };
 
         public static FileLocationData NewAssumed(string Path)
@@ -228,9 +229,9 @@ namespace UD_Bones_Folder.Mod
             if (Path.Contains(XRLCore.SavePath))
                 return NewLocal(Path);
 
-            if (OsseousAsh.Host.TryParse(Path, out OsseousAsh.Host host))
+            if (Host.TryParse(Path, out Host host))
             {
-                if (OsseousAsh.Hosts.FirstHostMatching(h => h.SameAs(host, IgnoreDisabled: true)) is OsseousAsh.Host existingHost)
+                if (ServerUtils.Hosts.FirstHostMatching(h => h.SameAs(host, IgnoreDisabled: true)) is Host existingHost)
                     return NewOnline(existingHost, existingHost.AuthToken);
                 return NewOnline(host);
             }

@@ -35,20 +35,21 @@ using XRL.World.Effects;
 using XRL.World.Parts;
 using XRL.World.WorldBuilders;
 
-using UD_Bones_Folder.Mod.UI;
-using UD_Bones_Folder.Mod.Events;
-using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
-using UD_Bones_Folder.Mod.Serialization;
-using UD_Bones_Folder.Mod.BonesSystem;
-
-using static UD_Bones_Folder.Mod.Const;
-
 using ColorUtility = ConsoleLib.Console.ColorUtility;
 using CompressionLevel = System.IO.Compression.CompressionLevel;
 
 using GameObject = XRL.World.GameObject;
 using Event = XRL.World.Event;
+
+using UD_Bones_Folder.Mod.UI;
+using UD_Bones_Folder.Mod.Events;
+using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
+using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.Moderation;
+using UD_Bones_Folder.Mod.OsseousAsh;
+
+using static UD_Bones_Folder.Mod.Const;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -343,7 +344,7 @@ namespace UD_Bones_Folder.Mod
 
             if (!NonRemoteOnly
                 && Options.EnableOsseousAshDownloads)
-                foreach (var bonesPath in OsseousAsh.GetOsseousAshFileLocationData())
+                foreach (var bonesPath in Configuration.GetOsseousAshFileLocationData())
                     yield return bonesPath;
         }
 
@@ -430,7 +431,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public static async Task<List<OsseousAsh.Host.ResponseInfo>> UploadBonesFileAsync(
+        public static async Task<List<ResponseInfo>> UploadBonesFileAsync(
             SaveBonesJSON SaveBonesJSON,
             byte[] BonesSavGz
             )
@@ -441,7 +442,7 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        return await OsseousAsh.UploadBonesAsync(SaveBonesJSON.ID, SaveBonesJSON, BonesSavGz);
+                        return await ServerUtils.UploadBonesAsync(SaveBonesJSON.ID, SaveBonesJSON, BonesSavGz);
                     }
                     catch (Exception x)
                     {
@@ -745,7 +746,7 @@ namespace UD_Bones_Folder.Mod
             {
                 try
                 {
-                    foreach (var onlineBonesInfo in OsseousAsh.GetBonesInfos().IteratorSafe())
+                    foreach (var onlineBonesInfo in ServerUtils.GetBonesInfos().IteratorSafe())
                     {
                         currentLocationData = onlineBonesInfo.FileLocationData;
                         try
@@ -863,7 +864,7 @@ namespace UD_Bones_Folder.Mod
         {
             if (IgnoreCache
                 || !Options.EnableOsseousAshDownloads
-                || !OsseousAsh.AllHosts(h => !h.Enabled || h.IsOnCooldown).IsNullOrEmpty()
+                || !Configuration.AllHosts(h => !h.Enabled || h.IsOnCooldown).IsNullOrEmpty()
                 || EligibleSaveBonesInfoCache == null)
                 EligibleSaveBonesInfoCache = new(await GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible && (Where?.Invoke(bones) is not false)));
 
@@ -1106,8 +1107,8 @@ namespace UD_Bones_Folder.Mod
                             bonesData = new(
                                 BonesID: bonesID,
                                 BonesZone: loadedZone,
-                                OsseousAshID: SaveBonesInfo.OsseousAshID,
-                                OsseousAshHandle: SaveBonesInfo.OsseousAshHandle);
+                                OsseousAshID: SaveBonesInfo.UserID,
+                                OsseousAshHandle: SaveBonesInfo.UserHandle);
                         }
                         else
                         {
@@ -1123,7 +1124,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 BonesID = bonesID,
                                 PseudoZone = loadedPseudoZone,
-                                OsseousAshHandle = SaveBonesInfo.OsseousAshHandle,
+                                OsseousAshHandle = SaveBonesInfo.UserHandle,
                             };
                         }
                     }
@@ -1291,7 +1292,7 @@ namespace UD_Bones_Folder.Mod
             {
                 try
                 {
-                    foreach (var host in OsseousAsh.AllEnabledHosts())
+                    foreach (var host in Configuration.AllEnabledHosts())
                     {
                         currentLocationData = FileLocationData.NewOnline(host);
                         try
@@ -1955,7 +1956,7 @@ namespace UD_Bones_Folder.Mod
                         if (bonesInfos.Any(b => b.IsMad))
                             icon.SetTile(MOON_KING_FEVER_TILE);
 
-                        using var options = new PickOptionDataSetAsync<SaveBonesInfo, UIUtils.CascadableResult>();
+                        using var options = new CascadablePickOptionDataSetAsync<SaveBonesInfo>(UIUtils.CascadableResult.CancelSilent, UIUtils.CascadableResult.CancelSilent);
                         do
                         {
                             if (failedBonesList.Count >= bonesInfos.Count())
@@ -1964,10 +1965,10 @@ namespace UD_Bones_Folder.Mod
                                 break;
                             }
 
-                            options.Clear(Dispose: true);
+                            options.ClearItems(Dispose: true);
 
                             // Add None Please:
-                            options.Add(new PickOptionData<SaveBonesInfo, Task<UIUtils.CascadableResult>>
+                            options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                             {
                                 Text = "none please",
                                 Hotkey = 'n',
@@ -1978,7 +1979,7 @@ namespace UD_Bones_Folder.Mod
                             // Add Roll It!:
                             if (canRollIt)
                             {
-                                options.Add(new PickOptionData<SaveBonesInfo, Task<UIUtils.CascadableResult>>
+                                options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                                 {
                                     Text = "roll it!".Color("yellow"),
                                     Hotkey = 'r',
@@ -1992,7 +1993,7 @@ namespace UD_Bones_Folder.Mod
                                 if (!failedBonesList.Contains(bonesInfo)
                                     && !allocation.IsBlocked())
                                 {
-                                    options.Add(new PickOptionData<SaveBonesInfo, Task<UIUtils.CascadableResult>>
+                                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                                     {
                                         Element = bonesInfo,
                                         Text = bonesInfo.GetBonesPickerLine(),
@@ -2026,8 +2027,6 @@ namespace UD_Bones_Folder.Mod
                                     IntroIcon: icon,
                                     NoBackButton: true,
                                     DefaultSelected: 0,
-                                    OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
-                                    OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                                     FinalSelectedCallback: UIUtils.ShowEscancellepedAsync)
                                 .WaitResult();
                         }

@@ -75,18 +75,18 @@ namespace UD_Bones_Folder.Mod
             => new(this, EqualityComparer ?? GetEqualityComparer(), Coalescer ?? GetCoalescer())
             ;
 
-        public BonesStat GetStat(Guid OsseousAshID)
-            => this.FirstOrDefault(stat => stat.OsseousAshID == OsseousAshID.ToString())
+        public BonesStat GetStat(Guid UserID)
+            => this.FirstOrDefault(stat => stat.UserID == UserID.ToString())
             ;
 
-        public bool TryGetStat(Guid OsseousAshID, out BonesStat Stat)
-            => (Stat = GetStat(OsseousAshID)) != null
+        public bool TryGetStat(Guid UserID, out BonesStat Stat)
+            => (Stat = GetStat(UserID)) != null
             ;
 
-        public bool IncrementStat(Guid OsseousAshID)
+        public bool IncrementStat(Guid UserID)
         {
-            if (TryGetStat(OsseousAshID, out var stat)
-                || Add(stat = new(OsseousAshID, 0)))
+            if (TryGetStat(UserID, out var stat)
+                || Add(stat = new(UserID, 0)))
             {
                 stat.Increment();
                 return true;
@@ -94,8 +94,8 @@ namespace UD_Bones_Folder.Mod
             return false;
         }
 
-        public int GetStatValue(Guid OsseousAshID)
-            => GetStat(OsseousAshID)?.Value
+        public int GetStatValue(Guid UserID)
+            => GetStat(UserID)?.Value
             ?? 0
             ;
 
@@ -114,11 +114,11 @@ namespace UD_Bones_Folder.Mod
         {
             foreach (var bonesStat in this)
                 if (Where?.Invoke(bonesStat) is not false)
-                    yield return bonesStat.OsseousAshID;
+                    yield return bonesStat.UserID;
         }
 
         public bool HasValue(Guid OsseousAshID)
-            => this.Any(stat => stat.OsseousAshID == OsseousAshID.ToString())
+            => this.Any(stat => stat.UserID == OsseousAshID.ToString())
             ;
     }
 }

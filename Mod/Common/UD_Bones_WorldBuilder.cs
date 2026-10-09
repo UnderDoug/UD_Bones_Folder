@@ -17,6 +17,7 @@ using Genkit;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.Serialization.Delegates;
 using UD_Bones_Folder.Mod.UI;
+using UD_Bones_Folder.Mod.OsseousAsh;
 
 namespace XRL.World.WorldBuilders
 {
@@ -37,7 +38,7 @@ namespace XRL.World.WorldBuilders
             if (Options.EnableOsseousAshDownloads)
             {
                 Loading.SetLoadingStatus($"Loading Bones...");
-                foreach (var host in OsseousAsh.AllHosts(h => h.IsOnCooldown))
+                foreach (var host in Configuration.AllHosts(h => h.IsOnCooldown))
                 {
                     string hostName = host.GetHostNameWithProtocol();
                     try

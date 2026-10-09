@@ -5,25 +5,25 @@ using System.Collections.Generic;
 using Kobold;
 
 using XRL;
+using XRL.Collections;
+using XRL.UI;
 using XRL.World;
 using XRL.World.AI;
 using XRL.World.AI.GoalHandlers;
+using XRL.World.Capabilities;
 using XRL.World.Effects;
 using XRL.World.Parts;
+using XRL.World.Parts.Mutation;
+using XRL.World.Parts.Skill;
+using XRL.World.ZoneParts;
 
 using static XRL.World.Cell;
 
-using static UD_Bones_Folder.Mod.SerializationExtensions;
-using XRL.Core;
-using XRL.Collections;
 using UD_Bones_Folder.Mod.Events;
-using XRL.World.ZoneParts;
-using XRL.World.Capabilities;
-using XRL.World.Parts.Skill;
-using XRL.World.Parts.Mutation;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using UD_Bones_Folder.Mod.BonesSystem;
-using XRL.UI;
+
+using static UD_Bones_Folder.Mod.SerializationExtensions;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -31,11 +31,13 @@ namespace UD_Bones_Folder.Mod
     public class BonesData : IComposite, IDisposable
     {
         public static BonesManager BonesManager => BonesManager.System;
+        public static OsseousAsh.Configuration Config => OsseousAsh.Configuration.Instance;
+
         public string BonesID;
         public Zone BonesZone;
         public PseudoZone PseudoZone;
 
-        public Guid OsseousAshID;
+        public Guid UserID;
         public string OsseousAshHandle;
 
         public BonesData()
@@ -50,7 +52,7 @@ namespace UD_Bones_Folder.Mod
             if (OsseousAshID != null
                 && !OsseousAshHandle.IsNullOrEmpty())
             {
-                this.OsseousAshID = OsseousAshID.GetValueOrDefault();
+                this.UserID = OsseousAshID.GetValueOrDefault();
                 this.OsseousAshHandle = OsseousAshHandle;
             }
         }
@@ -510,9 +512,9 @@ namespace UD_Bones_Folder.Mod
                                 catchFlag = nameof(Description);
                                 if (LunarRegent.TryGetPart(out Description description))
                                 {
-                                    string whoItWas = OsseousAshHandle ?? OsseousAsh.DefaultOsseousAshHandle;
-                                    if (OsseousAsh.Config == null
-                                        || OsseousAsh.Config.ID == OsseousAshID)
+                                    string whoItWas = OsseousAshHandle ?? OsseousAsh.Configuration.DefaultOsseousAshHandle;
+                                    if (Config == null
+                                        || Config.ID == UserID)
                                         whoItWas = $"you";
 
                                     description._Short = $"It was {whoItWas}.";
@@ -687,7 +689,7 @@ namespace UD_Bones_Folder.Mod
             BonesZone = null;
             PseudoZone?.Dispose();
             PseudoZone = null;
-            OsseousAshID = default;
+            UserID = default;
             OsseousAshHandle = null;
         }
     }

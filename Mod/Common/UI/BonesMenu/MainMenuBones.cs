@@ -13,6 +13,8 @@ using HarmonyLib;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.OsseousAsh;
+
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -102,7 +104,7 @@ namespace UD_Bones_Folder.Mod.UI
                         if (Options.EnableOsseousAshDownloads)
                         {
                             Loading.SetLoadingStatus($"Loading Bones...");
-                            foreach (var host in OsseousAsh.AllHosts(h => h.IsOnCooldown))
+                            foreach (var host in Configuration.AllHosts(h => h.IsOnCooldown))
                             {
                                 string hostName = host.GetHostNameWithProtocol();
                                 try
@@ -136,7 +138,7 @@ namespace UD_Bones_Folder.Mod.UI
         {
             if (MainMenuBonesOptions != null)
                 MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones()
-                    || OsseousAsh.WantToAsk;
+                    || Configuration.WantToAsk;
         }
 
         [HarmonyPatch(
@@ -175,13 +177,13 @@ namespace UD_Bones_Folder.Mod.UI
             bool needReshow = false;
             try
             {
-                if (OsseousAsh.WantToAsk)
+                if (Configuration.WantToAsk)
                 {
                     needReshow = true;
                     await The.UiContext;
 
                     AllowPromptAboutLinux = true;
-                    await NavigationController.instance.SuspendContextWhile(OsseousAsh.PerformAskAsync);
+                    await NavigationController.instance.SuspendContextWhile(Configuration.PerformAskAsync);
                 }
 
                 /*if (!GameManager.AwakeComplete)
@@ -195,7 +197,7 @@ namespace UD_Bones_Folder.Mod.UI
                 {
                     try
                     {
-                        if (OsseousAsh.Hosts.FirstHostMatching(h => h.Enabled) is OsseousAsh.Host firstEnabledHost)
+                        if (ServerUtils.Hosts.FirstHostMatching(h => h.Enabled) is Host firstEnabledHost)
                             firstEnabledHost.GetServerStatus(RethrowForLinuxPrompt: true);
                     }
                     catch (Exception x)

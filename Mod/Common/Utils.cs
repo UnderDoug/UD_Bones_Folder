@@ -653,8 +653,14 @@ namespace UD_Bones_Folder.Mod
         #region Aggregator Functions
 
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
-           => $"{Accumulator}{(!Accumulator.IsNullOrEmpty() ? Delimiter : null)}{Next}"
-           ;
+            => $"{Accumulator}{(!Accumulator.IsNullOrEmpty() ? Delimiter : null)}{Next}"
+            ;
+
+        public static string DelimitedNotNullAggregator<T>(string Accumulator, T Next, string Delimiter)
+            => Next is not null
+            ? $"{Accumulator}{(!Accumulator.IsNullOrEmpty() ? Delimiter : null)}{Next}"
+            : Accumulator
+            ;
 
         public static string CommaDelimitedAggregator<T>(string Accumulator, T Next)
             => DelimitedAggregator(Accumulator, Next, ",")

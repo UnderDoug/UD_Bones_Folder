@@ -32,7 +32,7 @@ namespace UD_Bones_Folder.Mod
             : base(FileLocationData.DefaultEqualityComparer, FileLocationData.DefaultCoalescer)
         { }
 
-        public bool AnyHostsMissing(IEnumerable<OsseousAsh.Host> Hosts)
+        public bool AnyHostsMissing(IEnumerable<Host> Hosts)
             => Hosts?.Any(h => !this.Any(f => h.SameAs(f.Host))) is true
             ;
     }

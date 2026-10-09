@@ -1,10 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Reflection.Emit;
+using System.Reflection;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Platform.IO;
+
+using HarmonyLib;
 
 using ConsoleLib.Console;
 
@@ -12,45 +19,38 @@ using Kobold;
 
 using UnityEngine.UI;
 
-using Platform.IO;
+using Genkit;
 
 using XRL;
 using XRL.Collections;
 using XRL.Language;
+using XRL.Rules;
 using XRL.UI;
 using XRL.UI.Framework;
 using XRL.World;
+using XRL.World.Effects;
 using XRL.World.Parts;
-
-using UD_Bones_Folder.Mod.UI;
+using XRL.World.Text;
+using XRL.World.WorldBuilders;
 
 using static XRL.World.Cell;
 
-using static UD_Bones_Folder.Mod.OsseousAsh;
-using static UD_Bones_Folder.Mod.OsseousAsh.Report;
+using UD_Bones_Folder.Mod.UI;
+
+using UD_Bones_Folder.Mod.Parts;
+using UD_Bones_Folder.Mod.Moderation;
+using UD_Bones_Folder.Mod.OsseousAsh;
 
 using Range = XRL.Range;
-using System.Collections.Concurrent;
 using Event = XRL.World.Event;
-using XRL.World.Skills;
-using XRL.World.Parts.Skill;
-using XRL.Rules;
-using UD_Bones_Folder.Mod.Parts;
-using Genkit;
-using XRL.World.WorldBuilders;
-using System.Text.RegularExpressions;
-using UD_Bones_Folder.Mod.Moderation;
-using System.Diagnostics;
-using HarmonyLib;
-using System.Reflection.Emit;
-using System.Reflection;
-using XRL.World.Effects;
 using static UD_Bones_Folder.Mod.SaveBonesInfo;
+using System.Net;
 
 namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
     {
+        private static OsseousAsh.Configuration Config => OsseousAsh.Configuration.Instance;
         public static string MakeDeathReasonThirdPersion(this string DeathReason, string Default = "You died under mysterious circumstances!")
         {
             string deathReason = DeathReason;
@@ -210,8 +210,8 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
-                OsseousAshID = Config?.ID ?? Guid.Empty,
-                OsseousAshHandle = Config?.Handle ?? DefaultOsseousAshHandle,
+                UserID = Config?.ID ?? Guid.Empty,
+                Handle = Config?.Handle ?? OsseousAsh.Configuration.DefaultOsseousAshHandle,
                 SaveVersion = XRLGame.SaveVersion,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
                 ID = Game.GameID,
@@ -1841,6 +1841,10 @@ namespace UD_Bones_Folder.Mod
             => SB.Append(Key?.ToString()).Append(": ").Append(Value?.ToString())
             ;
 
+        public static TextBuilder AppendPair(this TextBuilder TB, object Key, object Value)
+            => TB.Append(Key?.ToString()).Append(": ").Append(Value?.ToString())
+            ;
+
         public static char GetNextHotKey(
             this IEnumerable<char> Source,
             IEnumerable<char> Excluding = null,
@@ -2011,7 +2015,11 @@ namespace UD_Bones_Folder.Mod
             )
             => SB.AppendLine().AppendBullet(Color, Bullet);
 
-        public static StringBuilder AppendBonesReportedObject(this StringBuilder SB, ObjectReportDetails ReportedObject, int Indent = 0)
+        public static StringBuilder AppendBonesReportedObject(
+            this StringBuilder SB,
+            Report.ObjectReportDetails ReportedObject,
+            int Indent = 0
+            )
             => SB.AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.Blueprint), ReportedObject.Blueprint)
                 .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.SerializedBaseID), ReportedObject.SerializedBaseID)
                 .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.DisplayName), "[redacted as a precaution]")
@@ -2019,7 +2027,23 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.IsLunarRegent), ReportedObject.IsLunarRegent)
             ;
 
-        public static StringBuilder AppendBonesReport(this StringBuilder SB, Report Report, string Heading = null)
+        public static TextBuilder AppendBonesReportedObject(
+            this TextBuilder TB,
+            Report.ObjectReportDetails ReportedObject,
+            int Indent = 0
+            )
+            => TB.AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.Blueprint), ReportedObject.Blueprint)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.SerializedBaseID), ReportedObject.SerializedBaseID)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.DisplayName), "[redacted as a precaution]")
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.IsTheLunarRegent), ReportedObject.IsLunarRegent)
+                .AppendLine().AppendIndent(Indent, AsNBSP: true).AppendPair(nameof(ReportedObject.IsLunarRegent), ReportedObject.IsLunarRegent)
+            ;
+
+        public static StringBuilder AppendBonesReport(
+            this StringBuilder SB,
+            Report Report,
+            string Heading = null
+            )
         {
             if (!Heading.IsNullOrEmpty())
                 SB.Append(Heading)
@@ -2052,6 +2076,82 @@ namespace UD_Bones_Folder.Mod
             }
             return SB;
         }
+
+        public static TextBuilder AppendBonesReport(
+            this TextBuilder TB,
+            Report Report,
+            string Heading = null
+            )
+        {
+            if (!Heading.IsNullOrEmpty())
+                TB.Append(Heading)
+                    .AppendLine();
+
+            if (Report == null)
+                TB.Append("Report is null...");
+            else
+            {
+                TB.AppendPair(nameof(Report.BonesID), Report.BonesID)
+                    .AppendLine().AppendPair(nameof(Report.Blocked), Report.Blocked)
+                    .AppendLine().AppendPair(nameof(Report.Type), Report.Type);
+
+                TB.AppendLine();
+                if (Report.IsSpecificObject)
+                {
+                    TB.Append(nameof(Report.ObjectDetails)).Append(":")
+                        .AppendLine().AppendBonesReportedObject(Report.ObjectDetails, Indent: 1);
+                }
+                else
+                    TB.AppendPair("For Specific Object", Report.IsSpecificObject);
+
+                TB.AppendLine().Append(nameof(Report.Description)).Append(":")
+                    .AppendLine();
+
+                if (Report.Description.IsNullOrEmpty())
+                    TB.AppendIndent(1, AsNBSP: true).Append("none");
+                else
+                    TB.AppendQuote(Report.Description);
+            }
+            return TB;
+        }
+
+        public static TextBuilder AppendLineEnd(this TextBuilder TB)
+            => TB.AppendLine().Append("=ud_nbsp=".StartReplace().ToString())
+            ;
+
+        public static TextBuilder AppendRules(this TextBuilder TB, Action<TextBuilder> appender)
+        {
+            TB.Append("\n{{rules|");
+            appender(TB);
+            TB.Append("}}");
+            return TB;
+        }
+
+        public static TextBuilder AppendRules(this TextBuilder TB, string text)
+            => !text.IsNullOrEmpty()
+            ? TB.AppendLine().AppendColored("rules", text)
+            : TB
+            ;
+
+        public static TextBuilder AppendRule(this TextBuilder TB, object Value)
+            => !(Value?.ToString()).IsNullOrEmpty()
+            ? TB.AppendColored("rules", Value.ToString())
+            : TB
+            ;
+
+        public static TextBuilder AppendQuote(this TextBuilder TB, object Value)
+            => TB.Append("\"").Append(Value).Append("\"")
+            ;
+
+        public static TextBuilder AppendIndent(this TextBuilder TB, int Amount = 0, int Factor = 2, int MaxIndent = 12, bool AsNBSP = false)
+            => TB.Append(Amount.Indent(Factor, MaxIndent, AsNBSP))
+            ;
+
+        public static TextBuilder AppendColored(this TextBuilder TB, string color, string text)
+            => TB.Append("{{").Append(color).Append("|")
+                .Append(text)
+                .Append("}}")
+            ;
 
         public static IEnumerable<string> GetNotResistedDamageTypes(this GameObject Object)
         {
@@ -2275,12 +2375,24 @@ namespace UD_Bones_Folder.Mod
             => SB.Append(Capitalize ? Amount.ThisThese().Capitalize() : Amount.ThisThese())
             ;
 
+        public static TextBuilder AppendThisThese(this TextBuilder TB, int Amount, bool Capitalize = false)
+            => TB.Append(Capitalize ? Amount.ThisThese().Capitalize() : Amount.ThisThese())
+            ;
+
         public static StringBuilder AppendThings(this StringBuilder SB, int Amount, string Thing = "thing")
         {
             if (Amount != 1)
                 Thing = Thing.Pluralize();
 
             return SB.Append(Thing);
+        }
+
+        public static TextBuilder AppendThings(this TextBuilder TB, int Amount, string Thing = "thing")
+        {
+            if (Amount != 1)
+                Thing = Thing.Pluralize();
+
+            return TB.Append(Thing);
         }
 
         public static StringBuilder AppendUnavailableMods(this StringBuilder SB, IEnumerable<string> UnavailableMods)
@@ -2296,6 +2408,19 @@ namespace UD_Bones_Folder.Mod
                     ;
         }
 
+        public static TextBuilder AppendUnavailableMods(this TextBuilder TB, IEnumerable<string> UnavailableMods)
+        {
+            int unavailableCount = UnavailableMods.Count();
+            return UnavailableMods
+                .Select(ModManager.GetModTitle)
+                    .Aggregate(
+                        seed: TB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
+                            .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),
+                        func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
+                    .AppendLine().AppendColored("w", "You won't be able to enable these mods as they are missing outright.")
+                    ;
+        }
+
         public static StringBuilder AppendUnavailableMods(this StringBuilder SB, IEnumerable<ModRecord> UnavailableMods)
         {
             int unavailableCount = UnavailableMods.Count();
@@ -2303,6 +2428,19 @@ namespace UD_Bones_Folder.Mod
                 .Select(r => r.ToString())
                     .Aggregate(
                         seed: SB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
+                            .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),
+                        func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
+                    .AppendLine().AppendColored("w", "You won't be able to enable these mods as they are missing outright.")
+                    ;
+        }
+
+        public static TextBuilder AppendUnavailableMods(this TextBuilder TB, IEnumerable<ModRecord> UnavailableMods)
+        {
+            int unavailableCount = UnavailableMods.Count();
+            return UnavailableMods
+                .Select(r => r.ToString())
+                    .Aggregate(
+                        seed: TB.AppendLine().AppendThisThese(unavailableCount, true).Append(" ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
                             .AppendThings(unavailableCount, " mod").Append(" are ").AppendColored("red", "enabled").Append(" in this bones file:"),
                         func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
                     .AppendLine().AppendColored("w", "You won't be able to enable these mods as they are missing outright.")
@@ -3077,6 +3215,26 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<T> InEnumerable<T>(this T Value)
         {
             yield return Value;
+        }
+
+        public static bool Is404Exception(this WebException Ex)
+            => Ex != null
+            && Ex.Status == WebExceptionStatus.ProtocolError
+            && Ex.Response is HttpWebResponse resp
+            && resp.StatusCode == HttpStatusCode.NotFound
+            ;
+
+        public static void AppendWebHeader(this WebHeaderCollection Headers, HttpRequestHeader Header, object Value)
+        {
+            string headerValue = null;
+
+            if (Headers.Get(Header.ToString()) is string existingAuthHeader
+                && !existingAuthHeader.IsNullOrEmpty())
+                headerValue = existingAuthHeader + ";";
+
+            headerValue += $"{Value}";
+
+            Headers.Add(Header, headerValue);
         }
 
         #region Harmony

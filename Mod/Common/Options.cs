@@ -10,9 +10,6 @@ using Platform.IO;
 
 using Qud.UI;
 
-using UD_Bones_Folder.Mod.Moderation;
-using UD_Bones_Folder.Mod.UI;
-
 using UnityEngine;
 
 using XRL;
@@ -20,11 +17,15 @@ using XRL.Collections;
 using XRL.UI;
 using XRL.World;
 
+using UD_Bones_Folder.Mod.Moderation;
+using UD_Bones_Folder.Mod.OsseousAsh;
+using UD_Bones_Folder.Mod.UI;
+
 using static UD_Bones_Folder.Mod.Const;
-using static UD_Bones_Folder.Mod.OsseousAsh;
 using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.World.Event;
+using XRL.World.Text;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -63,6 +64,8 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
         #region General Settings
+
+        private static Configuration OsseousAshConfig => Configuration.Instance;
 
         [OptionFlag] public static int BonesMode_ProgressionSlant;
         [OptionFlag] public static bool EnableFlashingLightEffects;
@@ -108,7 +111,7 @@ namespace UD_Bones_Folder.Mod
         public static int DefaultPermyriadChance => LastNonCustomChosenPermyriadChance ?? 200;
 
         private static int? _CustomPermyriadChance;
-        [OptionFlag] public static int CustomPermyriadChance => (_CustomPermyriadChance ??= Config?.CustomPermyriadChance) ?? DefaultPermyriadChance;
+        [OptionFlag] public static int CustomPermyriadChance => (_CustomPermyriadChance ??= OsseousAshConfig?.CustomPermyriadChance) ?? DefaultPermyriadChance;
 
         private static HashSet<string> LockedMembers = new();
 
@@ -116,7 +119,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag]
         public static bool EnableOsseousAshStartupPopup
         {
-            get => (_EnableOsseousAshStartupPopup ??= Config?.AskAtStartup) ?? false;
+            get => (_EnableOsseousAshStartupPopup ??= OsseousAshConfig?.AskAtStartup) ?? false;
             set
             {
                 LockedMembers ??= new();
@@ -125,10 +128,10 @@ namespace UD_Bones_Folder.Mod
                     LockedMembers.Add(nameof(EnableOsseousAshStartupPopup));
                     try
                     {
-                        if (Config != null
-                            && Config.AskAtStartup != value)
+                        if (OsseousAshConfig != null
+                            && OsseousAshConfig.AskAtStartup != value)
                         {
-                            Config.WriteAskAtStartup(value);
+                            OsseousAshConfig.WriteAskAtStartup(value);
                         }
                     }
                     finally
@@ -145,7 +148,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag]
         public static bool EnableOsseousAshDownloads
         {
-            get => (_EnableOsseousAshDownloads ??= Config?.EnableDownloads) ?? false;
+            get => (_EnableOsseousAshDownloads ??= OsseousAshConfig?.EnableDownloads) ?? false;
             set
             {
                 LockedMembers ??= new();
@@ -154,10 +157,10 @@ namespace UD_Bones_Folder.Mod
                     LockedMembers.Add(nameof(EnableOsseousAshDownloads));
                     try
                     {
-                        if (Config != null
-                            && Config.EnableDownloads != value)
+                        if (OsseousAshConfig != null
+                            && OsseousAshConfig.EnableDownloads != value)
                         {
-                            Config.WriteEnableDownloads(value);
+                            OsseousAshConfig.WriteEnableDownloads(value);
                         }
                     }
                     finally
@@ -174,7 +177,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag]
         public static bool EnableOsseousAshUploads
         {
-            get => (_EnableOsseousAshUploads ??= Config?.EnableUploads) ?? false;
+            get => (_EnableOsseousAshUploads ??= OsseousAshConfig?.EnableUploads) ?? false;
             set
             {
                 LockedMembers ??= new();
@@ -183,10 +186,10 @@ namespace UD_Bones_Folder.Mod
                     LockedMembers.Add(nameof(EnableOsseousAshUploads));
                     try
                     {
-                        if (Config != null
-                            && Config.EnableUploads != value)
+                        if (OsseousAshConfig != null
+                            && OsseousAshConfig.EnableUploads != value)
                         {
-                            Config.WriteEnableUploads(value);
+                            OsseousAshConfig.WriteEnableUploads(value);
                         }
                     }
                     finally
@@ -199,7 +202,7 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        [OptionFlag] public static string OsseousAshHandle => Config?.Handle ?? DefaultOsseousAshHandle;
+        [OptionFlag] public static string OsseousAshHandle => OsseousAshConfig?.Handle ?? Configuration.DefaultOsseousAshHandle;
 
         #endregion
         #region Option Helpers
@@ -220,7 +223,7 @@ namespace UD_Bones_Folder.Mod
                     if (selected != CustomPermyriadChance)
                     {
                         _CustomPermyriadChance = Math.Clamp(selected.GetValueOrDefault(), 0, 10000);
-                        Config?.WriteCustomPermyriadChance(_CustomPermyriadChance.GetValueOrDefault());
+                        OsseousAshConfig?.WriteCustomPermyriadChance(_CustomPermyriadChance.GetValueOrDefault());
                     }
                     break;
                 }
@@ -305,7 +308,7 @@ namespace UD_Bones_Folder.Mod
                 && optionsByID.TryGetValue("UD_Bones_Folder_OsseousAshHandle", out var handleOption) is true)
             {
                 BaseHandleDisplayText ??= handleOption.DisplayText;
-                handleOption.DisplayText = $"{BaseHandleDisplayText}: {OsseousAshHandle ?? DefaultOsseousAshHandle}";
+                handleOption.DisplayText = $"{BaseHandleDisplayText}: {OsseousAshHandle ?? Configuration.DefaultOsseousAshHandle}";
             }
         }
 
@@ -328,7 +331,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (confirmed.GetValueOrDefault())
                 {
-                    Config.WriteHandle(entered ?? OsseousAshHandle);
+                    OsseousAshConfig.WriteHandle(entered ?? OsseousAshHandle);
                     break;
                 }
             }
@@ -396,17 +399,17 @@ namespace UD_Bones_Folder.Mod
         #region Osseous Ash ID
         public static async Task ManageOsseousAshIDAsync()
         {
-            using var options = new PickOptionDataSetAsync<Configuration, UIUtils.CascadableResult>();
-            var sB = Event.NewStringBuilder();
+            using var options = new CascadablePickOptionDataSetAsync<Configuration>(UIUtils.CascadableResult.CancelSilent, UIUtils.CascadableResult.CancelSilent);
+            using var tB = TextBuilder.Get();
             do
             {
-                sB.Clear();
-                options.Clear(Dispose: true);
+                tB.Clear();
+                options.ClearItems(Dispose: true);
 
-                sB.Append("Use the options below to manage your ").Append(OSSEOUS_ASH).Append(" ID.")
+                tB.Append("Use the options below to manage your ").Append(OSSEOUS_ASH).Append(" ID.")
                     .AppendLine()
                     .AppendLine().Append("Your current ").Append(OSSEOUS_ASH).Append(" ID is:")
-                    .AppendLine().AppendColored("W", Config.ID.ToString())
+                    .AppendLine().AppendColored("W", OsseousAshConfig.ID.ToString())
                     .AppendLine()
                     .AppendLine().Append("If you've been asked for your ").Append(OSSEOUS_ASH).Append(" ID by a server owner, ")
                     .Append("you can use the option below to copy it to your clipboard.")
@@ -415,9 +418,9 @@ namespace UD_Bones_Folder.Mod
                     .Append("is able to restrict access.")
                     .AppendLineEnd();
 
-                options.Add(new()
+                options.Add(new CascadablePickOptionDataAsync<Configuration>
                 {
-                    Element = Config,
+                    Element = OsseousAshConfig,
                     Text = "copy to clipboard",
                     Icon = new Renderable(
                             Tile: "Items/sw_unfurled_scroll1.bmp",
@@ -427,9 +430,9 @@ namespace UD_Bones_Folder.Mod
                     Hotkey = 'c',
                     Callback = PerformCopyOsseousAshIDToClipboardAsync,
                 });
-                options.Add(new()
+                options.Add(new CascadablePickOptionDataAsync<Configuration>
                 {
-                    Element = Config,
+                    Element = OsseousAshConfig,
                     Text = "generate new ID",
                     Icon = new Renderable(
                             Tile: "UI/sw_newchar.bmp",
@@ -443,18 +446,14 @@ namespace UD_Bones_Folder.Mod
             while ((await UIUtils.PerformPickOptionAsync(
                 OptionDataSet: options,
                 Title: $"Manage {OSSEOUS_ASH} ID".Colored("yellow"),
-                Intro: sB.ToString(),
+                Intro: tB.ToString(),
                 IntroIcon: new Renderable(
                     Tile: "Items/sw_credit_wedge.bmp",
                     ColorString: "&y",
                     TileColor: "&y",
                     DetailColor: 'K'),
                 DefaultSelected: 0,
-                OnBackCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
-                OnEscapeCallback: () => Task.Run(() => UIUtils.CascadableResult.CancelSilent),
                 FinalSelectedCallback: UIUtils.ShowEscancellepedAsync)).IsContinue());
-
-            Event.ResetTo(sB);
         }
 
         private static async Task<UIUtils.CascadableResult> PerformCopyOsseousAshIDToClipboardAsync(Configuration Config)
@@ -528,12 +527,17 @@ namespace UD_Bones_Folder.Mod
             await Popup.ShowAsync(
                     Message: Event.FinalizeString(
                         SB: Event.NewStringBuilder("Your existing ").Append(OSSEOUS_ASH).Append(" ID, ")
-                            .AppendColored("W", Config.ID.ToString())
+                            .AppendColored("W", OsseousAshConfig.ID.ToString())
                             .Append(", remains unchanged."))
                     );
         }
 
         #endregion
+
+        public static async Task ManageHostsOptionButtonAsync()
+            => await Host.ManageHostsOptionButtonWithSelectionAsync(null)
+            ;
+
         #endregion
     }
 }

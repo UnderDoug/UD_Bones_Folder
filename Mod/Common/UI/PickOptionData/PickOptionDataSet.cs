@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 using ConsoleLib.Console;
@@ -27,7 +28,11 @@ namespace UD_Bones_Folder.Mod.UI
         public PickOptionDataSet(PickOptionDataSet<T, TResult> Source)
             : base(Source)
         {
-            RequireElement = true;
+            if (Source != null)
+            {
+                SingleElement = Source.SingleElement;
+                RequireElement = Source.RequireElement;
+            }
         }
 
         public PickOptionDataSet(T SingleElement, bool RequireElement = true)
@@ -38,48 +43,48 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public IReadOnlyList<T> GetElements()
-        {
-            var elements = new List<T>();
-            for (int i = 0; i < Count; i++)
-            {
-                if (RequireElement)
+            => this.Aggregate(
+                seed: new List<T>(Count),
+                func: (a, n) =>
                 {
-                    var element = this.ElementAtOrDefault(i).Element;
-                    if (Equals(element, default))
-                        elements.Add(SingleElement);
-                }
-                else
-                    elements.Add(SingleElement);
-            }
-            return elements;
-        }
+                    var element = n.Element;
+                    if (!RequireElement
+                        || Equals(element, default))
+                        element = SingleElement;
+                    a.Add(element);
+                    return a;
+                })
+            ;
 
         public IReadOnlyList<string> GetOptions()
-        {
-            var options = new List<string>();
-            for (int i = 0; i < Count; i++)
-                options.Add(this.ElementAtOrDefault(i).Text);
-
-            return options;
-        }
+            => this.Aggregate(
+                seed: new List<string>(Count),
+                func: (a, n) =>
+                {
+                    a.Add(n.Text);
+                    return a;
+                })
+            ;
 
         public IReadOnlyList<IRenderable> GetIcons()
-        {
-            var icons = new List<IRenderable>();
-            for (int i = 0; i < Count; i++)
-                icons.Add(this.ElementAtOrDefault(i).Icon);
-
-            return icons;
-        }
+            => this.Aggregate(
+                seed: new List<IRenderable>(Count),
+                func: (a, n) =>
+                {
+                    a.Add(n.Icon);
+                    return a;
+                })
+            ;
 
         public IReadOnlyList<char> GetHotkeys()
-        {
-            var hotkeys = new List<char>();
-            for (int i = 0; i < Count; i++)
-                hotkeys.Add(this.ElementAtOrDefault(i).Hotkey);
-
-            return hotkeys;
-        }
+            => this.Aggregate(
+                seed: new List<char>(Count),
+                func: (a, n) =>
+                {
+                    a.Add(n.Hotkey);
+                    return a;
+                })
+            ;
 
         public bool HasHotkey(char Hotkey)
             => GetHotkeys().Contains(Hotkey)
@@ -98,25 +103,32 @@ namespace UD_Bones_Folder.Mod.UI
         }
 
         public TResult InvokeAt(int Index)
-            => this[Index].Invoke()
+            => this[Index].Invoke(GetElements().ElementAtOrDefault(Index))
             ;
 
         public TResult TryInvokeAt(int Index)
-            => this.ElementAtOrDefault(Index).Invoke()
+            => this.ElementAtOrDefault(Index).Invoke(GetElements().ElementAtOrDefault(Index))
             ;
 
-        public void Clear(bool Dispose)
+        public virtual void ClearItems(bool Dispose)
         {
             if (Dispose)
                 foreach (var element in this.IteratorSafe())
-                    element.Dispose();
+                    element?.Dispose();
 
+            ClearItems();
+        }
+
+        public virtual void ClearItems()
+        {
             Clear();
         }
 
-        public void Dispose()
+        public virtual void Dispose()
         {
-            Clear(Dispose: true);
+            SingleElement = default;
+            RequireElement = default;
+            ClearItems(Dispose: true);
         }
     }
 }

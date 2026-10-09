@@ -44,7 +44,7 @@ namespace UD_Bones_Folder.Mod.UI
             this.Callback = Callback;
         }
 
-        public virtual TResult Invoke()
+        public virtual TResult Invoke(T Element)
         {
             if (Callback != null)
             {
@@ -53,6 +53,10 @@ namespace UD_Bones_Folder.Mod.UI
             }
             return default;
         }
+
+        public virtual TResult Invoke()
+            => Invoke(Element)
+            ;
 
         public void Dispose()
         {

@@ -52,8 +52,7 @@ namespace UD_Bones_Folder.Mod
         public class ApproxDepthEqualityComparer : EqualityComparer<ApproxDepth>
         {
             public override bool Equals(ApproxDepth x, ApproxDepth y)
-                => x == ApproxDepth.Wildcard
-                || y == ApproxDepth.Wildcard
+                => EitherWildcard(x, y, ApproxDepth.Wildcard)
                 || x == y
                 ;
 
@@ -80,8 +79,7 @@ namespace UD_Bones_Folder.Mod
         public string TerrainTravelClass;
 
         public BonesSpec()
-        {
-        }
+        { }
 
         public BonesSpec(
             GameObject LunarRegent,
@@ -185,8 +183,8 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static bool EitherWildcard<T>(T X, T Y, T Wildcard)
-            => X?.Equals(Wildcard) is true
-            || Y?.Equals(Wildcard) is true
+            => Equals(X, Wildcard)
+            || Equals(Y, Wildcard)
             ;
 
         public bool SameAs(BonesSpec Other)

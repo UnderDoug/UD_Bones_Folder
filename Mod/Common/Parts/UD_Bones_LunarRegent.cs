@@ -18,6 +18,7 @@ using XRL.Rules;
 using UD_Bones_Folder.Mod.UI;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using UD_Bones_Folder.Mod.Parts;
+using UD_Bones_Folder.Mod.OsseousAsh;
 
 namespace XRL.World.Parts
 {
@@ -190,10 +191,10 @@ namespace XRL.World.Parts
 
             if (LocationData is not null)
             {
-                if (LocationData.Host is OsseousAsh.Host storedHost)
+                if (LocationData.Host is Host storedHost)
                 {
-                    if (OsseousAsh.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is OsseousAsh.HostSet hostCollection
-                        && hostCollection.FirstOrDefault(h => h.SameAs(storedHost, true)) is OsseousAsh.Host actualHost)
+                    if (ServerUtils.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is HostSet hostSet
+                        && hostSet.FirstOrDefault(h => h.SameAs(storedHost, true)) is Host actualHost)
                     {
                         if (actualHost.Enabled)
                             return actualHost.GetSaveBonesInfo(BonesID);
@@ -805,7 +806,7 @@ namespace XRL.World.Parts
                         catchFlag = $"{nameof(IsMad)}: false";
 
                     catchFlag = nameof(Description);
-                    SetBakedShortDesc(IsYou: E.IsYou, WhoItWas: E.BonesInfo?.OsseousAshHandle ?? OsseousAsh.DefaultOsseousAshHandle);
+                    SetBakedShortDesc(IsYou: E.IsYou, WhoItWas: E.BonesInfo?.UserHandle ?? Configuration.DefaultOsseousAshHandle);
 
                     if (lunarRegent.AddPart<GivesRep>() is GivesRep givesRep)
                     {

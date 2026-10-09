@@ -1,15 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 
 using XRL.World.Effects;
 
-using UD_Bones_Folder.Mod;
 using XRL.Rules;
 using Qud.API;
 using UD_Bones_Folder.Mod.Events;
-using System.Linq;
 using UD_Bones_Folder.Mod.Parts;
+
+using UD_Bones_Folder.Mod;
+using UD_Bones_Folder.Mod.OsseousAsh;
 
 namespace XRL.World.Parts
 {
@@ -24,7 +26,7 @@ namespace XRL.World.Parts
             "ReadStory",
             "ShowEffects",
             "ShowInternals",
-            OsseousAsh.ReportBonesInventoryAction.Command,
+            Report.InventoryAction.Command,
         };
 
         public bool WantsToBeDropped;

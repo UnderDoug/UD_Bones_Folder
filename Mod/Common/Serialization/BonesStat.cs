@@ -11,29 +11,30 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class BonesStat
     {
-        public string OsseousAshID;
+        public string UserID;
         public int Value;
 
         public BonesStat()
         { }
 
         public BonesStat(
-            string OsseousAshID,
+            string UserID,
             int Value
         ) : this()
         {
-            this.OsseousAshID = OsseousAshID;
+            this.UserID = UserID;
             this.Value = Value;
         }
 
         public BonesStat(
-            Guid OsseousAshID,
+            Guid UserID,
             int Value
-        ) : this(OsseousAshID.ToString(), Value)
+        ) : this(UserID.ToString(), Value)
         { }
 
+
         public bool SameAs(BonesStat Other)
-            => OsseousAshID == Other?.OsseousAshID
+            => UserID == Other?.UserID
             ;
 
         public BonesStat Increment()
@@ -43,10 +44,10 @@ namespace UD_Bones_Folder.Mod
         }
 
         public override string ToString()
-            => $"\"{nameof(OsseousAshID)}\": \"{OsseousAshID}\", \"{nameof(Value)}\": \"{Value}\"";
+            => $"\"{nameof(UserID)}\": \"{UserID}\", \"{nameof(Value)}\": \"{Value}\"";
 
         public static implicit operator KeyValuePair<string, int>(BonesStat BonesStat)
-            => new(BonesStat?.OsseousAshID, BonesStat?.Value ?? 0)
+            => new(BonesStat?.UserID, BonesStat?.Value ?? 0)
             ;
 
         public static implicit operator BonesStat(KeyValuePair<string, int> Pair)

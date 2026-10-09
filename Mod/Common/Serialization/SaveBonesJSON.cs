@@ -29,8 +29,8 @@ namespace UD_Bones_Folder.Mod
 
         public bool? IsYou;
         [JsonProperty]
-        public Guid OsseousAshID;
-        public string OsseousAshHandle;
+        public Guid UserID;
+        public string Handle;
 
         public string ModVersion;
         public long SaveTimeValue;
@@ -69,14 +69,16 @@ namespace UD_Bones_Folder.Mod
 
         public SaveBonesJSON()
             : base()
-        { }
+        {
+            InfoVersion = 2;
+        }
 
         public static SaveBonesJSON DummyBonesJSON(BonesManagement.VisibilityModes VisibilityMode)
             => new()
             {
                 IsYou = true,
-                OsseousAshID = Guid.Empty,
-                OsseousAshHandle = $"A Highlight Entropic Being",
+                UserID = Guid.Empty,
+                Handle = $"A Highlight Entropic Being",
                 SaveVersion = XRLGame.SaveVersion,
                 GameVersion = typeof(MainMenu).Assembly.GetName().Version.ToString(),
                 ID = Guid.Empty.ToString(),
@@ -234,8 +236,8 @@ namespace UD_Bones_Folder.Mod
         public SaveBonesJSON Clone()
             => new()
             {
-                OsseousAshID = OsseousAshID,
-                OsseousAshHandle = OsseousAshHandle,
+                UserID = UserID,
+                Handle = Handle,
                 SaveVersion = SaveVersion,
                 GameVersion = GameVersion,
                 ID = ID,
@@ -273,8 +275,8 @@ namespace UD_Bones_Folder.Mod
 
         public void Dispose()
         {
-            OsseousAshID = Guid.Empty;
-            OsseousAshHandle = null;
+            UserID = Guid.Empty;
+            Handle = null;
             SaveVersion = 0;
             GameVersion = null;
             ID = null;
