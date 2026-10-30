@@ -70,16 +70,16 @@ namespace XRL.World.Parts
                 E.AddEntry(this, nameof(bonesInfo.ModVersion), bonesInfo.ModVersion);
                 E.AddEntry(this, nameof(bonesInfo.SaveTimeValue), bonesInfo.SaveTimeValue.Timestamp());
 
-                string fileLocationDataDebugString = "empty";
-                if (!bonesInfo.FileLocationDataSet.IsNullOrEmpty())
-                    fileLocationDataDebugString = bonesInfo.FileLocationDataSet
+                string bonesSourcesString = "empty";
+                if (!bonesInfo.BonesSources.IsNullOrEmpty())
+                    bonesSourcesString = bonesInfo.BonesSources
                         .Aggregate(
                             seed: "",
-                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, n.TaggedDisplayName().Strip()))
+                            func: (a, n) => Utils.NewLineDelimitedAggregator(a, n.DisplayName.Strip()))
                         ;
 
-                E.AddEntry(this, nameof(bonesInfo.FileLocationData), fileLocationDataDebugString);
-                E.AddEntry(this, nameof(SaveBonesJSON.ZoneID), bonesInfo.GetBonesJSON().ZoneID);
+                E.AddEntry(this, nameof(bonesInfo.BonesSources), bonesSourcesString);
+                E.AddEntry(this, nameof(SaveBonesJSON.ZoneID), bonesInfo.JSON.ZoneID);
             }
             else
                 E.AddEntry(this, nameof(SaveBonesInfo), "Not Found...");

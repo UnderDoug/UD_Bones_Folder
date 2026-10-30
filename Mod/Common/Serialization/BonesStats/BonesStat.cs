@@ -9,7 +9,7 @@ namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
-    public class BonesStat
+    public class BonesStat : IDisposable
     {
         public string UserID;
         public int Value;
@@ -32,6 +32,13 @@ namespace UD_Bones_Folder.Mod
         ) : this(UserID.ToString(), Value)
         { }
 
+        public BonesStat Clone()
+            => new()
+            {
+                UserID = UserID,
+                Value = Value,
+            };
+
 
         public bool SameAs(BonesStat Other)
             => UserID == Other?.UserID
@@ -45,6 +52,12 @@ namespace UD_Bones_Folder.Mod
 
         public override string ToString()
             => $"\"{nameof(UserID)}\": \"{UserID}\", \"{nameof(Value)}\": \"{Value}\"";
+
+        public void Dispose()
+        {
+            UserID = null;
+            Value = 0;
+        }
 
         public static implicit operator KeyValuePair<string, int>(BonesStat BonesStat)
             => new(BonesStat?.UserID, BonesStat?.Value ?? 0)

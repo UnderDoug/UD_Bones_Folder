@@ -19,6 +19,7 @@ using UD_Bones_Folder.Mod.UI;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using UD_Bones_Folder.Mod.Parts;
 using UD_Bones_Folder.Mod.OsseousAsh;
+using UD_Bones_Folder.Mod.BonesSystem;
 
 namespace XRL.World.Parts
 {
@@ -32,8 +33,6 @@ namespace XRL.World.Parts
         public static int TitleEpithetOrderAdjust = -600;
 
         private Version? MigrateFrom = null;
-
-        public FileLocationData LocationData;
 
         public bool Cremated;
 
@@ -184,34 +183,11 @@ namespace XRL.World.Parts
             return $"Moon {regalTerm}";
         }
 
-        public SaveBonesInfo GetSourceSaveBonesInfo(bool AggregateLocations = true)
+        public SaveBonesInfo GetSourceSaveBonesInfo()
         {
-            if (AggregateLocations)
-                return BonesManager.GetSavedBonesByIDDirect(BonesID);
+            using var bonesSources = BonesManager.GetBonesSourcesFromPool();
 
-            if (LocationData is not null)
-            {
-                if (LocationData.Host is Host storedHost)
-                {
-                    if (ServerUtils.Hosts?.FirstOrDefault(hc => hc.Any(h => h.SameAs(storedHost, true))) is HostSet hostSet
-                        && hostSet.FirstOrDefault(h => h.SameAs(storedHost, true)) is Host actualHost)
-                    {
-                        if (actualHost.Enabled)
-                            return actualHost.GetSaveBonesInfo(BonesID);
-                        
-                        Utils.Warn($"{actualHost} is disabled and can't have bones retreived from it.");
-                        return null;
-                    }
-                    else
-                        Utils.Warn($"{storedHost} no longer exists and can't have bones retreived from it.");
-                }
-
-                if (BonesManager.TryGetSaveBonesByID(BonesID, out var saveBonesInfo, bonesInfo => LocationData.SameAs(bonesInfo.FileLocationData)))
-                    return saveBonesInfo;
-            }
-
-            Utils.Warn($"Couldn't find bones info in {LocationData?.ToString() ?? "MISSING_LOCATION_DATA"}");
-            return null;
+            return bonesSources.GetBestSource(BonesID).LoadInfo(BonesID);
         }
 
         public string GetRegalTitle()
@@ -774,8 +750,6 @@ namespace XRL.World.Parts
                 string catchFlag = $"Top";
                 try
                 {
-                    LocationData = E.BonesInfo.FileLocationData;
-
                     foreach (var part in BonesManager.PartsLunarRegentsShouldNotHave.IteratorSafe())
                         lunarRegent.RemovePart(part);
 

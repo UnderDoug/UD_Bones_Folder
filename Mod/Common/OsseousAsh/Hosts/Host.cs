@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Platform.IO;
+using StreamWriter = System.IO.StreamWriter;
+using StreamReader = System.IO.StreamReader;
 
 using ConsoleLib.Console;
 
@@ -24,21 +26,40 @@ using XRL.World.Text.Attributes;
 using XRL.World.Text.Delegates;
 
 using Event = XRL.World.Event;
+using Stream = System.IO.Stream;
 
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.UI;
-using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.Serialization;
 
 using static UD_Bones_Folder.Mod.Const;
 using static UD_Bones_Folder.Mod.OsseousAsh.HostSet;
+using System.Runtime.CompilerServices;
+using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
+using UD_Bones_Folder.Mod.Logging;
 
-namespace UD_Bones_Folder.Mod
+namespace UD_Bones_Folder.Mod.OsseousAsh
 {
     [HasModSensitiveStaticCache]
     [JsonObject(MemberSerialization.OptIn)]
     [Serializable]
-    public class Host : IComposite, IEquatable<Host>, IDisposable
+    public class Host : BaseBonesSource, IComposite, IEquatable<Host>, IDisposable
     {
+        #region Debug Registration
+        [UD_DebugRegistry]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(Host),
+                MethodNameValues: new()
+                {
+                    { nameof(GetServerStatusAsync), true },
+                    { nameof(GetCanUpAsync), true },
+                    { nameof(GetSessionAsync), true },
+                    { nameof(GetUserAsync), true },
+                    { nameof(CheckRegisterUserAsync), true },
+                });
+        #endregion
+
         [Serializable]
         public enum WebMethods
         {
@@ -65,19 +86,23 @@ namespace UD_Bones_Folder.Mod
             Port = null,
             Encrypted = true,
             TimeoutMS = DEFAULT_TIMEOUT,
+            MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS,
             Version = DEFAULT_VERSION,
             Enabled = false,
         };
 
         public const int DEFAULT_VERSION = 1;
-            
         public const int DEFAULT_TIMEOUT = 3000;
+        public const int DEFAULT_MAX_UP_ATTEMPTS = 5;
+        public const int DEFAULT_MAX_SAV_GZ_TOKEN_LIFE = 180000;
 
+        public const string JWT_HEADER = "jwt_token_header";
+        public const string OBFS_PASSWORD = "********";
         public static long SeverStatusCheckInterval => 300000;
 
         private static int CurrentHostID = 0;
 
-        public static Dictionary<string, Dictionary<string, PendingSavGz>> PendingSavGzCache = new();
+        public static Dictionary<string, Dictionary<string, PendingUpload>> PendingUploadCache = new();
 
         public static string status => nameof(status);
         public static string canUp => nameof(canUp);
@@ -127,10 +152,10 @@ namespace UD_Bones_Folder.Mod
         public int TimeoutMS = DEFAULT_TIMEOUT;
 
         /// <summary>
-        /// Current unused but will allow for effectively (optionally) password protecting a sever which will requiring this be assigned and sent along with the request.
+        /// The maximum number number of times an upload should be attempted before being considered to have failed.
         /// </summary>
         [JsonProperty]
-        public string AuthToken;
+        public int MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS;
 
         /// <summary>
         /// The API version this host expects to connect to.
@@ -150,8 +175,43 @@ namespace UD_Bones_Folder.Mod
         [JsonProperty]
         public bool Enabled;
 
+        [JsonProperty(nameof(JwtToken))]
+        private string _JwtToken;
+        /// <summary>
+        /// The JwtToken holding the current authentication session with this host. 
+        /// </summary>
+        /// <remarks>
+        /// Default behaviour refreshes the token every time it's used in order to reduce the frequency at which a new session needs to be established.
+        /// </remarks>
+        [JsonIgnore]
+        public string JwtToken
+        {
+            get => _JwtToken;
+            set
+            {
+                bool write = IsBuilt && _JwtToken != value;
+                _JwtToken = value;
+                if (write
+                    && ServerUtils.AllHostsWithLocation(p => p.Host == this)?.FirstOrDefault() is HostLocationPair pair
+                    && ServerUtils.Hosts.FirstOrDefault(hs => hs.LocationData?.SameAs(pair.FileLocationData) is true) is HostSet hostSet)
+                {
+                    hostSet.Write();
+                }
+            }
+        }
+
+        /// <summary>
+        /// An object representation of the User as it appears on the server.
+        /// </summary>
+        //[JsonIgnore]
+        [JsonProperty]
+        public User User;
+
         [JsonIgnore]
         private bool IsBuilt;
+
+        [JsonIgnore]
+        public bool HasSession => !JwtToken.IsNullOrEmpty();
 
         [JsonIgnore]
         private string BuiltString => !IsBuilt
@@ -171,7 +231,7 @@ namespace UD_Bones_Folder.Mod
 
         [JsonIgnore]
         public bool IsRunning
-            => !VersionRoutes.Init
+            => VersionRoutes.Init
             && GetServerStatus()
             ;
 
@@ -245,7 +305,7 @@ namespace UD_Bones_Folder.Mod
                 catch (Exception x)
                 {
                     Utils.ErrorTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
-                    Enabled = false;  
+                    Enabled = false;
                 }
             }
             else
@@ -257,29 +317,58 @@ namespace UD_Bones_Folder.Mod
         };
 
         [JsonIgnore]
+        private List<string> BonesIDCache;
+
+        [JsonIgnore]
+        private Timer BonesIDCacheTimer;
+
+        [JsonIgnore]
+        public string AuthToken;
+
+        [JsonIgnore]
         private IEnumerable<Report> _ReportsCache;
         [JsonIgnore]
         public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
         [JsonIgnore]
-        private string PendingSavGzCacheKey;
+        private string PendingUploadCacheKey;
 
         [JsonIgnore]
-        public Dictionary<string, PendingSavGz> PendingSavGzs
+        public Dictionary<string, PendingUpload> PendingUploads
         {
             get
             {
-                if (!PendingSavGzCache.ContainsKey(PendingSavGzCacheKey))
-                    PendingSavGzCache[PendingSavGzCacheKey] = new();
+                if (!PendingUploadCache.ContainsKey(PendingUploadCacheKey))
+                    PendingUploadCache[PendingUploadCacheKey] = new();
 
-                return PendingSavGzCache[PendingSavGzCacheKey];
+                return PendingUploadCache[PendingUploadCacheKey];
             }
         }
+
+        public sealed override IBonesSource.SourceType Type => IBonesSource.SourceType.Online;
+
+        public override string SourceID => NameWithPort(Name, Port);
+
+        public override string DisplayName => $"{Type.Tag()} {SourceID}";
+
+        public override bool CanLoad
+            => Options.EnableOsseousAshDownloads
+            && IsRunning
+            ;
+
+        public override bool CanSave
+            => Options.EnableOsseousAshUploads
+            && IsRunning
+            && CanUp
+            ;
+
+        public override string BlurbDisplayName => $"{SourceID.Colored(IBonesSource.SourceType.Online.GetColor())}";
+        public override string BlurbSavedVerb => "uploaded to";
 
         public Host()
         {
             Enabled = true;
-            PendingSavGzCacheKey = Guid.NewGuid().ToString();
+            PendingUploadCacheKey = Guid.NewGuid().ToString();
             TimeoutMS = DEFAULT_TIMEOUT;
         }
 
@@ -287,7 +376,7 @@ namespace UD_Bones_Folder.Mod
             string Name,
             int? Port = null,
             bool Encrypted = false,
-            string AuthToken = null,
+            string JwtToken = null,
             int Version = DEFAULT_VERSION,
             bool Enabled = true,
             int TimeoutMS = DEFAULT_TIMEOUT
@@ -297,7 +386,7 @@ namespace UD_Bones_Folder.Mod
             this.Name = Name;
             this.Port = Port;
             this.Encrypted = Encrypted;
-            this.AuthToken = AuthToken;
+            this.JwtToken = JwtToken;
             this.Version = Version;
             this.Enabled = Enabled;
             this.TimeoutMS = TimeoutMS;
@@ -305,14 +394,14 @@ namespace UD_Bones_Folder.Mod
 
         public Host(
             string HostName,
-            string AuthToken = null,
+            string JwtToken = null,
             int TimeoutMS = DEFAULT_TIMEOUT
             )
             : this()
         {
             Parse(HostName, out Name, out Port, out Encrypted, out Version);
-            if (!AuthToken.IsNullOrEmpty())
-                this.AuthToken = AuthToken;
+            if (!JwtToken.IsNullOrEmpty())
+                this.JwtToken = JwtToken;
 
             this.TimeoutMS = TimeoutMS;
         }
@@ -416,6 +505,32 @@ namespace UD_Bones_Folder.Mod
             }
             return false;
         }
+
+        private static void SetUpBonesIDCacheTimer(ref Timer BonesIDCacheTimer, ref List<string> BonesIDCache, TimerCallback TimerCallback)
+        {
+            ClearBonesIDCacheTimer(ref BonesIDCacheTimer);
+            BonesIDCacheTimer = new Timer(
+                callback: TimerCallback,
+                state: BonesIDCache,
+                dueTime: 300000,
+                period: 300000);
+        }
+
+        private static void ClearBonesIDCache(ref List<string> BonesIDCache)
+        {
+            BonesIDCache ??= new();
+            BonesIDCache.Clear();
+        }
+
+        private static void ClearBonesIDCacheTimer(ref Timer BonesIDCacheTimer, int Indent = 0)
+        {
+            BonesIDCacheTimer?.Dispose();
+            BonesIDCacheTimer = null;
+        }
+
+        public void ClearBonesIDCache()
+            => ClearBonesIDCache(ref BonesIDCache)
+            ;
 
         #endregion
 
@@ -609,14 +724,15 @@ namespace UD_Bones_Folder.Mod
                 return;
             }
 
-            Destination.PendingSavGzCacheKey = Source.PendingSavGzCacheKey;
+            Destination.PendingUploadCacheKey = Source.PendingUploadCacheKey;
+            Destination.User = Source.User?.Clone();
 
             Destination.Name = Source.Name;
             Destination.Port = Source.Port;
             Destination.Encrypted = Source.Encrypted;
             Destination.TimeoutMS = Source.TimeoutMS;
-            Destination.AuthToken = Source.AuthToken;
             Destination.Enabled = Source.Enabled;
+            Destination.JwtToken = Source.JwtToken;
 
             Destination.IsBuilt = Source.IsBuilt;
 
@@ -637,6 +753,8 @@ namespace UD_Bones_Folder.Mod
                 ClearStatusCheckTimer(ref Destination.StatusCheckTimer);
                 SetupStatusCheckTimer(ref Destination.StatusCheckTimer, Destination);
             }
+
+            Destination.AuthToken = Source.AuthToken;
 
             if (DisposeSource)
                 Source.Dispose();
@@ -662,6 +780,8 @@ namespace UD_Bones_Folder.Mod
         {
             IsBuilt = false;
             ClearStatusCheckTimer(ref StatusCheckTimer);
+            ClearBonesIDCacheTimer(ref BonesIDCacheTimer);
+            ClearBonesIDCache(ref BonesIDCache);
         }
 
         public void Build(bool Ping = false)
@@ -672,6 +792,18 @@ namespace UD_Bones_Folder.Mod
                 _ = IsRunning;
                 ClearReportsCache();
             }
+            ClearBonesIDCache(ref BonesIDCache);
+            SetUpBonesIDCacheTimer(
+                BonesIDCacheTimer: ref BonesIDCacheTimer,
+                BonesIDCache: ref BonesIDCache,
+                TimerCallback: delegate (object state)
+                {
+                    if (state is List<string> bonesIDCache)
+                    {
+                        ClearBonesIDCache(ref bonesIDCache);
+                        BonesIDCache = bonesIDCache;
+                    }
+                });
         }
 
         public int? GetTimeout()
@@ -844,73 +976,12 @@ namespace UD_Bones_Folder.Mod
             + (AuthToken.IsNullOrEmpty() || !IncludeAuth ? null : " (Auth)")
             ;
 
-        public string statusGetRoute()
-        {
-            string uRI = CombineHostRoute(IncludeVersion: false, status);
-            if (Version > 0
-                && Routes?.Status?.ParseValue() is string statusRoute)
-                uRI = CombineHostRoute(IncludeVersion: false, statusRoute);
-            return uRI;
-        }
-
-        public string canUpGetRoute(Guid UserID)
-            => CombineHostRoute(canUp, UserID.ToString())
-            ;
-
-        public string BonesIDGetRoute(string BonesID = null)
-            => CombineHostRoute(ID, BonesID)
-            ;
-
-        public string BonesInfoGetRoute(string BonesID = null)
-            => CombineHostRoute(Info, BonesID)
-            ;
-
-        public string BonesSavGzGetRoute(string BonesID = null)
-            => CombineHostRoute(SavGz, BonesID)
-            ;
-
-        public string BonesInfosGetRoute()
-            => CombineHostRoute(Infos)
-            ;
-
-        public string BonesPostRoute()
-            => CombineHostRoute(Bones)
-            ;
-
-        public string BonesSavGzPutRoute(string BonesID = null)
-            => CombineHostRoute(SavGz, BonesID)
-            ;
-
-        public string BonesReportPostRoute()
-            => CombineHostRoute(Report)
-            ;
-
-        public string BonesReportsGetRoute()
-            => CombineHostRoute(Reports)
-            ;
-
-        public string BonesReportCheckGetRoute(string BonesID, Guid UserID)
-            => CombineHostRoute(ReportCheck, BonesID, UserID.ToString())
-            ;
-
-        public string BonesStatsPutRoute(string BonesID, Guid UserID)
-            => CombineHostRoute(Stats, BonesID, UserID.ToString())
-            ;
-
-        public string BonesDownloadPostRoute(string BonesID, Guid UserID)
-            => CombineHostRoute(Download, BonesID, UserID.ToString())
-            ;
-
-        public string DisplayName()
-            => NameWithPort(Name, Port)
-            ;
-
         private static HttpWebRequest CreateWebRequest(
             string URI,
             string ContentType,
             WebMethods Method,
             int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
+            Action<StreamWriter> Proc = null
             )
         {
             if (!MainMenuBones.HasSeenMainMenu)
@@ -929,7 +1000,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (Proc != null)
                 {
-                    using var streamWriter = new System.IO.StreamWriter(httpReq.GetRequestStream());
+                    using var streamWriter = new StreamWriter(httpReq.GetRequestStream());
                     Proc.Invoke(streamWriter);
                 }
                 return httpReq;
@@ -949,18 +1020,47 @@ namespace UD_Bones_Folder.Mod
             Route Route,
             bool IncludeVersion,
             int? Timeout,
-            Action<System.IO.StreamWriter> Proc,
+            bool RequireSession,
+            Action<StreamWriter> Proc,
             out string URI,
-            params RouteParam[] Parameters
+            RouteParam[] RouteParams,
+            RouteQuery RouteQuery,
+            [CallerMemberName] string CallingMethod = ""
             )
         {
-            URI = CombineHostRoute(IncludeVersion: IncludeVersion, Route.ParseValue(Parameters));
-            return CreateWebRequest(
+            URI = CombineHostRoute(IncludeVersion: IncludeVersion, Route.ParseValue(RouteParams, RouteQuery));
+
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Route), Route),
+                    Debug.Arg(nameof(IncludeVersion), IncludeVersion),
+                    Debug.Arg(nameof(Timeout), Timeout?.ToString() ?? "null"),
+                    Debug.Arg(nameof(RequireSession), RequireSession),
+                    Debug.Arg($"out {nameof(URI)}", URI),
+                    Debug.Arg(nameof(RouteParams), (RouteParams?.Count())?.ToString() ?? "null"),
+                    Debug.Arg(nameof(RouteQuery), (RouteQuery?.Count())?.ToString() ?? "null"),
+                    Debug.Arg(nameof(CallingMethod), CallingMethod),
+                });
+
+            var httpReq = CreateWebRequest(
                 URI: URI,
                 ContentType: Route.ContentType,
                 Method: Route.Method,
                 Timeout: Timeout,
                 Proc: Proc);
+
+            if (RequireSession
+                && JwtToken.IsNullOrEmpty()
+                && GetSessionAsync().WaitResult() is string sessionToken)
+                JwtToken = sessionToken;
+
+            if (!JwtToken.IsNullOrEmpty())
+                httpReq.Headers.Add(JWT_HEADER, JwtToken);
+
+            return httpReq;
         }
 
         private HttpWebRequest CreateWebRequest(
@@ -968,128 +1068,198 @@ namespace UD_Bones_Folder.Mod
             bool IncludeVersion,
             int? Timeout,
             out string URI,
-            params RouteParam[] Parameters
+            bool RequireSession = true,
+            RouteParam[] RouteParams = null,
+            [CallerMemberName] string CallingMethod = ""
             )
             => CreateWebRequest(
                 Route: Route,
                 IncludeVersion: IncludeVersion,
                 Timeout: Timeout,
+                RequireSession: RequireSession,
                 Proc: null,
                 URI: out URI,
-                Parameters: Parameters)
+                RouteParams: RouteParams,
+                RouteQuery: null,
+                CallingMethod: CallingMethod)
             ;
 
         private HttpWebRequest CreateWebRequest(
             Route Route,
-            Action<System.IO.StreamWriter> Proc,
+            Action<StreamWriter> Proc,
             out string URI,
-            params RouteParam[] Parameters
+            bool RequireSession,
+            RouteParam[] RouteParams = null,
+            [CallerMemberName] string CallingMethod = ""
             )
             => CreateWebRequest(
                 Route: Route,
                 IncludeVersion: true,
                 Timeout: GetTimeout(),
+                RequireSession: RequireSession,
                 Proc: Proc,
                 URI: out URI,
-                Parameters: Parameters)
+                RouteParams: RouteParams,
+                RouteQuery: null,
+                CallingMethod: CallingMethod)
             ;
 
         private HttpWebRequest CreateWebRequest(
             Route Route,
             out string URI,
-            params RouteParam[] Parameters
+            bool RequireSession,
+            RouteParam[] RouteParams = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => CreateWebRequest(
+                Route: Route,
+                RequireSession: RequireSession,
+                Proc: null,
+                URI: out URI,
+                RouteParams: RouteParams,
+                CallingMethod: CallingMethod)
+            ;
+
+        private HttpWebRequest CreateWebRequest(
+            Route Route,
+            Action<StreamWriter> Proc,
+            out string URI,
+            RouteParam[] RouteParams = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => CreateWebRequest(
+                Route: Route,
+                Proc: Proc,
+                URI: out URI,
+                RequireSession: true,
+                RouteParams: RouteParams,
+                CallingMethod: CallingMethod)
+            ;
+
+        private HttpWebRequest CreateWebRequest(
+            Route Route,
+            out string URI,
+            RouteParam[] RouteParams = null,
+            [CallerMemberName] string CallingMethod = ""
             )
             => CreateWebRequest(
                 Route: Route,
                 Proc: null,
                 URI: out URI,
-                Parameters: Parameters)
+                RouteParams: RouteParams,
+                CallingMethod: CallingMethod)
             ;
 
-        private HttpWebRequest CreatePostJSON(
-            string URI,
-            int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
+        public bool HasPending(SaveBonesInfo BonesInfo)
+            => BonesInfo != null
+            && PendingUploads?.ContainsKey(BonesInfo.ID) is true
+            ;
+
+        private bool TryUpdateJwtToken(
+            HttpWebResponse HttpRes,
+            [CallerMemberName] string CallingMethod = ""
             )
-            => CreateWebRequest(
-                URI: URI,
-                ContentType: "json",
-                Method: WebMethods.POST,
-                Timeout: Timeout,
-                Proc: Proc)
-            ;
+        {
+            if (HttpRes == null)
+            {
+                JwtToken = null;
+                return true;
+            }
+            try
+            {
+                if (HttpRes?.Headers?.Get(JWT_HEADER) is string jwtToken
+                    && !jwtToken.IsNullOrEmpty())
+                    JwtToken = jwtToken;
 
-        private HttpWebRequest CreatePutJSON(
+                return true;
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"{CallingMethod} encountered issue updating {nameof(JwtToken)}", x);
+            }
+            return false;
+        }
+
+        private async Task<bool> TryGetResultAndStatusAsync(
+            HttpWebRequest HttpReq,
+            Route Route,
             string URI,
-            int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
+            Action<HttpStatusCode> StatusCodeCallback,
+            Action<string> ResultCallback
             )
-            => CreateWebRequest(
-                URI: URI,
-                ContentType: "json",
-                Method: WebMethods.PUT,
-                Timeout: Timeout,
-                Proc: Proc)
-            ;
+        {
+            try
+            {
+                // Utils.Log($"{3.Indent()}{nameof(GetEnumerableFromWebRequestAsync)}<{typeof(T).Name}>");
+                var httpRes = (HttpWebResponse)HttpReq.GetResponse();
+                string result = null;
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    // Utils.Log($"{3.Indent()}{nameof(streamReader.ReadToEndAsync)}");
+                    result = await streamReader.ReadToEndAsync();
+                }
+                StatusCodeCallback?.Invoke(httpRes.StatusCode);
+                ResultCallback?.Invoke(result);
 
-        private HttpWebRequest CreatePutGz(
-            string URI,
-            int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
+                TryUpdateJwtToken(httpRes);
+
+                return true;
+            }
+            catch (WebException x)
+            {
+                if (!HandleTimeoutWebException(x, URI, GetTimeout()))
+                    throw x;
+
+                TryUpdateJwtToken(null);
+                return false;
+            }
+            catch (Exception x)
+            {
+                Route.ErrorFailed("receiving", nameof(HttpWebResponse), URI, x);
+                TryUpdateJwtToken(null);
+            }
+            return false;
+        }
+
+        #region Server Status
+
+        public async Task<bool> GetServerStatusAsync(
+            bool RethrowForLinuxPrompt = false,
+            [CallerMemberName] string CallingMethod = ""
             )
-            => CreateWebRequest(
-                URI: URI,
-                ContentType: "gz",
-                Method: WebMethods.PUT,
-                Timeout: Timeout,
-                Proc: Proc)
-            ;
-
-        private HttpWebRequest CreateGetJSON(
-            string URI,
-            int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
-            )
-            => CreateWebRequest(
-                URI: URI,
-                ContentType: "json",
-                Method: WebMethods.GET,
-                Timeout: Timeout,
-                Proc: Proc)
-            ;
-
-        private HttpWebRequest CreateGetGz(
-            string URI,
-            int? Timeout = null,
-            Action<System.IO.StreamWriter> Proc = null
-            )
-            => CreateWebRequest(
-                URI: URI,
-                ContentType: "gz",
-                Method: WebMethods.GET,
-                Timeout: Timeout,
-                Proc: Proc)
-            ;
-
-        #region Get Server Status
-
-        public bool GetServerStatus(bool RethrowForLinuxPrompt = false)
         {
             if (!Enabled)
                 return false;
 
-            //Utils.Log($"{1.Indent()}{nameof(GetServerStatus)}, {nameof(RethrowForLinuxPrompt)}: {RethrowForLinuxPrompt}");
+            string methodName = nameof(GetServerStatusAsync);
 
-            string uRI = null; // statusGetRoute();
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(RethrowForLinuxPrompt), RethrowForLinuxPrompt),
+                    Debug.Arg(nameof(CallingMethod), CallingMethod),
+                });
 
+            string uRI = null;
             HttpWebRequest httpReq = null;
+            var route = Routes.Status;
             int? timeout = GetTimeout();
             if (timeout.HasValue)
                 timeout = (int)(timeout.GetValueOrDefault() * 0.5);
 
             try
             {
-                httpReq = CreateWebRequest(Routes.Status, IncludeVersion: false, Timeout: timeout, out uRI); // CreateGetJSON(uRI, timeout);
+                Debug.Log($"Before {nameof(CreateWebRequest)}", Indent: indent[1]);
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    IncludeVersion: false,
+                    Timeout: timeout,
+                    URI: out uRI,
+                    RequireSession: false);
+
+                Debug.Log($"After {nameof(CreateWebRequest)}", Indent: indent[1]);
             }
             catch (Exception x)
             {
@@ -1099,7 +1269,7 @@ namespace UD_Bones_Folder.Mod
                     && (x.Message?.Contains("The URI prefix is not recognized") is true))
                     throw x;
 
-                Utils.Error($"Creating Server Status HttpWebRequest for {uRI}", x);
+                route.ErrorFailed("creating", nameof(HttpWebRequest), uRI, x);
                 return false;
             }
 
@@ -1109,59 +1279,100 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
-                    var result = streamReader.ReadToEnd();
-                    if (httpRes.StatusCode == HttpStatusCode.OK
-                        && JObject.Parse(result) is JObject jObject
-                        && jObject["status"].ToObject<string>() is string statusString
-                        && statusString == "Running")
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.OK)
                     {
-                        //Utils.Log($"{2.Indent()}return true");
-                        return true;
+                        if (JObject.Parse(result) is JObject jObject
+                            && jObject["status"].ToObject<string>() is string statusString)
+                        {
+                            bool isRunning = statusString == "Running";
+
+                            if (!isRunning)
+                                Utils.Warn($"{ToString()} returned status \"{statusString}\"");
+
+                            Debug.Log($"return true", Indent: indent[2]);
+                            return isRunning;
+                        }
+                        else
+                            Utils.Warn($"{methodName} received unexpected data from {ToString()}" +
+                                $" - {httpRes.StatusCode.DisplayString()} - {result}");
                     }
                     else
-                        Utils.Warn($"{nameof(ServerUtils.GetBonesInfos)} got no status from {ToString()}" +
-                            $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        Utils.Warn($"{methodName} received unexpected status code from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}");
                 }
             }
             catch (WebException x)
             {
-                if (HandleTimeoutWebException(x, uRI, timeout))
-                    return false;
+                if (!HandleTimeoutWebException(x, uRI, timeout))
+                    throw x;
 
                 if (x.Is404Exception())
                 {
-                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound} ({(int)HttpStatusCode.NotFound}) for {nameof(GetServerStatus)} via route {uRI}");
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {methodName} via route {uRI}");
                     return false;
                 }
-                throw x;
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {methodName} via route {uRI}");
+                    return false;
+                }
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
+                route.ErrorFailed("receiving", nameof(HttpWebResponse), uRI, x);
             }
 
+            Debug.Log($"return false", Indent: indent[2]);
             return false;
         }
 
-        public bool GetCanUp()
+        public bool GetServerStatus(
+            bool RethrowForLinuxPrompt = false,
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => GetServerStatusAsync(RethrowForLinuxPrompt, CallingMethod).WaitResult()
+            ;
+
+        public async Task<bool> GetCanUpAsync(
+            [CallerMemberName] string CallingMethod = ""
+            )
         {
-            if (!IsRunning)
+            if (!IsRunning
+                || UserID == Guid.Empty)
                 return false;
 
-            if (UserID == Guid.Empty)
-                return false;
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(CallingMethod), CallingMethod)
+                });
+
+            string methodName = nameof(GetCanUpAsync);
 
             string uRI = null;
             HttpWebRequest httpReq = null;
+            var route = Routes.CanUpload;
             try
             {
-                httpReq = CreateWebRequest(Routes.CanUpload, out uRI, new RouteParam(nameof(UserID), UserID)); // CreateGetJSON(uRI, timeout);
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    URI: out uRI,
+                    RequireSession: false,
+                    RouteParams: new RouteParam[]
+                    {
+                        new(nameof(UserID), UserID)
+                    });
             }
             catch (Exception x)
             {
-                Utils.Error($"Creating GET canUp HttpWebRequest for {uRI}", x);
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
                 return false;
             }
 
@@ -1171,18 +1382,594 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.OK)
+                    {
+                        if (JsonConvert.DeserializeObject<bool>(result) is bool parsedResult)
+                            return parsedResult;
+                        else
+                            Utils.Warn($"{methodName} received unexpected data from {ToString()} - {httpRes.StatusCode.DisplayString()} - {result}");
+                    }
+                    else
+                        Utils.Warn($"{methodName} received unexpected status code from {ToString()} - {httpRes.StatusCode.DisplayString()}");
+                }
+            }
+            catch (WebException x)
+            {
+                if (!HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    throw x;
+
+                if (x.Is404Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {methodName} via route {uRI}");
+                    return false;
+                }
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {methodName} via route {uRI}");
+                    return false;
+                }
+                if (x.Is400Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.BadRequest.DisplayString()} for {methodName} via route {uRI}");
+                    return false;
+                }
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            return false;
+        }
+
+        public bool GetCanUp(
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => GetCanUpAsync(CallingMethod: CallingMethod).WaitResult()
+            ;
+
+        #endregion
+        #region User
+
+        public string ConsumeAuthToken()
+        {
+            var authToken = AuthToken;
+            AuthToken = null;
+            return authToken;
+        }
+
+        public async Task<string> AskWhatPasswordAsync(
+            string Purpose,
+            string Message,
+            bool IncludeNote = true,
+            bool ConfirmEntered = true,
+            bool PushView = false
+            )
+        {
+            using var title = TextBuilder.Get()
+                .AppendColored("yellow", $"{Purpose} {OSSEOUS_ASH} User");
+
+            using var message = TextBuilder.Get()
+                .Append(Message);
+            if (IncludeNote)
+                message.AppendLine()
+                .AppendLine().Append("Please note: default host behaviour does not typically require a password.");
+
+            if (await UIUtils.AskStringAsync(
+                    Message: message.ToString(),
+                    Title: title.ToString(),
+                    ReturnNullForEscape: true,
+                    EscapeNonMarkupFormatting: false,
+                    pushView: PushView
+                ) is string passwordString)
+            {
+                if (passwordString == null)
+                    return null;
+
+                if (passwordString == string.Empty)
+                {
+                    message.Clear()
+                        .Append("You have entered an empty password.")
+                        .AppendLine()
+                        .AppendLine().Append("Is this correct?")
+                        .AppendLine().Append("Select \"cancel\" to cancel ").Append(Purpose.ToLower()).Append(", otherwise \"no\" to enter something else.");
+
+                    var confirmEmpty = await Popup.NewPopupMessageAsync(
+                        message: message.ToString(),
+                        buttons: PopupMessage.YesNoCancelButton,
+                        title: title.ToString(),
+                        pushView: PushView);
+
+                    using var indent = new Indent(1);
+                    Debug.Log($"{nameof(confirmEmpty)}: {confirmEmpty.command}", Indent: indent);
+
+                    return confirmEmpty.command switch
+                    {
+                        "No" => await AskWhatPasswordAsync(Purpose, Message, IncludeNote, PushView: PushView),
+                        "Yes" => string.Empty,
+                        _ => null,
+                    };
+                }
+
+                string confirmText = passwordString;
+                bool isConsole = CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.Console;
+
+                string typeToConfirmText = !isConsole
+                    ? $"Type {confirmText.Colored("W")} to confirm."
+                    : $"{confirmText.Colored("W")}"
+                    ;
+
+                string defaultValue = !isConsole
+                    ? string.Empty
+                    : null
+                    ;
+
+                if (!ConfirmEntered
+                    || (await UIUtils.AskStringAsync(
+                            Message: $"Is this correct?\n\n{typeToConfirmText}",
+                            Title: title.ToString(),
+                            Default: defaultValue,
+                            pushView: PushView,
+                            WantsSpecificPrompt: confirmText)
+                        ) == confirmText)
+                    return passwordString;
+            }
+
+            return null;
+        }
+
+        public async Task<bool> CheckRegisterUserAsync(
+            string Password = null,
+            bool UpdatePassword = false,
+            bool TryGetSession = true,
+            bool PushView = false
+            )
+        {
+            if (!IsRunning
+                || UserID == Guid.Empty)
+                return false;
+
+            bool update = false;
+            using (var existingUser = await GetUserAsync(CatchBadRequest: true, PushView: PushView))
+            {
+                if (existingUser != null)
+                {
+                    existingUser.CopyTo(ref User);
+                    if (!UpdatePassword)
+                        return true;
+
+                    update = true;
+                }
+            }
+
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Password), Password != null),
+                    Debug.Arg(nameof(UpdatePassword), UpdatePassword),
+                    Debug.Arg(nameof(TryGetSession), TryGetSession),
+                    Debug.Arg(nameof(PushView), PushView),
+                });
+
+            string callingMethod = nameof(CheckRegisterUserAsync);
+
+            string uRI = null;
+            HttpWebRequest httpReq = null;
+            var route = !update ? Routes.NewUser : Routes.UpdateUserPassword;
+            using var user = new User(Configuration.Instance, Password);
+            try
+            {
+                Debug.Log($"{nameof(User)}:", Indent: indent[1]);
+                Debug.LogJson(user, Indent: indent[1]);
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    Proc: async streamWriter => await streamWriter.WriteAsync(JsonConvert.SerializeObject(new { User = user })),
+                    URI: out uRI,
+                    RequireSession: false,
+                    RouteParams: !update ? null : new RouteParam[] { new(nameof(UserID), UserID) });
+
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
+                return false;
+            }
+
+            if (httpReq == null)
+                return false;
+
+            try
+            {
+                var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.OK
+                        || httpRes.StatusCode == HttpStatusCode.Created)
+                    {
+                        if (JsonConvert.DeserializeObject<User>(result) is User parsedResult)
+                        {
+                            parsedResult.CopyTo(ref User, SanitizePassword: true);
+                            parsedResult.Dispose();
+
+                            /*if (TryGetSession
+                                && JwtToken == null
+                                && await GetSessionAsync(PushView) is string sessionToken)
+                                JwtToken = sessionToken;*/
+
+                            return true;
+                        }
+                        else
+                        {
+                            Utils.Warn($"{callingMethod} received unexpected data from {ToString()}" +
+                                $" - {httpRes.StatusCode.DisplayString()} - {result}");
+                        }
+                    }
+                    else
+                    {
+                        Utils.Warn($"{callingMethod} received unexpected status code from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}");
+                    }
+                }
+            }
+            catch (WebException x)
+            {
+                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    return false;
+
+                if (x.Is404Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {callingMethod} via route {uRI}");
+                    return false;
+                }
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {callingMethod} via route {uRI}");
+                    return false;
+                }
+                if (x.Is400Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.BadRequest.DisplayString()} for {callingMethod} via route {uRI}");
+                    return false;
+                }
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            finally
+            {
+                Debug.Log("Attempted to register User:", Indent: indent[1]);
+                if (user != null)
+                    Debug.LogJson(user, Indent: indent[1]);
+                else
+                    Debug.Log("none", Indent: indent[2]);
+            }
+            return false;
+        }
+
+        public async Task<User> GetUserAsync(bool CatchBadRequest = false, bool PushView = false)
+        {
+            if (!IsRunning
+                || UserID == Guid.Empty)
+                return null;
+
+            if (JwtToken.IsNullOrEmpty())
+            {
+                if (await GetSessionAsync(PushView: PushView) is not string sessionToken)
+                    return null;
+
+                JwtToken = sessionToken;
+            }
+
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(CatchBadRequest), CatchBadRequest),
+                    Debug.Arg(nameof(PushView), PushView),
+                });
+
+            string callingMethod = nameof(GetUserAsync);
+
+            string uRI = null;
+            HttpWebRequest httpReq = null;
+            var route = Routes.User;
+            try
+            {
+                httpReq = CreateWebRequest(route, out uRI, new RouteParam[] { new(nameof(UserID), UserID) });
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed("creating", nameof(HttpWebRequest), uRI, x);
+                return null;
+            }
+
+            if (httpReq == null)
+                return null;
+
+            try
+            {
+                var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.OK
+                        && JsonConvert.DeserializeObject<User>(result) is User parsedResult)
+                    {
+                        return parsedResult;
+                    }
+                    else
+                        Utils.Warn($"{callingMethod} got no status from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}");
+                }
+            }
+            catch (WebException x)
+            {
+                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    return null;
+
+                if (x.Is404Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                if (CatchBadRequest
+                    && x.Is400Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.BadRequest.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            return null;
+        }
+
+        public async Task<string> GetSessionAsync(bool PushView = false)
+        {
+            if (!IsRunning)
+                return null;
+
+            if (!JwtToken.IsNullOrEmpty())
+                return JwtToken;
+
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(PushView), PushView),
+                });
+
+            var password = User?.Password
+                ?? await AskWhatPasswordAsync(
+                    Purpose: "Authenticate",
+                    Message: $"Enter your password if you have one to authenticate with this host.",
+                    IncludeNote: false,
+                    ConfirmEntered: false,
+                    PushView: PushView);
+
+            string callingMethod = nameof(GetSessionAsync);
+
+            Debug.YehNah($"have {nameof(password)}", password != null, Indent: indent[1]);
+            if (password == null)
+            {
+                Utils.Warn($"{callingMethod} was not provided any credentials with which to authenticate {ToString()}.");
+                return null;
+            }
+
+            string uRI = null;
+            var route = Routes.GetSession;
+            HttpWebRequest httpReq = null;
+            try
+            {
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    URI: out uRI,
+                    RequireSession: false,
+                    RouteParams: new RouteParam[]
+                    {
+                        new(nameof(UserID), UserID)
+                    });
+
+                httpReq.Headers.AppendWebHeader(HttpRequestHeader.Authorization, $"basic {password}");
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
+                return null;
+            }
+
+            if (httpReq == null)
+                return null;
+
+            try
+            {
+                var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    Debug.Log(nameof(StreamReader), nameof(streamReader.ReadToEndAsync), Indent: indent[1]);
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.OK)
+                    {
+                        Debug.Log(nameof(httpRes.StatusCode), httpRes.StatusCode, Indent: indent[1]);
+                        if (JObject.Parse(result) is JObject jObject)
+                        {
+                            try
+                            {
+                                if (jObject["user"].ToObject<User>() is not User user)
+                                {
+                                    Utils.Warn($"{callingMethod} failed to deserialize {nameof(jObject)}[\"user\"] to {typeof(User)}");
+                                    return null;
+                                }
+                                if (user.ID != UserID)
+                                {
+                                    Utils.Warn($"{callingMethod} deserialized {typeof(User)} has incorrect ID:");
+                                    Utils.Log($"{1.Indent()}{{{user.ID}}} - Got");
+                                    Utils.Log($"{1.Indent()}{{{UserID}}} - Expected");
+                                    return null;
+                                }
+                                user.CopyTo(ref User, SanitizePassword: true);
+                                user.Dispose();
+
+                                // -- This is just debug stuff to force it to crash-out under controlled circumstances
+                                Debug.CheckYeh(nameof(User), (User?.ID)?.ToString() ?? "MISSING_USER", Indent: indent[1]);
+                                Debug.LogJson(User, Indent: indent[1]);
+                                string fileName = "User.json";
+                                var localFileLoc = Configuration.GetOsseousAshFileLocationData(Ensure: true).FirstOrDefault(f => f.Type == FileLocationData.LocationType.Local);
+                                Debug.Log($"Writing User to {localFileLoc.WithFileName(fileName)}", Indent: indent[1]);
+                                localFileLoc?.Write(fileName, User, Formatting.Indented); // `User` is serialised and written to disk just fine on its own
+                                _ = JsonConvert.SerializeObject(this, Formatting.Indented); // Crashes here trying to serialize `User` when it's a member of `Host`
+                                // -- Remove above this when the issue is resolved.
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"{callingMethod} failed to deserialize {nameof(jObject)}[\"user\"] to {typeof(User)}", x);
+                            }
+
+                            try
+                            {
+                                if (jObject["token"].ToString() is not string token)
+                                {
+                                    Utils.Warn($"{callingMethod} failed to deserialize {nameof(jObject)}[\"token\"] to {typeof(User)}");
+                                    return null;
+                                }
+                                return token;
+                            }
+                            catch (Exception x)
+                            {
+                                Utils.Error($"{callingMethod} failed to deserialize {nameof(jObject)}[\"token\"] to {typeof(User)}", x);
+                            }
+                        }
+                        else
+                        {
+                            Utils.Warn($"{callingMethod} received unexpected data from {ToString()}" +
+                                $" - {httpRes.StatusCode.DisplayString()} - {result}");
+                        }
+                    }
+                    else
+                    {
+                        Utils.Warn($"{callingMethod} received unexpected status code from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}");
+                    }
+                }
+            }
+            catch (WebException x)
+            {
+                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    return null;
+
+                if (x.Is404Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                if (x.Is400Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.BadRequest.DisplayString()} for {callingMethod} via route {uRI}");
+                    return null;
+                }
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            return null;
+        }
+
+        public async Task<bool> UpdateUserHandleAsync()
+        {
+            if (!IsRunning
+                || UserID == Guid.Empty
+                || !await CheckRegisterUserAsync())
+                return false;
+
+            string uRI = null;
+            HttpWebRequest httpReq = null;
+            var route = Routes.UpdateUserHandle;
+            try
+            {
+                User?.Dispose();
+                User = new User(Configuration.Instance);
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    Proc: async delegate (StreamWriter streamWriter)
+                    {
+                        await streamWriter.WriteAsync(JsonConvert.SerializeObject(new { User }));
+                    },
+                    URI: out uRI,
+                    RouteParams: new RouteParam[]
+                    { 
+                        new(nameof(UserID), UserID)
+                    });
+
+                using var title = TextBuilder.Get()
+                    .AppendColored("yellow", $"Update {OSSEOUS_ASH} Handle");
+
+                using var message = TextBuilder.Get()
+                    .Append("The host you're updating your handle with may require a password. If you know for sure you have one, please enter it now.");
+
+                if (await UIUtils.AskStringAsync(
+                    Message: message.ToString(),
+                    Title: title.ToString(),
+                    ReturnNullForEscape: true,
+                    EscapeNonMarkupFormatting: false) is string passwordString
+                    && !passwordString.IsNullOrEmpty())
+                    httpReq.Headers.AppendWebHeader(HttpRequestHeader.Authorization, $"basic {passwordString}");
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
+                return false;
+            }
+
+            if (httpReq == null)
+                return false;
+
+            try
+            {
+                var httpRes = (HttpWebResponse)httpReq.GetResponse();
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
                     var result = streamReader.ReadToEnd();
                     if (httpRes.StatusCode == HttpStatusCode.OK
                         && JsonConvert.DeserializeObject<bool>(result) is bool parsedResult
                         && parsedResult)
                     {
-                        return true;
+                        return parsedResult;
                     }
                     else
-                        Utils.Warn($"{nameof(ServerUtils.GetBonesInfos)} got no status from {ToString()}" +
-                            $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        Utils.Warn($"{nameof(UpdateUserHandleAsync)} got no status from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}");
                 }
             }
             catch (WebException x)
@@ -1192,386 +1979,27 @@ namespace UD_Bones_Folder.Mod
 
                 if (x.Is404Exception())
                 {
-                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound} ({(int)HttpStatusCode.NotFound}) for {nameof(GetCanUp)} via route {uRI}");
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.NotFound.DisplayString()} for {nameof(UpdateUserHandleAsync)} via route {uRI}");
                     return false;
                 }
-                throw x;
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {nameof(UpdateUserHandleAsync)} via route {uRI}");
+                    return false;
+                }
+                if (x.Is400Exception())
+                {
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.BadRequest.DisplayString()} for {nameof(UpdateUserHandleAsync)} via route {uRI}");
+                    return false;
+                }
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
             }
             return false;
-        }
-
-        #endregion
-        #region Upload Saves
-
-        public async Task<Guid> PostBonesInfoAsync(
-            SaveBonesJSON SaveBonesJSON,
-            PendingSavGz PendingSavGz,
-            bool Silent = false
-            )
-        {
-            if (!IsRunning)
-            {
-                if (!Silent)
-                    Utils.Warn($"{ToString()} is not running");
-
-                return Guid.Empty;
-            }
-
-            if (SaveBonesJSON == null)
-            {
-                if (!Silent)
-                    Utils.Warn($"{nameof(SaveBonesJSON)} is null");
-
-                return Guid.Empty;
-            }
-
-            if (!PendingSavGz.CheckValid(IgnoreToken: true, Silent: false).Success)
-                return Guid.Empty;
-
-            if (GetSaveBonesInfo(PendingSavGz.BonesID) is SaveBonesInfo existingBonesInfo)
-            {
-                if (!Silent)
-                    Utils.Warn($"{ToString()} already has a bones with the following ID {{{existingBonesInfo.ID}}}");
-
-                return Guid.Empty;
-            }    
-
-            string uRI = null;
-            HttpWebRequest httpReq = null;
-            try
-            {
-                using (var tempSaveBonesJSON = SaveBonesJSON.Clone())
-                {
-                    tempSaveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
-
-                    if (tempSaveBonesJSON.IsCharIconSwapped())
-                        tempSaveBonesJSON.HotSwapCharIcon();
-
-                    var bonesSpec = tempSaveBonesJSON.BonesSpec;
-                    tempSaveBonesJSON.BonesSpec = null;
-
-                    httpReq = CreateWebRequest(
-                        Route: Routes.NewBonesInfo,
-                        Proc: async delegate (System.IO.StreamWriter streamWriter)
-                        {
-                            using var record = new Record(
-                                UserID: UserID,
-                                BonesID: PendingSavGz.BonesID,
-                                SaveBonesJSON: tempSaveBonesJSON,
-                                BonesSpec: bonesSpec,
-                                SavGz: PendingSavGz.SavGz)
-                            ;
-                            await streamWriter.WriteAsync(JsonConvert.SerializeObject(record));
-                        },
-                        URI: out uRI);
-                }
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
-                return Guid.Empty;
-            }
-
-            if (httpReq == null)
-            {
-                if (!Silent)
-                    Utils.Warn($"{nameof(httpReq)} for {ToString()} is null");
-                return Guid.Empty;
-            }
-
-            try
-            {
-                var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                {
-                    var result = await streamReader.ReadToEndAsync();
-                    if (httpRes.StatusCode == HttpStatusCode.Created)
-                    {
-                        if (JObject.Parse(result) is JObject jObject
-                            && jObject["success"].ToObject<Guid>() is Guid parsedToken)
-                        {
-                            Utils.Info($"Successfully created new BonesInfo on server at \"{ToString()}\"" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})" +
-                                $" - {nameof(parsedToken)}: {parsedToken}");
-
-                            return parsedToken;
-                        }
-                    }
-                    else
-                    {
-                        Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
-                            $"instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})");
-                    }
-                }
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    return Guid.Empty;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Failed receiving POST response for {uRI}", x);
-                return Guid.Empty;
-            }
-            return Guid.Empty;
-        }
-
-        private TimerCallback GetPendingSavGzTimerCallback(PendingSavGz PendingSavGz)
-            => delegate (object state)
-            {
-                if (state is not string bonesID
-                    || bonesID.IsNullOrEmpty())
-                {
-                    Utils.Error($"{nameof(Timer)} passed invalid {nameof(PendingSavGz.BonesID)} ({state?.ToString() ?? "NO_STATE"}).");
-                    return;
-                }
-
-                if (PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
-                    pendingSavGz.RetryUpload().Wait();
-                else
-                    Utils.Warn($"{nameof(Timer)} passed {nameof(PendingSavGz.BonesID)} not found in {nameof(PendingSavGzs)} ({bonesID ?? "NO_BONES_ID"}).");
-
-            };
-
-        private Timer GetPendingSavGzTimer(PendingSavGz PendingSavGz)
-        {
-            string bonesID = PendingSavGz.BonesID;
-            Utils.InfoTimestamp($"Starting timer to reattempt upload of {nameof(PendingSavGz)} {{{bonesID}}} to {ToString()}. {nameof(PendingSavGzs)}: {PendingSavGzs.Count}");
-
-            return new(GetPendingSavGzTimerCallback(PendingSavGz),
-                state: bonesID,
-                dueTime: 45000, // every 45 seconds
-                period: 45000);
-        }
-
-        public async Task<ResponseInfo> PutBonesSavGz(PendingSavGz PendingSavGz, bool Silent = false)
-        {
-            var responseInfo = new ResponseInfo
-            {
-                Host = this,
-                Success = false,
-            };
-
-            if (PendingSavGz == null)
-            {
-                responseInfo.Message = $"{nameof(PendingSavGz)} is null";
-
-                if (!Silent)
-                    Utils.Warn(responseInfo.Message);
-                return responseInfo;
-            }
-
-            responseInfo = PendingSavGz.CheckValid(Silent: Silent);
-            if (!responseInfo.Success)
-                return responseInfo;
-
-            bool setUpTimer = PendingSavGz.Timer == null;
-            try
-            {
-                if (!IsRunning)
-                {
-                    responseInfo.StatusCode = HttpStatusCode.InternalServerError;
-                    responseInfo.Success = false;
-                    responseInfo.Message = $"{ToString()} is not running";
-                    if (!Silent)
-                        Utils.Warn(responseInfo.Message);
-
-                    return responseInfo;
-                }
-
-                string uRI = null;
-                HttpWebRequest httpReq = null;
-                try
-                {
-                    httpReq = CreateWebRequest(
-                        Route: Routes.NewBonesSavGz,
-                        Proc: async delegate (System.IO.StreamWriter streamWriter)
-                        {
-                            using (var savGzStream = new System.IO.MemoryStream(PendingSavGz.SavGz))
-                            {
-                                await savGzStream.CopyToAsync(streamWriter.BaseStream);
-                            }
-                        },
-                        URI: out uRI,
-                        new RouteParam(nameof(PendingSavGz.BonesID), PendingSavGz.BonesID));
-
-                    httpReq.Headers.AppendWebHeader(HttpRequestHeader.Authorization, $"basic {PendingSavGz.Token}");
-                }
-                catch (Exception x)
-                {
-                    responseInfo.Success = false;
-                    responseInfo.Message = x.Message;
-
-                    Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
-                    return responseInfo;
-                }
-
-                if (httpReq == null)
-                {
-                    responseInfo.Success = false;
-                    responseInfo.Message = $"{nameof(httpReq)} for {ToString()} is null";
-
-                    if (!Silent)
-                        Utils.Warn(responseInfo.Message);
-
-                    return responseInfo;
-                }
-
-                try
-                {
-                    var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                    {
-                        var result = await streamReader.ReadToEndAsync();
-                        responseInfo.StatusCode = httpRes.StatusCode;
-                        if (httpRes.StatusCode == HttpStatusCode.Created)
-                        {
-                            if (JObject.Parse(result) is JObject jObject
-                                && jObject["success"].ToObject<bool>())
-                            {
-                                responseInfo.Message = $"Successfully added \".sav.gz\" blob to Bones on server at \"{ToString()}\"";
-                                Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
-
-                                setUpTimer = false;
-
-                                PendingSavGz.Success = true;
-                                responseInfo.Success = true;
-                                if (PendingSavGz.Timer == null)
-                                    PendingSavGz.Dispose();
-
-                                return responseInfo;
-                            }
-                            else
-                            {
-                                responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received expected response from server at \"{ToString()}\": " +
-                                    $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}), but {nameof(result)} was malformed";
-
-                                if (!Silent)
-                                    Utils.Warn($"{responseInfo.Message}\n{JObject.Parse(result)?.ToString() ?? result?.ToString() ?? $"{nameof(result)} null"}");
-
-                                return responseInfo;
-                            }
-                        }
-                        else
-                        {
-                            responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": " +
-                                $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}) instead of expected {HttpStatusCode.Created} ({(int)HttpStatusCode.Created})";
-
-                            Utils.Warn(responseInfo.Message);
-                        }
-                    }
-
-                    responseInfo.Message = $"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": " +
-                        $"{httpRes.StatusCode} ({(int)httpRes.StatusCode}), but somehow fell through without an error.";
-
-                    if (!Silent)
-                        Utils.Warn(responseInfo.Message);
-
-                    return responseInfo;
-                }
-                catch (WebException x)
-                {
-                    if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    {
-                        setUpTimer = false;
-
-                        PendingSavGz.ForceDispose = true;
-                        if (PendingSavGz.Timer == null)
-                            PendingSavGz.Dispose();
-
-                        responseInfo.Success = false;
-                        responseInfo.Message = x.Message;
-
-                        return responseInfo;
-                    }
-                    throw x;
-                }
-                catch (Exception x)
-                {
-                    responseInfo.Success = false;
-                    responseInfo.Message = x.Message;
-
-                    Utils.ErrorOnce($"Failed receiving PUT response for {uRI} ({x.GetType().ToStringWithGenerics()})", x);
-                    return responseInfo;
-                }
-            }
-            finally
-            {
-                if (setUpTimer)
-                {
-                    string bonesID = PendingSavGz.BonesID;
-
-                    if (PendingSavGz != null
-                        && !PendingSavGzs.TryGetValue(bonesID, out var pendingSavGz))
-                    {
-                        PendingSavGzs[bonesID] = pendingSavGz = PendingSavGz;
-                        pendingSavGz.Timer = GetPendingSavGzTimer(pendingSavGz);
-                    }
-                }
-            }
-        }
-
-        public async Task<ResponseInfo> TryUploadBonesAsync(SaveBonesJSON SaveBonesJSON, PendingSavGz PendingSavGz)
-        {
-            var responseInfo = new ResponseInfo
-            {
-                Host = this,
-                Success = false,
-            };
-
-            if (!IsRunning)
-            {
-                responseInfo.StatusCode = HttpStatusCode.InternalServerError;
-                responseInfo.Message = $"Server is not running";
-                return responseInfo;
-            }
-
-            try
-            {
-                try
-                {
-                    PendingSavGz.Token = await PostBonesInfoAsync(SaveBonesJSON, PendingSavGz);
-                    PendingSavGz.UploadTime = DateTime.UtcNow;
-                }
-                catch (Exception x)
-                {
-                    PendingSavGz.Token = Guid.Empty;
-                    Utils.Warn($"{nameof(Host)}.{nameof(TryUploadBonesAsync)}", x);
-
-                    responseInfo.Message = x.Message;
-                }
-
-                if (PendingSavGz.Token.IsEmptyOrDefault())
-                {
-                    responseInfo.Success = false;
-                    responseInfo.Message ??= $"Missing or invalid auth token";
-                    return responseInfo;
-                }
-
-                try
-                {
-                    return await PutBonesSavGz(PendingSavGz);
-                }
-                catch (Exception x)
-                {
-                    responseInfo.Message = x.Message;
-
-                    return responseInfo;
-                }
-            }
-            catch (Exception x)
-            {
-                responseInfo.Message = x.Message;
-
-                Utils.Error($"{nameof(TryUploadBonesAsync)} failed to upload Bones with BonesID {PendingSavGz.BonesID}", x);
-                return responseInfo;
-            }
         }
 
         #endregion
@@ -1581,16 +2009,18 @@ namespace UD_Bones_Folder.Mod
         {
             if (!IsRunning
                 || Report == null
-                || Report.BonesID.IsNullOrEmpty())
+                || Report.BonesID.IsNullOrEmpty()
+                || !await CheckRegisterUserAsync())
                 return false;
 
             string uRI = null;
             HttpWebRequest httpReq = null;
+            var route = Routes.NewReport;
             try
             {
                 httpReq = CreateWebRequest(
-                    Route: Routes.NewReport,
-                    Proc: async delegate (System.IO.StreamWriter streamWriter)
+                    Route: route,
+                    Proc: async delegate (StreamWriter streamWriter)
                     {
                         await streamWriter.WriteAsync(JsonConvert.SerializeObject(Report));
                     },
@@ -1598,7 +2028,7 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
             }
 
             if (httpReq == null)
@@ -1607,7 +2037,8 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
                     var result = await streamReader.ReadToEndAsync();
                     if (httpRes.StatusCode == HttpStatusCode.Created)
@@ -1617,7 +2048,7 @@ namespace UD_Bones_Folder.Mod
                         {
                             Utils.Info($"Successfully reported {Report.BonesID} on server at \"{ToString()}\"" +
                                 $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                                
+
                             if (ClearReportsCache)
                                 this.ClearReportsCache();
 
@@ -1633,13 +2064,14 @@ namespace UD_Bones_Folder.Mod
             }
             catch (WebException x)
             {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    return false;
-                throw x;
+                if (!HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    throw x;
+
+                return false;
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed receiving POST response for {uRI}", x);
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
                 return false;
             }
             return false;
@@ -1652,22 +2084,20 @@ namespace UD_Bones_Folder.Mod
         {
             if (!IsRunning
                 || BonesID.IsNullOrEmpty()
-                || UserID.IsEmptyOrDefault())
+                || UserID.IsEmptyOrDefault()
+                || !await CheckRegisterUserAsync())
                 return false;
 
             string uRI = null;
             HttpWebRequest httpReq = null;
+            var route = Routes.Reported;
             try
             {
-                httpReq = CreateWebRequest(
-                    Route: Routes.Reported,
-                    URI: out uRI,
-                    new RouteParam(nameof(BonesID), BonesID),
-                    new RouteParam(nameof(UserID), UserID));
+                httpReq = CreateWebRequest(route, out uRI, new RouteParam[] { new(nameof(BonesID), BonesID), new(nameof(UserID), UserID) });
             }
             catch (Exception x)
             {
-                Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), uRI, x);
             }
 
             if (httpReq == null)
@@ -1676,7 +2106,8 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
                     var result = await streamReader.ReadToEndAsync();
                     if (httpRes.StatusCode == HttpStatusCode.OK)
@@ -1688,26 +2119,33 @@ namespace UD_Bones_Folder.Mod
                             int reportCount = jObject["reports"]?.ToObject<int>() ?? 0;
                             Utils.Info($"{BonesID} has {reportCount.Things(nameof(OsseousAsh.Report))} from {UserID} on server at \"{ToString()}\", " +
                                 $"at least 1 indicating {nameof(blocked)}" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                                $" - {httpRes.StatusCode.DisplayString()}");
 
                             return blocked;
                         }
                     }
                     else
                     {
-                        Utils.Warn($"{nameof(GetBonesReportBlockedCheck)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        Utils.Warn($"{nameof(GetBonesReportBlockedCheck)} received response from server at \"{ToString()}\": {httpRes.StatusCode.DisplayString()}");
                     }
                 }
             }
             catch (WebException x)
             {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
+                if (!HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    throw x;
+
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    Utils.Warn($"{nameof(Host)} {Name} got {HttpStatusCode.Forbidden.DisplayString()} for {nameof(GetBonesReportBlockedCheck)} via route {uRI}");
                     return false;
-                throw x;
+                }
+                return false;
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
+                route.ErrorFailed($"receiving", nameof(HttpWebResponse), uRI, x);
                 return false;
             }
             return false;
@@ -1719,17 +2157,19 @@ namespace UD_Bones_Folder.Mod
             if (!IsRunning)
                 return null;
 
+            if (!CheckRegisterUserAsync().WaitResult())
+                return null;
+
             string uRI = null;
             HttpWebRequest httpReq = null;
+            var route = Routes.UserReports;
             try
             {
-                httpReq = CreateWebRequest(
-                    Route: Routes.Reports,
-                    URI: out uRI);
+                httpReq = CreateWebRequest(route, out uRI, new RouteParam[] { new(nameof(UserID), UserID) });
             }
             catch (Exception x)
             {
-                Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
+                route.ErrorFailed("creating", nameof(HttpWebRequest), uRI, x);
             }
 
             if (httpReq == null)
@@ -1738,44 +2178,67 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
                     var result = streamReader.ReadToEnd();
                     if (httpRes.StatusCode == HttpStatusCode.OK)
                     {
                         try
                         {
-                            if (JObject.Parse(result) is JObject jObject
-                                && jObject["success"].ToObject<bool>() is bool success
-                                && jObject["data"] is JToken data)
+                            var reports = new List<Report>();
+                            if (JObject.Parse(result) is JObject jObject)
                             {
-                                var reports = new List<Report>();
-                                int counter = 0;
-                                while (true)
+                                if (jObject["success"].ToObject<bool>() is bool success
+                                    && jObject["data"] is JToken data)
                                 {
-                                    try
+                                    int counter = 0;
+                                    while (true)
                                     {
-                                        if (data?[counter++]?.ToObject<Report>() is Report report)
+                                        try
                                         {
-                                            if (report.UserID == UserID)
-                                                reports.Add(report);
+                                            if (data?[counter++]?.ToObject<Report>() is Report report)
+                                            {
+                                                if (report.UserID == UserID)
+                                                    reports.Add(report);
+                                            }
+                                            else
+                                                break;
                                         }
-                                        else
+                                        catch (ArgumentOutOfRangeException)
+                                        {
                                             break;
+                                        }
+                                        catch (Exception x)
+                                        {
+                                            Utils.Error($"Deserializing {nameof(GetBonesReports)} response into {nameof(IEnumerable<Report>)}", x);
+                                            break;
+                                        }
                                     }
-                                    catch (ArgumentOutOfRangeException)
+                                    Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{UserID}}} on server at {ToString()}" +
+                                        $" - {httpRes.StatusCode.DisplayString()}");
+
+                                    return reports;
+                                }
+                                else
+                                {
+                                    if (jObject.ToObject<Report[]>() is Report[] reportsArray)
                                     {
-                                        break;
-                                    }
-                                    catch (Exception x)
-                                    {
-                                        Utils.Error($"Deserializing {nameof(GetBonesReports)} response into {nameof(IEnumerable<Report>)}", x);
-                                        break;
+                                        reports.AddRange(reportsArray);
+
+                                        Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{UserID}}} on server at {ToString()}" +
+                                            $" - {httpRes.StatusCode.DisplayString()}");
+                                        return reports;
                                     }
                                 }
-                                Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{UserID}}} on server at {ToString()}" +
-                                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                            }
+                            else
+                            if (JsonConvert.DeserializeObject<Report[]>(result) is Report[] reportsArray)
+                            {
+                                reports.AddRange(reportsArray);
 
+                                Utils.Info($"Found {reports.Count.Things(nameof(OsseousAsh.Report))} by player {{{UserID}}} on server at {ToString()}" +
+                                    $" - {httpRes.StatusCode.DisplayString()}");
                                 return reports;
                             }
                         }
@@ -1789,7 +2252,7 @@ namespace UD_Bones_Folder.Mod
                     if (httpRes.StatusCode > HttpStatusCode.NoContent
                         || httpRes.StatusCode < HttpStatusCode.OK)
                     {
-                        Utils.Warn($"{nameof(GetBonesReports)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
+                        Utils.Warn($"{nameof(GetBonesReports)} received response from server at \"{ToString()}\": {httpRes.StatusCode.DisplayString()}");
                     }
                 }
             }
@@ -1801,12 +2264,12 @@ namespace UD_Bones_Folder.Mod
             }
             catch (Exception x)
             {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
+                route.ErrorFailed("receiving", nameof(HttpWebResponse), uRI, x);
                 return Enumerable.Empty<Report>();
             }
             return Enumerable.Empty<Report>();
         }
-            
+
         /*public async Task<IEnumerable<string>> GetBonesReportsForUser()
         {
             if (!Enabled
@@ -1830,7 +2293,7 @@ namespace UD_Bones_Folder.Mod
             try
             {
                 var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
                     var result = await streamReader.ReadToEndAsync();
                     if (httpRes.StatusCode == HttpStatusCode.OK)
@@ -1866,440 +2329,6 @@ namespace UD_Bones_Folder.Mod
             }
             return false;
         }*/
-
-        #endregion
-        #region Get Bones Info(s)
-
-        private SaveBonesJSON[] GetSaveBonesJSONs()
-        {
-            //Utils.Log($"{3.Indent()}GetSaveBonesJSONs");
-            if (!IsRunning)
-                return null;
-
-            string uRI = null;
-            HttpWebRequest httpReq = null;
-            try
-            {
-                httpReq = CreateWebRequest(
-                    Route: Routes.BonesInfos,
-                    URI: out uRI,
-                    new RouteParam(nameof(UserID), UserID));
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
-                return null;
-            }
-
-            if (httpReq == null)
-                return null;
-
-            try
-            {
-                var httpRes = (HttpWebResponse)httpReq.GetResponse();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                {
-                    var result = streamReader.ReadToEnd();
-                    if (httpRes.StatusCode == HttpStatusCode.OK
-                        && JObject.Parse(result) is JObject jObject
-                        && jObject["success"].ToObject<bool>())
-                    {
-                        try
-                        {
-                            var saveBonesJSONs = JsonConvert.DeserializeObject<SaveBonesJSON[]>(jObject["data"].ToString());
-                            foreach (var saveBonesJSON in saveBonesJSONs)
-                            {
-                                saveBonesJSON.Downloaded = true;
-                                saveBonesJSON.FileLocationType = FileLocationData.LocationType.Online;
-                            }
-
-                            return saveBonesJSONs;
-                        }
-                        catch (Exception x)
-                        {
-                            Utils.Error($"{nameof(ServerUtils.GetBonesInfos)} failed to deserialize {nameof(jObject)}[\"data\"] to {typeof(SaveBonesJSON[]).Name}", x);
-                            return null;
-                        }
-                    }
-                    else
-                    if (httpRes.StatusCode == HttpStatusCode.NoContent)
-                    {
-                        //Utils.Log($"{nameof(GetBonesInfos)} got no SaveBonesInfo from {ToString()}" +
-                        //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                    }
-                    else
-                    {
-                        Utils.Warn($"{nameof(ServerUtils.GetBonesInfos)} got no SaveBonesInfo from {ToString()}" +
-                            $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                    }
-                }
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    return null;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
-            }
-            return null;
-        }
-
-        public IEnumerable<SaveBonesInfo> GetSaveBonesInfos()
-        {
-            if (GetSaveBonesJSONs() is not SaveBonesJSON[] saveBonesJSONs)
-                yield break;
-
-            using var saveBonesInfos = ScopeDisposedList<SaveBonesInfo>.GetFromPool();
-            foreach (var saveBonesJSON in saveBonesJSONs)
-            {
-                if (saveBonesInfos.Any(bonesInfo => bonesInfo.ID == saveBonesJSON.ID))
-                    continue;
-
-                var saveBonesInfo = SaveBonesJSON.InfoFromJson(
-                    SaveBonesJSON: saveBonesJSON,
-                    FileLocationData: FileLocationData.NewOnline(this),
-                    SaveSize: saveBonesJSON.Size);
-
-                yield return saveBonesInfo;
-
-                saveBonesInfos.Add(saveBonesInfo);
-            }
-
-            //Utils.Log($"{nameof(GetBonesInfos)} got {saveBonesInfos.Count} Bones Info from {ToString()}");
-        }
-
-        private SaveBonesJSON GetSaveBonesJSON(string BonesID)
-        {
-            if (!IsRunning)
-                return null;
-
-            string uRI = null;
-            HttpWebRequest httpReq = null;
-            try
-            {
-                httpReq = CreateWebRequest(
-                    Route: Routes.BonesInfo,
-                    URI: out uRI,
-                    new RouteParam(nameof(BonesID), BonesID),
-                    new RouteParam(nameof(UserID), UserID));
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
-                return null;
-            }
-
-            if (httpReq == null)
-                return null;
-
-            try
-            {
-                using (var httpRes = (HttpWebResponse)httpReq.GetResponse())
-                {
-                    using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                    {
-                        var result = streamReader.ReadToEnd();
-                        if (httpRes.StatusCode == HttpStatusCode.OK
-                            && JObject.Parse(result) is JObject jObject
-                            && jObject["success"].ToObject<bool>())
-                        {
-                            try
-                            {
-                                return JsonConvert.DeserializeObject<SaveBonesJSON>(jObject["BonesInfo"].ToString());
-                            }
-                            catch (Exception x)
-                            {
-                                Utils.Error($"{nameof(GetSaveBonesJSON)} failed to deserialize {nameof(jObject)}[\"BonesInfo\"] to {nameof(SaveBonesJSON)}", x);
-                                return null;
-                            }
-                        }
-                        else
-                        if (httpRes.StatusCode == HttpStatusCode.NoContent)
-                        {
-                            //Utils.Log($"{nameof(GetSaveBonesJSON)} got no SaveBonesJSON from {ToString()}" +
-                            //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                        }
-                        else
-                        {
-                            Utils.Warn($"{nameof(GetSaveBonesJSON)} got no SaveBonesJSON from {ToString()}" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                        }
-                    }
-                }
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    return null;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Failed receiving GET response for {uRI}", x);
-            }
-            return null;
-        }
-
-        public SaveBonesInfo GetSaveBonesInfo(string BonesID)
-            => GetSaveBonesJSON(BonesID)?.InfoFromJson(
-                FileLocationData: FileLocationData.NewOnline(this),
-                SaveSize: 0L)
-            ;
-
-        #endregion
-        #region Get Bones SavGz
-
-        public async Task<byte[]> GetBonesSavGzAsync(string BonesID)
-        {
-            if (!IsRunning)
-                return null;
-
-            if (BonesID.IsNullOrEmpty())
-                return null;
-
-            string uRI = null;
-            HttpWebRequest httpReq = null;
-            try
-            {
-                httpReq = CreateWebRequest(
-                    Route: Routes.LoadBones,
-                    URI: out uRI,
-                    new RouteParam(nameof(BonesID), BonesID));
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating GET HttpWebRequest for {uRI}", x);
-                return null;
-            }
-
-            if (httpReq == null)
-                return null;
-
-            try
-            {
-                var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                {
-                    try
-                    {
-                        if ((await streamReader.ReadAllBytesAsync()) is byte[] rawBuffer)
-                        {
-                            Utils.Log($"{nameof(GetBonesSavGzAsync)} got a SaveBonesSavGz from {ToString()} ({Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name)})" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                            return rawBuffer;
-                        }
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
-                            $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})", x);
-                        return null;
-                    }
-                }
-                Utils.Warn($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
-                    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, GetTimeout()))
-                    return null;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}", x);
-            }
-            return null;
-        }
-
-        #endregion
-        #region Post Downlaod Bones File
-
-        /*public async Task<bool> PostDownloadBones(string BonesID, FileLocationData LocationData)
-        {
-            if (!IsRunning)
-                return false;
-
-            *//*if (Enabled)        // remove this to start testing again.
-                return false;*//*
-
-            if (BonesID.IsNullOrEmpty()
-                || Config is null
-                || Config.ID.IsEmptyOrDefault()
-                || LocationData is null
-                || LocationData.Type >= FileLocationData.LocationType.Mod)
-                return false;
-
-            string uRI = BonesDownloadPostRoute(BonesID, Config.ID);
-            HttpWebRequest httpReq = null;
-            int? timeout = GetTimeout();
-            try
-            {
-                httpReq = CreatePostJSON(uRI, timeout);
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating POST HttpWebRequest for {uRI}", x);
-                return false;
-            }
-
-            if (httpReq == null)
-                return false;
-
-            try
-            {
-                var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                {
-                    var result = streamReader.ReadToEnd();
-                    if (httpRes.StatusCode == HttpStatusCode.OK
-                        && JObject.Parse(result) is JObject jObject
-                        && jObject["success"].ToObject<bool>())
-                    {
-                        string catchFlag = "top";
-                        bool restoreBackup = false;
-                        string jsonFileName = BonesManager.GetInfoFileName(BonesManager.BonesFileName);
-                        string saveFileName = BonesManager.GetSaveFileName(BonesManager.BonesFileName);
-                        string jsonFilePath = LocationData.WithFileName(Path.Combine(BonesID, jsonFileName));
-                        string saveFilePath = LocationData.WithFileName(Path.Combine(BonesID, saveFileName));
-                        try
-                        {
-                            catchFlag = "DeserializeObject<SaveBonesJSON>";
-                            if (JsonConvert.DeserializeObject<SaveBonesJSON>(jObject?[nameof(SaveBonesJSON)]?.ToString()) is SaveBonesJSON saveBonesJSON
-                                && !(catchFlag = "Encoding.UTF8.GetString").IsNullOrEmpty()
-                                && Encoding.UTF8.GetString(jObject?[nameof(SavGz)]?.ToObject<byte[]>()) is string savGzString
-                                && !(catchFlag = "Convert.FromBase64String").IsNullOrEmpty()
-                                && Convert.FromBase64String(savGzString) is byte[] savGz)
-                            {
-                                catchFlag = "File.WriteAllText";
-                                saveBonesJSON.FileLocationType = LocationData.Type;
-                                await File.WriteAllTextAsync(jsonFilePath, JsonConvert.SerializeObject(saveBonesJSON, Formatting.Indented));
-                                if (File.Exists(saveFilePath))
-                                {
-                                    catchFlag = "File.Copy";
-                                    await File.CopyAsync(saveFilePath, $"{saveFilePath}.bak", overwrite: true);
-                                    restoreBackup = true;
-                                }
-                                catchFlag = "File.WriteAllBytes";
-                                await File.WriteAllBytesAsync(saveFilePath, savGz);
-
-                                MemoryHelper.GCCollect();
-
-                                catchFlag = "The.Game.CheckSave";
-                                The.Game.CheckSave(saveFilePath);
-                                return true;
-                            }
-                            return false;
-                        }
-                        catch (Exception x)
-                        {
-                            BonesManager.BonesHoardError(saveFilePath, x, restoreBackup);
-                            Utils.Error($"{nameof(PostDownloadBones)} failed to write reponse to files [{catchFlag}]", x);
-                            return false;
-                        }
-                    }
-                    else
-                    if (httpRes.StatusCode == HttpStatusCode.NoContent)
-                    {
-                        //Utils.Log($"{nameof(GetBonesInfos)} got no SaveBonesInfo from {uRI}" +
-                        //    $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                    }
-                    else
-                    {
-                        Utils.Warn($"{nameof(GetBonesInfos)} got no bones file from {uRI}" +
-                            $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})");
-                    }
-                }
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, timeout))
-                    return false;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a bones file from {uRI}", x);
-            }
-            return false;
-        }*/
-
-        #endregion
-        #region Put Bones Stats
-
-        public async Task<bool> PutBonesStats(
-            string BonesID,
-            string Stat
-            )
-        {
-            if (!IsRunning
-                || BonesID.IsNullOrEmpty()
-                || Stat.IsNullOrEmpty()
-                || !BonesStats.StatNames.Contains(Stat)
-                || UserID.IsEmptyOrDefault())
-                return false;
-
-            string uRI = null;
-            HttpWebRequest httpReq = null;
-            int? timeout = GetTimeout();
-            try
-            {
-                httpReq = CreateWebRequest(
-                    Route: Routes.UpdateBonesStats,
-                    URI: out uRI,
-                    new RouteParam(nameof(Stat), Stat),
-                    new RouteParam(nameof(BonesID), BonesID),
-                    new RouteParam(nameof(UserID), UserID));
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Creating PUT HttpWebRequest for {uRI}", x);
-                return false;
-            }
-
-            if (httpReq == null)
-                return false;
-
-            try
-            {
-                var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
-                using (var streamReader = new System.IO.StreamReader(httpRes.GetResponseStream()))
-                {
-                    var result = await streamReader.ReadToEndAsync();
-                    if (httpRes.StatusCode == HttpStatusCode.OK)
-                    {
-                        if (JObject.Parse(result) is JObject jObject
-                            && jObject["success"].ToObject<bool>())
-                        {
-                            Utils.Info($"Successfully updated stats to BonesRecord on server at \"{ToString()}\"" +
-                                $" - {httpRes.StatusCode} ({(int)httpRes.StatusCode})\n{jObject}");
-                            return true;
-                        }
-                    }
-                    else
-                    {
-                        Utils.Warn($"{nameof(TryUploadBonesAsync)} received response from server at \"{ToString()}\": {httpRes.StatusCode} ({(int)httpRes.StatusCode}) " +
-                            $"instead of expected {HttpStatusCode.OK} ({(int)HttpStatusCode.OK})");
-                    }
-                }
-            }
-            catch (WebException x)
-            {
-                if (HandleTimeoutWebException(x, uRI, timeout))
-                    return false;
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Failed receiving PUT response for {uRI}", x);
-                return false;
-            }
-            Utils.Warn($"Fell through sending/receiving PUT for {uRI}");
-            return false;
-        }
 
         #endregion
 
@@ -2357,6 +2386,14 @@ namespace UD_Bones_Folder.Mod
             Predicate<PickOptionData<HostLocationPair, Task<UIUtils.CascadableResult>>> SelectImmediately
             )
         {
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(SelectImmediately), (SelectImmediately != null ? "not " : null) + "null"),
+                });
+
             using var options = new CascadablePickOptionDataSetAsync<HostLocationPair>();
             var result = UIUtils.CascadableResult.Continue;
             HostLocationPair newHostLocationPair = null;
@@ -2383,11 +2420,13 @@ namespace UD_Bones_Folder.Mod
                 using var exludeHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
 
                 // ReadHostsTo(ref _Hosts);
-                using var hostLocationPairs = ScopeDisposedList<HostLocationPair>.GetFromPoolFilledWith(AllHostsWithLocation());
+                Debug.Log($"{nameof(ServerUtils.AllHostsWithLocation)}", Indent: indent[1]);
+                using var hostLocationPairs = ScopeDisposedList<HostLocationPair>.GetFromPoolFilledWith(ServerUtils.AllHostsWithLocation());
                 foreach (var hostLocationPair in hostLocationPairs)
                 {
                     try
                     {
+                        Debug.Log($"Pair: {hostLocationPair}", Indent: indent[2]);
                         if (!hostLocationPair.IsValid())
                         {
                             Utils.Warn($"{nameof(ManageHostsOptionButtonWithSelectionAsync)} got invalid {nameof(hostLocationPair)}: {hostLocationPair}");
@@ -2398,14 +2437,19 @@ namespace UD_Bones_Folder.Mod
                         options.Add(new CascadablePickOptionDataAsync<HostLocationPair>
                         {
                             Element = hostLocationPair,
-                            Text = $"[{locationData.Type.GetColoredString()}] {host.FullDisplayName(IncludeAuth: true)}",
+                            Text = $"{locationData.Tag()} {host.FullDisplayName(IncludeAuth: true)}",
                             Icon = new Renderable(
                                 Tile: "Mutations/gas_generation.bmp",
                                 ColorString: "&K",
                                 TileColor: "&K",
                                 DetailColor: FileLocationData.GetFileLocationDataTypeColor(locationData.Type)[0]),
                             Hotkey = options.GetHotkeys().GetNextHotKey(Excluding: exludeHotkeys),
-                            Callback = e => AskDoWhatWithHostAsync(new (ServerUtils.Hosts.FirstOrDefault(h => h.LocationData?.SameAs(e.FileLocationData) is true), e.Host))
+                            Callback = async delegate (HostLocationPair p)
+                            {
+                                var hostSet = ServerUtils.Hosts.FirstOrDefault(hs => hs.LocationData?.SameAs(p.FileLocationData) is true);
+                                var host = p.Host;
+                                return await AskDoWhatWithHostAsync(new(hostSet, host));
+                            }
                         });
                     }
                     catch (Exception x)
@@ -2416,6 +2460,7 @@ namespace UD_Bones_Folder.Mod
 
                 if (SelectImmediately != null)
                 {
+                    Debug.Log($"{nameof(SelectImmediately)} not null", Indent: indent[2]);
                     if (options.FirstOrDefault(SelectImmediately.Invoke) is CascadablePickOptionDataAsync<HostSet.HostLocationPair> selectedImmediately)
                     {
                         if (selectedImmediately.Callback?.Invoke(selectedImmediately?.Element) is Task<UIUtils.CascadableResult> resultTask)
@@ -2425,6 +2470,8 @@ namespace UD_Bones_Folder.Mod
                 }
                 else
                 {
+                    Debug.Log($"{nameof(SelectImmediately)} is null", Indent: indent[2]);
+
                     result = await UIUtils.PerformPickOptionAsync(
                         OptionDataSet: options,
                         Title: $"Manage {OSSEOUS_ASH} Host".Colored("yellow"),
@@ -2435,17 +2482,23 @@ namespace UD_Bones_Folder.Mod
 
                 if (newHostLocationPair?.IsValid() is false)
                 {
-                    Utils.Log($"!{nameof(newHostLocationPair)}{nameof(newHostLocationPair.IsValid)}; {nameof(Dispose)}");
+                    Debug.Log($"!{nameof(newHostLocationPair)}.{nameof(newHostLocationPair.IsValid)}; {nameof(Dispose)}", Indent: indent[1]);
                     newHostLocationPair.Dispose();
                 }
             }
             while (result.IsContinue());
 
-            foreach (var hostCollection in ServerUtils.Hosts)
-                hostCollection.Write();
+            Debug.Log($"foreach hostCollection in ServerUtils.Hosts", Indent: indent[1]);
+            foreach (var hostSet in ServerUtils.Hosts)
+            {
+                Debug.Log($"Write: {hostSet.LocationData}", Indent: indent[2]);
+                hostSet.Write();
+            }
+
+            Debug.CheckYeh($"{nameof(ManageHostsOptionButtonWithSelectionAsync)} Finished", Indent: indent[1]);
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformNewHostAsync(HostSet.HostLocationPair HostConfig)
+        private static async Task<UIUtils.CascadableResult> PerformNewHostAsync(HostLocationPair HostConfig)
         {
             if ((await AskHostLocationAsync()) is not FileLocationData chosenLocation)
                 return UIUtils.CascadableResult.CancelSilent;
@@ -2453,7 +2506,7 @@ namespace UD_Bones_Folder.Mod
             HostConfig.FileLocationData = chosenLocation;
 
             var sB = Event.NewStringBuilder();
-            using var options = new CascadablePickOptionDataSetAsync<HostSet.HostLocationPair>(HostConfig);
+            using var options = new CascadablePickOptionDataSetAsync<HostLocationPair>(HostConfig);
             var result = UIUtils.CascadableResult.Continue;
             do
             {
@@ -2494,7 +2547,7 @@ namespace UD_Bones_Folder.Mod
             return result;
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformBasicNewHostAsync(HostSet.HostLocationPair Element)
+        private static async Task<UIUtils.CascadableResult> PerformBasicNewHostAsync(HostLocationPair Element)
         {
             bool? confirmed = null;
             do
@@ -2503,22 +2556,22 @@ namespace UD_Bones_Folder.Mod
                 {
                     string entered = await AskFullHostNameAsync(Element.FileLocationData);
 
-                    string authToken = null;
-                    if (entered != null)
-                        authToken = await AskHostAuthTokenAsync(null);
-
                     int? timeout = null;
-                    if (entered != null
-                        && authToken != null)
+                    if (entered != null)
                         timeout = await AskHostTimeoutAsync(null);
 
+                    int? maxAttempts = null;
+                    if (entered != null
+                        && timeout.HasValue)
+                        maxAttempts = await AskHostMaxUpAttemptsAsync(null);
+
                     if (!entered.IsNullOrEmpty()
-                        && authToken != null
                         && timeout.HasValue
+                        && maxAttempts.HasValue
                         && TryParse(entered, out Element.Host))
                     {
                         Element.Host.TimeoutMS = timeout ?? DEFAULT_TIMEOUT;
-                        Element.Host.AuthToken = authToken.IsNullOrEmpty() ? null : authToken;
+                        Element.Host.MaxUploadAttempts = maxAttempts ?? DEFAULT_MAX_UP_ATTEMPTS;
 
                         if (Element.Host.Version < 0)
                         {
@@ -2530,7 +2583,7 @@ namespace UD_Bones_Folder.Mod
 
                     if (!confirmed.HasValue)
                     {
-                        Element.Host.Dispose(DisposePendingSavGz: true);
+                        Element.Host.Dispose(DisposePending: true);
                         break;
                     }
 
@@ -2543,9 +2596,14 @@ namespace UD_Bones_Folder.Mod
                             hostSet = new HostSet(Element.FileLocationData);
 
                         hostSet.WriteAddHost(Element.Host);
+                        if (await Element.Host.AskWhatPasswordAsync(
+                            Purpose: "Register",
+                            Message: "This is your first time using this host after setting it up. If you would like to set a password for use with this host, please enter it now.",
+                            IncludeNote: true) is string newPassword)
+                            await Element.Host.CheckRegisterUserAsync(newPassword, true);
                         break;
                     }
-                    Element.Host.Dispose(DisposePendingSavGz: true);
+                    Element.Host.Dispose(DisposePending: true);
                 }
                 finally
                 {
@@ -2557,7 +2615,7 @@ namespace UD_Bones_Folder.Mod
             return confirmed.ToCascadableResult(Silent: true);
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformAdvancedNewHostAsync(HostSet.HostLocationPair Element)
+        private static async Task<UIUtils.CascadableResult> PerformAdvancedNewHostAsync(HostLocationPair Element)
         {
             await Popup.ShowAsync("{{W|Advanced}} is not currently available.");
             return UIUtils.CascadableResult.Continue;
@@ -2584,15 +2642,12 @@ namespace UD_Bones_Folder.Mod
                 if (options.Count == 1)
                     return await options[0].Invoke();
 
-                string localType = FileLocationData.LocationType.Local.GetColoredString();
-                string syncedType = FileLocationData.LocationType.Synced.GetColoredString();
-
                 return await UIUtils.PerformPickOptionAsync(
                     OptionDataSet: options,
                     Title: $"New {OSSEOUS_ASH} Host".Colored("yellow"),
                     Intro: $"Which location would you like to record your new host?\n\n" +
-                        $"\u0007 [{localType}] only exists on this device.\n" +
-                        $"\u0007 [{syncedType}] will be synced by the platform managing the game's installation (if there is one).\n\n",
+                        $"\u0007 [{FileLocationData.LocalTypeString}] only exists on this device.\n" +
+                        $"\u0007 [{FileLocationData.SyncedTypeString}] will be synced by the platform managing the game's installation (if there is one).\n\n",
                     IntroIcon: Configuration.BlackAshCloudIcon);
             }
             finally
@@ -2606,74 +2661,95 @@ namespace UD_Bones_Folder.Mod
             if (ChosenLocation == null)
                 return null;
 
-            using var tB = TextBuilder.Get();
-            tB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
+            using var title = TextBuilder.Get()
+                .AppendColored("yellow", $"New {OSSEOUS_ASH} Host");
+
+            using var message = TextBuilder.Get()
+                .Append("Adding to location:")
+                .AppendLine().Append(ChosenLocation.Tag()).Append(" ")
+                .Append(ChosenLocation.SanitizeForDisplay())
                 .AppendLine().AppendLine();
 
-            tB.Append("Adding to location:")
-                .AppendLine().Append("[").Append(ChosenLocation.Type.GetColoredString()).Append("] ")
-                .Append(ChosenLocation.SanitiseForDisplay())
+            message.Append($"Enter the full host name of the host you'd like to add, including the protocol and, if applicable, the port number.")
                 .AppendLine().AppendLine();
-
-            tB.Append($"Enter the full host name of the host you'd like to add, including the protocol and, if applicable, the port number.")
-                .AppendLine().AppendLine();
-            tB.Append("Examples:")
+            message.Append("Examples:")
                 .AppendLine().Append("https://osseousash.cloud/")
                 .AppendLine().Append("http://localhost:8000/api/")
                 .AppendLine().Append("http://192.168.0.25:8080/api/v1/")
                 .AppendLine().AppendLine();
-            tB.Append("You'll be asked to confirm the parsed result.");
+            message.Append("You'll be asked to confirm the parsed result.");
 
-            return await Popup.AskStringAsync(tB.ToString(), Default: "", ReturnNullForEscape: true, AllowColorize: false);
-        }
-
-        private static async Task<string> AskHostAuthTokenAsync(string PrependMessage)
-        {
-            using var tB = TextBuilder.Get();
-            tB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
-                .AppendLine().AppendLine();
-            if (!PrependMessage.IsNullOrEmpty())
-                tB.Append(PrependMessage)
-                    .AppendLine().AppendLine();
-
-            tB.Append($"If the new host requires authentication of some kind, enter the required key below.")
-                .AppendLine().AppendLine();
-            tB.Append("You can change/update this later if necessary.");
-
-            return await Popup.AskStringAsync(tB.ToString(), Default: "", ReturnNullForEscape: true, AllowColorize: false);
+            return await UIUtils.AskStringAsync(
+                Message: message.ToString(),
+                Title: title.ToString(),
+                Default: "",
+                ReturnNullForEscape: true,
+                AllowColorize: false);
         }
 
         private static async Task<int?> AskHostTimeoutAsync(string PrependMessage)
         {
-            using var tB = TextBuilder.Get();
-            tB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
-                .AppendLine().AppendLine();
+            using var title = TextBuilder.Get()
+                .AppendColored("yellow", $"New {OSSEOUS_ASH} Host");
+
+            using var message = TextBuilder.Get();
             if (!PrependMessage.IsNullOrEmpty())
-                tB.Append(PrependMessage)
+                message.Append(PrependMessage)
                     .AppendLine().AppendLine();
 
-            tB.Append($"Enter the amount of time in milliseconds (-1 for unlimited) to wait before cancelling most requests to this host.")
+            message.Append($"Enter the amount of time in milliseconds (-1 for unlimited) to wait before cancelling most requests to this host.")
                 .AppendLine().AppendLine();
-            tB.Append("You can change/update this later if necessary.");
+            message.Append("You can change/update this later if necessary.");
 
-            return await Popup.AskNumberAsync(tB.ToString(), Start: DefaultHost.TimeoutMS, Min: -1);
+            return await UIUtils.AskNumberAsync(
+                Message: message.ToString(),
+                Title: title.ToString(),
+                Start: DefaultHost.TimeoutMS,
+                Min: -1);
+        }
+
+        private static async Task<int?> AskHostMaxUpAttemptsAsync(string PrependMessage)
+        {
+            using var title = TextBuilder.Get()
+                .AppendColored("yellow", $"New {OSSEOUS_ASH} Host");
+
+            using var message = TextBuilder.Get();
+            if (!PrependMessage.IsNullOrEmpty())
+                message.Append(PrependMessage)
+                    .AppendLine().AppendLine();
+
+            message.Append($"Enter the maximum number of times this host should attempt to upload a bones file (including the initial attempt).")
+                .AppendLine().Append("This refers specifically to the json/info component of a bones file. A failed .sav.gz upload will re-attempt until the 3 minute window has passed.")
+                .AppendLine()
+                .AppendLine().Append("You can change/update this later if necessary.");
+
+            return await UIUtils.AskNumberAsync(
+                Message: message.ToString(),
+                Title: title.ToString(),
+                Start: DefaultHost.MaxUploadAttempts,
+                Min: 1);
         }
 
         private static async Task<int?> AskHostVersionAsync(string PrependMessage)
         {
-            using var tB = TextBuilder.Get();
-            tB.AppendColored("yellow", $"New {OSSEOUS_ASH} Host")
-                .AppendLine().AppendLine();
+            using var title = TextBuilder.Get()
+                .AppendColored("yellow", $"New {OSSEOUS_ASH} Host");
+
+            using var message = TextBuilder.Get();
             if (!PrependMessage.IsNullOrEmpty())
-                tB.Append(PrependMessage)
+                message.Append(PrependMessage)
                     .AppendLine().AppendLine();
 
-            tB.Append($"Enter the API version used by this host.")
-                .AppendLine().Append("Some hosts will report their version number if you go to [host name]/api/status is a web browser.")
+            message.Append($"Enter the API version used by this host.")
+                .AppendLine().Append("Some hosts will report their version number if you go to [host name]/api/status in a web browser.")
                 .AppendLine()
                 .AppendLine().Append("You can change/update this later if necessary.");
 
-            return await Popup.AskNumberAsync(tB.ToString(), Start: DefaultHost.Version, Min: 0);
+            return await UIUtils.AskNumberAsync(
+                Message: message.ToString(),
+                Title: title.ToString(),
+                Start: DefaultHost.Version,
+                Min: 0);
         }
 
         private static async Task<bool?> ConfirmParsedHost(Host NewHost)
@@ -2690,7 +2766,6 @@ namespace UD_Bones_Folder.Mod
                 .AppendLine().AppendPair(nameof(NewHost.Port), (NewHost.Port)?.ToString() ?? "")
                 .AppendLine().AppendPair(nameof(NewHost.Encrypted), NewHost.Encrypted)
                 .AppendLine().AppendPair(nameof(NewHost.TimeoutMS), NewHost.GetTimeoutString())
-                .AppendLine().AppendPair(nameof(NewHost.AuthToken), NewHost.AuthToken)
                 .AppendLine().AppendPair(nameof(NewHost.Version), $"{NewHost.Version}{(NewHost.GetAPIVersionStub() is string apiStub ? $" ({apiStub})" : null)}")
                 .AppendLine()
                 .AppendLine().Append(NewHost.GetHostNameWithProtocol())
@@ -2712,89 +2787,161 @@ namespace UD_Bones_Folder.Mod
         }
 
         private static async Task ShowCancelledAddHost()
-        {
-            await Popup.ShowAsync(
-                Message: Event.FinalizeString(
-                    SB: Event.NewStringBuilder("Addition of new host cancelled."))
-                );
-        }
+            => await Popup.ShowAsync("Addition of new host cancelled.")
+            ;
 
         private static async Task<UIUtils.CascadableResult> AskDoWhatWithHostAsync(HostSetHostPair HostParentPair)
         {
-            Utils.Log($"{nameof(AskDoWhatWithHostAsync)}");
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(HostParentPair), HostParentPair),
+                });
 
-            var Host = HostParentPair.Host;
-            var HostCollection = HostParentPair.HostSet;
+            var host = HostParentPair.Host;
+            var hostSet = HostParentPair.HostSet;
 
-            var locationData = HostCollection.LocationData;
-            using var options = new CascadablePickOptionDataSetAsync<HostSetHostPair>(HostParentPair, UIUtils.CascadableResult.Back, UIUtils.CascadableResult.Cancel);
+            var locationData = hostSet.LocationData;
+            var options = new CascadablePickOptionDataSetAsync<HostSetHostPair>(HostParentPair, UIUtils.CascadableResult.Back, UIUtils.CascadableResult.Cancel);
             UIUtils.CascadableResult result;
             using var tB = TextBuilder.Get();
-            do
+            try
             {
-                tB.Clear();
-                options.ClearItems(Dispose: true);
-
-                tB.Append($"What would you like to do with host ").Append(Host.GetHostNameWithProtocol()).Append(", ")
-                    .Append("which is in the below location:")
-                    .AppendLine()
-                    .AppendLine().Append(HostCollection.TaggedDisplayName())
-                    .AppendLine()
-                    .AppendLine().AppendPair("Server Status", Host.ServerStatusString);
-                if (Host.IsOnCooldown)
-                    tB.AppendLine().AppendColored("C", "Host status checks on cooldown.");
-                tB.AppendLineEnd();
-
-                Utils.Log($"if {nameof(Host)}.{nameof(Host.IsOnCooldown)}");
-                if (Host.IsOnCooldown)
+                do
                 {
-                    Utils.Log($"add clear timeout cooldown");
+                    int priority = 1;
+                    tB.Clear();
+                    options.ClearItems(Dispose: true);
+
+                    tB.Append($"What would you like to do with host ").Append(host.GetHostNameWithProtocol()).Append(", ")
+                        .Append("which is in the below location:")
+                        .AppendLine()
+                        .AppendLine().Append(hostSet.TaggedDisplayName())
+                        .AppendLine()
+                        .AppendLine().AppendPair("Server Status", host.ServerStatusString);
+                    if (host.IsOnCooldown)
+                        tB.AppendLine().AppendColored("C", "Host status checks on cooldown.");
+                    tB.AppendLine()
+                        .AppendLine().AppendPair("Registered as", host.User?.Handle ?? "[not yet registered]");
+                    if (host.User != null)
+                        tB.AppendLine().AppendPair(nameof(host.User.Status), host.User.Status)
+                            .AppendLine().AppendPair(nameof(host.User.Access), host.User.Access);
+                    tB.AppendLineEnd();
+
+                    // Utils.Log($"if {nameof(host)}.{nameof(host.IsOnCooldown)}");
+                    int coolDownPriority = priority++ * 5;
+                    if (host.IsOnCooldown)
+                    {
+                        // Utils.Log($"add clear timeout cooldown");
+                        options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
+                        {
+                            Text = "clear timeout cooldown",
+                            Priority = coolDownPriority, // 5
+                            Hotkey = 'c',
+                            Callback = PerformClearTimeoutAsync,
+                        });
+                    }
+                    // Utils.Log($"add modify");
                     options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
                     {
-                        Text = "clear timeout cooldown",
-                        Hotkey = 'c',
-                        Callback = PerformClearTimeoutAsync,
+                        Text = "modify",
+                        Priority = priority++ * 5, // 10
+                        Hotkey = 'm',
+                        Callback = PerformModifyHostAsync
                     });
-                }
-                Utils.Log($"add modify");
-                options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
-                {
-                    Text = "modify",
-                    Hotkey = 'm',
-                    Callback = PerformModifyHostAsync
-                });
-                Utils.Log($"add migrate");
-                options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
-                {
-                    Text = "migrate",
-                    Hotkey = 'M',
-                    Callback = PerformMigrateHostAsync
-                });
-                Utils.Log($"add delete");
-                options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
-                {
-                    Text = "delete",
-                    Hotkey = 'd',
-                    Callback = async delegate (HostSetHostPair p)
+                    // Utils.Log($"add migrate");
+                    options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
                     {
-                        string message = $"Are you sure you want to delete {p.Host.GetHostNameWithProtocol()} from {p.HostSet.DisplayName()}?";
-                        if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
+                        Text = "migrate",
+                        Priority = priority++ * 5, // 15
+                        Hotkey = 'M',
+                        Callback = PerformMigrateHostAsync
+                    });
+                    // Utils.Log($"add delete");
+                    options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
+                    {
+                        Text = "delete",
+                        Priority = priority++ * 5, // 20
+                        Hotkey = 'd',
+                        Callback = PerformDeleteHostAsync,
+                    });
+                    options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
+                    {
+                        Text = $"manage registration: {(host.User != null ? host.User.Handle : "unregistered")?.Colored("rules")}",
+                        Priority = priority++ * 5, // 25
+                        Hotkey = 'r',
+                        Callback = async delegate (HostSetHostPair p)
                         {
-                            p.HostSet.WriteRemoveHost(p.Host, Dispose: true);
-                            return UIUtils.CascadableResult.BackSilent;
-                        }
-                        return UIUtils.CascadableResult.Continue;
-                    }
-                });
+                            if (p.Host.IsOnCooldown
+                                || !p.Host.IsRunning)
+                            {
+                                await Popup.ShowAsync($"Connection to {p.Host} is {(p.Host.IsOnCooldown ? "temporarily" : "currently")} unavailable.");
+                                return UIUtils.CascadableResult.Continue;
+                            }
+                            return await PerformManageRegistrationAsync(p);
+                        },
+                    });
 
-                Utils.Log($"result {nameof(UIUtils.PerformPickOptionAsync)}");
-                result = await UIUtils.PerformPickOptionAsync(
-                    OptionDataSet: options,
-                    Title: $"Manage {OSSEOUS_ASH} Host".Colored("yellow"),
-                    Intro: tB.ToString(),
-                    IntroIcon: HostCollection.GetAshCloudIcon());
+                    bool hostCanEndSessionOrIsEnabled = host.HasSession
+                        || (!host.IsOnCooldown
+                            && host.IsRunning
+                            && host.User != null);
+
+                    coolDownPriority = priority++ * 5;
+                    if (hostCanEndSessionOrIsEnabled)
+                    {
+                        options.Add(new CascadablePickOptionDataAsync<HostSetHostPair>
+                        {
+                            Text = !host.HasSession ? $"start session" : $"end session",
+                            Priority = coolDownPriority, // 30
+                            Hotkey = 's',
+                            Callback = async delegate (HostSetHostPair p)
+                            {
+                                if (p.Host.HasSession)
+                                {
+                                    using var message = TextBuilder.Get($"Are you sure you want to end your session?")
+                                        .AppendLine()
+                                        .AppendLine().Append("You will be prompted to start a new session the next time a connection is attempted with this host.")
+                                        .AppendLine()
+                                        .AppendLine().Append("If you would like to stop future connections to this host, you may need to disable it first via '")
+                                            .AppendColored("W", "[m]").Append(" modify'.");
+
+                                    switch (await Popup.ShowYesNoCancelAsync(message.ToString()))
+                                    {
+                                        case DialogResult.No:
+                                            return UIUtils.CascadableResult.Continue;
+                                        case DialogResult.Cancel:
+                                            return UIUtils.CascadableResult.BackSilent;
+                                        default:
+                                            break;
+                                    }
+                                }
+                                p.Host.JwtToken = !p.Host.HasSession
+                                    ? await p.Host.GetSessionAsync(PushView: true)
+                                    : null
+                                    ;
+                                return UIUtils.CascadableResult.Continue;
+                            },
+                        });
+                    }
+                    // Utils.Log($"call delegate");
+                    ServerUtils.InvokeDoWhatWithHostPickOptionsDelegates(HostParentPair, ref options);
+
+                    // Utils.Log($"result {nameof(UIUtils.PerformPickOptionAsync)}");
+                    result = await UIUtils.PerformPickOptionAsync(
+                        OptionDataSet: options,
+                        Title: $"Manage {OSSEOUS_ASH} Host".Colored("yellow"),
+                        Intro: tB.ToString(),
+                        IntroIcon: hostSet.GetAshCloudIcon());
+                }
+                while (result.IsContinue());
             }
-            while (result.IsContinue());
+            finally
+            {
+                options.Dispose();
+            }
 
             if (result.IsCancel())
                 return result;
@@ -2804,14 +2951,22 @@ namespace UD_Bones_Folder.Mod
 
         private static async Task<UIUtils.CascadableResult> PerformClearTimeoutAsync(HostSetHostPair HostParentPair)
         {
-            string hostName = HostParentPair.Host.GetHostNameWithProtocol();
+            var host = HostParentPair.Host;
+            string hostName = host.GetHostNameWithProtocol();
             string message = $"Are you sure you want clear the timeout cooldown for {hostName}?";
             if ((await Popup.ShowYesNoCancelAsync(message)) == DialogResult.Yes)
-                HostParentPair.Host.ManuallyClearStatusCheckTimer(ReasonForOverride: $"{hostName} was cleared by player via options menu");
+                host.ManuallyClearStatusCheckTimer(ReasonForOverride: $"{hostName} was cleared by player via options menu");
 
             message = $"Timeout cooldown for {hostName} cleared.";
             if (HostParentPair.Host.IsOnCooldown)
                 message = $"Failed to clear timeout cooldown for {hostName}.";
+            else
+            {
+                if (await host.GetUserAsync(CatchBadRequest: true) is not User user)
+                    await PerformManageRegistrationAsync(HostParentPair);
+                else
+                    user.CopyTo(ref host.User);
+            }
 
             await Popup.ShowAsync(message);
 
@@ -2835,7 +2990,7 @@ namespace UD_Bones_Folder.Mod
         private static async Task<UIUtils.CascadableResult> PerformModifyPortAsync(Host Host)
         {
             Host.Port = await Popup.AskNumberAsync(
-                Message: $"Enter a new {nameof(Mod.Host.Port)}:",
+                Message: $"Enter a new {nameof(Port)}:",
                 Start: Host.Port ?? 0,
                 Min: 0);
 
@@ -2867,23 +3022,19 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        private static async Task<UIUtils.CascadableResult> PerformModifyAuthTokenAsync(Host Host)
+        private static async Task<UIUtils.CascadableResult> PerformModifyMaxUpAttemptsAsync(Host Host)
         {
-            Host.AuthToken = await Popup.AskStringAsync(
-                Message: "Enter a new Auth Token:",
-                Default: Host.AuthToken ?? "",
-                ReturnNullForEscape: true,
-                AllowColorize: false);
+            var number = await Popup.AskNumberAsync(
+                Message: $"Enter a new Maximum Upload Attempts:",
+                Start: Host.MaxUploadAttempts,
+                Min: 1);
 
-            var returnValue = Host.AuthToken != null
-                ? UIUtils.CascadableResult.Continue
-                : UIUtils.CascadableResult.Back
-                ;
+            if (!number.HasValue)
+                return UIUtils.CascadableResult.Back;
 
-            if (Host.AuthToken == "")
-                Host.AuthToken = null;
+            Host.TimeoutMS = number.GetValueOrDefault();
 
-            return returnValue;
+            return UIUtils.CascadableResult.Continue;
         }
 
         private static async Task<UIUtils.CascadableResult> PerformModifyVersionAsync(Host Host)
@@ -2926,6 +3077,7 @@ namespace UD_Bones_Folder.Mod
             using var options = new CascadablePickOptionDataSetAsync<Host>(host, UIUtils.CascadableResult.Back, UIUtils.CascadableResult.Cancel);
             do
             {
+                int priority = 1;
                 tB.Clear();
                 options.ClearItems(Dispose: true);
 
@@ -2940,42 +3092,49 @@ namespace UD_Bones_Folder.Mod
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
                     Text = $"Change {nameof(host.Name)}: {host.Name?.Colored("rules")}",
+                    Priority = priority++ * 5, // 5
                     Hotkey = 'n',
                     Callback = PerformModifyNameAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
                     Text = $"Change {nameof(host.Port)}: {(host.Port?.ToString() ?? "none")?.Colored("rules")}",
+                    Priority = priority++ * 5, // 10
                     Hotkey = 'p',
                     Callback = PerformModifyPortAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
                     Text = host.Encrypted.GetCheckboxText(nameof(host.Encrypted)),
+                    Priority = priority++ * 5, // 15
                     Hotkey = 'e',
                     Callback = PerformToggleEncryptedAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
                     Text = $"Change Timeout (ms): {host.GetTimeoutString()?.Colored("rules")}",
+                    Priority = priority++ * 5, // 20
                     Hotkey = 't',
                     Callback = PerformModifyTimeoutAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
-                    Text = $"Change Auth Token: {(host.AuthToken.IsNullOrEmpty() ? "none" : "********")?.Colored("rules")}",
-                    Hotkey = 'a',
-                    Callback = PerformModifyAuthTokenAsync,
+                    Text = $"Change Max Upload Attempts: {host.MaxUploadAttempts.ToString().Colored("rules")}",
+                    Priority = priority++ * 5, // 25
+                    Hotkey = 'm',
+                    Callback = PerformModifyMaxUpAttemptsAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
-                    Text = $"Change API {nameof(host.Version)}: {host.Version} ({host.GetAPIVersionStub()})",
+                    Text = $"Change API {nameof(host.Version)}: {host.Version.ToString().Colored("rules")} ({host.GetAPIVersionStub()})",
+                    Priority = priority++ * 5, // 30
                     Hotkey = 'v',
                     Callback = PerformModifyVersionAsync,
                 });
                 options.Add(new CascadablePickOptionDataAsync<Host>
                 {
                     Text = host.GetEnabledCheckbox(),
+                    Priority = priority++ * 5, // 35
                     Hotkey = 'E',
                     Callback = PerformToggleEnabledAsync,
                 });
@@ -2989,6 +3148,7 @@ namespace UD_Bones_Folder.Mod
                     options.Add(new CascadablePickOptionDataAsync<Host>
                     {
                         Text = "revert changes"?.Colored("w"),
+                        Priority = priority++ * 5, // 45
                         Hotkey = 'u',
                         Icon = new Renderable(
                             Tile: "UI/sw_lastchar.bmp",
@@ -3132,6 +3292,40 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
+        private static async Task<UIUtils.CascadableResult> PerformManageRegistrationAsync(HostSetHostPair Pair)
+        {
+            var host = Pair.Host;
+
+            string purpose = "Register";
+            string message = "You aren't currently registered with this host.\nBefore registering, if you would like to set a password for use with this host, please enter it below:";
+
+            var user = await host.GetUserAsync(CatchBadRequest: true);
+            user?.CopyTo(ref host.User);
+            user?.Dispose();
+
+            bool update = false;
+            if (host.User != null)
+            {
+                purpose = "Update";
+                message = "Please enter your new password below:";
+                update = true;
+            }
+
+            if (await host.AskWhatPasswordAsync(
+                Purpose: purpose,
+                Message: message,
+                IncludeNote: true) is string newPassword)
+            {
+                if (newPassword == null)
+                    return UIUtils.CascadableResult.Continue;
+
+                if (await host.CheckRegisterUserAsync(newPassword, update))
+                    return UIUtils.CascadableResult.Continue;
+            }
+
+            return UIUtils.CascadableResult.Back;
+        }
+
         private static async Task<UIUtils.CascadableResult> PerformDeleteHostAsync(HostSetHostPair Pair)
         {
             if (Pair?.IsValid() is not true)
@@ -3254,29 +3448,606 @@ namespace UD_Bones_Folder.Mod
 
         #endregion
 
-        public void Dispose(bool DisposePendingSavGz)
+        public void Dispose(bool DisposePending)
         {
             Name = null;
             Port = null;
             Encrypted = false;
             AuthToken = null;
+            Version = 0;
             Enabled = false;
+            JwtToken = null;
             WrittenEnabled = false;
             ClearStatusCheckTimer(ref StatusCheckTimer);
-            if (DisposePendingSavGz)
+            ClearBonesIDCacheTimer(ref BonesIDCacheTimer);
+            BonesIDCache?.Clear();
+            BonesIDCache = null;
+            if (DisposePending)
             {
-                foreach (var pendingSavGz in (PendingSavGzs?.Values).IteratorSafe())
-                    pendingSavGz.Dispose();
+                foreach (var pendingUpload in (PendingUploads?.Values).IteratorSafe())
+                    pendingUpload.Dispose();
 
-                if (PendingSavGzCache.ContainsKey(PendingSavGzCacheKey))
-                    PendingSavGzCache.Remove(PendingSavGzCacheKey);
+                if (PendingUploadCache.ContainsKey(PendingUploadCacheKey))
+                    PendingUploadCache.Remove(PendingUploadCacheKey);
             }
-            PendingSavGzCacheKey = null;
+            PendingUploadCacheKey = null;
+            AuthToken = null;
+            User?.Dispose();
+            User = null;
         }
 
         public void Dispose()
-            => Dispose(DisposePendingSavGz: false)
+            => Dispose(DisposePending: false)
             ;
+
+        #region BaseBonesSource
+
+        public override bool HasInfo(string BonesID)
+            => ListBonesIDs().Contains(BonesID)
+            ;
+
+        public override bool HasSavGz(string BonesID)
+            => ListBonesIDs().Contains(BonesID)
+            ;
+
+        public override bool IsBonesBlocked(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()} blocking {nameof(SaveBonesInfo)} is not currently supported.", new NotImplementedException());
+            return false;
+        }
+
+        public override async Task<SaveBonesInfo> LoadInfoAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()} loading {nameof(SaveBonesInfo)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => (SaveBonesInfo)null);
+        }
+
+        public override async Task<IEnumerable<SaveBonesInfo>> LoadInfosAsync(IEnumerable<string> BonesIDs = null)
+            => (await GetEnumerableFromRouteAsync<SaveBonesJSON>(
+                Route: Routes.BonesInfosByIDs,
+                ProcBody: async delegate (StreamWriter sw)
+                {
+                    if (BonesIDs != null)
+                        await sw.WriteJsonObjectAsync(new { BonesIDs = BonesIDs.ToArray() });
+                },
+                ProcEach: sbj => sbj.MarkAsOnline(this),
+                Parameters: new RouteParam[1]
+                {
+                    new(nameof(UserID), UserID),
+                })
+                ).Select(sbj => SaveBonesJSON.CreateInfoFrom(SaveBonesJSON: sbj, BonesSource: this))
+            ;
+
+        public override async Task<BonesSpec> LoadSpecAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()} loading {nameof(BonesSpec)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => (BonesSpec)null);
+        }
+
+        public override async Task<ModRecordCollection> LoadModConfigAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()} loading {nameof(ModRecordCollection)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => (ModRecordCollection)null);
+        }
+
+        public override async Task<BonesStats> LoadStatsAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()} loading {nameof(BonesStats)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => (BonesStats)null);
+        }
+
+        public async Task<byte[]> GetBonesSavGzAsync(string BonesID)
+        {
+            if (!IsRunning)
+                return null;
+
+            if (BonesID.IsNullOrEmpty())
+                return null;
+
+            if (!await CheckRegisterUserAsync())
+                return null;
+
+            string uRI = null;
+            HttpWebRequest httpReq = null;
+            var route = Routes.LoadBones;
+            try
+            {
+                httpReq = CreateWebRequest(route, out uRI, new RouteParam[] { new(nameof(BonesID), BonesID) });
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed("creating", nameof(HttpWebRequest), uRI, x);
+                return null;
+            }
+
+            if (httpReq == null)
+                return null;
+
+            try
+            {
+                var httpRes = (HttpWebResponse)await httpReq.GetResponseAsync();
+                TryUpdateJwtToken(httpRes);
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                {
+                    try
+                    {
+                        if ((await streamReader.ReadAllBytesAsync()) is byte[] rawBuffer)
+                        {
+                            string sizeString = Buffer.ByteLength(rawBuffer).Things(typeof(byte).Name);
+                            Utils.Log($"{nameof(GetBonesSavGzAsync)} got a {typeof(byte[]).ToStringWithGenerics()} from {ToString()} ({sizeString})" +
+                                $" - {httpRes.StatusCode.DisplayString()}");
+                            return rawBuffer;
+                        }
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
+                            $" - {httpRes.StatusCode.DisplayString()}", x);
+                        return null;
+                    }
+                }
+                Utils.Warn($"{nameof(GetBonesSavGzAsync)} failed to get a Bones SavGz from {ToString()}" +
+                    $" - {httpRes.StatusCode.DisplayString()}");
+            }
+            catch (WebException x)
+            {
+                if (!HandleTimeoutWebException(x, uRI, GetTimeout()))
+                    throw x;
+
+                if (x.Is403Exception())
+                {
+                    TryUpdateJwtToken(null);
+                    throw x;
+                }
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed("receiving", nameof(HttpWebResponse), uRI, x);
+            }
+            return null;
+        }
+
+        public override async Task<BonesSavGz> LoadSavGzAsync(string BonesID)
+        {
+            if (await GetBonesSavGzAsync(BonesID) is byte[] savGz)
+                return new(BonesID, savGz);
+
+            return null;
+        }
+
+        public override async Task<ActionResult> IncrementStatAsync(string BonesID, string StatName)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()}.{nameof(IncrementStat)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => ActionResult.NewFailed().SetMessage("Unsupported"));
+        }
+
+        public HttpWebRequest CreatePostBonesInfoRequest(
+            PendingUpload PendingUpload,
+            out string URI,
+            bool Silent = false
+            )
+        {
+            URI = null;
+            HttpWebRequest httpReq = null;
+            var route = Routes.NewBonesInfo;
+            try
+            {
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    Proc: async sw => await sw.WriteJsonObjectAsync(PendingUpload.BonesRecord),
+                    URI: out URI);
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), URI, x);
+                return null;
+            }
+
+            if (httpReq == null)
+            {
+                if (!Silent)
+                    route.WarnFailed($"creating", nameof(HttpWebRequest), URI);
+            }
+            return httpReq;
+        }
+
+        public async Task<HttpWebResponse> GetPostBonesInfoResponseAsync(
+            HttpWebRequest HttpReq,
+            string URI
+            )
+        {
+            HttpWebResponse httpRes = null;
+            string warnMessage = null;
+            try
+            {
+                httpRes = (HttpWebResponse)await HttpReq.GetResponseAsync();
+                TryUpdateJwtToken(httpRes);
+            }
+            catch (WebException x)
+            {
+                if (!HandleTimeoutWebException(x, URI, GetTimeout()))
+                {
+                    warnMessage = $"; Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during resposne from {ToString()}";
+                    throw x;
+                }
+                if (x.Is403Exception())
+                {
+                    warnMessage = $"; Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during resposne from {ToString()}";
+                    TryUpdateJwtToken(null);
+                    throw x;
+                }
+            }
+            catch (Exception x)
+            {
+                warnMessage ??= $"; Caught {x.GetType().ToStringWithGenerics()} during resposne from {ToString()}";
+                Routes.NewBonesInfo.ErrorFailed($"receiving", nameof(HttpWebResponse), URI, x, warnMessage);
+            }
+            return httpRes;
+        }
+
+        public HttpWebRequest CreatePutBonesSavGzRequest(
+            PendingUpload PendingUpload,
+            out string URI,
+            bool Silent = false
+            )
+        {
+            URI = null;
+            HttpWebRequest httpReq = null;
+            var route = Routes.NewBonesSavGz;
+            try
+            {
+                httpReq = CreateWebRequest(
+                    Route: route,
+                    Proc: async delegate (StreamWriter streamWriter)
+                    {
+                        using (var savGzStream = new System.IO.MemoryStream(PendingUpload.SavGz))
+                        {
+                            await savGzStream.CopyToAsync(streamWriter.BaseStream);
+                        }
+                    },
+                    URI: out URI,
+                    RouteParams: new RouteParam[]
+                    {
+                        new(nameof(PendingUpload.BonesID), PendingUpload.BonesID)
+                    });
+
+                PendingUpload.AppendAuthHeader(httpReq);
+            }
+            catch (Exception x)
+            {
+                route.ErrorFailed($"creating", nameof(HttpWebRequest), URI, x);
+                return null;
+            }
+
+            if (httpReq == null)
+            {
+                if (!Silent)
+                    route.WarnFailed($"creating", nameof(HttpWebRequest), URI);
+            }
+            return httpReq;
+        }
+
+        public async Task<HttpWebResponse> GetPutBonesSavGzResponseAsync(
+            HttpWebRequest HttpReq,
+            string URI,
+            bool Rethrow = false
+            )
+        {
+            HttpWebResponse httpRes = null;
+            string warnMessage = null;
+            try
+            {
+                httpRes = (HttpWebResponse)await HttpReq.GetResponseAsync();
+                TryUpdateJwtToken(httpRes);
+            }
+            catch (WebException x)
+            {
+                if (!HandleTimeoutWebException(x, URI, GetTimeout()))
+                {
+                    warnMessage = $"; Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}";
+                    throw x;
+                }
+                if (x.Is403Exception())
+                {
+                    warnMessage = $"; Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during resposne from {ToString()}";
+                    TryUpdateJwtToken(null);
+                    throw x;
+                }
+            }
+            catch (Exception x)
+            {
+                warnMessage ??= $"; Caught {x.GetType().ToStringWithGenerics()} during response from {ToString()}";
+                Routes.NewBonesSavGz.ErrorFailed($"receiving", nameof(HttpWebResponse), URI, x, warnMessage);
+                if (Rethrow)
+                    throw x;
+            }
+            return httpRes;
+        }
+
+        public override async Task<ActionResult> SaveInfoAsync(SaveBonesJSON BonesJSON)
+            => await SaveBonesAsync(BonesJSON, LoadSavGz(BonesJSON.BonesID))
+            ;
+
+        public override async Task<ActionResult> SaveSavGzAsync(BonesSavGz BonesSavGz)
+            => await SaveBonesAsync(LoadInfo(BonesSavGz.BonesID).JSON, BonesSavGz)
+            ;
+
+        public virtual bool SaveBones(SaveBonesJSON BonesJSON, BonesSavGz BonesSavGz, out ResponseInfo ResponseInfo)
+        {
+            ResponseInfo = new ResponseInfo
+            {
+                Host = this,
+                StatusCode = HttpStatusCode.InternalServerError,
+                Success = false,
+                Message = "Host is not running",
+            };
+            if (!IsRunning)
+                return false;
+
+            string bonesID = BonesJSON.BonesID;
+            if (PendingUploads.TryGetValue(bonesID, out var pendingUpload))
+            {
+                if (pendingUpload.BonesRecord.SaveBonesJSON.SaveTimeValue >= BonesJSON.SaveTimeValue)
+                {
+                    ResponseInfo.StatusCode = HttpStatusCode.NotModified;
+                    ResponseInfo.Message = "Host already has newer bones with this ID";
+                    return true;
+                }
+
+                pendingUpload.ForceDispose = true;
+                pendingUpload.Dispose();
+            }
+
+            PendingUploads[bonesID] = new PendingUpload
+            {
+                ParentHost = this,
+                BonesID = bonesID,
+                BonesRecord = BonesJSON.GetBonesRecord(),
+                BonesSavGz = BonesSavGz.Clone(),
+            };
+
+            ResponseInfo = PendingUploads[bonesID].Attempt();
+            return true;
+        }
+
+        public override async Task<ActionResult> SaveBonesAsync(SaveBonesJSON BonesJSON, BonesSavGz BonesSavGz)
+            => await Task.Run(() =>
+            {
+                var saved = SaveBones(BonesJSON, BonesSavGz, out var responseInfo);
+                var result = ActionResult.NewFailed();
+                if (PendingUploads.ContainsKey(BonesJSON.ID))
+                    return result.SetPending()
+                        .SetMessage($"Bones upload pending, {responseInfo.Message}");
+
+                if (saved)
+                    return result.SetSuccess()
+                        .SetMessage("Bones uploaded");
+
+                return result
+                    .SetMessage($"{responseInfo.StatusCode.DisplayString()} - {responseInfo.Message}");
+            })
+            ;
+
+        public override async Task<ActionResult> BlockBonesAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()}.{nameof(BlockBones)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => ActionResult.NewFailed().SetMessage("Unsupported"));
+        }
+
+        public override async Task<ActionResult> UnblockBonesAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()}.{nameof(UnblockBones)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => ActionResult.NewFailed().SetMessage("Unsupported"));
+        }
+
+        public override async Task<ActionResult> DeleteInfoAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()}.{nameof(DeleteInfo)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => ActionResult.NewFailed().SetMessage("Unsupported"));
+        }
+
+        public override async Task<ActionResult> DeleteSavGzAsync(string BonesID)
+        {
+            Utils.WarnOnce($"{GetType().ToStringWithGenerics()}.{nameof(DeleteSavGz)} is not currently supported.", new NotImplementedException());
+            return await Task.Run(() => ActionResult.NewFailed().SetMessage("Unsupported"));
+        }
+
+        private async Task<IEnumerable<T>> GetEnumerableFromWebRequestAsync<T>(
+            Route Route,
+            HttpWebRequest HttpReq,
+            string URI,
+            Func<T, T> ProcEach = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+        {
+            HttpStatusCode statusCode = default;
+            string result = null;
+            if (!await TryGetResultAndStatusAsync(
+                HttpReq: HttpReq,
+                Route: Route,
+                URI: URI,
+                StatusCodeCallback: sc => statusCode = sc,
+                ResultCallback: r => result = r))
+                return Enumerable.Empty<T>();
+
+            // bool noContent = false;
+            if (statusCode == HttpStatusCode.OK)
+            {
+                if (JObject.Parse(result) is JObject jObject)
+                {
+                    try
+                    {
+                        var output = jObject.ToObject<T[]>().IteratorSafe();
+
+                        // Utils.Log($"{4.Indent()}Have a {nameof(result)}");
+                        if (ProcEach == null)
+                            return output;
+
+                        return output.Select(ProcEach);
+                    }
+                    catch (Exception x)
+                    {
+                        Utils.Error($"{CallingMethod} failed to deserialize {nameof(jObject)} to {typeof(T[])}", x);
+                    }
+                }
+                else
+                {
+                    Utils.Warn($"{CallingMethod} received unexpected data from {ToString()}" +
+                        $" - {statusCode.DisplayString()} - {result}");
+                }
+            }
+            else
+            if (statusCode == HttpStatusCode.NoContent)
+            {
+                // Utils.Log($"{4.Indent()}No Content");
+                // noContent = true;
+            }
+            else
+            {
+                Utils.Warn($"{CallingMethod} received unexpected status code from {ToString()}" +
+                    $" - {statusCode.DisplayString()}");
+            }
+            /*if (!noContent)
+                Utils.Log($"{4.Indent()}Failed");*/
+            return Enumerable.Empty<T>();
+        }
+
+        private async Task<IEnumerable<T>> GetEnumerableFromRouteAsync<T>(
+            Route Route,
+            Action<StreamWriter> ProcBody = null,
+            Func<T, T> ProcEach = null,
+            RouteParam[] Parameters = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+        {
+            // Utils.Log($"{3.Indent()}{nameof(GetEnumerableFromRouteAsync)}<{typeof(T).Name}>");
+            if (!IsRunning)
+                return Enumerable.Empty<T>();
+
+            if (!await CheckRegisterUserAsync())
+                return Enumerable.Empty<T>();
+
+            string uRI = null;
+            HttpWebRequest httpReq = null;
+            try
+            {
+                // Utils.Log($"{3.Indent()}{nameof(CreateWebRequest)}");
+                httpReq = CreateWebRequest(
+                    Route: Route,
+                    Proc: ProcBody,
+                    URI: out uRI,
+                    RouteParams: Parameters);
+            }
+            catch (Exception x)
+            {
+                Route.ErrorFailed("creating", nameof(HttpWebRequest), uRI, x);
+                return Enumerable.Empty<T>();
+            }
+
+            if (httpReq == null)
+                return Enumerable.Empty<T>();
+
+            try
+            {
+                return await GetEnumerableFromWebRequestAsync(
+                    Route: Route,
+                    HttpReq: httpReq,
+                    URI: uRI,
+                    ProcEach: ProcEach,
+                    CallingMethod: CallingMethod);
+            }
+            catch (Exception x)
+            {
+                Utils.Error($"{nameof(GetEnumerableFromRouteAsync)} failed calling {nameof(GetEnumerableFromWebRequestAsync)}", x);
+            }
+            return Enumerable.Empty<T>();
+        }
+
+        private async Task<IEnumerable<string>> GetBonesIDsAsync()
+            => await GetEnumerableFromRouteAsync<string>(Routes.BonesIDs)
+            ;
+
+        public override async Task<IEnumerable<string>> ListBonesIDsAsync()
+        {
+            BonesIDCache ??= new();
+            if (BonesIDCache.IsNullOrEmpty())
+            {
+                try
+                {
+                    BonesIDCache.AddRange(await GetBonesIDsAsync());
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"{nameof(ListBonesIDs)} failed to {nameof(GetBonesIDsAsync)}", x);
+                    return Enumerable.Empty<string>();
+                }
+            }
+            return BonesIDCache;
+        }
+
+        private async Task<IEnumerable<SaveBonesJSON>> GetSaveBonesJSONsAsync()
+        {
+            ClearBonesIDCache(ref BonesIDCache);
+            var bonesJSONs = await GetEnumerableFromRouteAsync<SaveBonesJSON>(
+                Route: Routes.BonesInfos,
+                Parameters: new RouteParam[1]
+                {
+                    new(nameof(UserID), UserID),
+                });
+
+            BonesIDCache.AddRange(bonesJSONs.Select(b => b.ID).Distinct());
+            return bonesJSONs;
+        }
+
+        public async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfosAsync()
+        {
+            var saveBonesInfos = new List<SaveBonesInfo>();
+            // Utils.Log($"{2.Indent()}{nameof(GetSaveBonesInfosAsync)}");
+            var bonesJSONs = (await GetSaveBonesJSONsAsync()).IteratorSafe();
+            foreach (var bonesJSON in bonesJSONs)
+            {
+                if (saveBonesInfos.Any(bonesInfo => bonesInfo.ID == bonesJSON.ID))
+                    continue;
+
+                saveBonesInfos.Add(SaveBonesJSON.CreateInfoFrom(bonesJSON, this));
+            }
+
+            return saveBonesInfos;
+        }
+
+        public override async Task<IEnumerable<SaveBonesInfo>> ListBonesInfosAsync()
+            => await GetSaveBonesInfosAsync()
+            ;
+
+        private async Task<IEnumerable<BonesSpec>> GetBonesSpecsAsync()
+            => await GetEnumerableFromRouteAsync<BonesSpec>(Routes.BonesSpecs)
+            ;
+
+        public override async Task<IEnumerable<BonesSpec>> ListBonesSpecsAsync()
+            => await GetBonesSpecsAsync()
+            ;
+
+        private async Task<IEnumerable<ModRecordCollection>> GetModConfigsAsync()
+            => await GetEnumerableFromRouteAsync<ModRecordCollection>(Routes.BonesModConfigs)
+            ;
+
+        public override async Task<IEnumerable<ModRecordCollection>> ListModConfigsAsync()
+            => await GetModConfigsAsync()
+            ;
+
+        public override async Task<IEnumerable<string>> GetBonesIDsMatchingSpecAsync(BonesSpec PlayerSpec)
+            => await GetEnumerableFromRouteAsync<string>(
+                Route: Routes.BonesIDsMatchingSpec,
+                ProcBody: async sw => await sw.WriteJsonObjectAsync(new { PlayerSpec }))
+            ;
+
+        public override async Task<IEnumerable<ModRecordCollection>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec)
+            => await GetEnumerableFromRouteAsync<ModRecordCollection>(
+                Route: Routes.BonesModConfigsMatchingSpec,
+                ProcBody: async sw => await sw.WriteJsonObjectAsync(new { PlayerSpec }))
+            ;
+
+        #endregion
 
         public static implicit operator string(Host Host)
             => Host.ToString()

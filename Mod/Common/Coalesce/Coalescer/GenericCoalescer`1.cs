@@ -16,6 +16,10 @@ namespace UD_Bones_Folder.Mod
             : base(CoalesceMethod.TypeDefined)
         { }
 
+        public GenericCoalescer(CoalesceMethod Method)
+            : base(Method)
+        { }
+
         private NotSupportedException UseTypeDefined_NotSupportedException()
             => new (
                 message: $"{CallChain(typeof(ICoalescible<T>).ToStringWithGenerics(), nameof(ICoalescible<T>.Coalesce))} " +

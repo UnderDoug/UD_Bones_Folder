@@ -65,7 +65,7 @@ namespace UD_Bones_Folder.Mod.UI
             DeleteButton.RequireContext<NavigationContext>().parentContext = Context.context;
 
             var bonesInfo = bonesData.BonesInfo;
-            var bonesJSON = bonesInfo?.GetBonesJSON();
+            var bonesJSON = bonesInfo?.JSON;
             if (Instantiate(OsseousAshManagementRow.imageTinyFrame) is not ImageTinyFrame imageTinyFrame)
             {
                 Invalid = true;

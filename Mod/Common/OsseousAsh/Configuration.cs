@@ -8,6 +8,8 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Platform.IO;
 
+using Steamworks;
+
 using ConsoleLib.Console;
 
 using Qud.UI;
@@ -43,7 +45,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         private static Configuration _Instance;
         public static Configuration Instance => _Instance ??= ReadOrNewAsync()?.WaitResult();
 
-        public static string DefaultOsseousAshHandle => "{{K|A Mysterious Stranger}}";
+        public static string UserIDString => (Instance?.ID)?.ToString() ?? "MISSING_USER";
+
+        public static string DefaultOsseousAshHandle => Steamworks.SteamFriends.GetPersonaName() ?? "{{K|A Mysterious Stranger}}";
 
         public const string OSSEOUS_ASH_UPLOADS = "{{yellow|uploads}}";
         public const string OSSEOUS_ASH_DOWNLOADS = "{{red|downloads}}";
@@ -143,9 +147,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             bool hasFile = false;
             foreach (var osseousAshLocationData in GetOsseousAshFileLocationData())
             {
-                if (osseousAshLocationData.Type >= FileLocationData.LocationType.Mod)
-                    continue;
-
                 try
                 {
                     currentLocationData = osseousAshLocationData;
@@ -182,32 +183,18 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static IEnumerable<FileLocationData> GetOsseousAshFileLocationData(bool Ensure = false)
         {
-            if (Ensure)
-            {
-                if (!SyncedFileLocation.EnsureExists().IsNullOrEmpty())
-                    yield return SyncedFileLocation;
-
-                if (!LocalFileLocation.EnsureExists().IsNullOrEmpty())
-                    yield return LocalFileLocation;
-            }
-            else
-            {
+            if (!Ensure
+                || SyncedFileLocation.TryEnsureExists())
                 yield return SyncedFileLocation;
+
+            if (!Ensure
+                || LocalFileLocation.TryEnsureExists())
                 yield return LocalFileLocation;
-            }
         }
 
         public static async Task<Configuration> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
             => await FileLocationData?.ReadFromFileAsync<Configuration>(FileName)
             ;
-
-        public static async Task<Configuration> ReadAsync()
-        {
-            if (TryFindBestOsseousAshPath(out var fileLocationData, ConfigFileName))
-                return await fileLocationData.ReadFromFileAsync<Configuration>(ConfigFileName);
-
-            return null;
-        }
 
         public static async Task<Configuration> ReadOrNewAsync()
         {
@@ -380,29 +367,13 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
-        public static IEnumerable<Host> AllHosts(Predicate<Host> Where)
-        {
-            foreach (var hostsCollection in ServerUtils.Hosts.IteratorSafe())
-                foreach (var host in hostsCollection.IteratorSafe())
-                    if (Where?.Invoke(host) is not false)
-                        yield return host;
-        }
-
-        public static IEnumerable<Host> AllHosts()
-            => AllHosts(null).IteratorSafe()
-            ;
-
-        public static IEnumerable<Host> AllEnabledHosts()
-            => AllHosts(h => h.Enabled).IteratorSafe()
-            ;
-
         public static async Task PerformAskAsync()
         {
             EnsureConfiguration();
-            await AskOnStartup();
+            await AskOnStartupAsync();
         }
 
-        public static async Task AskOnStartup()
+        public static async Task AskOnStartupAsync()
         {
             if (GameManager.AwakeComplete
                 || MainMenuBones.AllowPromptAboutLinux)

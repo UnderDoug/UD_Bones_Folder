@@ -20,13 +20,17 @@ using UnityEngine.Events;
 
 using XRL;
 using XRL.CharacterBuilds;
+using XRL.Collections;
 using XRL.UI;
 using XRL.UI.Framework;
 using XRL.Wish;
-
 using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
+using static UD_Bones_Folder.Mod.OsseousAsh.HostSet;
+using Debug = UD_Bones_Folder.Mod.Logging.Debug;
+
 using KeyCode = UnityEngine.KeyCode;
+using UD_Bones_Folder.Mod.Logging;
 
 namespace UD_Bones_Folder.Mod.UI
 {
@@ -79,7 +83,6 @@ namespace UD_Bones_Folder.Mod.UI
                 }
                 MainMenuBonesOptions.Enabled = BonesManager.HasSaveBones();
             }
-
         }
 
         [HarmonyPatch(
@@ -104,7 +107,7 @@ namespace UD_Bones_Folder.Mod.UI
                         if (Options.EnableOsseousAshDownloads)
                         {
                             Loading.SetLoadingStatus($"Loading Bones...");
-                            foreach (var host in Configuration.AllHosts(h => h.IsOnCooldown))
+                            foreach (var host in ServerUtils.AllHosts(h => h.IsOnCooldown))
                             {
                                 string hostName = host.GetHostNameWithProtocol();
                                 try
@@ -164,16 +167,23 @@ namespace UD_Bones_Folder.Mod.UI
                 HasSeenMainMenu = true;
 
                 // NavigationController.instance.SuspendContextWhile(PerforMainMenuFirstShowAsync).Wait();
-                PerforMainMenuFirstShowAsync();
+                PerformMainMenuFirstShowAsync();
 
                 // UIManager.showWindow("MainMenu");
                 // MainMenu.instance.Reshow();
             }
         }
 
-        private static async void PerforMainMenuFirstShowAsync()
+        private static async void PerformMainMenuFirstShowAsync()
         {
-            Utils.Log($"PerformMainMenuFirstShowAsync - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg($"{nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}", GameManager.AwakeComplete)
+                });
+
             bool needReshow = false;
             try
             {
@@ -198,7 +208,7 @@ namespace UD_Bones_Folder.Mod.UI
                     try
                     {
                         if (ServerUtils.Hosts.FirstHostMatching(h => h.Enabled) is Host firstEnabledHost)
-                            firstEnabledHost.GetServerStatus(RethrowForLinuxPrompt: true);
+                            await firstEnabledHost.GetServerStatusAsync(RethrowForLinuxPrompt: true);
                     }
                     catch (Exception x)
                     {
@@ -234,6 +244,30 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                     }
                 }
+
+                /*Debug.Log($"Start Host Sessions:", Indent: indent[1]);
+                using var hostLocationPairs = ScopeDisposedList<HostLocationPair>.GetFromPoolFilledWith(AllHostsWithLocation(p => p.Host.Enabled));
+                foreach ((var host, var location) in hostLocationPairs)
+                {
+                    var hostSet = ServerUtils.Hosts.FirstOrDefault(hs => hs.LocationData?.SameAs(location) is true);
+
+                    if (host.JwtToken.IsNullOrEmpty()
+                        && await host.GetSessionAsync(PushView: true) is string sessionToken)
+                        host.JwtToken = sessionToken;
+
+                    if (!host.HasSession
+                        || !await host.CheckRegisterUserAsync(TryGetSession: false))
+                    {
+                        if (host.Enabled
+                            && await Host.FlipEnabledAsync(host))
+                        {
+                            Debug.Log($"{host} disabled", Indent: indent[2]);
+                            hostSet.Write();
+                            continue;
+                        }
+                    }
+                    Debug.Log($"{host} established session", Indent: indent[2]);
+                }*/
             }
             finally
             {
@@ -244,7 +278,6 @@ namespace UD_Bones_Folder.Mod.UI
                     MainMenu.instance.Reshow();
                 }
             }
-
         }
 
         [HarmonyPatch(

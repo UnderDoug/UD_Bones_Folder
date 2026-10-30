@@ -8,6 +8,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
+using MemoryStream = System.IO.MemoryStream;
+using IOException = System.IO.IOException;
+using File = Platform.IO.File;
+
 using Cysharp.Text;
 
 using Platform;
@@ -50,6 +54,8 @@ using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.OsseousAsh;
 
 using static UD_Bones_Folder.Mod.Const;
+using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
+using XRL.World.Text;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -68,14 +74,6 @@ namespace UD_Bones_Folder.Mod
 
         public static string BonesFileName => "LunarRegent";
 
-        public static string BonesSyncPath => DataManager.SyncedPath("Bones");
-
-        public static string BonesSavePath => DataManager.SavePath("Bones");
-
-        public static FileLocationData BonesSaveSyncInfo => FileLocationData.NewSynced(BonesSyncPath);
-
-        public static FileLocationData BonesSavePathInfo => FileLocationData.NewLocal(BonesSavePath);
-
         public static List<string> PartsLunarRegentsShouldNotHave = new List<string>
         {
             nameof(OpeningStory),
@@ -84,18 +82,18 @@ namespace UD_Bones_Folder.Mod
         #endregion
         #region Static Caches
 
+        private static bool ShowErrorPopups
+        {
+            get => XRL.UI.Options.ShowErrorPopups;
+            set => XRL.UI.Options.ShowErrorPopups = value;
+        }
+
         private static bool _WishContext;
         public static bool WishContext
         {
             get => _WishContext;
             protected set => _WishContext = value;
         }
-
-        public static FileLocationData[] BonesPaths => new FileLocationData[]
-        {
-            BonesSaveSyncInfo,
-            BonesSavePathInfo,
-        };
 
         private static BonesManager _System;
         public static BonesManager System
@@ -108,9 +106,6 @@ namespace UD_Bones_Folder.Mod
             }
             private set => _System = value;
         }
-
-        private static IEnumerable<string> _RunningMods = null;
-        public static IEnumerable<string> RunningMods => _RunningMods ??= ModManager.GetRunningMods().ToList();
 
         [GameBasedStaticCache(CreateInstance = false)]
         private static bool? _HasSaveBones;
@@ -146,9 +141,6 @@ namespace UD_Bones_Folder.Mod
         public bool Initialized;
 
         [NonSerialized]
-        public FileLocationData BonesDirectory;
-
-        [NonSerialized]
         public Task SaveTask;
 
         public int ChancePermyriadForBones => Options.GetPermyriadChanceForBones();
@@ -180,6 +172,9 @@ namespace UD_Bones_Folder.Mod
                 return _StartingLocation;
             }
         }
+
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        internal static List<BonesSourcesDelegateEntry> BonesSourcesDelegates;
 
         public BonesManager()
         { }
@@ -227,6 +222,51 @@ namespace UD_Bones_Folder.Mod
         }
 
         [ModSensitiveCacheInit]
+        private static void CacheBonesSourceDelegates()
+        {
+            BonesSourcesDelegates = new();
+
+            var delegatesByPriority = new Dictionary<int, ScopeDisposedList<BonesSourcesDelegateEntry>>();
+            foreach (var delegateMethod in ModManager.GetMethodsWithAttribute(typeof(BonesSourcesDelegateAttribute), typeof(HasReturnsBonesSourcesDelegateAttribute)))
+            {
+                var attribute = delegateMethod.GetCustomAttribute<BonesSourcesDelegateAttribute>();
+
+                var type = attribute.Type;
+                var priority = attribute.Priority;
+
+                var modInfo = ModManager.GetMod(delegateMethod?.DeclaringType?.Assembly)
+                    ?? Utils.ThisMod;
+
+                if (BonesSourcesDelegateEntry.TryCreate(
+                    Type: type,
+                    Priority: priority,
+                    DelegateMethod: delegateMethod,
+                    DelegateEntry: out BonesSourcesDelegateEntry delegateEntry,
+                    ModInfo: modInfo))
+                {
+                    if (!delegatesByPriority.TryGetValue(delegateEntry.Priority, out ScopeDisposedList<BonesSourcesDelegateEntry> delegateList))
+                    {
+                        delegateList = ScopeDisposedList<BonesSourcesDelegateEntry>.GetFromPool();
+                        delegatesByPriority[delegateEntry.Priority] = delegateList;
+                    }
+                    delegateList.Add(delegateEntry);
+                }
+            }
+
+            using (var delegateEntryLists = ScopeDisposedList<ScopeDisposedList<BonesSourcesDelegateEntry>>.GetFromPool())
+            {
+                delegateEntryLists.AddRange(delegatesByPriority.SortBy((x, y) => x.Key.CompareTo(y.Key)).Select(kvp => kvp.Value));
+
+                foreach (var delegateEntryList in delegateEntryLists)
+                {
+                    foreach (var delegateEntry in delegateEntryList)
+                        BonesSourcesDelegates.Add(delegateEntry);
+                    delegateEntryList.Dispose();
+                }
+            }
+        }
+
+        [ModSensitiveCacheInit]
         public static void AddAchievement()
         {
             if (AchievementManager.State?.Stats != null)
@@ -263,67 +303,55 @@ namespace UD_Bones_Folder.Mod
                 base.Read(Reader);
             }
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(MissingBlueprintReplacements)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(MissingBlueprintReplacements)})");
             MissingBlueprintReplacements = Reader.ReadStringCompositeDictionary<ReplacementEntry>();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(TileReplacementsByMissingBlueprint)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(TileReplacementsByMissingBlueprint)})");
             TileReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(BlueprintReplacementsByMissingBlueprint)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(BlueprintReplacementsByMissingBlueprint)})");
             BlueprintReplacementsByMissingBlueprint = Reader.ReadOptimizedStringDictionary();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ZoneBones)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ZoneBones)})");
             ZoneBones = Reader.ReadStringCompositeDictionary<ZoneBonesAllocation>();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Alerted)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Alerted)})");
             Alerted = Reader.ReadDictionary<string, bool>();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Encountered)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(Encountered)})");
             Encountered = Reader.ReadList<string>();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(FailedToLoadBones)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(FailedToLoadBones)})");
             FailedToLoadBones = Reader.ReadList<string>();
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ImmutableLocations)})");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)}({nameof(ImmutableLocations)})");
             ImmutableLocations = Reader.ReadComposite<LocationSet>();
             if (readVersion < AddedFieldReflectionSerialization)
             {
-                Utils.Log($"  {nameof(ImmutableLocations)}.{nameof(ImmutableLocations.InvertLocations)}()");
+                // Utils.Log($"  {nameof(ImmutableLocations)}.{nameof(ImmutableLocations.InvertLocations)}()");
                 ImmutableLocations.InvertLocations();
             }
 
-            Utils.Log($"{nameof(BonesManager)}.{nameof(Read)} - Finished!");
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(Read)} - Finished!");
         }
 
         #endregion
 
-        public FileLocationData GetBonesLocationData()
+        public static BonesSources GetBonesSourcesFromPool(Predicate<IBonesSource> Where)
         {
-            if (BonesDirectory is null)
-            {
-                BonesDirectory = FileLocationData.NewSynced(Path.Combine(BonesSyncPath, GameID));
-                try
-                {
-                    BonesDirectory.EnsureExists();
-                }
-                catch (Exception x)
-                {
-                    MetricsManager.LogCallingModError(x);
-                    BonesDirectory = FileLocationData.NewSynced(Path.Combine(BonesSavePath, GameID));
-                }
+            var bonesSources = BonesSources.GetFromPool();
+            foreach (var bonesSourcesDelegate in BonesSourcesDelegates.IteratorSafe())
+                bonesSources.AddDistinctRange(bonesSourcesDelegate.GetBonesSources.Invoke());
 
-                try
-                {
-                    BonesDirectory.EnsureExists();
-                }
-                catch (Exception x)
-                {
-                    MetricsManager.LogCallingModError(x);
-                    return null;
-                }
-            }
-            return BonesDirectory;
+            if (Where != null)
+                bonesSources.RemoveAll(bs => !Where.Invoke(bs));
+
+            return bonesSources;
         }
+
+        public static BonesSources GetBonesSourcesFromPool()
+            => GetBonesSourcesFromPool(null)
+            ;
 
         public static string GetSaveFileName(string FileName = null)
             => !FileName.IsNullOrEmpty()
@@ -337,21 +365,10 @@ namespace UD_Bones_Folder.Mod
             : SaveBonesInfo.Json
             ;
 
-        public static IEnumerable<FileLocationData> GetBonesFileLocationData(bool NonRemoteOnly = false)
-        {
-            foreach (var bonesPath in BonesPaths)
-                yield return bonesPath;
-
-            if (!NonRemoteOnly
-                && Options.EnableOsseousAshDownloads)
-                foreach (var bonesPath in Configuration.GetOsseousAshFileLocationData())
-                    yield return bonesPath;
-        }
-
         public static SaveBonesInfo DummyBonesInfo
             => SaveBonesInfo.DummyBonesInfo(
                 VisibilityMode: BonesManagement.instance?.VisibilityMode ?? BonesManagement.VisibilityModes.All,
-                LocationData: BonesSaveSyncInfo)
+                BonesSource: BonesPile.BonesFolderCache.GetValue(IBonesSource.SourceType.Synced) ?? BonesPile.DummyFolder)
             ;
 
         private Task ReturnSaveTaskNullWithLogMessage(string Message = null)
@@ -432,7 +449,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static async Task<List<ResponseInfo>> UploadBonesFileAsync(
-            SaveBonesJSON SaveBonesJSON,
+            SaveBonesJSON BonesJSON,
             byte[] BonesSavGz
             )
         {
@@ -442,15 +459,15 @@ namespace UD_Bones_Folder.Mod
                 {
                     try
                     {
-                        return await ServerUtils.UploadBonesAsync(SaveBonesJSON.ID, SaveBonesJSON, BonesSavGz);
+                        return await Task.Run<List<ResponseInfo>>(() => ServerUtils.UploadBones(BonesJSON, new(BonesJSON.ID, BonesSavGz)));
                     }
                     catch (Exception x)
                     {
-                        Utils.Error($"{nameof(SaveBonesFileAsync)} failed to upload Bones with BonesID {{{SaveBonesJSON.ID}}}", x);
+                        Utils.Error($"{nameof(UploadBonesFileAsync)} failed to upload Bones with BonesID {{{BonesJSON.ID}}}", x);
                     }
                 }
                 else
-                    Utils.Warn($"{nameof(BonesSavGz)} is null or empty for BonesID {{{SaveBonesJSON.ID}}}. Upload aborted.");
+                    Utils.Warn($"{nameof(BonesSavGz)} is null or empty for BonesID {{{BonesJSON.ID}}}. Upload aborted.");
             }
             return null;
         }
@@ -462,31 +479,57 @@ namespace UD_Bones_Folder.Mod
             => !(await UploadBonesFileAsync(SaveBonesJSON, BonesSavGz)).IsNullOrEmpty()
             ;
 
-        public static async Task<bool> SaveBonesFileAsync(
-            FileLocationData FileLocationData,
-            string SavePath,
-            SaveBonesJSON SaveBonesJSON,
-            byte[] BonesSavGz,
-            bool UploadFile
-            )
+        public static bool SaveBonesFile(SaveBonesJSON BonesJSON, BonesSavGz BonesSavGz)
         {
+            var bonesSources = GetBonesSourcesFromPool(BonesSources.SourceCanHoard);
             try
             {
-                SaveBonesJSON.FileLocationType = FileLocationData.Type;
+                using var sourceResults = ScopeDisposedList<KeyValuePair<IBonesSource, ActionResult>>.GetFromPool();
+                foreach (var bonesSource in bonesSources.GetHoardableSources())
+                    sourceResults.Add(new(bonesSource, bonesSource.SaveBones(BonesJSON, BonesSavGz)));
 
-                await SaveBonesInfo.SafeWriteSaveBonesJSONAsync(FileLocationData, SaveBonesJSON, RequireExisting: false);
-                await File.WriteAllBytesAsync(SavePath, BonesSavGz);
-                Utils.Info($"Successfully saved {Path.GetFileName(SavePath)} ({BonesSavGz.FormatBytes()}) to {FileLocationData.TaggedDisplayName().Strip()}");
+                bool anySuccess = sourceResults.Any(kvp => (bool)kvp.Value);
+                bool allFullSuccess = sourceResults.All(kvp => kvp.Value.Type >= ActionResult.ResultType.Pending);
+
+                if (!anySuccess)
+                    Utils.Error($"Failed to save Bones with BonesID {{{BonesJSON.ID}}}:");
+                else
+                {
+                    if (!allFullSuccess)
+                        Utils.Warn($"Successfully saved Bones with BonesID {{{BonesJSON.ID}}} to some bones sources:");
+                    else
+                        Utils.Info($"Successfully saved Bones with BonesID {{{BonesJSON.ID}}} to all bones sources:");
+                }
+
+                sourceResults.Loggregate(
+                    Proc: kvp => $"{kvp.Key.DisplayName.Strip()} => {kvp.Value}",
+                    Empty: $"no bones sources",
+                    PostProc: s => $"{1.Indent()}: {s}");
+
+                MemoryHelper.GCCollect();
+                foreach (var bonesSource in bonesSources.GetHoardableSources())
+                {
+                    if (bonesSource is BonesFolder folderSource)
+                    {
+                        try
+                        {
+                            CheckBonesSave(folderSource.GetFullSavGzFilePathFor(BonesJSON.ID));
+                        }
+                        catch (Exception x)
+                        {
+                            BonesHoardError(The.Game.GameID, bonesSource.InEnumerable(), x, true);
+                            return false;
+                        }
+                    }
+                }
+
+                return anySuccess;
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(SaveBonesFileAsync)} failed to save Bones with BonesID {{{SaveBonesJSON.ID}}}", x);
+                BonesHoardError(The.Game.GameID, bonesSources, x, true);
+                return false;
             }
-
-            if (UploadFile)
-                await TryUploadBonesFileAsync(SaveBonesJSON, BonesSavGz);
-
-            return File.Exists(SavePath);
         }
 
         public Task HoardBones(
@@ -519,9 +562,8 @@ namespace UD_Bones_Folder.Mod
 
                 PrepareZoneObjectsForNextRun(currentZone, GameID, LunarRegent);
 
-                var fileLocationData = GetBonesLocationData();
                 string saveFileName = GetSaveFileName();
-                var bonesFilePath = fileLocationData.WithFileName(saveFileName);
+                var bonesSources = GetBonesSourcesFromPool(BonesSources.SourceCanHoard);
                 try
                 {
                     if (game.WallTime != null)
@@ -565,50 +607,30 @@ namespace UD_Bones_Folder.Mod
                     writer.FinalizeWrite();
                     pseudoZone.UnprepForFinalizeWrite();
 
-                    bool restoreBackup = false;
-                    try
+                    using (var memoryStream = new MemoryStream())
                     {
-                        if (File.Exists(bonesFilePath))
+                        using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
                         {
-                            File.Copy(bonesFilePath, $"{bonesFilePath}.bak", overwrite: true);
-                            restoreBackup = true;
+                            byte[] buffer = writer.Stream.GetBuffer();
+                            saveBonesJSON.Size = buffer.LongLength;
+                            gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
                         }
-                        using (var memoryStream = new global::System.IO.MemoryStream())
+                        using (var bonesSavGz = new BonesSavGz(The.Game.GameID, memoryStream.ToArray()))
                         {
-                            using (var gZipStream = new GZipStream(memoryStream, CompressionLevel.Fastest, leaveOpen: true))
-                            {
-                                byte[] buffer = writer.Stream.GetBuffer();
-                                gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
-                            }
-
-                            SaveBonesFileAsync(
-                                FileLocationData: fileLocationData,
-                                SavePath: bonesFilePath,
-                                SaveBonesJSON: saveBonesJSON,
-                                BonesSavGz: memoryStream.ToArray(),
-                                UploadFile: true).Wait();
+                            SaveBonesFile(saveBonesJSON, bonesSavGz);
                         }
-                        MemoryHelper.GCCollect();
-                        CheckBonesSave(bonesFilePath);
-                    }
-                    catch (Exception x)
-                    {
-                        BonesHoardError(bonesFilePath, x, restoreBackup);
-                    }
-                    finally
-                    {
-                        SerializationWriter.Release(writer);
                     }
                     return null;
                 }
                 catch (Exception x)
                 {
                     SerializationWriter.Release(writer);
-                    BonesHoardError(bonesFilePath, x);
+                    BonesHoardError(The.Game.GameID, bonesSources, x);
                     return SaveTask = Task.FromException(x);
                 }
                 finally
                 {
+                    SerializationWriter.Release(writer);
                     MemoryHelper.GCCollectMax();
                     _HasSaveBones = null;
                 }
@@ -617,40 +639,47 @@ namespace UD_Bones_Folder.Mod
 
         public static void CheckBonesSave(string Path)
         {
-            using var stream = Platform.IO.File.OpenRead(Path);
+            using var stream = File.OpenRead(Path);
             if (stream.Length < 2)
-                throw new System.IO.IOException("Bones file is less than two bytes.");
+                throw new IOException("Bones file is less than two bytes.");
 
             Span<byte> buffer = stackalloc byte[2];
             stream.Read(buffer);
             if (buffer[0] != 31
                 || buffer[1] != 139)
-                throw new System.IO.IOException("Bones file is missing gzip header.");
+                throw new IOException("Bones file is missing gzip header.");
         }
 
         public static void BonesHoardError(
-            string Path,
+            string BonesID,
+            IEnumerable<IBonesSource> FailedSources,
             Exception Exception,
             bool RestoreBackup = false
             )
         {
             Utils.Error(nameof(HoardBones), Exception);
-            if (RestoreBackup
-                && File.Exists(Path + ".bak"))
+            if (RestoreBackup)
             {
-                try
+                string bakFileName = $"{BonesFolder.BonesSavGzName}.bak";
+                using var resultStrings = ScopeDisposedList<string>.GetFromPool();
+                foreach (var source in FailedSources)
                 {
-                    File.Copy(Path + ".bak", Path, overwrite: true);
+                    if (source is BonesFolder folderSource)
+                    {
+                        var results = folderSource.RestoreBackUps(BonesID);
+                        string resultString = $"{folderSource.DisplayName.Strip()}";
+                        resultStrings.Add(results.Aggregate(resultString, (a, n) => Utils.NewLineDelimitedAggregator(a, $"{NBSP.ThisManyTimes(2)}: {n}".Strip())));
+                    }
                 }
-                catch (Exception x)
-                {
-                    Utils.Warn($"Failed to restore backup bones file. {x}");
-                }
+                // Utils.Log($"Attempted to restore backups for BonesID {{{BonesID}}}");
+                resultStrings.Loggregate(
+                    Proc: s => s,
+                    Empty: $"no sources");
             }
-
             Popup.ShowFailAsync($"There was a fatal exception attempting to save some bones. " +
                 $"{Utils.ThisMod.DisplayTitle} attempted to recover them.\n" +
-                $"You ought to check out your bones folder for recent changes ({Utils.BothBonesLocations})\n\n" +
+                $"You ought to check out your bones folder(s) for recent changes:\n" +
+                $"{FailedSources.Aggregate((string)null, (a, n) => Utils.NewLineDelimitedAggregator(a, $"{NBSP}{NBSP}{n.Type.Tag()} {n.DisplayName}"))}\n\n" +
                 $"It'd be helpful if you could contact {Utils.AuthorOnPlatforms}, " +
                 $"because they'll probably want a copy of the problem bones.");
         }
@@ -694,100 +723,78 @@ namespace UD_Bones_Folder.Mod
             SaveBonesInfo NoBonesPlaceholder = null
             )
         {
-            //Utils.Log($"GetSaveBonesInfoAsync - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
             var saveBonesInfos = new List<SaveBonesInfo>();
 
-            FileLocationData currentLocationData = null;
-            
-            foreach (var bonesFileLocationData in GetBonesFileLocationData(NonRemoteOnly: true))
+            using var bonesSources = GetBonesSourcesFromPool(BonesSources.SourceCanExhume);
+            // Utils.Log($"{nameof(BonesManager)}.{nameof(GetSaveBonesInfoAsync)}, Sources:");
+            using var failedFileSources = ScopeDisposedList<KeyValuePair<IBonesSource, Exception>>.GetFromPool();
+            foreach (var bonesSource in bonesSources)
             {
                 try
                 {
-                    currentLocationData = bonesFileLocationData;
-                    if (!bonesFileLocationData.Exists())
-                        continue;
-
-                    foreach (var bonesFolder in await bonesFileLocationData.EnumerateDirectoriesAsync())
+                    // Utils.Log($"{1.Indent()}{bonesSource.DisplayName.Strip()}");
+                    foreach (var saveBonesInfo in await bonesSource.ListBonesInfosAsync())
                     {
-                        if (await SaveBonesInfo.GetPhysicalSaveBonesInfoAsync(bonesFolder) is SaveBonesInfo savedBonesInfo)
-                        {
-                            try
-                            {
-                                if (!IncludeVersionIncompatible
-                                    && !IsVersionCompatible(savedBonesInfo))
-                                    continue;
-
-                                if (Where?.Invoke(savedBonesInfo) is not false)
-                                {
-                                    if (saveBonesInfos.FirstOrDefault(b => b.ID == savedBonesInfo.ID) is SaveBonesInfo existingInfo
-                                        && existingInfo.FileLocationData != null)
-                                    {
-                                        existingInfo.FileLocationData = bonesFolder;
-                                        continue;
-                                    }
-                                    saveBonesInfos.Add(savedBonesInfo);
-                                }
-                            }
-                            catch (Exception x)
-                            {
-                                Utils.Warn($"Exception adding saved BonesInfo {{{savedBonesInfo.ID}}}, {currentLocationData}: {x}");
-                            }
-                        }
-                    }
-                }
-                catch (Exception x)
-                {
-                    SeriousBonesError(x, currentLocationData);
-                    saveBonesInfos.Clear();
-                }
-            }
-
-            if (Options.EnableOsseousAshDownloads)
-            {
-                try
-                {
-                    foreach (var onlineBonesInfo in ServerUtils.GetBonesInfos().IteratorSafe())
-                    {
-                        currentLocationData = onlineBonesInfo.FileLocationData;
                         try
                         {
+                            // saveBonesInfo.AddSource(bonesSource);
                             if (!IncludeBlocked
-                                && onlineBonesInfo.IsBlocked)
+                                && bonesSource.IsBonesBlocked(saveBonesInfo.ID))
+                            {
+                                // Utils.Log($"{2.Indent()}[blocked] {saveBonesInfo.ID}");
                                 continue;
+                            }
 
                             if (!IncludeVersionIncompatible
-                                && !IsVersionCompatible(onlineBonesInfo))
-                                continue;
-
-                            if (Where?.Invoke(onlineBonesInfo) is not false)
+                                && !IsVersionCompatible(saveBonesInfo))
                             {
-                                if (saveBonesInfos.FirstOrDefault(b => b.ID == onlineBonesInfo.ID) is SaveBonesInfo existingInfo
-                                    && existingInfo.FileLocationData != null
-                                    && !existingInfo.FileLocationData.SameAs(onlineBonesInfo.FileLocationData))
+                                // Utils.Log($"{2.Indent()}[incpVer] {saveBonesInfo.ID}");
+                                continue;
+                            }
+
+                            if (Where?.Invoke(saveBonesInfo) is not false)
+                            {
+                                if (saveBonesInfos.FirstOrDefault(b => b.ID == saveBonesInfo.ID) is SaveBonesInfo existingInfo)
                                 {
-                                    _ = existingInfo.FileLocationData;
-                                    _ = onlineBonesInfo.FileLocationData;
-                                    existingInfo.FileLocationDataSet.UnionWith(onlineBonesInfo.FileLocationDataSet);
+                                    existingInfo.AddSource(bonesSource);
+                                    saveBonesInfo.Dispose();
+                                    {
+                                        // Utils.Log($"{2.Indent()}[present] {saveBonesInfo.ID}");
+                                        continue;
+                                    }
+                                }
+                                saveBonesInfos.Add(saveBonesInfo);
+                                {
+                                    // Utils.Log($"{2.Indent()}[added!!] {saveBonesInfo.ID}");
                                     continue;
                                 }
-                                saveBonesInfos.Add(onlineBonesInfo);
                             }
+                            else
+                                saveBonesInfo.Dispose();
                         }
                         catch (Exception x)
                         {
-                            Utils.Warn($"Exception adding online BonesInfo {{{onlineBonesInfo.ID}}}, {currentLocationData}: {x}");
+                            Utils.Warn($"Exception adding saved BonesInfo {{{saveBonesInfo.ID}}}, {bonesSource.DisplayName}: {x}");
                         }
                     }
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Failed to retrieve any online BonesInfos", x);
+                    if (!bonesSource.IsOnline())
+                        failedFileSources.Add(new (bonesSource, x));
+                    else
+                        Utils.Error($"{bonesSource.DisplayName} failed to {nameof(bonesSource.ListBonesInfosAsync)}", x);
                 }
             }
+            saveBonesInfos.RemoveAll(bi => bonesSources.Any(bs => bs.IsBonesBlocked(bi.ID)));
+
+            if (!failedFileSources.IsNullOrEmpty())
+                SeriousBonesError(failedFileSources);
 
             if (saveBonesInfos.IsNullOrEmpty()
                 && NoBonesPlaceholder != null)
             {
+                // Utils.Log($"{2.Indent()}[dummy!] {NoBonesPlaceholder.ID}");
                 saveBonesInfos.Add(NoBonesPlaceholder);
             }
 
@@ -826,7 +833,7 @@ namespace UD_Bones_Folder.Mod
 
         public static async Task<IEnumerable<SaveBonesInfo>> GetCrematableSaveBonesInfoAsync(bool IncludeVersionIncompatible = false)
             => await GetSaveBonesInfoAsync(
-                Where: b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced,
+                Where: bi => bi.BonesSources.Any(bs => bs.IsOnDisk()),
                 IncludeVersionIncompatible: IncludeVersionIncompatible)
             ;
 
@@ -864,7 +871,7 @@ namespace UD_Bones_Folder.Mod
         {
             if (IgnoreCache
                 || !Options.EnableOsseousAshDownloads
-                || !Configuration.AllHosts(h => !h.Enabled || h.IsOnCooldown).IsNullOrEmpty()
+                || !ServerUtils.AllHosts(h => !h.Enabled || h.IsOnCooldown).IsNullOrEmpty()
                 || EligibleSaveBonesInfoCache == null)
                 EligibleSaveBonesInfoCache = new(await GetSaveBonesInfoAsync(bones => bones.IsLooselyEligible && (Where?.Invoke(bones) is not false)));
 
@@ -880,29 +887,35 @@ namespace UD_Bones_Folder.Mod
                 .IteratorSafe()
             ;
 
-        private static void SeriousBonesError(Exception X, FileLocationData FileLocationData)
+        private static void SeriousBonesError(IEnumerable<KeyValuePair<IBonesSource, Exception>> FailedSources)
         {
-            MetricsManager.LogError("Error checking for save files", X);
-            using var sB = ZString.CreateStringBuilder();
-            if (X is UnauthorizedAccessException
-                || X is global::System.IO.IOException)
+
+            int sourceCount = FailedSources.Count();
+            string sourcesCountString = sourceCount.Things(nameof(BonesFolder));
+            string bonesFolders = sourceCount == 1 ? nameof(BonesFolder) : nameof(BonesFolder).Pluralize();
+            string listedBonesFolders = FailedSources.Aggregate((string)null, (a, n) => Utils.NewLineDelimitedAggregator(a, n.Key.DisplayName.Strip()));
+            using var tB = TextBuilder.Get();
+            foreach ((var source, var x) in FailedSources)
             {
-                sB.AppendLine("There was a permission error while trying to access your bones directory.");
-                sB.AppendLine();
-                sB.AppendLine(ColorUtility.EscapeFormatting(X.Message));
+                Utils.Error($"Error checking {source.DisplayName} for save files", x);
+                if (x is UnauthorizedAccessException
+                    || x is IOException)
+                {
+                    tB.Append("There was a permission error while trying to access ").Append(sourcesCountString).Append(".")
+                        .AppendLine().Append(ColorUtility.EscapeFormatting(x.Message));
+                }
+                else
+                {
+                    tB.AppendLine().Append("There was an error while trying to access ").Append(sourcesCountString).Append(".")
+                        .AppendLine().Append("Possible ").Append(bonesFolders).Append(": ")
+                        .AppendLine().Append(listedBonesFolders);
+                }
+                tB.AppendLine().AppendLine();
             }
-            else
-            {
-                sB.AppendLine("There was an error while trying to access your bones directory.");
-                sB.AppendLine();
-                sB.Append("Directory: ");
-                sB.AppendLine(ColorUtility.EscapeFormatting(FileLocationData.SanitiseForDisplay()));
-            }
-            sB.AppendLine();
-            sB.AppendLine("Caves of Qud will run, but Bones won't be available. Please check your directory’s permissions.");
+            tB.Append("Caves of Qud will run, but offline Bones won't be available. Please check your directory’s permissions.");
 
             Popup.WaitNewPopupMessage(
-                message: sB.ToString(),
+                message: tB.ToString(),
                 buttons: new List<QudMenuItem>
                 {
                     new QudMenuItem
@@ -912,17 +925,17 @@ namespace UD_Bones_Folder.Mod
                         command = "Cancel"
                     }
                 },
-                title: "Error reading bones location.");
+                title: "Error reading bones sources.");
         }
 
         public async Task<BonesData> ExhumeLunarRegentAsync(SaveBonesInfo SaveBonesInfo, bool NoStatus = false)
         {
-            int versionNumber = -1;
+            int fileVersion = -1;
             string versionString = "{unknown}";
 
             BonesData bonesData = null;
 
-            bool errorPopups = XRL.UI.Options.ShowErrorPopups;
+            bool errorPopups = ShowErrorPopups;
             try
             {
                 var reader = SerializationReader.Get();
@@ -935,28 +948,30 @@ namespace UD_Bones_Folder.Mod
 
                 try
                 {
-                    using var savGzStream = await SaveBonesInfo.GetSavGzStreamAsync();
-
                     var memory = reader.Stream;
 
-                    if (savGzStream.Length >= 2
-                        && savGzStream.ReadByte() == 31)
-                        savGzStream.ReadByte();
-
-                    savGzStream.Position = 0L;
-
-                    using (var gZipStream = new GZipStream(savGzStream, CompressionMode.Decompress))
+                    using (var bonesSavGz = await SaveBonesInfo.GetBonesSavGzStreamAsync())
                     {
+                        using var savGzStream = bonesSavGz.Stream;
+
+                        if (savGzStream.Length < 2
+                            || savGzStream.ReadByte() != 31
+                            || savGzStream.ReadByte() != 139)
+                            throw new FatalDeserializationVersionException($"{nameof(savGzStream)} lacks {nameof(GZipStream)} header");
+
+                        savGzStream.Position = 0L;
+
+                        using var gZipStream = new GZipStream(savGzStream, CompressionMode.Decompress);
                         await gZipStream.CopyToAsync(memory);
                     }
 
                     memory.Position = 0L;
 
-                    XRL.UI.Options.ShowErrorPopups = false;
+                    ShowErrorPopups = false;
 
                     reader.StartMetricsOff();
 
-                    XRL.UI.Options.ShowErrorPopups = errorPopups;
+                    ShowErrorPopups = errorPopups;
 
                     if (reader.ReadInt32() != SERIALIZATION_CHECK)
                     {
@@ -964,38 +979,14 @@ namespace UD_Bones_Folder.Mod
                         throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is for incorrect game version.");
                     }
 
-                    versionNumber = reader.FileVersion;
+                    fileVersion = reader.FileVersion;
                     versionString = reader.ReadString();
-                    try
-                    {
-                        if (versionNumber != XRLGame.SaveVersion)
-                        {
-                            /*if (SaveBonesInfo.IsOnline)
-                                throw new InvalidOperationException("Bones file is online and can't be upgraded (yet)");*/
 
-                            if (!SaveBonesInfo.IsOnline)
-                            {
-                                if ((await SaveBonesInfo.GetBonesFilePathAsync()) is string bonesPath)
-                                {
-                                    // need to put code here that maybe tries to update the save version of the bones file if successful?
-                                    string backupPath = bonesPath + $"_upgradebackup_{versionNumber}.gz";
-                                    if (!File.Exists(backupPath))
-                                    {
-                                        File.Copy(bonesPath, backupPath);
-                                        string cacheDBPath = Path.Combine(SaveBonesInfo.Directory, "Cache.db");
-                                        string cacheDBBackupPath = cacheDBPath + $"_upgradebackup_{versionNumber}.gz";
-                                        if (File.Exists(cacheDBPath)
-                                            && !File.Exists(cacheDBBackupPath))
-                                            File.Copy(cacheDBPath, cacheDBBackupPath);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception x)
+                    /*if (fileVersion != XRLGame.SaveVersion)
                     {
-                        Utils.Error($"bones upgrade backup: {x}");
-                    }
+                        throw new DeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) " +
+                            $"is for incorrect game version ({versionString}).");
+                    }*/
 
                     if (reader.FileVersion < MIN_SAVE_VERSION)
                         throw new FatalDeserializationVersionException($"Bones file ({SaveBonesInfo.ID}) is for incorrect game version.");
@@ -1028,7 +1019,7 @@ namespace UD_Bones_Folder.Mod
                     {
                         try
                         {
-                            XRL.UI.Options.ShowErrorPopups = false;
+                            ShowErrorPopups = false;
                             if (reader.ReadInt32() != BONES_ZONE_POS)
                                 throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing {nameof(Zone)} val-check.");
 
@@ -1041,13 +1032,13 @@ namespace UD_Bones_Folder.Mod
                             reader.UnspoolTo(BONES_FINALIZE_POS, Prior: true);
                             Utils.Error(x);
                         }
-                        XRL.UI.Options.ShowErrorPopups = errorPopups;
+                        ShowErrorPopups = errorPopups;
                     }
                     else
                     {
                         try
                         {
-                            XRL.UI.Options.ShowErrorPopups = false;
+                            ShowErrorPopups = false;
                             if (reader.ReadInt32() != BONES_ZONE_POS)
                                 throw new DeserializationException($"Bones file ({SaveBonesInfo.ID}) missing {nameof(Zone)} val-check.");
 
@@ -1062,7 +1053,7 @@ namespace UD_Bones_Folder.Mod
                         }
                         finally
                         {
-                            XRL.UI.Options.ShowErrorPopups = errorPopups;
+                            ShowErrorPopups = errorPopups;
                         }
                     }
 
@@ -1083,12 +1074,12 @@ namespace UD_Bones_Folder.Mod
                     {
                         reader.Errors++;
 
-                        XRL.UI.Options.ShowErrorPopups = false;
+                        ShowErrorPopups = false;
                         Utils.Error(x);
                     }
                     finally
                     {
-                        XRL.UI.Options.ShowErrorPopups = errorPopups;
+                        ShowErrorPopups = errorPopups;
                     }
 
                     try
@@ -1107,8 +1098,7 @@ namespace UD_Bones_Folder.Mod
                             bonesData = new(
                                 BonesID: bonesID,
                                 BonesZone: loadedZone,
-                                OsseousAshID: SaveBonesInfo.UserID,
-                                OsseousAshHandle: SaveBonesInfo.UserHandle);
+                                Handle: SaveBonesInfo.UserHandle);
                         }
                         else
                         {
@@ -1124,7 +1114,7 @@ namespace UD_Bones_Folder.Mod
                             {
                                 BonesID = bonesID,
                                 PseudoZone = loadedPseudoZone,
-                                OsseousAshHandle = SaveBonesInfo.UserHandle,
+                                Handle = SaveBonesInfo.UserHandle,
                             };
                         }
                     }
@@ -1132,34 +1122,34 @@ namespace UD_Bones_Folder.Mod
                     {
                         reader.Errors++;
 
-                        XRL.UI.Options.ShowErrorPopups = false;
+                        ShowErrorPopups = false;
                         Utils.Error(x);
 
                         bonesData = null;
                     }
                     finally
                     {
-                        XRL.UI.Options.ShowErrorPopups = errorPopups;
+                        ShowErrorPopups = errorPopups;
                     }
 
                     if (bonesSpec != null)
-                        SaveBonesInfo.BonesSpec = bonesSpec;
+                        SaveBonesInfo.JSON.BonesSpec = bonesSpec;
 
                     if (reader.Errors > 0)
                         SerializationExtensions.PerformOptionallySilently(() => DisplayLoadError(reader, "bones file", reader.Errors));
                 }
                 catch (Exception x)
                 {
-                    XRL.UI.Options.ShowErrorPopups = false;
+                    ShowErrorPopups = false;
                     Utils.Error(x);
-                    XRL.UI.Options.ShowErrorPopups = errorPopups;
+                    ShowErrorPopups = errorPopups;
                     bonesData = null;
                 }
                 finally
                 {
                     SerializationReader.Release(reader);
                     status.Dispose();
-                    XRL.UI.Options.ShowErrorPopups = errorPopups;
+                    ShowErrorPopups = errorPopups;
                 }
 
             }
@@ -1181,11 +1171,11 @@ namespace UD_Bones_Folder.Mod
                 }
                 else
                 {
-                    if (versionNumber < XRLGame.SaveVersion)
+                    if (fileVersion < XRLGame.SaveVersion)
                         message = $"That bones file looks like it's from an older game save format revision ({versionString}). Sorry!\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
                     else
-                    if (versionNumber > XRLGame.SaveVersion)
+                    if (fileVersion > XRLGame.SaveVersion)
                         message = $"That bones file looks like it's from a newer game save format revision ({versionString}).\n\n" +
                             $"In the future this process will more intelligently exclude mismatched bones.";
 
@@ -1198,7 +1188,7 @@ namespace UD_Bones_Folder.Mod
             finally
             {
                 _HasSaveBones = null;
-                XRL.UI.Options.ShowErrorPopups = errorPopups;
+                ShowErrorPopups = errorPopups;
             }
 
             return bonesData;
@@ -1232,7 +1222,7 @@ namespace UD_Bones_Folder.Mod
             => ExhumeLunarRegentAsync(SaveBonesInfo, NoStatus).WaitResult()
             ;
 
-        public static async Task<SaveBonesInfo> GetSavedBonesByIDAsync(string BonesID, Predicate<SaveBonesInfo> Where = null)
+        public static async Task<SaveBonesInfo> GetBonesInfoByIDAsync(string BonesID, Predicate<SaveBonesInfo> Where = null)
         {
             foreach (var savedBones in await GetSaveBonesInfoAsync(Where))
                 if (savedBones.ID == BonesID)
@@ -1241,7 +1231,7 @@ namespace UD_Bones_Folder.Mod
             return null;
         }
 
-        public static async Task<SaveBonesInfo> GetSavedBonesByIDDirectAsync(
+        public static async Task<SaveBonesInfo> GetBonesInfoByIDDirectAsync(
             string BonesID,
             bool IncludeVersionIncompatible = false,
             bool IncludeBlocked = false
@@ -1253,85 +1243,19 @@ namespace UD_Bones_Folder.Mod
             if (!Guid.TryParse(BonesID, out _))
                 return null;
 
-            FileLocationData currentLocationData = null;
-            SaveBonesInfo output = null;
-            foreach (var bonesFileLocationData in GetBonesFileLocationData(NonRemoteOnly: true))
-            {
-                try
-                {
-                    currentLocationData = bonesFileLocationData.CreateCombine(BonesID);
-                    if (!currentLocationData.Exists())
-                        continue;
+            using var bonesSources = GetBonesSourcesFromPool(BonesSources.SourceCanExhume);
 
-                    if (await SaveBonesInfo.GetPhysicalSaveBonesInfoAsync(currentLocationData) is SaveBonesInfo savedBonesInfo)
-                    {
-                        try
-                        {
-                            if (!IncludeVersionIncompatible
-                                && !IsVersionCompatible(savedBonesInfo))
-                                continue;
+            if (!IncludeBlocked
+                && bonesSources.Any(bs => bs.IsBonesBlocked(BonesID)))
+                return null;
 
-                            if (output != null)
-                                output.FileLocationData = currentLocationData;
-                            else
-                                output = savedBonesInfo;
-                        }
-                        catch (Exception x)
-                        {
-                            Utils.Warn($"Exception adding saved BonesInfo {{{BonesID}}}, {currentLocationData}: {x}");
-                        }
-                    }
-                }
-                catch (Exception x)
-                {
-                    SeriousBonesError(x, currentLocationData);
-                }
-            }
+            var bonesInfo = await bonesSources.GetBonesInfoAsync(BonesID);
 
-            if (Options.EnableOsseousAshDownloads)
-            {
-                try
-                {
-                    foreach (var host in Configuration.AllEnabledHosts())
-                    {
-                        currentLocationData = FileLocationData.NewOnline(host);
-                        try
-                        {
-                            if (host.GetSaveBonesInfo(BonesID) is not SaveBonesInfo onlineBonesInfo)
-                                continue;
+            if (!IncludeVersionIncompatible
+                && !IsVersionCompatible(bonesInfo))
+                return null;
 
-                            if (!IncludeBlocked
-                                && onlineBonesInfo.IsBlocked)
-                                continue;
-
-                            if (!IncludeVersionIncompatible
-                                && !IsVersionCompatible(onlineBonesInfo))
-                                continue;
-
-
-                            if (output != null)
-                            {
-                                _ = output.FileLocationData;
-                                _ = onlineBonesInfo.FileLocationData;
-                                output.FileLocationDataSet.UnionWith(onlineBonesInfo.FileLocationDataSet);
-                                continue;
-                            }
-                            else
-                                output = onlineBonesInfo;
-                        }
-                        catch (Exception x)
-                        {
-                            Utils.Warn($"Exception adding online BonesInfo {{{BonesID}}}, {currentLocationData}: {x}");
-                        }
-                    }
-                }
-                catch (Exception x)
-                {
-                    Utils.Error($"Failed to retrieve any online BonesInfos", x);
-                }
-            }
-
-            return output;
+            return bonesInfo;
         }
 
         public static SaveBonesInfo GetSavedBonesByIDDirect(
@@ -1339,7 +1263,7 @@ namespace UD_Bones_Folder.Mod
             bool IncludeVersionIncompatible = false,
             bool IncludeBlocked = false
             )
-            => GetSavedBonesByIDDirectAsync(
+            => GetBonesInfoByIDDirectAsync(
                     BonesID: BonesID,
                     IncludeVersionIncompatible: IncludeVersionIncompatible,
                     IncludeBlocked: IncludeBlocked)
@@ -1347,7 +1271,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static SaveBonesInfo GetSavedBonesByID(string BonesID, Predicate<SaveBonesInfo> Where = null)
-            => GetSavedBonesByIDAsync(BonesID, Where).WaitResult()
+            => GetBonesInfoByIDAsync(BonesID, Where).WaitResult()
             ;
 
         public static bool TryGetSaveBonesByID(string BonesID, out SaveBonesInfo SaveBonesInfo, Predicate<SaveBonesInfo> Where = null)
@@ -1526,25 +1450,9 @@ namespace UD_Bones_Folder.Mod
             Action AfterDeletionLoop
             )
         {
-            var crematableBonesInfos = (await GetSaveBonesInfoAsync(
-                    Where: delegate (SaveBonesInfo b)
-                    {
-                        return b.IsCrematable
-                            && (Where?.Invoke(b) is not false)
-                            ;
-                    },
-                    IncludeVersionIncompatible: true))
-                .IteratorSafe();
+            using var bonesSources = GetBonesSourcesFromPool();
 
-            if (crematableBonesInfos.IsNullOrEmpty())
-            {
-                await Popup.NewPopupMessageAsync(
-                    message: $"There aren't any local bones to cremate!",
-                    title: "{{yellow|No Bones!}}");
-
-                return (await GetSaveBonesInfoAsync())
-                    .IteratorSafe();
-            }
+            using var bonesInfos = bonesSources.GetBonesInfosFromPool(Where);
 
             var buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
@@ -1560,7 +1468,7 @@ namespace UD_Bones_Folder.Mod
                 defaultValue = null;
             }
             if ((await Popup.AskStringAsync(
-                    Message: $"Are you sure you want to cremate {$"all {crematableBonesInfos.Count()}".Colored("red")} bones?" + typeToConfirmText,
+                    Message: $"Are you sure you want to cremate {$"all {bonesInfos.Count}".Colored("red")} bones?" + typeToConfirmText,
                     Default: defaultValue,
                     WantsSpecificPrompt: confirmText,
                     MaxLength: confirmText.Length)
@@ -1568,7 +1476,7 @@ namespace UD_Bones_Folder.Mod
             {
                 BeforeDeletionLoop?.Invoke();
 
-                int countBefore = crematableBonesInfos.Count();
+                int countBefore = bonesInfos.Count;
                 int paddingAmount = countBefore.ToString().Length;
                 int cremateCounter = 0;
                 int crematedCounter = 0;
@@ -1578,7 +1486,56 @@ namespace UD_Bones_Folder.Mod
 
                 string cremateString(string Color = null)
                     => $"{paddedCremateCounter().Colored(Color)}/{countBefore}";
-                foreach (var bonesInfo in crematableBonesInfos)
+
+                var resultsByInfo = new Dictionary<SaveBonesInfo, ScopeDisposedList<KeyValuePair<IBonesSource, ActionResult>>>();
+                foreach (var bonesInfo in bonesInfos)
+                {
+                    resultsByInfo[bonesInfo] = ScopeDisposedList<KeyValuePair<IBonesSource, ActionResult>>.GetFromPool();
+                    foreach (var source in bonesSources)
+                    {
+                        resultsByInfo[bonesInfo].Add(new(source, await source.DeleteBonesAsync(bonesInfo.ID)));
+                    }
+                    if (resultsByInfo[bonesInfo].Any(r => r.Value))
+                        cremateCounter++;
+                }
+
+                string output = resultsByInfo.Aggregate(
+                    seed: null,
+                    func: delegate (string acc, KeyValuePair<SaveBonesInfo, ScopeDisposedList<KeyValuePair<IBonesSource, ActionResult>>> next)
+                    {
+                        if (!acc.IsNullOrEmpty())
+                            acc += "\n";
+
+                        var bonesInfo = next.Key;
+                        var results = next.Value;
+                        acc += $"{bonesInfo.Name.StartReplace().ToString().Strip()} {{{bonesInfo.ID}}}\n";
+
+                        acc += results.Aggregate(
+                            seed: null,
+                            func: delegate (string acc2, KeyValuePair<IBonesSource, ActionResult> next2)
+                            {
+                                if (!acc2.IsNullOrEmpty())
+                                    acc2 += "\n";
+
+                                var source = next2.Key;
+                                var result = next2.Value;
+                                return acc2 + $"{1.Indent()}: {$"{1.Indent()}: no results"} {(result ? "deleted" : result)}";
+                            })
+                            ?? $"{1.Indent()}: no results";
+
+                        return acc;
+                    });
+
+                await Popup.ShowAsync($"{"Cremation Results:".Colored("W")}\n\n{output}");
+                Utils.Log("Cremation Results:");
+                Utils.Log(output);
+
+                foreach ((var bonesInfo, var results) in resultsByInfo)
+                {
+                    bonesInfo.Dispose();
+                    results.Dispose();
+                }
+                foreach (var bonesInfo in bonesInfos)
                 {
                     cremateCounter++;
                     if (bonesInfo == null)
@@ -1592,18 +1549,18 @@ namespace UD_Bones_Folder.Mod
 
                 AfterDeletionLoop?.Invoke();
 
-                var bonesInfos = (await GetSaveBonesInfoAsync()).IteratorSafe();
+                using var newBonesInfos = bonesSources.GetBonesInfosFromPool();
 
                 string crematedString = crematedCounter.ToString();
                 if (crematedCounter != countBefore)
                     crematedString = crematedString.Colored("red");
 
-                bool isSomethingWrong = bonesInfos.Any(b => b.FileLocationData.Type < FileLocationData.LocationType.Mod);
+                bool isSomethingWrong = newBonesInfos.Any(bi => bi.BonesSources.Any(bs => bs.IsOnDisk()));
 
                 string somethingWrongString = isSomethingWrong ? "\n\n{{K|(something went wrong)}}" : null;
                 await Popup.NewPopupMessageAsync($"{crematedString}/{countBefore} Bones Cremated!{somethingWrongString}");
                 Loading.SetLoadingStatus(null);
-                return bonesInfos;
+                return newBonesInfos;
             }
             return (await GetSaveBonesInfoAsync()).IteratorSafe();
         }
@@ -1918,13 +1875,17 @@ namespace UD_Bones_Folder.Mod
 
             var playerSpec = BonesSpec.GetPlayerSpec(Z);
 
-            bool notEncounteredAndWithinSpec(SaveBonesInfo SaveBonesInfo)
-                => !Encountered.Contains(SaveBonesInfo.ID)
-                && !FailedToLoadBones.Contains(SaveBonesInfo.ID)
-                && SaveBonesInfo.BonesSpec?.IsWithinSpec(playerSpec) is true
+            bool notEncounteredAndWithinSpec(BonesSpec BonesSpec)
+                => !Encountered.Contains(BonesSpec?.BonesID)
+                && !FailedToLoadBones.Contains(BonesSpec?.BonesID)
+                && BonesSpec?.IsWithinSpec(playerSpec) is true
                 ;
 
-            if (GetEligibleSaveBonesInfo(notEncounteredAndWithinSpec, IgnoreCache) is IEnumerable<SaveBonesInfo> bonesInfos
+            bool infoNotEncounteredAndWithinSpec(SaveBonesInfo SaveBonesInfo)
+                => notEncounteredAndWithinSpec(SaveBonesInfo.BonesSpec)
+                ;
+
+            if (GetEligibleSaveBonesInfo(infoNotEncounteredAndWithinSpec, IgnoreCache) is IEnumerable<SaveBonesInfo> bonesInfos
                 && !bonesInfos.IsNullOrEmpty())
             {
                 var allocationType = allocation.Type;
@@ -2040,11 +2001,11 @@ namespace UD_Bones_Folder.Mod
                         || (result.IsBack()
                             && allocation.WantsBones()))
                     {
-                        var bonesBag = new BallBag<SaveBonesInfo>();
+                        var bonesBag = new BallBag<SaveBonesInfo>(Stat.GetSeededRandomGenerator($"{nameof(CheckBones)}::{Z.ZoneID}"), bonesInfos.Count());
                         foreach (var bonesInfo in bonesInfos)
                         {
                             if (!failedBonesList.Contains(bonesInfo))
-                                if (bonesInfo.GetBonesWeight() is int weight)
+                                if (bonesInfo.EnabledMods?.GetBonesWeight() is int weight)
                                     bonesBag.Add(bonesInfo, weight);
                         }
                         while (!bonesBag.IsNullOrEmpty()

@@ -9,6 +9,8 @@ using Newtonsoft.Json;
 
 using Platform.IO;
 
+using UD_Bones_Folder.Mod.BonesSystem;
+using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.Serialization.PseudoTypes;
 using UD_Bones_Folder.Mod.UI;
 
@@ -28,7 +30,10 @@ namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
-    public class BonesSpec : IComposite
+    public class BonesSpec :
+        IBonesFileElement,
+        IComposite,
+        IDisposable
     {
         [Serializable]
         public enum ApproxDepth
@@ -66,6 +71,13 @@ namespace UD_Bones_Folder.Mod
         public static string MissingTerrainType => "Mystery";
         public static string Wildcard => "*";
 
+        [JsonIgnore]
+        string IBonesFileElement.BonesID
+        {
+            get => BonesID;
+            set => BonesID = value;
+        }
+
         public string BonesID;
 
         public int Level;
@@ -79,7 +91,21 @@ namespace UD_Bones_Folder.Mod
         public string TerrainTravelClass;
 
         public BonesSpec()
+            : base()
         { }
+
+        public BonesSpec(BonesSpec Source)
+            : this()
+        {
+            BonesID = Source.BonesID;
+            Level = Source.Level;
+            ZoneID = Source.ZoneID;
+            ZoneZ = Source.ZoneZ;
+            ZoneTier = Source.ZoneTier;
+            ZoneTerrainType = Source.ZoneTerrainType;
+            RegionTier = Source.RegionTier;
+            TerrainTravelClass = Source.TerrainTravelClass;
+        }
 
         public BonesSpec(
             GameObject LunarRegent,
@@ -270,5 +296,38 @@ namespace UD_Bones_Folder.Mod
         public bool IsWithinSpec(Zone Zone)
             => IsWithinSpec(GetPlayerSpec(Zone))
             ;
+
+        public void Dispose()
+        {
+            BonesID = null;
+            Level = 0;
+            ZoneID = null;
+            ZoneZ = 0;
+            ZoneTier = 0;
+            ZoneTerrainType = null;
+            RegionTier = 0;
+            TerrainTravelClass = null;
+        }
+
+        public static explicit operator RouteQuery(BonesSpec Operand)
+        {
+            if (Operand == null)
+                return null;
+
+            /*return new RouteQuery(
+                RouteQuery: new RouteQueryPair[]
+                {
+                    new (nameof(Operand.BonesID), Operand.BonesID),
+                    new (nameof(Operand.Level), Operand.Level),
+                    new (nameof(Operand.ZoneID), Operand.ZoneID),
+                    new (nameof(Operand.ZoneZ), Operand.ZoneZ),
+                    new (nameof(Operand.ZoneTier), Operand.ZoneTier),
+                    new (nameof(Operand.ZoneTerrainType), Operand.ZoneTerrainType),
+                    new (nameof(Operand.RegionTier), Operand.RegionTier),
+                    new (nameof(Operand.TerrainTravelClass), Operand.TerrainTravelClass),
+                });*/
+
+            return new(Operand);
+        }
     }
 }

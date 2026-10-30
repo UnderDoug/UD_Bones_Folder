@@ -85,7 +85,7 @@ namespace XRL.World.Parts
 
         public bool IsWithinDefinedLevel(SaveBonesInfo BonesInfo)
             => GetForPlayerLevel() < 5
-            || BonesInfo.GetBonesJSON() is not SaveBonesJSON bonesJSON
+            || BonesInfo.JSON is not SaveBonesJSON bonesJSON
             || BonesSpec.IsWithinLevel(bonesJSON.Level, GetForPlayerLevel())
             ;
 
@@ -195,7 +195,7 @@ namespace XRL.World.Parts
                 using var bonesInfoList = ScopeDisposedList<SaveBonesInfo>.GetFromPoolFilledWith(saveBonesInfos);
                 foreach (var bonesInfo in bonesInfoList)
                 {
-                    if (bonesInfo.GetBonesWeight() is int weight)
+                    if (bonesInfo.EnabledMods?.GetBonesWeight() is int weight)
                     {
                         if (!bonesWeights.ContainsKey(bonesInfo.ID))
                             bonesWeights[bonesInfo.ID] = 0;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -12,6 +13,7 @@ using Platform.IO;
 
 using Qud.UI;
 
+using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.OsseousAsh;
 
 using UnityEngine;
@@ -54,6 +56,9 @@ namespace UD_Bones_Folder.Mod.UI
             All,
         }
 
+        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        internal static List<ManageBonesPickOptionsDelegateEntry> ManageBonesPickOptionsDelegates;
+
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolder_BonesManagement";
 
         public const string CMD_ACCEPT = "Accept";
@@ -82,8 +87,8 @@ namespace UD_Bones_Folder.Mod.UI
                     if (BonesManager.GetSaveBonesInfoAsync(
                             Where: IsBonesToShow,
                             IncludeBlocked: IncludeBlocked,
-                            NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesManager.BonesSaveSyncInfo)
-                        ).AwaitResult() is IEnumerable<SaveBonesInfo> bonesInfos
+                            NoBonesPlaceholder: SaveBonesInfo.DummyBonesInfo(VisibilityMode, BonesPile.BonesFolderCache.GetValue(IBonesSource.SourceType.Synced) ?? BonesPile.DummyFolder)
+                        ).WaitResult() is IEnumerable<SaveBonesInfo> bonesInfos
                     && bonesInfos.OrderBy(bones => bones, SaveBonesInfo.SaveBonesInfoComparerDescending).AsEnumerable() is IEnumerable<SaveBonesInfo> orderedBonesInfos)
                     _SaveBonesInfoCache = new(orderedBonesInfos);
                 }
@@ -245,6 +250,32 @@ namespace UD_Bones_Folder.Mod.UI
             AllBonesMenuBar.gameObject.name = nameof(AllBonesMenuBar);
         }
 
+
+        [ModSensitiveCacheInit]
+        private static void CacheDoWhatWithHostPickOptionDataDelegates()
+        {
+            ManageBonesPickOptionsDelegates = new();
+            foreach (var delegateMethod in ModManager.GetMethodsWithAttribute(typeof(ManageBonesPickOptionsDelegateAttribute), typeof(HasManageBonesPickOptionsDelegateAttribute)))
+            {
+                var attribute = delegateMethod.GetCustomAttribute<ManageBonesPickOptionsDelegateAttribute>();
+
+                var modInfo = ModManager.GetMod(delegateMethod?.DeclaringType?.Assembly)
+                    ?? Utils.ThisMod;
+
+                if (ManageBonesPickOptionsDelegateEntry.TryCreate(
+                    DelegateMethod: delegateMethod,
+                    DelegateEntry: out ManageBonesPickOptionsDelegateEntry delegateEntry,
+                    ModInfo: modInfo))
+                    ManageBonesPickOptionsDelegates.Add(delegateEntry);
+            }
+        }
+
+        internal static void InvokeDoWhatWithHostPickOptionsDelegates(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
+        {
+            foreach (var manageBonesPickOptionsDelegateEntry in ManageBonesPickOptionsDelegates.IteratorSafe())
+                manageBonesPickOptionsDelegateEntry.ProcessManageBonesPickOptions.Invoke(BonesInfo, ref Options);
+        }
+
         public void SetParentTransform(Component Component, Transform Transform = null)
         {
             Transform ??= transform;
@@ -280,20 +311,19 @@ namespace UD_Bones_Folder.Mod.UI
                     && !isBlocked)
                     return false;
 
-                if (SaveBonesInfo.FileLocationData is not FileLocationData fileLocationData)
+                if (SaveBonesInfo.BonesSources.Select(bs => bs.Type) is not IEnumerable<IBonesSource.SourceType> sourceTypes)
                     return false;
 
-                var fileLocationDataType = fileLocationData.Type;
                 if (SourceMode == SourceModes.File
-                    && !fileLocationDataType.IsFile())
+                    && !sourceTypes.Any(st => st.IsOnDisk()))
                     return false;
 
                 if (SourceMode == SourceModes.Mod
-                    && !fileLocationDataType.IsMod())
+                    && !sourceTypes.Any(st => st.IsModded()))
                     return false;
 
                 if (SourceMode == SourceModes.Online
-                    && !fileLocationDataType.IsOnline())
+                    && !sourceTypes.Any(st => st.IsOnline()))
                     return false;
 
                 return true;
@@ -307,6 +337,8 @@ namespace UD_Bones_Folder.Mod.UI
 
         public override void Show()
         {
+            //Utils.Log($"{nameof(BonesManagement)}.{nameof(Show)}");
+
             if (SaveBonesInfoCache is not IEnumerable<SaveBonesInfo> cachedBonesInfos
                 || SaveBonesInfosToUIElements(cachedBonesInfos) is not List<BonesInfoData> bareBones
                 || bareBones.IsNullOrEmpty()
@@ -456,13 +488,14 @@ namespace UD_Bones_Folder.Mod.UI
             if (BonesInfo.IsDummy)
                 return UIUtils.CascadableResult.CancelSilent;
 
+            var options = new CascadablePickOptionDataSetAsync<SaveBonesInfo>(BonesInfo, UIUtils.CascadableResult.BackSilent, UIUtils.CascadableResult.CancelSilent);
             var sB = WEvent.NewStringBuilder();
             var result = UIUtils.CascadableResult.Continue;
             try
             {
-                using var options = new CascadablePickOptionDataSetAsync<SaveBonesInfo>(BonesInfo, UIUtils.CascadableResult.BackSilent, UIUtils.CascadableResult.CancelSilent);
                 do
                 {
+                    int priority = 1;
                     sB.Clear();
                     options.ClearItems(Dispose: true);
 
@@ -478,6 +511,7 @@ namespace UD_Bones_Folder.Mod.UI
                     options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                     {
                         Text = "View stats",
+                        Priority = priority++ * 5, // 5
                         Icon = BonesInfo.StatsIcon,
                         Hotkey = 's',
                         Callback = SaveBonesInfo.ShowBlurbAsync,
@@ -485,60 +519,35 @@ namespace UD_Bones_Folder.Mod.UI
                     options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                     {
                         Text = "Manage relative mod configuration",
+                        Priority = priority++ * 5, // 10
                         Icon = SaveBonesInfo.ManageConfigIcon,
                         Hotkey = 'm',
                         Callback = SaveBonesInfo.AskRestoreModsAsync,
                     });
 
-                    if (Options.EnableOsseousAshUploads
-                        && BonesInfo.FileLocationDataSet.AnyHostsMissing(Configuration.AllEnabledHosts()))
-                    {
-                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                        {
-                            Text = $"Upload",
-                            Icon = Configuration.UploadIcon,
-                            Hotkey = 'u',
-                            Callback = UploadBonesAsync,
-                        });
-                    }
-                    if (BonesInfo.FileLocationDataSet.IncludesOnline)
-                    {
-                        if (Options.EnableOsseousAshDownloads
-                            && BonesInfo.FileLocationDataSet.IsOnlyOnline)
-                        {
-                            options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                            {
-                                Text = $"Download",
-                                Icon = Configuration.DownloadIcon,
-                                Hotkey = 'd',
-                                Callback = DownloadBonesAsync,
-                            });
-                        }
+                    // Upload Bones
 
-                        bool isBlocked = BonesInfo.IsBlocked;
-                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                        {
-                            Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
-                            Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
-                            Hotkey = 'b',
-                            Callback = SaveBonesInfo.BlockUnblockAsync,
-                        });
-                        if (!isBlocked)
-                        {
-                            options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                            {
-                                Text = "Report",
-                                Icon = Report.ReportBonesIcon,
-                                Hotkey = 'r',
-                                Callback = SaveBonesInfo.AskForBonesReportAsync,
-                            });
-                        }
-                    }
-                    if (BonesInfo.IsCrematable)
+                    // Download Bones
+
+                    bool isBlocked = BonesInfo.IsBlocked;
+                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+                    {
+                        Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
+                        Priority = priority++ * 5, // 15
+                        Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
+                        Hotkey = 'b',
+                        Callback = SaveBonesInfo.BlockUnblockAsync,
+                    });
+
+                    // Report Bones
+
+                    if (BonesInfo.IsYou
+                        || BonesInfo.BonesSources.Any(bs => bs.Type.IsTwixtInclusive(BonesSystem.IBonesSource.SourceType.Local, BonesSystem.IBonesSource.SourceType.Synced)))
                     {
                         options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                         {
                             Text = "Cremate",
+                            Priority = priority++ * 5, // 20
                             Icon = new Renderable(
                                 Tile: "Mutations/spontaneous_combustion.bmp",
                                 ColorString: "&R",
@@ -548,6 +557,7 @@ namespace UD_Bones_Folder.Mod.UI
                             Callback = PerformDelete,
                         });
                     }
+                    InvokeDoWhatWithHostPickOptionsDelegates(BonesInfo, ref options);
 
                     result = await UIUtils.PerformPickOptionAsync(
                         OptionDataSet: options,
@@ -567,6 +577,7 @@ namespace UD_Bones_Folder.Mod.UI
             }
             finally
             {
+                options?.Dispose();
                 WEvent.ResetTo(sB);
             }
             return result;
@@ -651,7 +662,7 @@ namespace UD_Bones_Folder.Mod.UI
 
                 try
                 {
-                    if (bonesInfo.GetBonesJSON() is not SaveBonesJSON json)
+                    if (bonesInfo.JSON is not SaveBonesJSON json)
                     {
                         await Popup.ShowAsync("That bones file appears to be missing an info file, or the info file has been lost during load." +
                             $"\n\nPlease contact {Utils.AuthorOnPlatforms} to see if the file can be recovered.");
@@ -716,146 +727,6 @@ namespace UD_Bones_Folder.Mod.UI
                     instance?.HandleDeleteAll();
             });
 
-
-        public static async Task<UIUtils.CascadableResult> DownloadBonesAsync(SaveBonesInfo BonesInfo)
-        {
-            var fileLocationData = FileLocationData.NewSynced(BonesManager.BonesSaveSyncInfo.WithFileName(BonesInfo.ID));
-            string saveFilePath = fileLocationData.WithFileName(BonesManager.GetSaveFileName());
-
-            bool restoreBackup = false;
-
-            string catchFlag = "top";
-            //Utils.Log(catchFlag);
-            try
-            {
-                catchFlag = "try";
-                //Utils.Log(catchFlag);
-
-                if (await BonesInfo.GetSavGzBytesAsync() is byte[] savGz
-                    && BonesInfo.GetBonesJSON() is SaveBonesJSON saveBonesJSON)
-                {
-                    catchFlag = "saveBonesJSONLocationType";
-                    //Utils.Log(catchFlag);
-                    var saveBonesJSONLocationType = saveBonesJSON.FileLocationType;
-
-                    if (await File.ExistsAsync(saveFilePath))
-                    {
-                        catchFlag = "File.Copy";
-                        //Utils.Log(catchFlag);
-                        File.Copy(saveFilePath, $"{saveFilePath}.bak", overwrite: true);
-                        restoreBackup = true;
-                    }
-                    catchFlag = "BonesManager.SaveBonesFileAsync";
-                    //Utils.Log(catchFlag);
-                    if (await BonesManager.SaveBonesFileAsync(
-                        FileLocationData: fileLocationData,
-                        SavePath: saveFilePath,
-                        SaveBonesJSON: saveBonesJSON,
-                        BonesSavGz: savGz,
-                        UploadFile: false))
-                    {
-                        catchFlag = "BonesInfo.FileLocationDataSet.Add";
-                        BonesInfo.FileLocationDataSet.Add(fileLocationData);
-                        BonesInfo.Size = $"Total size: {savGz.FormatBytes()}";
-                    }
-                    else
-                        saveBonesJSON.FileLocationType = saveBonesJSONLocationType;
-
-                    MemoryHelper.GCCollect();
-
-                    catchFlag = "BonesManager.CheckBonesSave";
-                    //Utils.Log(catchFlag);
-                    BonesManager.CheckBonesSave(saveFilePath);
-
-                    catchFlag = "Popup.ShowAsync";
-                    //Utils.Log(catchFlag);
-                    await Popup.ShowAsync($"Downloaded {BonesInfo.Name.StartReplace()} to:\n{BonesInfo.TaggedDisplayDirectory}");
-                    return UIUtils.CascadableResult.Continue;
-                }
-
-                // Utils.Log("Fell Through");
-                await Popup.ShowAsync($"Something whent wrong, {BonesInfo.Name.StartReplace()} bones appears to be missing save data.");
-                return UIUtils.CascadableResult.Continue;
-            }
-            catch (Exception x)
-            {
-                BonesManager.BonesHoardError(saveFilePath, x, restoreBackup);
-                Utils.Error($"{nameof(DownloadBonesAsync)} failed to write bones to file [{catchFlag}]", x);
-                return UIUtils.CascadableResult.BackSilent;
-            }
-        }
-
-        public static async Task<UIUtils.CascadableResult> UploadBonesAsync(SaveBonesInfo BonesInfo)
-        {
-            string catchFlag = "top";
-            //Utils.Log(catchFlag);
-            try
-            {
-                catchFlag = "try";
-                //Utils.Log(catchFlag);
-
-                if (await BonesInfo.GetSavGzStreamAsync() is System.IO.Stream byteStream
-                    && await byteStream.ReadAllBytesAsync() is byte[] savGz
-                    && BonesInfo.GetBonesJSON() is SaveBonesJSON saveBonesJSON)
-                {
-                    catchFlag = "BonesManager.UploadBonesFileAsync";
-                    //Utils.Log(catchFlag);
-
-                    if ((await BonesManager.UploadBonesFileAsync(saveBonesJSON, savGz)) is List<ResponseInfo> responseInfos)
-                    {
-                        if (!responseInfos.Any(ri => ri.Success))
-                        {
-                            string failures = responseInfos.Aggregate(
-                                seed: null,
-                                func: delegate (string acc, ResponseInfo next)
-                                {
-                                    if (!acc.IsNullOrEmpty())
-                                        acc += "\n";
-                                    acc += $"{Const.NBSP}{Const.NBSP}{Const.CROSS.Colored("red")}{Const.NBSP}{next.Host?.ToString() ?? "MISSING_HOST"} - {next.Message ?? "Unkown"}";
-                                    return acc;
-                                })
-                                ?? $"{Const.NBSP}{Const.NBSP}{Const.CROSS.Colored("red")}{Const.NBSP}No hosts.";
-                            await Popup.ShowAsync($"Something whent wrong uploading {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones:\n{failures}");
-                            return UIUtils.CascadableResult.Continue;
-                        }
-
-                        foreach (var responseInfo in responseInfos)
-                            if (responseInfo.Host is Host host)
-                            BonesInfo.FileLocationDataSet.Add(FileLocationData.NewOnline(host));
-
-                        catchFlag = "successFullHosts.Aggregate";
-                        //Utils.Log(catchFlag);
-                        string hostsString = responseInfos
-                            .Where(ri => ri.Host != null && ri.Success)
-                            .Select(ri => ri.Host)
-                            .Aggregate(
-                                seed: (string)null,
-                                func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{Const.NBSP}{Const.NBSP}{Const.DF.Colored("green")}{Const.NBSP}{n}"));
-
-                        catchFlag = "Popup.ShowAsync";
-                        //Utils.Log(catchFlag);
-                        await Popup.ShowAsync($"Uploaded {BonesInfo.Name.StartReplace()} to the following hosts:\n{hostsString}");
-                        return UIUtils.CascadableResult.Continue;
-                    }
-                    catchFlag = "Fell Through Upload";
-
-                    // Utils.Log(catchFlag);
-                    await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones failed to upload.");
-                    return UIUtils.CascadableResult.Continue;
-                }
-                catchFlag = "Fell Through Data";
-
-                // Utils.Log(catchFlag);
-                await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
-                return UIUtils.CascadableResult.Continue;
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"{nameof(UploadBonesAsync)} failed to upload bones to hosts [{catchFlag}]", x);
-                return UIUtils.CascadableResult.BackSilent;
-            }
-        }
-
         public void HandleDownloadButton()
         {
             if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
@@ -863,12 +734,12 @@ namespace UD_Bones_Folder.Mod.UI
 
             if (Bones[BonesScroller.selectedPosition] is not BonesInfoData bonesData
                 || bonesData.BonesInfo is not SaveBonesInfo bonesInfo
-                || bonesInfo.FileLocationData.Type != FileLocationData.LocationType.Online)
+                || bonesInfo.BonesSources.All(bs => !bs.IsOnline()))
                 return;
 
             try
             {
-                DownloadBonesAsync(bonesInfo).WaitResult();
+                ServerUtils.ManageBonesDownloadAsync(bonesInfo).WaitResult();
                 Show();
             }
             catch (Exception x)
@@ -877,7 +748,7 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
-        public void HandleUploadButton()
+        /*public void HandleUploadButton()
         {
             if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
                 return;
@@ -896,7 +767,7 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 Utils.Error(nameof(HandleUploadButton), x);
             }
-        }
+        }*/
 
         public void HandleModsButton()
         {
@@ -921,7 +792,7 @@ namespace UD_Bones_Folder.Mod.UI
         public static async Task PerformDelete(
             SaveBonesInfo BonesInfo,
             Action BeforeDeletion,
-            Action AfterDeletion
+            Action<bool> AfterDeletion
             )
         {
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
@@ -938,17 +809,22 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 BeforeDeletion?.Invoke();
 
-                BonesInfo.Cremate();
+                bool success = BonesInfo.Cremate();
 
-                AfterDeletion?.Invoke();
+                AfterDeletion?.Invoke(success);
 
-                await Popup.NewPopupMessageAsync("Bones Cremated!", PopupMessage.AcceptButton);
+                string message = success
+                    ? "Bones Cremated!"
+                    : "Failed cremating bones!"
+                    ;
+
+                await Popup.NewPopupMessageAsync(message, PopupMessage.AcceptButton);
             }
         }
 
         public async Task<UIUtils.CascadableResult> PerformDelete(SaveBonesInfo BonesInfo)
         {
-            bool hasOnline = BonesInfo.FileLocationDataSet.Any(fld => fld.Type.IsOnline());
+            bool hasOnline = BonesInfo.BonesSources.Any(bs => bs.IsOnline());
 
             int selectedPos = Bones.IndexOf(BonesScroller.choices.FirstOrDefault(data => data.Id == BonesInfo.ID));
 
@@ -959,7 +835,7 @@ namespace UD_Bones_Folder.Mod.UI
                 if (BonesScroller.TryGetSelectionElementsAtIndex(selectedPos, Bones, out _, out BonesInfoData bonesData, out SaveManagementRow saveRow))
                     saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
 
-            if (BonesInfo.FileLocationData == null)
+            if (BonesInfo.BonesSources.IsNullOrEmpty())
             {
                 SaveBonesInfoCache?.Remove(BonesInfo);
                 return UIUtils.CascadableResult.CancelSilent;
@@ -980,27 +856,29 @@ namespace UD_Bones_Folder.Mod.UI
                 || !bonesInfo.IsCrematable)
                 return;
 
-            bool hasOnline = bonesInfo.FileLocationDataSet.Any(fld => fld.Type.IsOnline());
+            bool hasOnline = bonesInfo.BonesSources.Any(bs => bs.IsOnline());
 
             await PerformDelete(
                 BonesInfo: bonesInfo,
                 BeforeDeletion: () => DisableNavContext(),
-                AfterDeletion: delegate ()
+                AfterDeletion: delegate (bool success)
                 {
-                    if (bonesInfo.FileLocationData != null)
+                    if (success)
                     {
-                        if (BonesScroller.selectionClones[selectedPos] is FrameworkUnityScrollChild selectionClone
-                            && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
+                        if (!bonesInfo.BonesSources.IsNullOrEmpty())
                         {
-                            //Utils.Log($"HandleDelete");
-                            BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, BonesScroller.selectedPosition);
-                            saveRow.setBonesData(bonesData);
-                            saveRow.Update();
+                            if (BonesScroller.selectionClones[selectedPos] is FrameworkUnityScrollChild selectionClone
+                                && selectionClone.gameObject.GetComponent<SaveManagementRow>() is SaveManagementRow saveRow)
+                            {
+                                //Utils.Log($"HandleDelete");
+                                BonesScroller.PostSetup.Invoke(selectionClone, selectionClone.scrollContext, bonesData, BonesScroller.selectedPosition);
+                                saveRow.setBonesData(bonesData);
+                                saveRow.Update();
+                            }
                         }
+                        else
+                            SaveBonesInfoCache?.Remove(bonesInfo);
                     }
-                    else
-                        SaveBonesInfoCache?.Remove(bonesInfo);
-
                     EnableNavContext();
                 });
 

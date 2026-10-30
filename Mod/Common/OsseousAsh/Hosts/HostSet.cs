@@ -24,6 +24,7 @@ using UD_Bones_Folder.Mod.Serialization;
 using static UD_Bones_Folder.Mod.Const;
 
 using Event = XRL.World.Event;
+using UD_Bones_Folder.Mod.Logging;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
@@ -31,6 +32,17 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
     [Serializable]
     public class HostSet : CompositeSet<Host>
     {
+        #region Debug Registration
+        [UD_DebugRegistry]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(HostSet),
+                MethodNameValues: new()
+                {
+                    { nameof(ReadFromFileAsync), true },
+                });
+        #endregion
+
         [Serializable]
         public class HostEqualityComparer : CompositeEqualityComparer<Host>
         {
@@ -54,28 +66,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 ;
         }
 
-        [JsonObject(MemberSerialization.OptOut)]
-        [Serializable]
-        protected class HostCollectionJSON
-        {
-            public Host[] Hosts;
-
-            public HostCollectionJSON()
-            {
-            }
-
-            public HostCollectionJSON(HostSet Source)
-                : this()
-            {
-                Source.RemoveWhere(h => h == null);
-                Hosts = Source.ToArray();
-            }
-
-            public HostSet ToHostSet(FileLocationData LocationData)
-                => new(Hosts, LocationData)
-                ;
-        }
-
         public class HostLocationPair : IDisposable
         {
             public Host Host;
@@ -92,13 +82,19 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 this.FileLocationData = FileLocationData;
             }
 
+            public void Deconstruct(out Host Host, out FileLocationData FileLocationData)
+            {
+                Host = this.Host;
+                FileLocationData = this.FileLocationData;
+            }
+
             public bool IsValid()
                 => Host != null
                 && FileLocationData != null
                 ;
 
             public override string ToString()
-                => $"{Host?.GetHostNameWithProtocol() ?? "NO_HOST"} in {FileLocationData?.SanitiseForDisplay() ?? "NO_LOCATION"}"
+                => $"{Host?.GetHostNameWithProtocol() ?? "NO_HOST"} in {FileLocationData?.SanitizeForDisplay() ?? "NO_LOCATION"}"
                 ;
 
             public void Dispose()
@@ -123,6 +119,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 this.HostSet = HostSet;
                 this.Host = Host;
             }
+
+            public override string ToString()
+                => $"{HostSet?.LocationData?.ToString() ?? "MISSING_HOSTSET"} -> {Host?.ToString() ?? "MISSING_HOST"}"
+                ;
 
             public bool IsValid()
                 => HostSet != null
@@ -188,6 +188,18 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public FileLocationData LocationData;
 
+        [JsonProperty]
+        private Host[] Hosts
+        {
+            get => ToArray();
+            set
+            {
+                Clear();
+                EnsureCapacity(value?.Length ?? 0);
+                AddRange(value);
+            }
+        }
+
         public HostSet()
             : base(DefaultEqualityComparer)
         { }
@@ -206,18 +218,24 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static async Task<HostSet> ReadFromFileAsync(FileLocationData FileLocationData, string FileName)
         {
-            if ((await FileLocationData?.ReadFromFileAsync<HostCollectionJSON>(FileName)) is HostCollectionJSON hostCollectionJSON
-                && !hostCollectionJSON.Hosts.IsNullOrEmpty())
-                return hostCollectionJSON.ToHostSet(FileLocationData);
+            if ((await FileLocationData?.ReadFromFileAsync<HostSet>(FileName)) is HostSet hostSet)
+            {
+                if (!hostSet.Hosts.IsNullOrEmpty())
+                {
+                    using var indent = new Indent(1);
+                    Debug.LogCaller(
+                        Indent: indent,
+                        ArgPairs: new Debug.ArgPair[]
+                        {
+                            Debug.Arg(nameof(FileLocationData), FileLocationData),
+                            Debug.Arg(nameof(FileName), FileName),
+                            Debug.Arg(nameof(HostSet)),
+                        });
 
-            return null;
-        }
-
-        public static async Task<HostSet> ReadAsync()
-        {
-            if (Configuration.TryFindBestOsseousAshPath(out FileLocationData fileLocationData, HostsFileName))
-                return await ReadFromFileAsync(fileLocationData, HostsFileName);
-
+                    hostSet.LocationData = FileLocationData;
+                    return hostSet;
+                }
+            }
             return null;
         }
 
@@ -237,19 +255,46 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public void WriteToFile(FileLocationData FileLocationData, string FileName)
         {
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(FileLocationData), FileLocationData),
+                    Debug.Arg(nameof(FileName), FileName),
+                });
+
             var enableds = new Dictionary<Host, bool?>();
             foreach (var host in this)
                 host.HotSwapEnabled(ref enableds);
 
-            FileLocationData.Write(FileName, new HostCollectionJSON(this), Formatting.Indented);
-
-            foreach (var host in this)
-                host.HotSwapEnabled(ref enableds);
+            try
+            {
+                Debug.LogJson(this, Indent: indent[1]);
+                FileLocationData.Write(FileName, this, Formatting.Indented);
+                return;
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"{nameof(HostSet)} failed to {nameof(WriteToFile)}", x);
+            }
+            finally
+            {
+                foreach (var host in this)
+                    host.HotSwapEnabled(ref enableds);
+            }
         }
 
         public void Write()
         {
-            // Utils.Log($"{nameof(Write)}({nameof(HostCollection)}: {LocationData}");
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(HostSet), LocationData),
+                });
+
             if (LocationData is not null
                 || Configuration.TryFindBestOsseousAshPath(out LocationData, HostsFileName))
                 WriteToFile(LocationData, HostsFileName);
@@ -291,7 +336,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 Write();
                 if (Dispose)
-                    Host.Dispose(DisposePendingSavGz: true);
+                    Host.Dispose(DisposePending: true);
             }
         }
 
@@ -302,7 +347,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 if (Remove(host))
                 {
-                    host.Dispose(DisposePendingSavGz: true);
+                    host.Dispose(DisposePending: true);
                     any = true;
                 }
             }
@@ -323,15 +368,15 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         }
 
         public string TaggedDisplayName()
-            => $"[{(LocationData?.Type ?? FileLocationData.LocationType.None).GetColoredString()}] {DisplayName()}";
+            => $"{LocationData.Tag()} {DisplayName()}";
 
         public string DisplayName()
-            => LocationData?.SanitiseForDisplay()
+            => LocationData?.SanitizeForDisplay()
             ?? "{{R|ERR:}} Unknown Location "
             ;
 
         public override string ToString()
-            => this.Aggregate(LocationData.SanitiseForDisplay(), Utils.NewLineDelimitedAggregator)
+            => this.Aggregate(LocationData.SanitizeForDisplay(), Utils.NewLineDelimitedAggregator)
             ;
 
         public void BuildHosts(bool Ping = false)
@@ -346,33 +391,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 yield return host.ConnectionLevel;
         }
 
-        public static IEnumerable<HostLocationPair> AllHostsWithLocation(Predicate<HostLocationPair> Where)
-        {
-            foreach (var hostSet in ServerUtils.Hosts.IteratorSafe())
-            {
-                foreach (var host in hostSet.IteratorSafe())
-                {
-                    var element = new HostLocationPair(host, hostSet?.LocationData);
-                    if (Where?.Invoke(element) is false)
-                    {
-                        element.Dispose();
-                        continue;
-                    }
-
-                    yield return element;
-                }
-            }
-        }
-
-        public static IEnumerable<HostLocationPair> AllHostsWithLocation()
-            => AllHostsWithLocation(null)
-            ;
-
         public void DisposeClear(Predicate<Host> Where, bool DisposePendingSavGz = false)
         {
             foreach (var host in this)
                 if (Where?.Invoke(host) is not false)
-                    host.Dispose(DisposePendingSavGz: DisposePendingSavGz);
+                    host.Dispose(DisposePending: DisposePendingSavGz);
 
             Clear();
         }
@@ -387,7 +410,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             DisposeClear();
             base.Dispose();
         }
-        }
+    }
+
     public static class OsseousAshHostCollectionExtensions
     {
         public static int TotalCount(this Rack<HostSet> Hosts)

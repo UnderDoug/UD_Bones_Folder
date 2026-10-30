@@ -36,6 +36,9 @@ using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.Serialization;
 
 using static UD_Bones_Folder.Mod.Const;
+using UD_Bones_Folder.Mod.BonesSystem;
+using UD_Bones_Folder.Mod.OsseousAsh;
+using System.Diagnostics.CodeAnalysis;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -51,11 +54,6 @@ namespace UD_Bones_Folder.Mod
         public static string Author => ThisMod.Manifest.Author;
         public static string AuthorOnPlatforms => $"{Author} on GitHub (UnderDoug), on Discord (.underdoug), or on the Steam Workshop (UnderDoug)";
 
-        public static string BothBonesLocations 
-            => $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSyncPath)} -OR- " +
-            $"{DataManager.SanitizePathForDisplay(BonesManager.BonesSavePath)}"
-            ;
-
         public const double FPS_MODULO = 8.0;
 
         private static int LastSpriteManagerPathMapCount = 0;
@@ -69,6 +67,94 @@ namespace UD_Bones_Folder.Mod
         [ModSensitiveStaticCache(CreateEmptyInstance = false)]
         private static exTextureInfo _InvalidTextureInfo;
         public static exTextureInfo InvalidTextureInfo => _InvalidTextureInfo ??= GetSpriteManagerInvalidInfoNaughty();
+
+
+        public static ModInfo GetFirstCallingModNot(ModInfo ThisMod)
+        {
+            try
+            {
+                Dictionary<Assembly, ModInfo> modAssemblies = ModManager.ActiveMods
+                    ?.Where(mi => mi != ThisMod && mi.Assembly != null)
+                    ?.ToDictionary(mi => mi.Assembly, mi => mi);
+
+                if (modAssemblies.IsNullOrEmpty())
+                {
+                    return null;
+                }
+                StackTrace stackTrace = new();
+                for (int i = 0; i < 12 && stackTrace?.GetFrame(i) is StackFrame stackFrameI; i++)
+                {
+                    if (stackFrameI?.GetMethod() is MethodBase methodBase
+                        && methodBase.DeclaringType is Type declaringType
+                        && modAssemblies.ContainsKey(declaringType.Assembly))
+                    {
+                        return modAssemblies[declaringType.Assembly];
+                    }
+                }
+            }
+            catch (Exception x)
+            {
+                MetricsManager.LogException(nameof(GetFirstCallingModNot), x, Const.GAME_MOD_EXCEPTION);
+            }
+            return null;
+        }
+
+        public static bool TryGetFirstCallingModNot([NotNullWhen(true)] ModInfo ThisMod, out ModInfo FirstCallingMod)
+            => (FirstCallingMod = GetFirstCallingModNot(ThisMod)) != null
+            ;
+
+        public static bool EitherNull<Tx, Ty>(
+            [NotNullWhen(false)] Tx X,
+            [NotNullWhen(false)] Ty Y,
+            out bool AreEqual
+            )
+        {
+            AreEqual = (X is null) == (Y is null);
+            return X is null
+                || Y is null
+                ;
+        }
+
+        public static bool EitherNull<Tx, Ty>(
+            [NotNullWhen(false)] Tx X,
+            [NotNullWhen(false)] Ty Y,
+            out int Comparison
+            )
+        {
+            Comparison = 0;
+
+            bool xNull = X is null;
+            bool yNull = Y is null;
+
+            if (!xNull
+                && !yNull)
+                return false;
+
+            if (!xNull
+                && yNull)
+                Comparison = 1;
+
+            if (xNull
+                && !yNull)
+                Comparison = -1;
+
+            return true;
+        }
+
+        public static bool EitherNullOrEmpty<Tx, Ty>(
+            [NotNullWhen(false)] Tx[] X,
+            [NotNullWhen(false)] Ty[] Y,
+            out bool AreEqual
+            )
+        {
+            if (EitherNull(X, Y, out AreEqual))
+                return AreEqual;
+
+            AreEqual = (X.Length > 0) == (Y.Length > 0);
+            return X.Length > 0
+                || Y.Length > 0
+                ;
+        }
 
         #region Blueprint Specs
 
@@ -152,8 +238,12 @@ namespace UD_Bones_Folder.Mod
             => Error($"{DateTime.Now.Timestamp()} - {Message}")
             ;
 
+        private static string ExceptionString(this Exception X)
+            => $"{(X != null ? $": {X}" : null)}"
+            ;
+
         public static void Error(ModInfo ModInfo, object Context, Exception X)
-            => Error(ModInfo, $"{Context}: {X}")
+            => Error(ModInfo, $"{Context}{X.ExceptionString()}")
             ;
 
         public static void Error(object Context, Exception X)
@@ -189,7 +279,7 @@ namespace UD_Bones_Folder.Mod
 
             string message = Context.ToString();
             if (SingleTimeErrorMessages[ModInfo].Add(message))
-                ModInfo.Error($"{message}: {X}");
+                ModInfo.Error($"{message}{X.ExceptionString()}");
         }
 
         public static void ErrorOnce(object Context, Exception X)
@@ -209,7 +299,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static void Warn(ModInfo ModInfo, object Context, Exception X)
-            => Warn(ModInfo, $"{Context}: {X}")
+            => Warn(ModInfo, $"{Context}{X.ExceptionString()}")
             ;
 
         public static void Warn(object Context, Exception X)
@@ -253,7 +343,7 @@ namespace UD_Bones_Folder.Mod
 
             string message = Context.ToString();
             if (SingleTimeWarnMessages[ModInfo].Add(message))
-                ModInfo.Warn($"{message}: {X}");
+                ModInfo.Warn($"{message}{X.ExceptionString()}");
         }
 
         public static void WarnOnce(object Context, Exception X)
@@ -650,6 +740,20 @@ namespace UD_Bones_Folder.Mod
             return max;
         }
 
+        public static string AppendTick(string String, bool AppendSpace = true)
+            => String + "[" + TICK + "]" + (AppendSpace ? " " : "")
+            ;
+
+        public static string AppendCross(string String, bool AppendSpace = true)
+            => String + "[" + CROSS + "]" + (AppendSpace ? " " : "")
+            ;
+
+        public static string AppendYehNah(string String, bool Yeh, bool AppendSpace = true)
+            => Yeh
+            ? AppendTick(String, AppendSpace)
+            : AppendCross(String, AppendSpace)
+            ;
+
         #region Aggregator Functions
 
         public static string DelimitedAggregator<T>(string Accumulator, T Next, string Delimiter)
@@ -690,33 +794,33 @@ namespace UD_Bones_Folder.Mod
             => PipeDelimitedAggregator(Accumulator, Next, null)
             ;
 
+        public static string AcronymAggregator(string Accumulator, char Next)
+            => Accumulator + (char.IsLetter(Next) && char.IsUpper(Next) ? Next : null)
+            ;
+
+        public static string RouteQueryPairAggregator(string Accumulator, RouteQueryPair Next)
+        {
+            if (Next.ToString() is not string queryPair)
+                return Accumulator;
+
+            if (Accumulator.IsNullOrEmpty())
+                Accumulator += "?";
+            else
+                Accumulator += "&";
+
+            return Accumulator + queryPair;
+        }
+
+        public static long FileSizeAggregator(long Accumulator, string Next)
+            => Accumulator + new Platform.IO.FileInfo(Next).Length
+            ;
+
         public static string CallChain(params string[] Strings)
             => Strings?.Aggregate("", PeriodDelimitedAggregator)
             ;
 
 
         #endregion
-
-        public static async Task PopupShowAsync(
-            string Message,
-            string Title = null,
-            bool Capitalize = true,
-            bool LogMessage = true,
-            Location2D PopupLocation = null
-            )
-        {
-            if (Capitalize)
-                Message = ColorUtility.CapitalizeExceptFormatting(Message);
-
-            if (LogMessage)
-                MessageQueue.AddPlayerMessage(Message: Message, Capitalize: Capitalize);
-
-            await Popup.NewPopupMessageAsync(
-                message: Message,
-                buttons: PopupMessage.AcceptButton,
-                title: Title,
-                PopupLocation: PopupLocation);
-        }
 
         private static exTextureInfo GetSpriteManagerInvalidInfoNaughty(string DebugForTile = null)
         {

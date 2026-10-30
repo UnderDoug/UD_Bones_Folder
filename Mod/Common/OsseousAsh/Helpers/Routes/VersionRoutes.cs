@@ -7,7 +7,7 @@ using System.Text;
 using XRL;
 using XRL.Collections;
 
-using static UD_Bones_Folder.Mod.Host;
+using static UD_Bones_Folder.Mod.OsseousAsh.Host;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
@@ -15,6 +15,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
     [HasRegistersRoutes]
     public static class VersionRoutes
     {
+        public const int MIN_ROUTE_VERSION = 1;
+
+        public const int MAX_ROUTE_VERSION = 1;
+
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         public static Dictionary<int, RouteSet> RoutesByVersion = new();
 
@@ -43,11 +47,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                         ValidMethods ??= new();
                         foreach (var method in methods)
                         {
-                            var methodMod = ModManager.GetMod(method.DeclaringType.Assembly);
+                            var methodMod = ModManager.GetMod(method.DeclaringType.Assembly) ?? Utils.ThisMod;
                             string toUse = $"to be used by {nameof(RegistersRoutesAttribute)}";
                             if (!method.IsStatic)
                             {
-                                MetricsManager.LogModWarning(methodMod, $"{method.Name} must be static {toUse}");
+                                methodMod.Warn($"{method.Name} must be static {toUse}");
                                 continue;
                             }
 
@@ -56,7 +60,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                             {
                                 if (!method.ReturnType.InheritsFrom(typeof(RouteSet)))
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name} must have at least one parameter ({typeof(int).Name} or {nameof(RouteSet)}) or return {nameof(RouteSet)} {toUse}");
+                                    methodMod.Warn($"{method.Name} must have at least one parameter ({typeof(int).Name} or {nameof(RouteSet)}) or return {nameof(RouteSet)} {toUse}");
                                     continue;
                                 }
                                 paramInfos = new ParameterInfo[0];
@@ -78,14 +82,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 if (!isInt
                                     && !isRouteSet)
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name}'s first parameter must be either {typeof(int).Name} or {nameof(RouteSet)} {toUse}");
+                                    methodMod.Warn($"{method.Name}'s first parameter must be either {typeof(int).Name} or {nameof(RouteSet)} {toUse}");
                                     continue;
                                 }
                                 if (paramInfos.Length < 2
                                     && !paramInfos[0].ParameterType.InheritsFrom(typeof(RouteSet))
                                     && !returnsRouteSet)
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name} must return a {nameof(RouteSet)} if its only parameter isn't also a {nameof(RouteSet)} {toUse}");
+                                    methodMod.Warn($"{method.Name} must return a {nameof(RouteSet)} if its only parameter isn't also a {nameof(RouteSet)} {toUse}");
                                     continue;
                                 }
                             }
@@ -102,19 +106,19 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 if (!isInt
                                     && !isRouteSet)
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name}'s second parameter must be either {typeof(int).Name} or {nameof(RouteSet)} {toUse}");
+                                    methodMod.Warn($"{method.Name}'s second parameter must be either {typeof(int).Name} or {nameof(RouteSet)} {toUse}");
                                     continue;
                                 }
                                 if (!haveRouteSet
                                     && !returnsRouteSet)
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name} must return a {nameof(RouteSet)} if neither of its first two parameters aren't a {nameof(RouteSet)} {toUse}");
+                                    methodMod.Warn($"{method.Name} must return a {nameof(RouteSet)} if neither of its first two parameters aren't a {nameof(RouteSet)} {toUse}");
                                     continue;
                                 }
                                 if (param1.InheritsFrom(param2)
                                     || param2.InheritsFrom(param1))
                                 {
-                                    MetricsManager.LogModWarning(methodMod, $"{method.Name}'s first two parameters cannot be the same {toUse}");
+                                    methodMod.Warn($"{method.Name}'s first two parameters cannot be the same {toUse}");
                                     continue;
                                 }
                             }
@@ -123,9 +127,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                         }
                     }
                     Utils.Info($"Registering Routes...");
-                    for (int i = 0; i < 2; i++)
+                    for (int i = MIN_ROUTE_VERSION; i <= MAX_ROUTE_VERSION; i++)
                     {
-                        var routeSet = new RouteSet(DefaultUnsupported: false, Version: i);
+                        var routeSet = new RouteSet(DefaultUnsupported: false, ApiVersion: i);
                         foreach (var method in ValidMethods.IteratorSafe())
                         {
                             var paramTypes = method.GetParameters().IteratorSafe().Select(pi => pi.ParameterType);
@@ -172,111 +176,78 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         [RegistersRoutes]
         public static RouteSet RegisterRoutes(int Version, RouteSet RouteSet)
         {
-            if (Version == 0)
-            {
-                // Status
-                RouteSet.Status ??= new(WebMethods.GET, "status");
-
-                // User
-                RouteSet.CanUpload ??= new(WebMethods.GET, "canUp/:UserID");
-
-                // Bones
-                RouteSet.NewBonesInfo ??= new(WebMethods.POST, "Bones");
-                RouteSet.NewBonesSavGz ??= new(WebMethods.PUT, "Bones/SavGz/:BonesID", "gz");
-
-                RouteSet.BonesInfo ??= new(WebMethods.GET, "Bones/Info/:BonesID");
-                RouteSet.BonesInfos ??= new(WebMethods.GET, "Bones/Infos");
-
-                RouteSet.BonesSpec ??= new(WebMethods.GET, "Bones/Spec/:BonesID");
-                RouteSet.BonesSpecs ??= new(WebMethods.GET, "Bones/Specs");
-
-                RouteSet.UpdateBonesStats ??= new(WebMethods.PUT, "Bones/Stats/:BonesID/:UserID");
-
-                RouteSet.LoadBones ??= new(WebMethods.GET, "Bones/SavGz/:BonesID", "gz");
-                RouteSet.DownloadBones ??= new(WebMethods.POST, "Bones/Download/:BonesID/:UserID", "gz");
-
-                RouteSet.CheckBonesID ??= new(WebMethods.GET, "Bones/ID/:BonesID");
-                RouteSet.BonesIDs ??= new(WebMethods.GET, "Bones/IDs");
-
-                RouteSet.DeleteBones ??= new(WebMethods.DELETE, "Bones/del/:BonesID");
-                // RouteSet.WipeBones ??= new(WebMethods.DELETE, "del/Bones");
-
-                // Report
-                RouteSet.NewReport ??= new(WebMethods.POST, "Report");
-
-                RouteSet.Reported ??= new(WebMethods.GET, "Report/Check/:BonesID/:UserID");
-                // RouteSet.Report ??= new(WebMethods.GET, "ReportID/:ReportID");
-                // RouteSet.Reports ??= new(WebMethods.GET, "Reports");
-
-                RouteSet.ReportByBonesAndUser ??= new(WebMethods.GET, "Reports/:BonesID/:UserID");
-                // RouteSet.ReportByBones ??= new(WebMethods.GET, "Reports/Bones/:BonesID");
-                RouteSet.ReportByUser ??= new(WebMethods.GET, "Reports/OAID/:UserID");
-
-                // RouteSet.DeleteReport ??= new(WebMethods.DELETE, "Report/del/:ReportID");
-                RouteSet.DeleteReportByBonesAndUser ??= new(WebMethods.DELETE, "del/Reports/:BonesID/:UserID");
-                // RouteSet.DeleteReportByBones ??= new(WebMethods.DELETE, "del/Report/Bones/:BonesID");
-                // RouteSet.DeleteReportByUser ??= new(WebMethods.DELETE, "del/Report/OAID/:UserID");
-                // RouteSet.WipeReports ??= new(WebMethods.DELETE, "del/Reports");
-            }
-            else
             if (Version == 1)
             {
                 // Status
-                RouteSet.Status ??= new(WebMethods.GET, "status");
+                RouteSet.SupportRoute(nameof(RouteSet.Status), WebMethods.GET, "status");
 
                 // User
-                RouteSet.CanUpload ??= new(WebMethods.GET, "canUp/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.CanUpload), WebMethods.GET, "users/:UserID/upload-eligibility");
 
-                RouteSet.NewUser ??= new(WebMethods.POST, "User/new");
-                RouteSet.UpdateUser ??= new(WebMethods.POST, "User/Update/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.NewUser), WebMethods.POST, "users");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateUser), WebMethods.PUT, "users/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateUserHandle), WebMethods.PUT, "users/:UserID/handle");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateUserPassword), WebMethods.PUT, "users/:UserID/password");
 
-                RouteSet.Login ??= new(WebMethods.POST, "User/Login");
+                RouteSet.SupportRoute(nameof(RouteSet.GetSession), WebMethods.GET, "users/:UserID/session");
 
-                RouteSet.User ??= new(WebMethods.GET, "User/:UserID");
-                // RouteSet.Users ??= new(WebMethods.GET, "Users");
-                // RouteSet.UserStatus ??= new(WebMethods.POST, "User/Status/:UserID");
-                // RouteSet.UserHandle ??= new(WebMethods.POST, "User/Handle/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.User), WebMethods.GET, "users/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.Users), WebMethods.GET, "users");
+                RouteSet.SupportRoute(nameof(RouteSet.UserStatus), WebMethods.GET, "users/:UserID/status");
+                RouteSet.SupportRoute(nameof(RouteSet.UserHandle), WebMethods.GET, "users/:UserID/handle");
+
+                RouteSet.SupportRoute(nameof(RouteSet.UserReports), WebMethods.GET, "users/:UserID/reports");
+                RouteSet.SupportRoute(nameof(RouteSet.DeleteUserReports), WebMethods.DELETE, "users/:UserID/reports");
 
                 // Bones
-                RouteSet.NewBonesInfo ??= new(WebMethods.POST, "Bones/new");
-                RouteSet.NewBonesSavGz ??= new(WebMethods.PUT, "Bones/SavGz/:BonesID");
+                RouteSet.SupportRoute(nameof(RouteSet.NewBonesInfo), WebMethods.POST, "bones");
+                RouteSet.SupportRoute(nameof(RouteSet.NewBonesSavGz), WebMethods.PUT, "bones/:BonesID/bytes-gz", "gz");
 
-                RouteSet.BonesInfo ??= new(WebMethods.GET, "Bones/Info/:BonesID/:UserID");
-                RouteSet.BonesInfos ??= new(WebMethods.GET, "Bones/Infos/:UserID");
-                RouteSet.BonesPagedInfos ??= new(WebMethods.GET, "/Bones/Paged/Infos/:from-:to/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.LoadBones), WebMethods.GET, "bones/:BonesID/bytes-gz", "gz");
 
-                RouteSet.BonesSpec ??= new(WebMethods.GET, "Bones/Spec/:BonesID");
-                RouteSet.BonesSpecs ??= new(WebMethods.GET, "Bones/Specs");
+                RouteSet.SupportRoute(nameof(RouteSet.CheckBonesID), WebMethods.GET, "bones/:BonesID/confirmation");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesIDs), WebMethods.GET, "bones/ids");
 
-                RouteSet.UpdateBonesStats ??= new(WebMethods.PUT, "Bones/Stats/:Stat/:BonesID/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.DeleteBones), WebMethods.DELETE, "bones/:BonesID");
+                RouteSet.SupportRoute(nameof(RouteSet.WipeBones), WebMethods.DELETE, "bones");
 
-                RouteSet.LoadBones ??= new(WebMethods.GET, "Bones/SavGz/:BonesID");
-                RouteSet.DownloadBones ??= new(WebMethods.POST, "Bones/Download/:BonesID/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesReports), WebMethods.GET, "bones/:BonesID/reports");
+                RouteSet.SupportRoute(nameof(RouteSet.DeleteBonesReports), WebMethods.DELETE, "bones/:BonesID/reports");
 
-                RouteSet.CheckBonesID ??= new(WebMethods.GET, "Bones/ID/:BonesID");
-                RouteSet.BonesIDs ??= new(WebMethods.GET, "Bones/IDs");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesInfos), WebMethods.GET, "bones/infos");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesInfo), WebMethods.GET, "bones/:BonesID/info");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesPagedInfos), WebMethods.GET, "bones/infos/paged/:from-:to");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesInfosByIDs), WebMethods.POST, "bones/infos");
 
-                RouteSet.DeleteBones ??= new(WebMethods.DELETE, "Bones/del/:BonesID");
-                // RouteSet.WipeBones ??= new(WebMethods.DELETE, "del/Bones");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesSpecs), WebMethods.GET, "bones/specs");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesSpec), WebMethods.GET, "bones/:BonesID/spec");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesIDsMatchingSpec), WebMethods.GET, "bones/IDs/spec", Queryable: true);
+
+                RouteSet.SupportRoute(nameof(RouteSet.BonesStatSets), WebMethods.GET, "bones/:BonesID/stat-sets");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesStatSet), WebMethods.GET, "bones/:BonesID/stat-sets");
+
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateBonesStats), WebMethods.PUT, "bones/:BonesID/stat-sets/:Stat");
+
+                RouteSet.SupportRoute(nameof(RouteSet.BonesModConfigs), WebMethods.GET, "bones/mod-configs");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesModConfig), WebMethods.GET, "bones/:BonesID/mod-configs");
+                RouteSet.SupportRoute(nameof(RouteSet.BonesModConfigsMatchingSpec), WebMethods.GET, "bones/mod-configs/spec", Queryable: true);
 
                 // Report
-                RouteSet.NewReport ??= new(WebMethods.POST, "Report/new");
+                RouteSet.SupportRoute(nameof(RouteSet.NewReport), WebMethods.POST, "reports");
 
-                // RouteSet.UpdateReport ??= new(WebMethods.PUT, "Report/:ReportID");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateReport), WebMethods.PUT, "reports/:ReportID");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateBlocked), WebMethods.PUT, "reports/:BonesID/:UserID/blocked");
 
-                RouteSet.Reported ??= new(WebMethods.GET, "Report/Check/:BonesID/:UserID");
-                // RouteSet.Report ??= new(WebMethods.GET, "Report/:ReportID");
-                RouteSet.Reports ??= new(WebMethods.GET, "Reports");
+                RouteSet.SupportRoute(nameof(RouteSet.Reported), WebMethods.GET, "reports/:BonesID/:UserID/confirmation");
+                RouteSet.SupportRoute(nameof(RouteSet.Blocked), WebMethods.GET, "reports/:BonesID/:UserID/blocked");
+                RouteSet.SupportRoute(nameof(RouteSet.Report), WebMethods.GET, "reports/:ReportID");
 
-                RouteSet.ReportByBonesAndUser ??= new(WebMethods.GET, "Reports/:BonesID/:UserID");
-                // RouteSet.ReportByBones ??= new(WebMethods.GET, "Reports/Bones/:BonesID");
-                RouteSet.ReportByUser ??= new(WebMethods.GET, "Reports/User/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.ReportByBonesAndUser), WebMethods.GET, "reports/:BonesID/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.Reports), WebMethods.GET, "reports");
 
-                // RouteSet.DeleteReport ??= new(WebMethods.DELETE, "Report/del/:ReportID");
-                RouteSet.DeleteReportByBonesAndUser ??= new(WebMethods.DELETE, "del/Reports/:BonesID/:UserID");
-                // RouteSet.DeleteReportByBones ??= new(WebMethods.DELETE, "del/Report/Bones/:BonesID");
-                // RouteSet.DeleteReportByUser ??= new(WebMethods.DELETE, "del/Report/User/:UserID");
-                // RouteSet.WipeReports ??= new(WebMethods.DELETE, "del/Reports");
+                RouteSet.SupportRoute(nameof(RouteSet.DeleteReport), WebMethods.DELETE, "reports/:ReportID");
+                RouteSet.SupportRoute(nameof(RouteSet.DeleteReportByBonesAndUser), WebMethods.DELETE, "reports/:BonesID/:UserID");
+                RouteSet.SupportRoute(nameof(RouteSet.WipeReports), WebMethods.DELETE, "reports");
             }
             return RouteSet;
         }

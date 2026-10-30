@@ -136,6 +136,7 @@ namespace UD_Bones_Folder.Mod.UI
         private static bool IsQudGamemodeModuleWindowDescriptor(EmbarkBuilderModuleWindowDescriptor Descriptor)
             => Descriptor.module is QudGamemodeModule
             ;
+
         public override void assembleWindowDescriptors(List<EmbarkBuilderModuleWindowDescriptor> windows)
         {
             int index = windows.FindIndex(IsQudGamemodeModuleWindowDescriptor);
@@ -265,7 +266,7 @@ namespace UD_Bones_Folder.Mod.UI
                     try
                     {
                         if (activeWindow.window is QudCustomizeCharacterModuleWindow customizeCharacterModuleWindow
-                        && customizeCharacterModuleWindow.module is QudCustomizeCharacterModule customizeCharacterModule)
+                            && customizeCharacterModuleWindow.module is QudCustomizeCharacterModule customizeCharacterModule)
                         {
                             if (customizeCharacterModule.data == null)
                                 customizeCharacterModule.setData(new());

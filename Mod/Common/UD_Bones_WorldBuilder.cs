@@ -38,7 +38,7 @@ namespace XRL.World.WorldBuilders
             if (Options.EnableOsseousAshDownloads)
             {
                 Loading.SetLoadingStatus($"Loading Bones...");
-                foreach (var host in Configuration.AllHosts(h => h.IsOnCooldown))
+                foreach (var host in ServerUtils.AllHosts(h => h.IsOnCooldown))
                 {
                     string hostName = host.GetHostNameWithProtocol();
                     try

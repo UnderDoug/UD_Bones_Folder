@@ -45,12 +45,14 @@ using Range = XRL.Range;
 using Event = XRL.World.Event;
 using static UD_Bones_Folder.Mod.SaveBonesInfo;
 using System.Net;
+using Newtonsoft.Json;
 
 namespace UD_Bones_Folder.Mod
 {
     public static class Extensions
     {
         private static OsseousAsh.Configuration Config => OsseousAsh.Configuration.Instance;
+
         public static string MakeDeathReasonThirdPersion(this string DeathReason, string Default = "You died under mysterious circumstances!")
         {
             string deathReason = DeathReason;
@@ -210,7 +212,6 @@ namespace UD_Bones_Folder.Mod
 
             return new SaveBonesJSON
             {
-                UserID = Config?.ID ?? Guid.Empty,
                 Handle = Config?.Handle ?? OsseousAsh.Configuration.DefaultOsseousAshHandle,
                 SaveVersion = XRLGame.SaveVersion,
                 GameVersion = Game.GetType().Assembly.GetName().Version.ToString(),
@@ -227,7 +228,7 @@ namespace UD_Bones_Folder.Mod
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
                 Turn = Game.Turns,
                 SaveTime = $"{localTimeNow.ToLongDateString()} at {localTimeNow.ToLongTimeString()}",
-                ModsEnabled = ModRecord.GetRunningMods().Select(r => r.ToPairString()).ToList(),
+                EnabledMods = ModRecordCollection.NewCurrent(),
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
@@ -261,7 +262,7 @@ namespace UD_Bones_Folder.Mod
         public static void SetBonesIcon(this SaveManagementRow SaveRow, BonesInfoData BonesData)
         {
             var bonesInfo = BonesData.BonesInfo;
-            var bonesJSON = bonesInfo?.GetBonesJSON();
+            var bonesJSON = bonesInfo?.JSON;
 
             var bonesRender = bonesInfo.Render;
 
@@ -334,7 +335,7 @@ namespace UD_Bones_Folder.Mod
                     if (locationBoxTextSkin.name == "tct"
                         || locationBoxTextSkin.gameObject.name == "tct")
                     {
-                        locationBoxTextSkin.SetText(bonesInfo.GetFileLocationTypeColorString());
+                        locationBoxTextSkin.SetText(bonesInfo.GetSourceTypesColorString());
                         break;
                     }
                 }
@@ -1677,7 +1678,6 @@ namespace UD_Bones_Folder.Mod
                 return default;
 
             Task.Wait();
-
             return Task.Result;
         }
 
@@ -2343,14 +2343,38 @@ namespace UD_Bones_Folder.Mod
             => Creature.AdjustCyberneticsLicensePointsFromWedges(Amount, out _)
             ;
 
-        public static void RemoveAll<T>(this ScopeDisposedList<T> Source, Predicate<T> Where)
+        public static int RemoveAll<T>(this PooledList<T> Source, Predicate<T> Where)
         {
             if (Source.IsNullOrEmpty())
-                return;
+                return 0;
 
+            int removed = 0;
             for (int i = Source.Count - 1; i >= 0; i--)
+            {
                 if (Where?.Invoke(Source[i]) is true)
+                {
+                    removed++;
                     Source.RemoveAt(i);
+                }
+            }
+            return removed;
+        }
+
+        public static int RemoveAll<T>(this ScopeDisposedList<T> Source, Predicate<T> Where)
+        {
+            if (Source.IsNullOrEmpty())
+                return 0;
+
+            int removed = 0;
+            for (int i = Source.Count - 1; i >= 0; i--)
+            {
+                if (Where?.Invoke(Source[i]) is true)
+                {
+                    removed++;
+                    Source.RemoveAt(i);
+                }
+            }
+            return removed;
         }
 
         public static bool GainAP(this GameObject Creatrue, int Amount)
@@ -2875,7 +2899,8 @@ namespace UD_Bones_Folder.Mod
         }
 
         public static string TypeStringWithGenerics<T>(this T Object, bool Short = false)
-            => (Object?.GetType() ?? typeof(T))?.ToStringWithGenerics(Short);
+            => (Object?.GetType() ?? typeof(T))?.ToStringWithGenerics(Short)
+            ;
 
         public static string Acronymize(this string String)
         {
@@ -2884,7 +2909,27 @@ namespace UD_Bones_Folder.Mod
                 || String.ToUpper() == String)
                 return String;
 
-            return String.Aggregate("", (a, n) => a + (char.IsLetter(n) && char.IsUpper(n) ? n : null));
+            return String.Capitalize().Aggregate((string)null, Utils.AcronymAggregator) ?? String.ToUpper()[0].ToString();
+        }
+
+        public static bool None<T>([NotNullWhen(true)] this IEnumerable<T> Enumberable, Predicate<T> Where)
+            => !Enumberable.Any(Where?.ToFunc())
+            ;
+
+        public static Func<T, bool> ToFunc<T>(this Predicate<T> Filter, bool ThrowIfNull = false)
+        {
+            if (Filter == null
+                && ThrowIfNull)
+                throw new ArgumentNullException(
+                    paramName: nameof(Filter),
+                    message: "cannot be null if " + nameof(ThrowIfNull) + " is set to " + ThrowIfNull.ToString());
+
+            return delegate (T Input)
+            {
+                return Filter == null
+                    || Filter(Input)
+                    ;
+            };
         }
 
         public static T ConvertType<T>(this object Value)
@@ -3224,6 +3269,20 @@ namespace UD_Bones_Folder.Mod
             && resp.StatusCode == HttpStatusCode.NotFound
             ;
 
+        public static bool Is400Exception(this WebException Ex)
+            => Ex != null
+            && Ex.Status == WebExceptionStatus.ProtocolError
+            && Ex.Response is HttpWebResponse resp
+            && resp.StatusCode == HttpStatusCode.BadRequest
+            ;
+
+        public static bool Is403Exception(this WebException Ex)
+            => Ex != null
+            && Ex.Status == WebExceptionStatus.ProtocolError
+            && Ex.Response is HttpWebResponse resp
+            && resp.StatusCode == HttpStatusCode.Forbidden
+            ;
+
         public static void AppendWebHeader(this WebHeaderCollection Headers, HttpRequestHeader Header, object Value)
         {
             string headerValue = null;
@@ -3235,6 +3294,56 @@ namespace UD_Bones_Folder.Mod
             headerValue += $"{Value}";
 
             Headers.Add(Header, headerValue);
+        }
+
+        public static async Task WriteJsonObjectAsync(this System.IO.StreamWriter StreamWriter, object Object)
+            => await StreamWriter.WriteAsync(JsonConvert.SerializeObject(Object))
+            ;
+
+        public static IEnumerable<T> Subset<T>(this IEnumerable<T> Source, System.Range Range)
+        {
+            (int offset, int length) = Range.GetOffsetAndLength(Source.Count());
+            int i = 0;
+            foreach (var element in Source.IteratorSafe())
+            {
+                if (i >= length)
+                    break;
+
+                if (i >= offset)
+                    yield return element;
+
+                i++;
+            }
+        }
+
+        public static string SafeJoin<T>(this IEnumerable<T> Enumerable, string Delimiter = ", ")
+            => (Enumerable != null
+                && Enumerable.Count() > 0)
+            ? Enumerable.Aggregate(
+                seed: "",
+                func: (a, n) => a + (!a.IsNullOrEmpty() ? Delimiter : null) + n.ToString())
+            : null
+            ;
+
+        public static bool ElementsMatch<Tx, Ty>(this Tx[] X, Ty[] Y)
+        {
+            if (Utils.EitherNullOrEmpty(X, Y, out bool areEqual))
+                return areEqual;
+
+            if (X.Length != Y.Length)
+                return false;
+
+            for (int i = 0; i < X.Length; i++)
+            {
+                Tx x = X[i];
+                Ty y = Y[i];
+                if ((!Utils.EitherNull(x, y, out bool iAreEqual)
+                        && !x.Equals(y))
+                    || iAreEqual)
+                    return false;
+            }
+
+            return true;
         }
 
         #region Harmony

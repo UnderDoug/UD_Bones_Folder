@@ -8,8 +8,10 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 using Platform.IO;
+using Path = Platform.IO.Path;
 
 using UD_Bones_Folder.Mod.Coalescence;
+using UD_Bones_Folder.Mod.Logging;
 using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.Serialization;
 
@@ -24,64 +26,17 @@ namespace UD_Bones_Folder.Mod
     [Serializable]
     public class FileLocationData : IComposite, IEquatable<FileLocationData>, IDisposable
     {
-        public class EqualityComparer : CompositeEqualityComparer<FileLocationData>
-        {
-            public override bool Equals(FileLocationData x, FileLocationData y)
-                => x == null
-                    || y == null
-                ? (x == null) == (y == null)
-                : x.SameAs(y)
-                ;
-
-            public override int GetHashCode(FileLocationData obj)
-                => obj?.GetHashCode()
-                ?? 0
-                ;
-        }
-
-        public class Coalescer : Coalescer<FileLocationData>
-        {
-            public Coalescer()
-            {
-                _CoalesceMethod = CoalesceMethod.First;
-            }
-
-            public Coalescer(CoalesceMethod CoalesceMethod)
-                : base(CoalesceMethod)
-            { }
-
-            public override FileLocationData CoalesceFirst(FileLocationData x, FileLocationData y)
-                => x;
-
-            public override FileLocationData CoalesceSecond(FileLocationData x, FileLocationData y)
-                => y;
-
-            public override FileLocationData CoalesceGreater(FileLocationData x, FileLocationData y)
-                => throw Nonsense_NotSupportedException()
-                ;
-
-            public override FileLocationData CoalesceLesser(FileLocationData x, FileLocationData y)
-                => throw Nonsense_NotSupportedException()
-                ;
-
-            public override FileLocationData CoalesceCombine(FileLocationData x, FileLocationData y)
-                => throw Nonsense_NotSupportedException()
-                ;
-
-            public override FileLocationData CoalesceDifference(FileLocationData x, FileLocationData y)
-                => throw Nonsense_NotSupportedException()
-                ;
-        }
-
-        public class TypeComparer : Comparer<FileLocationData>
-        {
-            public override int Compare(FileLocationData x, FileLocationData y)
-                => x == null
-                    || y == null
-                ? (x == null).CompareTo(y == null)
-                : x.Type.CompareTo(y.Type)
-                ;
-        }
+        #region Debug Registration
+        [UD_DebugRegistry]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(FileLocationData),
+                MethodNameValues: new()
+                {
+                    { nameof(ReadFromFileAsync), true },
+                    { nameof(WriteAsync), true },
+                });
+        #endregion
 
         [Serializable]
         public enum LocationType
@@ -89,8 +44,6 @@ namespace UD_Bones_Folder.Mod
             None,
             Local,
             Synced,
-            Mod,
-            Online,
         }
 
         private static readonly char[] PathSeparatorChars = new char[3]
@@ -100,42 +53,27 @@ namespace UD_Bones_Folder.Mod
             System.IO.Path.DirectorySeparatorChar,
         };
 
-        public static EqualityComparer DefaultEqualityComparer = new();
-
-        public static Coalescer DefaultCoalescer = new();
-
-        public static TypeComparer DefaultTypeComparer = new();
-
-        public static string MissingLocaitonShortDisplayName => $"a {"strange location".Colored(LocationType.None.TypeColor())}";
-
-        public static FileLocationData DummyFileLocationData = new FileLocationData
-        {
-            Type = LocationType.None,
-        };
+        public static string LocalTypeString => LocationType.Local.GetColoredString();
+        public static string SyncedTypeString => LocationType.Synced.GetColoredString();
 
         public LocationType Type;
         public string Path;
-        public Host Host;
 
         public FileLocationData()
         { }
 
         public FileLocationData(
             LocationType Type,
-            string Path,
-            Host Host
+            string Path
             )
             : this()
         {
             this.Type = Type;
-
             this.Path = PathWithoutFileName(Path);
-
-            this.Host = Host;
         }
 
         public FileLocationData(FileLocationData Source)
-            : this(Source.Type, Source.Path, Source.Host)
+            : this(Source.Type, Source.Path)
         { }
 
         private static int FindExtension(string path)
@@ -166,10 +104,9 @@ namespace UD_Bones_Folder.Mod
             {
                 LocationType.Synced => "G",
                 LocationType.Local => "W",
-                LocationType.Mod => "C",
-                LocationType.Online => "Y",
                 _ => "R",
-            };
+            }
+            ;
 
         public string GetFileLocationDataTypeColor()
             => GetFileLocationDataTypeColor(Type)
@@ -188,62 +125,18 @@ namespace UD_Bones_Folder.Mod
             {
                 Type = LocationType.Local,
                 Path = Path,
-            };
+            }
+            ;
 
         public static FileLocationData NewSynced(string Path)
             => new FileLocationData
             {
                 Type = LocationType.Synced,
                 Path = Path,
-            };
-
-        public static FileLocationData NewMod(string Path)
-            => new FileLocationData
-            {
-                Type = LocationType.Mod,
-                Path = Path,
-            };
-
-        public static FileLocationData NewOnline(Host Host)
-            => new FileLocationData
-            {
-                Type = LocationType.Online,
-                Host = Host,
-            };
-
-        public static FileLocationData NewOnline(string HostName, string AuthToken = null)
-            => new FileLocationData
-            {
-                Type = LocationType.Online,
-                Host = new Host(HostName, AuthToken),
-            };
-
-        public static FileLocationData NewAssumed(string Path)
-        {
-            if (Path.ContainsAny("\\Mods\\", "/Mods/", "\\workshop\\content\\333640\\", "/workshop/content/333640/"))
-                return NewMod(Path);
-
-            if (Path.Contains(XRLCore.SyncedPath))
-                return NewSynced(Path);
-
-            if (Path.Contains(XRLCore.SavePath))
-                return NewLocal(Path);
-
-            if (Host.TryParse(Path, out Host host))
-            {
-                if (ServerUtils.Hosts.FirstHostMatching(h => h.SameAs(host, IgnoreDisabled: true)) is Host existingHost)
-                    return NewOnline(existingHost, existingHost.AuthToken);
-                return NewOnline(host);
             }
+            ;
 
-            return new FileLocationData
-            {
-                Type = LocationType.None,
-                Path = Path,
-            };
-        }
-
-        public string SanitiseForDisplay(string FileName = null)
+        public string SanitizeForDisplay(string FileName = null)
         {
             string output = Path;
             if (!FileName.IsNullOrEmpty())
@@ -252,21 +145,8 @@ namespace UD_Bones_Folder.Mod
             return DataManager.SanitizePathForDisplay(output);
         }
 
-        public string ShortDisplayName()
-            => Type switch
-            {
-                LocationType.Synced or
-                LocationType.Local => $"a {Tag(false)} folder",
-                LocationType.Mod => $"a {Tag(false)}", // eventually display the actual mod name.
-                LocationType.Online => $"{Host.DisplayName().Colored(LocationType.Online.TypeColor())}",
-                _ => MissingLocaitonShortDisplayName,
-            }
-            ;
-
         public string DisplayName()
-            => Type <= LocationType.Mod
-            ? SanitiseForDisplay()
-            : Host?.GetHostNameWithProtocol()
+            => SanitizeForDisplay()
             ;
 
         public string Tag(bool Braces = true)
@@ -277,21 +157,6 @@ namespace UD_Bones_Folder.Mod
             => $"{Tag()} {DisplayName()}"
             ;
 
-        public string GetSavedVerb()
-            => Type switch
-            {
-                LocationType.Synced or
-                LocationType.Local => "saved to",
-                LocationType.Mod => "compiled in",
-                LocationType.Online => "uploaded to",
-                _ => "materialized mytseriously in",
-            };
-
-        public bool Exists(string Directory)
-            => !Path.IsNullOrEmpty()
-            && Platform.IO.Directory.Exists(Combine(Directory))
-            ;
-
         public bool Exists()
             => !Path.IsNullOrEmpty()
             && Directory.Exists(Path)
@@ -299,23 +164,13 @@ namespace UD_Bones_Folder.Mod
 
         public string EnsureExists()
         {
-            if (Type == LocationType.Online
-                && !Options.EnableOsseousAshDownloads)
-            {
-                // consider adding code here to check "canUp" or "status"
+            if (Type <= LocationType.None)
                 return null;
-            }
-
-            if (Type == LocationType.Mod
-                || Type == LocationType.None)
-                return null;
-
-            if (Exists())
-                return Path;
 
             try
             {
-                Directory.CreateDirectory(Path);
+                if (!Exists())
+                    Path = Directory.CreateDirectory(Path).FullName;
             }
             catch (Exception x)
             {
@@ -329,85 +184,6 @@ namespace UD_Bones_Folder.Mod
         public bool TryEnsureExists()
             => !EnsureExists().IsNullOrEmpty()
             ;
-
-        public long GetDirectorySize()
-            => Type.IsTwixtInclusive(LocationType.Local, LocationType.Synced)
-                && TryEnsureExists()
-            ? Directory.EnumerateFiles(this).Aggregate(0L, (a, n) => a + new FileInfo(n).Length)
-            : 0L
-            ;
-
-        public async Task<IEnumerable<FileLocationData>> EnumerateDirectoriesAsync(bool LogErrorIfFailed = true)
-        {
-            try
-            {
-                var enumerationResult = await Folder.EnumerateDirectoriesAsync(this);
-
-                if (LogErrorIfFailed)
-                {
-                    enumerationResult.LogErrorIfFailed();
-                }
-                return enumerationResult.directories.Select(s => NewAssumed(s));
-            }
-            catch (Exception x)
-            {
-                Utils.Error($"Enumerating directories in {SanitiseForDisplay()}", x);
-                return Enumerable.Empty<FileLocationData>();
-            }
-        }
-
-        public IEnumerable<FileLocationData> EnumerateDirectories(bool LogErrorIfFailed = true)
-            => EnumerateDirectoriesAsync(LogErrorIfFailed).WaitResult()
-            ;
-
-        public bool TryDeleteDirectory(Action<FileLocationData> OnSuccess = null, Action<FileLocationData> OnFailure = null)
-        {
-            if (Type.IsFile())
-            {
-                int attempts = 0;
-                while (Directory.Exists(this))
-                {
-                    try
-                    {
-                        Directory.Delete(this);
-                        BonesManager.ClearHasSaveBones();
-                        OnSuccess?.Invoke(this);
-                        return true;
-                    }
-                    catch (Exception x)
-                    {
-                        if (attempts++ < 20)
-                        {
-                            Thread.Sleep(50);
-                            continue;
-                        }
-
-                        Utils.Error($"Error deleting directory {SanitiseForDisplay()}", x);
-                        break;
-                    }
-                }
-            }
-
-            OnFailure?.Invoke(this);
-            return false;
-        }
-
-        public string Combine(string Path)
-            => !Path.IsNullOrEmpty()
-            ? Platform.IO.Path.Combine(this, Path)
-            : this
-            ;
-
-        public FileLocationData CreateCombine(string Path)
-        {
-            if (Type.IsOnline())
-                throw new NotSupportedException($"{nameof(LocationType.Online)} {nameof(FileLocationData)} don't currently support URLs beyond the TLD (or a subdomain).");
-
-            if (Path.IsNullOrEmpty())
-                return Clone();
-
-            return NewAssumed(Combine(Path));
-        }
 
         public string WithFileName(string FileName)
             => Platform.IO.Path.Combine(this, FileName)
@@ -428,12 +204,30 @@ namespace UD_Bones_Folder.Mod
             {
                 try
                 {
-                    if (JsonConvert.DeserializeObject<T>(await File.ReadAllTextAsync(WithFileName(FileName))) is T json)
-                        return json;
+                    using var indent = new Indent(1);
+                    Debug.LogCaller(
+                        Indent: indent,
+                        ArgPairs: new Debug.ArgPair[]
+                        {
+                            Debug.Arg(typeof(T).ToStringWithGenerics()),
+                            Debug.Arg(nameof(FileName), FileName),
+                        });
+
+                    if (await File.ReadAllTextAsync(WithFileName(FileName)) is not string fileContents)
+                    {
+                        Utils.Warn($"Failed to {nameof(ReadFromFileAsync)} {SanitizeForDisplay(FileName)}");
+                        return default;
+                    }
+                    if (JsonConvert.DeserializeObject<T>(fileContents) is not T deserializeObject)
+                    {
+                        Utils.Warn($"Failed to {nameof(JsonConvert.DeserializeObject)} in {SanitizeForDisplay(FileName)}");
+                        return default;
+                    }
+                    return deserializeObject;
                 }
                 catch (Exception x)
                 {
-                    Utils.Error($"Reading File {SanitiseForDisplay(FileName)}", x);
+                    Utils.Error($"Reading File {SanitizeForDisplay(FileName)}", x);
                 }
             }
             return default;
@@ -441,35 +235,58 @@ namespace UD_Bones_Folder.Mod
 
         public async Task WriteAsync<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
         {
-            if (Type <= LocationType.Synced)
+            using var indent = new Indent(1);
+            Debug.LogCaller(
+                Indent: indent,
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(FileName), FileName),
+                    Debug.Arg(nameof(Object), Object?.GetType()?.ToStringWithGenerics() ?? "MISSING"),
+                    Debug.Arg(nameof(Formatting), Formatting),
+                    Debug.Arg(nameof(Ensure), Ensure),
+                });
+
+            try
             {
+                if (Type <= LocationType.None)
+                    throw new InvalidOperationException("Write location must be writable");
+
                 if ((Ensure
                         && TryEnsureExists())
                     || Exists())
                 {
-                    // Utils.Log($"{nameof(WriteAsync)} {SanitiseForDisplay(FileName)}, {nameof(Formatting)}: {Formatting}");
+                    Debug.Log($"{nameof(File)}.{nameof(File.WriteAllTextAsync)}", Indent: indent[1]);
+                    Debug.LogJson(Object, Indent: indent[1]);
                     await File.WriteAllTextAsync(
                         path: WithFileName(FileName),
                         content: JsonConvert.SerializeObject(Object, Formatting));
                 }
             }
-            else
-                Utils.Warn($"Attempted to {nameof(Write)} {FileName} to non-writable location {SanitiseForDisplay()}: " +
-                    $"{new InvalidOperationException("write location must be writable")}");
+            catch (Exception x)
+            {
+                string message = x is InvalidOperationException
+                    ? $"Attempted to {nameof(Write)} {FileName} to non-writable location {SanitizeForDisplay()}"
+                    : $"Encountered issue trying to {nameof(WriteAsync)} to {SanitizeForDisplay()}"
+                    ;
+
+                Utils.Warn(message, x);
+            }
+
+            Debug.CheckYeh($"{nameof(WriteAsync)} {FileName} Finished", Indent: indent[0]);
         }
 
-        public void Write<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
-            => WriteAsync(FileName, Object, Formatting, Ensure).Wait()
+        public async void Write<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
+            => await WriteAsync(FileName, Object, Formatting, Ensure)
             ;
 
         public override string ToString()
-            => this;
+            => (string)this
+            ;
 
         public virtual bool SameAs(FileLocationData Other)
             => Other is not null
             && Type == Other.Type
             && Path == Other.Path
-            && (Host?.SameAs(Other.Host) is not false)
             ;
 
         public bool Equals(FileLocationData Other)
@@ -485,24 +302,18 @@ namespace UD_Bones_Folder.Mod
         public override int GetHashCode()
             => (Path?.GetHashCode() ?? 0)
             ^ Type.GetHashCode()
-            ^ (Host?.GetHashCode() ?? 0)
             ;
 
         public void Dispose()
         {
             Type = LocationType.None;
             Path = null;
-            Host = null;
         }
 
         public static implicit operator string(FileLocationData FileLocationData)
-            => FileLocationData.Type switch
-            {
-                LocationType.Online => FileLocationData.Host,
-                LocationType.Mod => FileLocationData.Path,
-                _ => FileLocationData.EnsureExists()
-                    ?? FileLocationData.Path,
-            };
+            => FileLocationData.EnsureExists()
+            ?? FileLocationData.Path
+            ;
     }
 
     public static class FileLocationDataExtensions
@@ -513,114 +324,6 @@ namespace UD_Bones_Folder.Mod
 
         public static string GetColoredString(this FileLocationData.LocationType Type)
             => Type.ToString().Colored(Type.TypeColor())
-            ;
-
-        public static async Task PerformBasedOnTypeAsync(
-            this FileLocationData LocationData,
-            Func<Task> OnlineCallback = null,
-            Func<Task> ModCallback = null,
-            Func<Task> FileCallback = null,
-            Func<Task> DefaultCallback = null
-            )
-        {
-            switch (LocationData?.Type)
-            {
-                case FileLocationData.LocationType.Online:
-                    await OnlineCallback?.Invoke();
-                    return;
-                case FileLocationData.LocationType.Mod:
-                    await ModCallback?.Invoke();
-                    return;
-                case FileLocationData.LocationType.Synced:
-                case FileLocationData.LocationType.Local:
-                    await FileCallback?.Invoke();
-                    return;
-                case FileLocationData.LocationType.None:
-                default:
-                    await DefaultCallback?.Invoke();
-                    return;
-            }
-        }
-
-        public static async Task PerformBasedOnTypeAsync<T>(
-            this FileLocationData LocationData,
-            T Value,
-            Func<T, Task> OnlineCallback = null,
-            Func<T, Task> ModCallback = null,
-            Func<T, Task> FileCallback = null,
-            Func<T, Task> DefaultCallback = null
-            )
-        {
-            switch (LocationData?.Type)
-            {
-                case FileLocationData.LocationType.Online:
-                    await OnlineCallback?.Invoke(Value);
-                    return;
-                case FileLocationData.LocationType.Mod:
-                    await ModCallback?.Invoke(Value);
-                    return;
-                case FileLocationData.LocationType.Synced:
-                case FileLocationData.LocationType.Local:
-                    await FileCallback?.Invoke(Value);
-                    return;
-                case FileLocationData.LocationType.None:
-                default:
-                    await DefaultCallback?.Invoke(Value);
-                    return;
-            }
-        }
-
-        public static async Task<T> ReturnBasedOnTypeAsync<T>(
-            this FileLocationData LocationData,
-            Func<Task<T>> OnlineCallback = null,
-            Func<Task<T>> ModCallback = null,
-            Func<Task<T>> FileCallback = null,
-            Func<Task<T>> DefaultCallback = null
-            )
-            => LocationData?.Type switch
-            {
-                FileLocationData.LocationType.Online => await OnlineCallback?.Invoke(),
-
-                FileLocationData.LocationType.Mod => await ModCallback?.Invoke(),
-
-                FileLocationData.LocationType.Synced or
-                FileLocationData.LocationType.Local => await FileCallback?.Invoke(),
-
-                _ => await DefaultCallback?.Invoke(),
-            }
-            ;
-
-        public static async Task<T> ReturnBasedOnTypeAsync<T>(
-            this FileLocationData LocationData,
-            T Value,
-            Func<T, Task<T>> OnlineCallback = null,
-            Func<T, Task<T>> ModCallback = null,
-            Func<T, Task<T>> FileCallback = null,
-            Func<T, Task<T>> DefaultCallback = null
-            )
-            => LocationData?.Type switch
-            {
-                FileLocationData.LocationType.Online => await OnlineCallback?.Invoke(Value),
-
-                FileLocationData.LocationType.Mod => await ModCallback?.Invoke(Value),
-
-                FileLocationData.LocationType.Synced or
-                FileLocationData.LocationType.Local => await FileCallback?.Invoke(Value),
-
-                _ => await DefaultCallback?.Invoke(Value),
-            }
-            ;
-
-        public static bool IsFile(this FileLocationData.LocationType Type)
-            => Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced)
-            ;
-
-        public static bool IsMod(this FileLocationData.LocationType Type)
-            => Type.IsTwixtInclusive(FileLocationData.LocationType.Mod, FileLocationData.LocationType.Mod)
-            ;
-
-        public static bool IsOnline(this FileLocationData.LocationType Type)
-            => Type.IsTwixtInclusive(FileLocationData.LocationType.Online, FileLocationData.LocationType.Online)
             ;
     }
 }

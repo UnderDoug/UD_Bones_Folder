@@ -16,7 +16,7 @@ namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptOut)]
     [Serializable]
-    public class BonesStats
+    public class BonesStats : IDisposable
     {
         private static Configuration Config => Configuration.Instance;
         public static Guid UserID => Config?.ID ?? Guid.Empty;
@@ -50,6 +50,24 @@ namespace UD_Bones_Folder.Mod
         [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
         public BonesStatSet Broken;
 
+        [JsonIgnore]
+        public Dictionary<string, BonesStatSet> StatSetsByName => new Dictionary<string, BonesStatSet>
+        {
+            { nameof(Encountered), Encountered },
+            { nameof(Defeated), Defeated },
+            { nameof(Reclaimed), Reclaimed },
+            { nameof(Broken), Broken },
+        };
+
+        [JsonIgnore]
+        public Dictionary<string, Func<Guid, bool>> IncrementMethodByByName => new Dictionary<string, Func<Guid, bool>>
+        {
+            { nameof(Encountered), IncrementEncountered },
+            { nameof(Defeated), IncrementDefeated },
+            { nameof(Reclaimed), IncrementReclaimed },
+            { nameof(Broken), IncrementBroken },
+        };
+
         public BonesStats()
         {
             Encountered = new();
@@ -65,7 +83,6 @@ namespace UD_Bones_Folder.Mod
             BonesStatSet Broken
             )
         {
-
             this.Encountered = Encountered?.Clone() ?? new();
             this.Defeated = Defeated?.Clone() ?? new();
             this.Reclaimed = Reclaimed?.Clone() ?? new();
@@ -74,7 +91,9 @@ namespace UD_Bones_Folder.Mod
 
         public BonesStats(BonesStats Source)
             : this(Source?.Encountered, Source?.Defeated, Source?.Reclaimed, Source?.Broken)
-        { }
+        {
+            LastEncountered = Source.LastEncountered;
+        }
 
         public bool IncrementStat(ref BonesStatSet StatSet, Guid UserID)
             => (StatSet ??= new()).IncrementStat(UserID);
@@ -374,6 +393,19 @@ namespace UD_Bones_Folder.Mod
                 sB.Append(RegentName.Capitalize()).Append(" has ").AppendRule("never").Append(" been encountered").Append(".");
 
             return Event.FinalizeString(sB);
+        }
+
+        public void Dispose()
+        {
+            _LastEncountered = 0L;
+            Encountered?.Dispose();
+            Encountered = null;
+            Defeated?.Dispose();
+            Defeated = null;
+            Reclaimed?.Dispose();
+            Reclaimed = null;
+            Broken?.Dispose();
+            Broken = null;
         }
     }
 

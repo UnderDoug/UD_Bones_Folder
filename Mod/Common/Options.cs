@@ -26,6 +26,7 @@ using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.World.Event;
 using XRL.World.Text;
+using UD_Bones_Folder.Mod.BonesSystem;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -34,6 +35,15 @@ namespace UD_Bones_Folder.Mod
     public static class Options
     {
         #region Debug Settings
+
+        // Debug Settings
+        [OptionFlag] public static bool DebugEnableLogging;
+
+        public static bool? EnableLogging
+            => XRL.UI.Options.HasOption(MOD_PREFIX + nameof(DebugEnableLogging))
+            ? DebugEnableLogging
+            : null
+            ;
 
         [OptionFlag] public static bool DebugEnableFinalizeDeserializationLogging;
         [OptionFlag] public static bool DebugEnableSilencedLogging;
@@ -68,6 +78,21 @@ namespace UD_Bones_Folder.Mod
         private static Configuration OsseousAshConfig => Configuration.Instance;
 
         [OptionFlag] public static int BonesMode_ProgressionSlant;
+
+        [OptionFlag(nameof(PreferredBonesFolderForSave))] private static int _PreferredBonesFolderForSave
+        {
+            set
+            {
+                PreferredBonesFolderForSave = Math.Clamp(value, (int)IBonesSource.SourceType.None, (int)IBonesSource.SourceType.Synced) switch
+                {
+                    1 => IBonesSource.SourceType.Local,
+                    2 => IBonesSource.SourceType.Synced,
+                    _ => IBonesSource.SourceType.None,
+                };
+            }
+        }
+        public static IBonesSource.SourceType PreferredBonesFolderForSave;
+
         [OptionFlag] public static bool EnableFlashingLightEffects;
         [OptionFlag] public static bool EnableBonesFromEarlierModVersions;
 
@@ -332,6 +357,17 @@ namespace UD_Bones_Folder.Mod
                 if (confirmed.GetValueOrDefault())
                 {
                     OsseousAshConfig.WriteHandle(entered ?? OsseousAshHandle);
+                    ServerUtils.AllEnabledHosts().ForEach(Proc: async delegate (Host Host)
+                    {
+                        try
+                        {
+                            await Host.UpdateUserHandleAsync();
+                        }
+                        catch (Exception x)
+                        {
+                            Utils.Warn($"{Host} failed to update user handle", x);
+                        }
+                    });
                     break;
                 }
             }

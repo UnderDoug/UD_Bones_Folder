@@ -44,16 +44,30 @@ namespace UD_Bones_Folder.Mod.UI
 
         public IReadOnlyList<T> GetElements()
             => this.Aggregate(
-                seed: new List<T>(Count),
+                seed: new Dictionary<int, List<T>>(),
                 func: (a, n) =>
                 {
+                    int key = n.Priority;
+                    if (!a.ContainsKey(key))
+                        a[key] = new();
+
+                    var list = a[key];
+
                     var element = n.Element;
                     if (!RequireElement
                         || Equals(element, default))
                         element = SingleElement;
-                    a.Add(element);
+                    list.Add(element);
                     return a;
                 })
+                .Values
+                .Aggregate(
+                    seed: new List<T>(Count),
+                    func: (a, n) =>
+                    {
+                        a.AddRange(n);
+                        return a;
+                    })
             ;
 
         public IReadOnlyList<string> GetOptions()
@@ -110,10 +124,16 @@ namespace UD_Bones_Folder.Mod.UI
             => this.ElementAtOrDefault(Index).Invoke(GetElements().ElementAtOrDefault(Index))
             ;
 
+        public int GetDefaultIndex()
+            => IndexOf(this.Aggregate(
+                seed: (PickOptionData<T, TResult>)null,
+                func: (a, n) => a is null || n.Default > a.Default ? n : a))
+            ;
+
         public virtual void ClearItems(bool Dispose)
         {
             if (Dispose)
-                foreach (var element in this.IteratorSafe())
+                foreach (var element in this)
                     element?.Dispose();
 
             ClearItems();

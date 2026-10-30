@@ -9,6 +9,8 @@ namespace UD_Bones_Folder.Mod
         public const string MOD_ID = "UD_Bones_Folder";
         public const string MOD_PREFIX = MOD_ID + "_";
 
+        public const string GAME_MOD_EXCEPTION = "game_mod_exception";
+
         public const int MIN_SAVE_VERSION = 400;
 
         public const int SERIALIZATION_CHECK = 123457;

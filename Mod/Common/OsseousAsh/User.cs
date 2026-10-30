@@ -1,29 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
-using Platform.IO;
-
-using XRL;
-using XRL.UI;
-using XRL.World;
-using XRL.World.Parts;
-
-using static UD_Bones_Folder.Mod.Const;
-
-using GameObject = XRL.World.GameObject;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
-    [JsonObject(MemberSerialization.OptOut)]
+    /*[JsonObject(MemberSerialization.OptOut
+        , MissingMemberHandling = MissingMemberHandling.Ignore
+        , ItemNullValueHandling = NullValueHandling.Ignore
+        )]*/
     [Serializable]
     public class User : IDisposable
     {
+        [Serializable]
         public enum StatusTypes
         {
             Pending,
@@ -31,6 +19,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Disabled,
         }
 
+        [Serializable]
         public enum AccessLevels
         {
             None,
@@ -39,43 +28,96 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Manage,
         }
 
+        [JsonProperty]
         public Guid ID;
+        [JsonProperty]
         public string Handle;
 
         [JsonConverter(typeof(StringEnumConverter))]
-        public StatusTypes Status;
+        [JsonProperty(nameof(Status))]
+        private StatusTypes? _Status;
+
+        [JsonIgnore]
+        public StatusTypes Status
+        {
+            get => _Status ?? StatusTypes.Active;
+            set => _Status = value;
+        }
 
         [JsonConverter(typeof(StringEnumConverter))]
-        public AccessLevels Access;
+        [JsonProperty(nameof(Access))]
+        private AccessLevels? _Access;
+
+        [JsonIgnore]
+        public AccessLevels Access
+        {
+            get => _Access ?? AccessLevels.Up;
+            set => _Access = value;
+        }
+
+        [JsonProperty]
+        public string Password;
 
         public User()
-        {
-        }
+            : base()
+        { }
 
         public User(
             Guid ID,
             string Handle,
-            StatusTypes Status,
-            AccessLevels Access
+            StatusTypes? Status = null,
+            AccessLevels? Access = null,
+            string Password = null
         ) : this()
         {
             this.ID = ID;
             this.Handle = Handle;
-            this.Status = Status;
-            this.Access = Access;
+            _Status = Status;// ?? StatusTypes.Active;
+            _Access = Access;// ?? AccessLevels.Up;
+            this.Password = Password;
         }
 
         public User(
-            Configuration Config
-        ) : this(Config.ID, Config.Handle, StatusTypes.Pending, AccessLevels.None)
+            Configuration Config,
+            string Password = null
+        ) : this(Config.ID, Config.Handle, null, null, Password)
         { }
+
+        public User CopyTo(ref User Other, bool SanitizePassword = false)
+        {
+            Other ??= new();
+
+            if (ID != Guid.Empty)
+                Other.ID =  ID;
+
+            Other.Handle = Handle;
+            Other._Status = _Status;
+            Other._Access = _Access;
+            if (!SanitizePassword)
+                Other.Password = Password;
+            else
+            {
+                if (Password == null)
+                    Other.Password = "";
+                else
+                    Other.Password = null;
+            }
+            return Other;
+        }
+
+        public User Clone()
+        {
+            var newUser = new User();
+            return CopyTo(ref newUser);
+        }
 
         public void Dispose()
         {
             ID = default;
             Handle = null;
-            Status = StatusTypes.Pending;
-            Access = AccessLevels.None;
+            _Status = default;// null;
+            _Access = default;// null;
+            Password = null;
         }
     }
 }

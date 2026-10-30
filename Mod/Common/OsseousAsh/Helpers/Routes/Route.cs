@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using Newtonsoft.Json;
@@ -26,6 +28,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public string Value;
         public string ContentType;
 
+        public bool Queryable;
+
+        public bool HasParams => Value?.Contains(":") is true;
+
+        public bool IsUnsupported => Method == Host.WebMethods.Unsupported;
+
         public Route()
             : base()
         { }
@@ -36,7 +44,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             this.Value = Value;
         }
 
-        public Route(Host.WebMethods Method, string Value, string ContentType = "json")
+        public Route(
+            Host.WebMethods Method,
+            string Value,
+            string ContentType = "json",
+            bool Queryable = false
+            )
             : this(Value)
         {
             if (ContentTypes.ContainsKey(ContentType))
@@ -45,10 +58,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 this.ContentType = ContentType;
 
             this.Method = Method;
+
+            this.Queryable = Queryable;
         }
 
         public Route(Route Source)
-            : this(Source.Method, Source.Value, Source.ContentType)
+            : this(Source.Method, Source.Value, Source.ContentType, Source.Queryable)
         { }
 
         public static Route NotSupported(string Message = "Not supported in this version")
@@ -59,20 +74,31 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             => new(this)
             ;
 
-        public string ParseValue(params RouteParam[] Parameters)
+        public string ParseValue(RouteParam[] RouteParams, RouteQuery RouteQuery)
         {
-            if (Method == Host.WebMethods.Unsupported)
+            if (IsUnsupported)
                 throw new NotSupportedException(Value);
 
+            if (ContentType.IsNullOrEmpty())
+                throw new InvalidOperationException($"{nameof(ContentType)} cannot be null or empty");
+
             string route = Value;
-            foreach ((string key, string value) in Parameters.IteratorSafe())
+            foreach ((string key, string value) in RouteParams.IteratorSafe())
                 route = route.Replace($":{key}", value);
 
             if (route.Contains(":"))
                 throw new InvalidOperationException($"Final route must have all params replaced: (@ {route.IndexOf(':')}) \"{route}\"");
 
-            return route;
+            return route + RouteQuery?.ToString();
         }
+
+        public string ParseValue(params RouteParam[] RouteParams)
+            => ParseValue(RouteParams, null)
+            ;
+
+        public string ParseValue(params RouteQueryPair[] RouteQuery)
+            => ParseValue(null, new RouteQuery(RouteQuery))
+            ;
 
         public bool SameAs(Route Other)
             => Other != null
@@ -82,6 +108,38 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public override string ToString()
             => $"{Method}, {Value}, {ContentType}"
+            ;
+
+        private void Error(string Message, Exception X = null)
+        {
+            Utils.Error(Message, X);
+        }
+
+        private void Warn(string Message, Exception X = null)
+        {
+            Utils.Warn(Message, X);
+        }
+
+        public void ErrorFailed(
+            string Doing,
+            string With,
+            string URI,
+            Exception X = null,
+            object Context = null,
+            [CallerMemberName] string What = ""
+            )
+            => Error($"{What} failed {Doing} {Method} {With} for {URI}{(Context != null ? $" {Context}" : null)}", X)
+            ;
+
+        public void WarnFailed(
+            string Doing,
+            string With,
+            string URI,
+            Exception X = null,
+            object Context = null,
+            [CallerMemberName] string What = ""
+            )
+            => Warn($"{What} failed {Doing} {Method} {With} for {URI}{(Context != null ? $" {Context}" : null)}", X)
             ;
     }
 }

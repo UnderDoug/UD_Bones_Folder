@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
+using Genkit;
+
 using Qud.UI;
 
+using XRL.Messages;
 using XRL.UI;
 using XRL.UI.Framework;
 
@@ -156,7 +160,7 @@ namespace UD_Bones_Folder.Mod.UI
             IRenderable IntroIcon = null,
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             bool NoBackButton = false,
-            int DefaultSelected = 0,
+            int? DefaultSelected = null,
             bool RespectOptionNewlines = false,
             Func<Task<TResult>> OnBackCallback = null,
             Func<Task<TResult>> OnEscapeCallback = null,
@@ -164,7 +168,8 @@ namespace UD_Bones_Folder.Mod.UI
             Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> FinalSelectedCallback = null
             )
         {
-            DefaultSelected = Math.Clamp(DefaultSelected, 0, OptionDataSet.Count - 1);
+            int defaultSelected = DefaultSelected ?? OptionDataSet.GetDefaultIndex();
+            defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
             ButtonCallbacks ??= new();
 
             ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => Task.Run(() => (TResult)default)));
@@ -178,8 +183,8 @@ namespace UD_Bones_Folder.Mod.UI
             if (!NoBackButton)
                 buttons.AddRange(BackButton);
 
-            int choice = DefaultSelected;
-            PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[DefaultSelected];
+            int choice = defaultSelected;
+            PickOptionData<T, Task<TResult>> chosenOption = OptionDataSet[defaultSelected];
             Task<TResult> optionCallBack;
             TResult result = default;
 
@@ -197,7 +202,7 @@ namespace UD_Bones_Folder.Mod.UI
                         Icons: OptionDataSet.GetIcons(),
                         IntroIcon: IntroIcon,
                         Buttons: buttons,
-                        DefaultSelected: DefaultSelected,
+                        DefaultSelected: defaultSelected,
                         RespectOptionNewlines: RespectOptionNewlines,
                         AllowEscape: true,
                         OnResult: choice => taskCompletionSource.TrySetResult(choice));
@@ -241,7 +246,7 @@ namespace UD_Bones_Folder.Mod.UI
             IRenderable IntroIcon = null,
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             bool NoBackButton = false,
-            int DefaultSelected = 0,
+            int? DefaultSelected = null,
             bool RespectOptionNewlines = false,
             Func<Task<CascadableResult>> OnBackCallback = null,
             Func<Task<CascadableResult>> OnEscapeCallback = null,
@@ -270,7 +275,7 @@ namespace UD_Bones_Folder.Mod.UI
             IRenderable IntroIcon = null,
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             bool NoBackButton = false,
-            int DefaultSelected = 0,
+            int? DefaultSelected = null,
             bool RespectOptionNewlines = false,
             Func<TResult> OnBackCallback = null,
             Func<TResult> OnEscapeCallback = null,
@@ -278,7 +283,8 @@ namespace UD_Bones_Folder.Mod.UI
             Func<PickOptionData<T, TResult>, TResult, TResult> FinalSelectedCallback = null
             )
         {
-            DefaultSelected = Math.Clamp(DefaultSelected, 0, OptionDataSet.Count - 1);
+            int defaultSelected = DefaultSelected ?? OptionDataSet.GetDefaultIndex();
+            defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
             ButtonCallbacks ??= new();
 
             ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => (TResult)default));
@@ -292,8 +298,8 @@ namespace UD_Bones_Folder.Mod.UI
             if (!NoBackButton)
                 buttons.AddRange(BackButton);
 
-            int choice = DefaultSelected;
-            PickOptionData<T, TResult> chosenOption = OptionDataSet[DefaultSelected];
+            int choice = defaultSelected;
+            PickOptionData<T, TResult> chosenOption = OptionDataSet[defaultSelected];
             TResult result = default;
             
             try
@@ -306,7 +312,7 @@ namespace UD_Bones_Folder.Mod.UI
                     Icons: OptionDataSet.GetIcons(),
                     IntroIcon: IntroIcon,
                     Buttons: buttons,
-                    DefaultSelected: DefaultSelected,
+                    DefaultSelected: defaultSelected,
                     RespectOptionNewlines: RespectOptionNewlines,
                     AllowEscape: true);
 
@@ -455,6 +461,191 @@ namespace UD_Bones_Folder.Mod.UI
                 CancelledWhen: r => r.IsBack(),
                 EscapedWhen: r => r.IsCancel(),
                 PostProc: (o, r) => !r.IsContinue() && !r.IsSilent() ? ++r : r);
+        }
+
+        public static async Task<string> AskStringAsync(
+            string Message,
+            string Title = null,
+            string Default = "",
+            string RestrictChars = null,
+            bool ReturnNullForEscape = false,
+            bool EscapeNonMarkupFormatting = true,
+            bool? AllowColorize = null,
+            bool pushView = false,
+            string WantsSpecificPrompt = null
+            )
+        {
+            ControlManager.ResetInput();
+
+            var buttons = (AllowColorize
+                    ?? XRL.UI.Options.GetOption("OptionEnableColorTextInput").EqualsNoCase("Yes"))
+                ? PopupMessage.SubmitCancelColorButton
+                : PopupMessage.SubmitCancelButton;
+
+            if (WantsSpecificPrompt != null)
+            {
+                if (CapabilityManager.CurrentPlatformClassification() == CapabilityManager.PlatformClassification.PC)
+                    buttons = PopupMessage.SubmitCancelHoldButton;
+                else
+                if (Default == null)
+                    buttons = PopupMessage.CancelHoldButton;
+            }
+
+            if (pushView)
+                GameManager.Instance.PushGameView("ModernPopup:AskString");
+
+            string result = Default;
+            try
+            {
+                QudMenuItem qudMenuItem;
+                while (true)
+                {
+                    qudMenuItem = await Popup.NewPopupMessageAsync(
+                        message: StringFormat.ClipText(Message, 60, KeepNewlines: true),
+                        buttons: buttons,
+                        options: null,
+                        title: Title,
+                        inputDefault: result,
+                        DefaultSelected: 0,
+                        contextTitle: null,
+                        contextRender: null,
+                        afterRender: null,
+                        showContextFrame: true,
+                        EscapeNonMarkupFormatting: EscapeNonMarkupFormatting,
+                        pushView: pushView,
+                        cancelToken: default,
+                        askingNumber: false,
+                        RestrictChars: RestrictChars ?? "",
+                        WantsSpecificPrompt: WantsSpecificPrompt);
+
+                    if (!(qudMenuItem.command == "Color"))
+                    {
+                        break;
+                    }
+
+                    result = qudMenuItem.text;
+                    string text = await Popup.ShowColorPickerAsync(
+                        Title: "Choose color",
+                        AllowEscape: true,
+                        includePatterns: true,
+                        previewContent: ColorUtility.StripFormatting(result));
+                    if (!string.IsNullOrEmpty(text))
+                    {
+                        if (string.IsNullOrWhiteSpace(result))
+                        {
+                            result = " ";
+                        }
+
+                        result = "{{" + text + "|" + ColorUtility.StripFormatting(result) + "}}";
+                    }
+                }
+
+                if (qudMenuItem.command == "Cancel")
+                {
+                    return ReturnNullForEscape
+                        ? null
+                        : ""
+                        ;
+                }
+
+                return qudMenuItem.text;
+            }
+            catch (Exception x)
+            {
+                Utils.Error("AskStringAsync", x);
+                return null;
+            }
+            finally
+            {
+                Keyboard.ClearInput(LeaveMovementEvents: false, clearFrameDown: true);
+
+                if (pushView)
+                    GameManager.Instance.PopGameView(bHard: true);
+            }
+        }
+
+        public static async Task<int?> AskNumberAsync(
+            string Message,
+            string Title = null,
+            int Start = 0,
+            int Min = 0,
+            int Max = int.MaxValue,
+            string RestrictChars = "",
+            bool pushView = false)
+        {
+            ControlManager.ResetInput();
+            if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Keyboard)
+            {
+                if (pushView)
+                    GameManager.Instance.PushGameView("ModernPopupGamepadAskNumber");
+
+                try
+                {
+                    return await AskNumberScreen.show($"{Title}\n\n{Message}", Start, Min, Max);
+                }
+                finally
+                {
+                    if (pushView)
+                        GameManager.Instance.PopGameView(bHard: true);
+                }
+            }
+
+            var submitCancelButton = PopupMessage.SubmitCancelButton;
+
+            if (pushView)
+                GameManager.Instance.PushGameView("ModernPopup:AskNumber");
+
+            try
+            {
+                var qudMenuItem = await Popup.NewPopupMessageAsync(
+                    message: StringFormat.ClipText(Message, 60, KeepNewlines: true),
+                    buttons: submitCancelButton,
+                    options: null,
+                    title: Title,
+                    inputDefault: Start.ToString(),
+                    DefaultSelected: 0,
+                    pushView: pushView,
+                    askingNumber: true,
+                    RestrictChars: RestrictChars);
+
+                if (qudMenuItem.command == "Cancel")
+                    return null;
+
+
+                return Convert.ToInt32(qudMenuItem.text);
+            }
+            catch (Exception x)
+            {
+                Utils.Error("AskNumberAsync", x);
+                return null;
+            }
+            finally
+            {
+                Keyboard.ClearInput(LeaveMovementEvents: false, clearFrameDown: true);
+                if (pushView)
+                    GameManager.Instance.PopGameView(bHard: true);
+            }
+        }
+
+        public static async Task PopupShowAsync(
+            string Message,
+            string Title = null,
+            bool Capitalize = true,
+            bool LogMessage = true,
+            Location2D PopupLocation = null
+            )
+        {
+            if (Capitalize)
+                Message = ColorUtility.CapitalizeExceptFormatting(Message);
+
+            if (LogMessage)
+                MessageQueue.AddPlayerMessage(Message: Message, Capitalize: Capitalize);
+
+            await Popup.NewPopupMessageAsync(
+                message: Message,
+                buttons: PopupMessage.AcceptButton,
+                title: Title,
+                PopupLocation: PopupLocation);
         }
     }
 }

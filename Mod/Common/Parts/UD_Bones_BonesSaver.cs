@@ -804,9 +804,12 @@ namespace XRL.World.Parts
                 if (originalAllowRealyDie.HasValue)
                     UI.Options.AllowReallydie = originalAllowRealyDie.GetValueOrDefault();
 
-                if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo, b => b.FileLocationData.Type <= FileLocationData.LocationType.Synced))
+                if (BonesManager.TryGetSaveBonesByID(gameID, out saveBonesInfo))
                 {
-                    Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()} in:\n{saveBonesInfo.TaggedDisplayDirectory}!");
+                    string locations = saveBonesInfo.BonesSources.Aggregate(
+                        seed: (string)null,
+                        func: (a, n) => Utils.NewLineDelimitedAggregator(a, $"{Const.NBSP} : {n.BlurbSavedVerb} {n.BlurbDisplayName}"));
+                    Popup.Show($"Created new bones file for {saveBonesInfo.Name.StartReplace()}, it was...\n{locations}");
                     return true;
                 }
             }

@@ -37,24 +37,19 @@ namespace UD_Bones_Folder.Mod
         public Zone BonesZone;
         public PseudoZone PseudoZone;
 
-        public Guid UserID;
-        public string OsseousAshHandle;
+        public string Handle;
 
         public BonesData()
         { }
 
-        public BonesData(string BonesID, Zone BonesZone, Guid? OsseousAshID = null, string OsseousAshHandle = null)
+        public BonesData(string BonesID, Zone BonesZone, string Handle = null)
             : this()
         {
             this.BonesID = BonesID;
             this.BonesZone = BonesZone;
 
-            if (OsseousAshID != null
-                && !OsseousAshHandle.IsNullOrEmpty())
-            {
-                this.UserID = OsseousAshID.GetValueOrDefault();
-                this.OsseousAshHandle = OsseousAshHandle;
-            }
+            if (!Handle.IsNullOrEmpty())
+                this.Handle = Handle;
         }
 
         public static BonesData GetFromSaveBonesInfo(SaveBonesInfo SaveBonesInfo, bool NoStatus = false)
@@ -512,9 +507,8 @@ namespace UD_Bones_Folder.Mod
                                 catchFlag = nameof(Description);
                                 if (LunarRegent.TryGetPart(out Description description))
                                 {
-                                    string whoItWas = OsseousAshHandle ?? OsseousAsh.Configuration.DefaultOsseousAshHandle;
-                                    if (Config == null
-                                        || Config.ID == UserID)
+                                    string whoItWas = Handle ?? OsseousAsh.Configuration.DefaultOsseousAshHandle;
+                                    if (BonesInfo.IsYou)
                                         whoItWas = $"you";
 
                                     description._Short = $"It was {whoItWas}.";
@@ -689,8 +683,7 @@ namespace UD_Bones_Folder.Mod
             BonesZone = null;
             PseudoZone?.Dispose();
             PseudoZone = null;
-            UserID = default;
-            OsseousAshHandle = null;
+            Handle = null;
         }
     }
 }

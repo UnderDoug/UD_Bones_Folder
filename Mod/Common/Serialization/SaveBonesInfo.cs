@@ -30,11 +30,17 @@ using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.UI;
 using XRL.World.Text;
+using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
 
 namespace UD_Bones_Folder.Mod
 {
     [Serializable]
-    public class SaveBonesInfo : SaveGameInfo, IComparable<SaveBonesInfo>
+    public class SaveBonesInfo
+        : SaveGameInfo
+        , IBonesFileElement
+        , IComparable<SaveBonesInfo>
+        , IDisposable
     {
         public class SaveBonesInfoComparer : IComparer<SaveBonesInfo>
         {
@@ -70,172 +76,6 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public class ModRecord
-        {
-            public class EqualityComparer : EqualityComparer<ModRecord>
-            {
-                public override bool Equals(ModRecord x, ModRecord y)
-                    => x == null
-                        || y == null
-                    ? (x == null) == (y == null)
-                    : x.ID == y.ID
-                    ;
-
-                public override int GetHashCode(ModRecord obj)
-                    => (obj?.ID?.GetHashCode() ?? 0)
-                    ;
-            }
-
-            public static EqualityComparer EQComp = new();
-
-            public string ID;
-            public string DisplayName;
-
-            public string GetDisplayName()
-            {
-                if (ID == null)
-                    return null;
-
-                if (ID == string.Empty)
-                    return ID;
-
-                if (!DisplayName.IsNullOrEmpty())
-                    return DisplayName;
-
-                return ModManager.GetModTitle(ID);
-            }
-
-            public override string ToString()
-                => GetDisplayName() is string displayName
-                    && displayName != ID
-                ? $"{displayName} ({ID})"
-                : ID
-                ;
-
-            public static ModRecord Parse(string String)
-            {
-                if (String == null)
-                    return null;
-
-                if (String == string.Empty
-                    || String.Split(";;") is not string[] pair
-                    || pair.Length < 2)
-                    return new ModRecord
-                    {
-                        ID = String,
-                        DisplayName = ModManager.GetModTitle(String),
-                    };
-
-                return new ModRecord
-                {
-                    ID = pair[0],
-                    DisplayName = pair[1],
-                };
-            }
-
-            public static IEnumerable<ModRecord> FromModIDs(IEnumerable<string> ModIDs)
-            {
-                foreach (var modID in ModIDs.IteratorSafe())
-                    yield return Parse(modID);
-            }
-
-            public static IEnumerable<ModRecord> GetRunningMods(Predicate<ModRecord> Where = null)
-            {
-                foreach (var modID in ModManager.GetRunningMods().IteratorSafe())
-                    if (Parse(modID) is ModRecord modRecord
-                        && Where?.Invoke(modRecord) is not false)
-                        yield return modRecord;
-            }
-
-            public static IEnumerable<ModRecord> GetAvailableMods(Predicate<ModRecord> Where = null)
-            {
-                foreach (var modID in ModManager.GetAvailableMods().IteratorSafe())
-                    if (Parse(modID) is ModRecord modRecord
-                        && Where?.Invoke(modRecord) is not false)
-                        yield return modRecord;
-            }
-
-            public string ToPairString()
-            {
-                if (ID == null)
-                    return null;
-
-                return !DisplayName.IsNullOrEmpty()
-                        && ID != DisplayName
-                    ? $"{ID};;{DisplayName}"
-                    : ID
-                    ;
-            }
-
-            public static explicit operator string(ModRecord Operand)
-                => Operand?.ToPairString()
-                ;
-
-            public static explicit operator ModRecord(string Operand)
-                => Parse(Operand)
-                ;
-        }
-
-        public class ModsDifferInfo
-        {
-            public bool IsDummy;
-            public int UnavailableWhereBonesEnabled;
-            public int EnabledWhereBonesDisabled;
-            public int DisabledWhereBonesEnabled;
-            public int MatchingMods;
-            public int DifferLevel
-            {
-                get
-                {
-                    if (UnavailableWhereBonesEnabled < 0)
-                        return -1;
-                    if (DisabledWhereBonesEnabled > 0)
-                        return 3;
-                    if (DisabledWhereBonesEnabled > 0)
-                        return 2;
-                    return EnabledWhereBonesDisabled > 0
-                        ? 1
-                        : 0
-                        ;
-                }
-            }
-            public bool IsRed => DifferLevel >= 2;
-            public bool IsYellow => DifferLevel == 1;
-
-            public override string ToString()
-            {
-                if (IsDummy)
-                    return "{{y|mods:}} {{K|N/A}}";
-
-                if (DifferLevel < 0)
-                    return "{{y|mods:}} {{red|error}}";
-
-                if (DifferLevel == 0)
-                    return "{{y|mods:}} {{green|\u00fb}}";
-
-                string output = "mods:".Colored("y");
-
-                string extras = null;
-                if (EnabledWhereBonesDisabled > 0)
-                    extras = $"{extras}{(-EnabledWhereBonesDisabled).Signed()}".Colored("yellow");
-
-                if (DisabledWhereBonesEnabled > 0)
-                {
-                    if (!extras.IsNullOrEmpty())
-                        extras += "|".Colored("y");
-                    extras = $"{extras}{DisabledWhereBonesEnabled.Signed()}".Colored("red");
-                }
-
-                if (UnavailableWhereBonesEnabled > 0)
-                {
-                    if (!extras.IsNullOrEmpty())
-                        extras += "|".Colored("y");
-                    extras = $"{extras}X{UnavailableWhereBonesEnabled}".Colored("red");
-                }
-                return $"{output} {extras}";
-            }
-        }
-
         public static Configuration Config => Configuration.Instance;
 
         public static string Sav => $"{BonesManager.BonesFileName}.sav";
@@ -244,8 +84,6 @@ namespace UD_Bones_Folder.Mod
         public static string Json => SaveBonesJSON.FileName;
 
         public static SaveBonesInfoComparer SaveBonesInfoComparerDescending = new SaveBonesInfoComparer(Ascending: true);
-
-        public static int BaseBonesWeight = 1000;
 
         public static IRenderable NonePleaseIcon = new BonesRender(
                 Blueprint: GameObjectFactory.Factory.GetBlueprintIfExists("UD The Lunar Face"),
@@ -283,56 +121,46 @@ namespace UD_Bones_Folder.Mod
         {
             get
             {
-                if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
+                if (JSON is not SaveBonesJSON bonesJSON)
                     return true;
 
                 if (bonesJSON.IsYou is bool isYou)
                     return isYou;
 
-                if (!UserID.IsEmptyOrDefault())
-                    return UserID == Config.ID;
-
                 return true;
             }
         }
 
-        public Guid UserID
-            => GetBonesJSON()?.UserID
-            ?? Guid.Empty;
+        public SaveBonesJSON JSON => json as SaveBonesJSON;
 
-        public string UserHandle => GetBonesJSON()?.Handle;
+        public string UserHandle => JSON?.Handle;
 
-        public string JSONFilePath;
         public DateTime SaveTimeValue;
 
-        public string ModVersion;
+        public string ModVersion => JSON?.ModVersion;
 
-        public string DeathReason;
+        public string DeathReason => JSON?.DeathReason ?? "They died mysteriously...";
 
-        public string GenotypeName;
-        public string SubtypeName;
+        public string GenotypeName => JSON?.GenotypeName ?? "Human";
+        public string SubtypeName => JSON?.SubtypeName ?? "Adventurer";
 
-        public BonesSpec BonesSpec;
+        public BonesSpec BonesSpec => JSON?.BonesSpec;
 
-        public BonesStats Stats => GetBonesJSON()?.Stats;
+        public BonesStats Stats => JSON?.Stats;
 
         private bool? _IsMad;
-        public bool IsMad => _IsMad ??= (GetBonesJSON()?.IsCharIconSwapped() is true)
-            || !GameObjectFactory.Factory.HasBlueprint(GetBonesJSON()?.Blueprint ?? "MISSING_BLUEPRINT")
+        public bool IsMad => _IsMad ??= (JSON?.IsCharIconSwapped() is true)
+            || !GameObjectFactory.Factory.HasBlueprint(JSON?.Blueprint ?? "MISSING_BLUEPRINT")
             ;
 
-        public IEnumerable<ModRecord> EnabledMods
-            => ModsEnabled?.Select(s => ModRecord.Parse(s))
-            ?? Enumerable.Empty<ModRecord>()
-            ;
+        public ModRecordCollection EnabledMods
+        {
+            get => JSON?.EnabledMods;
+            set => JSON.EnabledMods = value;
+        }
 
         private ModsDifferInfo _ModsDiffer;
         public ModsDifferInfo ModsDiffer => _ModsDiffer ??= GetModsDifferInfo();
-
-        public ZoneRequest ZoneRequest => BonesSpec != null
-            ? new(BonesSpec.ZoneID)
-            : default
-            ;
 
         public bool WasCremated;
 
@@ -343,7 +171,7 @@ namespace UD_Bones_Folder.Mod
         public bool IsLooselyEligible => _IsLooselyEligible ??= IsEligibleForCurrentSave();
 
         private BonesRender _Render;
-        public BonesRender Render => _Render ??= new(GetBonesJSON());
+        public BonesRender Render => _Render ??= new(JSON);
         public BonesRender FlippedRender => new(Render, HFlip: !Render.GetHFlip());
 
         public IRenderable StatsIcon => new Renderable(
@@ -352,92 +180,48 @@ namespace UD_Bones_Folder.Mod
             TileColor: "&w",
             DetailColor: Render.GetDetailColor());
 
-        public string FullBonesPathSav => GetFullBonesPathSav(FileLocationData);
-        public string FullBonesPathSavGz => GetFullBonesPathSavGz(FileLocationData);
-        public string FullBonesPathBak => GetFullBonesPathBak(FileLocationData);
-
-        public string DisplayDirectory => FileLocationData.SanitiseForDisplay();
-        public string BonesBakDisplay => FileLocationData.SanitiseForDisplay(SavGzBak);
-        public string TaggedDisplayDirectory => FileLocationData.TaggedDisplayName();
+        public string BonesBakDisplay
+        {
+            get {
+                if (BonesSources.FirstOrDefault(bs => bs is BonesFolder bf && bf.IsPreferredLocation) is BonesFolder bonesFolder)
+                    return BonesFolder.SanitizePathForDisplay(bonesFolder.CombinePath(SavGzBak));
+                return SavGzBak;
+            }
+        }
+        public string TaggedDisplayDirectory => BonesSources.GetBestSource(BonesID).DisplayName;
 
         public bool IsDummy;
 
-        public FileLocationData FileLocationData
-        {
-            get
-            {
-                if (IsDummy)
-                    return FileLocationData.DummyFileLocationData;
-
-                if (FileLocationDataSet.IsNullOrEmpty()
-                    && GetBonesJSON() is SaveBonesJSON bonesJSON
-                    && !Directory.IsNullOrEmpty())
-                {
-                    using var assumedLocationData = FileLocationData.NewAssumed(Directory);
-                    FileLocationData.LocationType type = assumedLocationData.Type;
-                    if (bonesJSON.FileLocationType != FileLocationData.LocationType.None)
-                        type = bonesJSON.FileLocationType;
-
-                    FileLocationDataSet.Add(new FileLocationData(type, assumedLocationData.Path, assumedLocationData.Host));
-                    // Utils.Log($"New {nameof(_FileLocationData)}: {_FileLocationData?.SanitiseForDisplay() ?? "NO_DATA"}");
-                }
-                return FileLocationDataSet.FirstOrDefault(delegate (FileLocationData locationData)
-                {
-                    if (locationData.Type.IsFile())
-                    {
-                        if (locationData.FileExists(SavGz))
-                            return true;
-
-                        if (locationData.FileExists(Sav))
-                            return true;
-
-                        return false;
-                    }
-                    return true;
-                });
-            }
-            set
-            {
-                if (value == null)
-                    FileLocationDataSet?.Clear();
-                else
-                    FileLocationDataSet.Add(value);
-            }
-        }
-
-        private FileLocationDataSet _FileLocationDataSet;
-        public FileLocationDataSet FileLocationDataSet
-        {
-            get
-            {
-                _FileLocationDataSet ??= new();
-                return _FileLocationDataSet?.SortInPlace(FileLocationData.DefaultTypeComparer.Compare) as FileLocationDataSet;
-            }
-        }
-
-        public Host Host => FileLocationDataSet.FirstOrDefault(ld => ld.Type.IsOnline())?.Host;
-
-        public bool IsOnline
-            => FileLocationData != null
-            && FileLocationData.Type.IsOnline()
-            && Host != null
-            ;
+        private BonesSources _BonesSources;
+        public BonesSources BonesSources => _BonesSources ??= BonesSources.GetFromPool();
 
         public bool IsCrematable
             => !IsDummy
-            && FileLocationDataSet.IsCrematable
+            && (IsYou
+                || BonesSources.Any(bs => bs.IsOnDisk()))
             ;
 
         public bool IsDownloaded
             => /*!IsYou
-            && */GetBonesJSON() is SaveBonesJSON bonesJSON
+            && */JSON is SaveBonesJSON bonesJSON
             && bonesJSON.Downloaded.GetValueOrDefault()
             ;
 
         protected bool? _IsBlocked;
         public bool IsBlocked => _IsBlocked ??= ServerUtils.IsBonesBlocked(ID);
 
-        public bool IsGenerated => GetBonesJSON()?.GameMode == BonesModeModule.BONES_MODE;
+        public bool IsGenerated => JSON?.GameMode == BonesModeModule.BONES_MODE;
+
+        [JsonIgnore]
+        public string BonesID
+        {
+            get => JSON?.BonesID;
+            set
+            {
+                if (JSON is SaveBonesJSON bonesJSON)
+                    bonesJSON.BonesID = value;
+            }
+        }
 
         public SaveBonesInfo()
             : base()
@@ -445,11 +229,11 @@ namespace UD_Bones_Folder.Mod
 
         public static SaveBonesInfo DummyBonesInfo(
             BonesManagement.VisibilityModes VisibilityMode,
-            FileLocationData LocationData
+            IBonesSource BonesSource
             )
-            => SaveBonesJSON.InfoFromJson(
+            => SaveBonesJSON.CreateInfoFrom(
                 SaveBonesJSON: SaveBonesJSON.DummyBonesJSON(VisibilityMode),
-                FileLocationData: LocationData,
+                Directory: BonesSource.SourceID,
                 SaveSize: 0L,
                 IsDummy: true)
             ;
@@ -459,39 +243,22 @@ namespace UD_Bones_Folder.Mod
             ?? "{{y|mods:}} {{K|N/A}}"
             ;
 
-        public string GetFileLocationTypeColorString(bool IncludeAdditionalPips = true)
+        public string GetSourceTypesColorString(bool IncludeAdditionalPips = true)
         {
-            string output = (FileLocationData?.Type ?? FileLocationData.LocationType.None)
-                .ToString()
-                .ToLower()
-                .Colored(FileLocationData?.GetFileLocationDataTypeColor() ?? "R");
+            string output = null;
+            if (!BonesSources.IsNullOrEmpty())
+                output = BonesSources.GetSourceTypesColorString(IncludeAdditionalPips);
 
-            string additionsString = null;
+            if (!output.IsNullOrEmpty())
+                return output;
 
-            if (IncludeAdditionalPips)
-            {
-                additionsString = FileLocationDataSet?.Aggregate(
-                    seed: (string)null,
-                    func: delegate (string acc, FileLocationData next)
-                    {
-                        if (next?.SameAs(FileLocationData) is false)
-                            acc += Const.BULLET.Colored(next.GetFileLocationDataTypeColor());
-
-                        return acc;
-                    });
-            }
-
-            if (!additionsString.IsNullOrEmpty())
-                //additionsString = $"{"{{K|"}[{additionsString}]{"}}"}";
-                additionsString = $" {additionsString}";
-
-            return $"{output}{additionsString}";
+            return IBonesSource.SourceType.None.Tag(false);
         }
 
         public string GetVersionWarning()
         {
             string versionString = null;
-            if (GetBonesJSON() is SaveBonesJSON saveBonesJSON)
+            if (JSON is SaveBonesJSON saveBonesJSON)
             {
                 string versionColor = null;
                 if (saveBonesJSON.SaveVersion < Const.MIN_SAVE_VERSION)
@@ -524,9 +291,31 @@ namespace UD_Bones_Folder.Mod
                 .ToString()
             ;
 
-        public XRL.Version GetModVersion()
+        public static XRL.Version GetModVersion(string ModVersion)
             => new(ModVersion)
             ;
+
+        public XRL.Version GetModVersion()
+            => GetModVersion(ModVersion)
+            ;
+
+        public SaveBonesInfo AddSource(IBonesSource BonesSource)
+        {
+            BonesSources.AddDistinct(BonesSource);
+            return this;
+        }
+
+        public SaveBonesInfo RemoveSource(IBonesSource BonesSource)
+        {
+            BonesSources.Remove(BonesSource);
+            return this;
+        }
+
+        public SaveBonesInfo RemoveSourceByType(IBonesSource.SourceType Type)
+        {
+            BonesSources.RemoveAll(bs => bs.Type == Type);
+            return this;
+        }
 
         public IEnumerable<string> GetBonesMenuDataRowStrings(bool IncludeVersionWarning = false)
         {
@@ -558,41 +347,10 @@ namespace UD_Bones_Folder.Mod
             => GetBonesMenuDataRowString(N, IncludeVersionWarning: false)
             ;
 
-        public static async Task SafeWriteSaveBonesJSONAsync(
-            FileLocationData LocationData,
-            SaveBonesJSON BonesJSON,
-            bool RequireExisting = true
-            )
-        {
-            if (LocationData is null)
-            {
-                Utils.Warn($"Attempted to safe write SaveBonesJSON to null {nameof(FileLocationData)}");
-                return;
-            }
-            if (LocationData.Type >= FileLocationData.LocationType.Mod)
-            {
-                Utils.Warn($"Attempted to safe write SaveBonesJSON to \"{LocationData.Type}\" file location type");
-                return;
-            }
-
-            if (!RequireExisting
-                || await LocationData.FileExistsAsync(Json))
-            {
-                // Utils.Log($"{nameof(SafeWriteSaveBonesJSONAsync)} {LocationData?.SanitiseForDisplay(Json)}");
-                BonesJSON.HotSwapCharIcon(EitherSideOf: () =>
-                    LocationData.WriteAsync(Json, BonesJSON, Formatting.Indented, Ensure: true).Wait()
-                    );
-            }
-        }
-
-        private async Task SafeWriteSaveBonesJSONAsync(bool RequireExisting = true)
-            => await SafeWriteSaveBonesJSONAsync(FileLocationData, GetBonesJSON(), RequireExisting)
-            ;
-
         private void IncrementStat(Func<bool> IncrementStatFunc, string StatName = null)
         {
             // Utils.Log($"{nameof(IncrementStat)} {StatName ?? "NO_STAT_NAME"} via {nameof(FileLocationData)}: {FileLocationData?.SanitiseForDisplay(Json) ?? "NO_DATA"}");
-            if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            if (JSON is not SaveBonesJSON bonesJSON)
             {
                 Utils.Warn($"Attempted to {nameof(IncrementStat)} {StatName ?? "NO_STAT_NAME"} for null {nameof(SaveBonesJSON)}.");
                 return;
@@ -602,15 +360,17 @@ namespace UD_Bones_Folder.Mod
                 Utils.Log($"Failed to {nameof(IncrementStat)} {StatName ?? "NO_STAT_NAME"}, {nameof(IncrementStatFunc)} returned {false}");
                 return;
             }
-            foreach (var fileLocationData in FileLocationDataSet)
+
+            foreach (var bonesSource in BonesSources)
             {
-                fileLocationData.PerformBasedOnTypeAsync(
-                    Value: bonesJSON,
-                    OnlineCallback: v => fileLocationData.Host.PutBonesStats(v.ID, StatName),
-                    ModCallback: v => Task.Run(() => Utils.Warn($"Currently unable to increment Mod-loaded bones files.")),
-                    FileCallback: v => SafeWriteSaveBonesJSONAsync(),
-                    DefaultCallback: v => Task.Run(() => Utils.Warn($"Attempted to increment stat for unknown or missing File Location Type: {(FileLocationData?.Type)?.ToString() ?? "NO_DATA"}."))
-                    ).Wait();
+                try
+                {
+                    bonesSource.IncrementStat(BonesID, StatName);
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"{bonesSource.SourceID} failed to {nameof(IncrementStat)} {StatName ?? "NO_STAT_NAME"}", x);
+                }
             }
         }
 
@@ -618,182 +378,45 @@ namespace UD_Bones_Folder.Mod
             => IncrementStat(
                 IncrementStatFunc: () => Stats?.IncrementEncountered() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Encountered)))
-                ;
+            ;
 
         public void IncrementDefeated()
             => IncrementStat(
                 IncrementStatFunc: () => Stats?.IncrementDefeated() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Defeated)))
-                ;
+            ;
 
         public void IncrementReclaimed()
             => IncrementStat(
                 IncrementStatFunc: () => Stats?.IncrementReclaimed() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Reclaimed)))
-                ;
+            ;
 
         public void IncrementBroken()
             => IncrementStat(
                 IncrementStatFunc: () => Stats?.IncrementBroken() is true,
                 StatName: Utils.CallChain(nameof(SaveBonesInfo), nameof(Stats), nameof(Stats.Broken)))
-                ;
+            ;
 
-        /*public static void RepairBonesSpec(SaveBonesInfo BonesInfo, BonesSpec BonesSpec)
+        public async Task<BonesSavGz> LoadBonesSavGzAsync()
         {
-            if (BonesInfo?.GetBonesJSON() is not SaveBonesJSON bonesJSON)
-            {
-                Utils.Warn($"Attempted to repair {nameof(SaveBonesJSON)}.{nameof(SaveBonesJSON.BonesSpec)} for null {nameof(SaveBonesJSON)}.");
-                return;
-            }
-            if (BonesInfo?.FileLocationData is not FileLocationData locationData)
-            {
-                Utils.Warn($"Attempted to repair {nameof(SaveBonesJSON)}.{nameof(SaveBonesJSON.BonesSpec)} for {nameof(SaveBonesInfo)} with no {nameof(FileLocationData)}.");
-                return;
-            }
-
-            bonesJSON.BonesSpec = BonesSpec;
-            locationData.PerformBasedOnTypeAsync(
-                Value: bonesJSON,
-                OnlineCallback: v => locationData.Host.PutBonesStats(v.ID, bonesJSON),
-                ModCallback: v => Task.Run(() => Utils.Warn($"Currently unable to repair Mod-loaded BonesSpecs.")),
-                FileCallback: v => SafeWriteSaveBonesJSONAsync(locationData, bonesJSON, RequireExisting: true),
-                DefaultCallback: v => Task.Run(() => Utils.Warn($"Attempted to repair BonesSpec for unknown or missing File Location Type: {(locationData?.Type)?.ToString() ?? "NO_DATA"}."))
-                ).Wait();
-        }*/
-
-        public static async Task<SaveBonesInfo> GetPhysicalSaveBonesInfoAsync(FileLocationData FileLocationData)
-        {
-            if (FileLocationData == null)
-                return null;
-
-            if (!FileLocationData.Type.IsTwixtInclusive(FileLocationData.LocationType.Local, FileLocationData.LocationType.Synced))
-            {
-                Utils.Warn($"Attempted to get \"on disk\" {nameof(SaveBonesInfo)} from {nameof(FileLocationData)} " +
-                    $"of inappropriate type: {FileLocationData.Type}({(int)FileLocationData.Type})");
-                return null;
-            }
-            try
-            {
-                if (Path.GetFileNameWithoutExtension(FileLocationData).EqualsNoCase("mods")
-                    || Path.GetFileNameWithoutExtension(FileLocationData).EqualsNoCase("textures"))
-                    return null;
-
-                if (FileLocationData.FileExists(Json))
-                    return await SaveBonesJSON.ReadSaveBonesJson(FileLocationData);
-
-                if (!Platform.IO.Directory.EnumerateFiles(FileLocationData).Any(f => !f.EndsWith(".json")))
-                {
-                    try
-                    {
-                        Platform.IO.Directory.Delete(FileLocationData);
-                    }
-                    catch (Exception x)
-                    {
-                        Utils.Warn(x);
-                    }
-                }
-                else
-                    Utils.Warn($"Weird bones directory with no .json file present: {FileLocationData.SanitiseForDisplay()}");
-            }
-            catch (ThreadInterruptedException x)
-            {
-                throw x;
-            }
-            catch (Exception x)
-            {
-                Utils.Warn(x);
-            }
-            return null;
+            using var bonesSources = BonesManager.GetBonesSourcesFromPool().Intersect(BonesSources);
+            return await bonesSources.GetBonesSavGzAsync(ID);
         }
 
-        public SaveBonesJSON GetBonesJSON()
-            => json as SaveBonesJSON
-            ;
-
-
-        public static string GetFullBonesPathSav(FileLocationData FileLocationData)
-            => FileLocationData.WithFileName(Sav)
-            ;
-
-        public static string GetFullBonesPathSavGz(FileLocationData FileLocationData)
-            => FileLocationData.WithFileName(SavGz)
-            ;
-
-        public static string GetFullBonesPathBak(FileLocationData FileLocationData)
-            => FileLocationData.WithFileName(SavGzBak)
-            ;
-
-        public async Task<string> GetBonesFilePathAsync()
+        public async Task<BonesSavGz> GetBonesSavGzStreamAsync()
         {
-            if (IsOnline)
+            if (await LoadBonesSavGzAsync() is not BonesSavGz bonesSavGz)
                 return null;
 
-            string bonesPath = null;
-            int attempts = 0;
-            int setCount = FileLocationDataSet.Count;
-            while (FileLocationData != null
-                && attempts++ < setCount
-                && FileLocationData.Type.IsFile())
+            if (!bonesSavGz.TryEnsureLoadable())
             {
-                var fileLocationData = FileLocationData;
-                bonesPath = FullBonesPathSavGz;
-                if (!await File.ExistsAsync(bonesPath))
-                {
-                    bonesPath = FullBonesPathSav;
-                    if (!await File.ExistsAsync(bonesPath))
-                    {
-                        Utils.Error($"No saved bones exist. ({DisplayDirectory})");
-
-                        try
-                        {
-                            if (!FileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
-                            {
-                                FileLocationDataSet.Remove(fld);
-                                BonesManager.ClearHasSaveBones();
-                            }))
-                            {
-                                Utils.Warn($"Failed to delete empty bones directory. ({DisplayDirectory})");
-                            }
-                        }
-                        catch (Exception x)
-                        {
-                            Utils.Error($"Deleting empty bones directory failed ({DisplayDirectory})", x);
-                        }
-                        finally
-                        {
-                            FileLocationDataSet.Remove(fileLocationData);
-                            BonesManager.ClearHasSaveBones();
-                        }
-                    }
-                }
+                bonesSavGz.Dispose();
+                return null;
             }
-            return bonesPath;
+
+            return bonesSavGz;
         }
-
-        public string GetBonesFilePath()
-            => GetBonesFilePathAsync().WaitResult()
-            ;
-
-        public async Task<byte[]> GetSavGzBytesAsync()
-            => await Host.GetBonesSavGzAsync(ID)
-            ;
-
-        public async Task<System.IO.Stream> GetSavGzStreamAsync()
-        {
-            if ((await GetBonesFilePathAsync()) is string bonesPath)
-                return File.OpenRead(bonesPath);
-
-            byte[] cloudBytes = await GetSavGzBytesAsync();
-
-            return !cloudBytes.IsNullOrEmpty()
-                ? new System.IO.MemoryStream(cloudBytes)
-                : null
-                ;
-        }
-
-        public System.IO.Stream GetSavGzStream()
-            => GetSavGzStreamAsync().WaitResult()
-            ;
 
         public IEnumerable<string> GetDebugLines()
         {
@@ -807,7 +430,7 @@ namespace UD_Bones_Folder.Mod
             yield return $"{nameof(IsEligible)}: {IsEligible}";
             yield return $"{nameof(IsLooselyEligible)}: {IsLooselyEligible}";
 
-            var bonesJSON = GetBonesJSON();
+            var bonesJSON = JSON;
 
             yield return $"{nameof(bonesJSON.DeathReason)}: {bonesJSON.DeathReason}";
             yield return $"{nameof(bonesJSON.Location)}: {bonesJSON.Location}";
@@ -816,52 +439,6 @@ namespace UD_Bones_Folder.Mod
             yield return $"{nameof(bonesJSON.SaveVersion)}: {(bonesJSON?.SaveVersion)?.ToString() ?? "missing"}";
             yield return $"{nameof(ModVersion)}: {ModVersion ?? "missing"}";
 
-        }
-
-        public int? GetBonesWeight()
-        {
-            if (ModsEnabled.IsNullOrEmpty())
-                return null;
-
-            int saveWeight = BaseBonesWeight;
-
-            saveWeight += ModsDiffer.EnabledWhereBonesDisabled * -1;
-            saveWeight += ModsDiffer.DisabledWhereBonesEnabled * -2;
-            saveWeight += ModsDiffer.UnavailableWhereBonesEnabled * -4;
-
-            saveWeight += ModsDiffer.MatchingMods * 3;
-
-            /*if (Stats.Encountered is BonesStatSet encountered)
-            {
-                int timesEncountered = encountered.GetStatValue(OsseousAsh.Config.ID);
-                // do something on the basis of times encountered maybe?
-            }*/
-
-            if (GetModVersion() is XRL.Version saveVersion
-                && Utils.ModVersion is XRL.Version modVersion)
-            {
-                if (modVersion < saveVersion)
-                    return null;
-
-                if (modVersion.Build != saveVersion.Build)
-                    return null;
-
-                int versionDiff = Math.Max(0, modVersion.Revision - saveVersion.Revision);
-
-                int diffReduction = 100;
-                for (int i = 0; i < versionDiff; i++)
-                {
-                    if (diffReduction <= 0
-                        || saveWeight <= 0)
-                        break;
-
-                    saveWeight -= diffReduction;
-
-                    diffReduction *= 2;
-                }
-            }
-
-            return Math.Max(1, saveWeight);
         }
 
         public static DateTime GetSaveTime(SaveBonesJSON BonesJSON)
@@ -877,7 +454,7 @@ namespace UD_Bones_Folder.Mod
         }
 
         public DateTime GetSaveTime()
-            => GetSaveTime(GetBonesJSON())
+            => GetSaveTime(JSON)
             ;
 
         public static string GetSaveTimeString(DateTime SaveTime)
@@ -897,41 +474,42 @@ namespace UD_Bones_Folder.Mod
             var sB = Event.NewStringBuilder();
 
             sB.Append("These bones ");
-            if (UserID == Config?.ID)
+            if (IsYou)
                 sB.Append("are yours");
             else
                 sB.Append("come from ").Append(UserHandle);
             sB.Append(".");
 
+            var preferredBonesSource = BonesSources.FirstOrDefault() ?? BonesPile.DummyFolder;
+
             sB.AppendLine()
                 .AppendLine().Append("They ");
 
-            if (FileLocationData?.Type != null
-                && FileLocationData.Type != FileLocationData.LocationType.None)
+            if (preferredBonesSource.Type != IBonesSource.SourceType.None)
                 sB.Append("were ");
 
-            sB.Append(FileLocationData?.GetSavedVerb() ?? "materialized mytseriously in").Append(" ");
+            sB.Append(preferredBonesSource.BlurbSavedVerb).Append(" ");
 
-            sB.Append(FileLocationData?.ShortDisplayName() ?? FileLocationData.MissingLocaitonShortDisplayName)
+            sB.Append(preferredBonesSource.BlurbDisplayName)
                 .Append(" on ").Append(GetSaveTimeString()).Append(", ")
                 .AppendRule(SaveTimeValue.TimeAgo("ago")).Append(".")
                 .AppendLine();
 
-            if ((FileLocationDataSet?.Count ?? 0) > 1)
+            if ((BonesSources?.Count ?? 0) > 1)
             {
                 sB.AppendLine().Append("There is also a copy ");
 
-                if (FileLocationDataSet.Count == 2)
+                if (BonesSources.Count == 2)
                 {
-                    var otherLocation = FileLocationDataSet[1];
-                    sB.Append(otherLocation.GetSavedVerb()).Append(" ").Append(otherLocation.ShortDisplayName());
+                    var otherLocation = BonesSources[1];
+                    sB.Append(otherLocation.BlurbSavedVerb).Append(" ").Append(otherLocation.BlurbDisplayName);
                 }
                 else
                 {
                     sB.Append("in the following additional locations:");
-                    for (int i = 1; i < FileLocationDataSet.Count; i++)
+                    for (int i = 1; i < BonesSources.Count; i++)
                         sB.AppendLine()
-                            .Append(FileLocationDataSet[i].ShortDisplayName());
+                            .Append(BonesSources[i].BlurbSavedVerb);
                 }
                 sB.AppendLine();
             }
@@ -970,14 +548,14 @@ namespace UD_Bones_Folder.Mod
                 {
                     showModConfigLine = false;
                     sB.AppendLine().Append("Based on your current mod configuration, and the version disparty, these bones are weighted ")
-                        .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
+                        .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordCollection.BaseBonesWeight).Append(".")
                         .AppendLine();
                 }
             }
             if (showModConfigLine)
             {
                 sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
-                    .AppendRule((GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(BaseBonesWeight).Append(".")
+                    .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordCollection.BaseBonesWeight).Append(".")
                     .AppendLine();
             }
 
@@ -1058,39 +636,37 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        public void Cremate()
+        public bool Cremate()
         {
-            if (IsCrematable)
+            if (!IsCrematable)
+                return false;
+
+            using var bonesSources = BonesSources.CloneFromPool();
+            var results = ScopeDisposedList<ActionResult>.GetFromPool();
+            try
             {
-                using var fileLocationDataList = ScopeDisposedList<FileLocationData>.GetFromPoolFilledWith(FileLocationDataSet);
-                try
+                foreach (var bonesSource in bonesSources)
                 {
-                    foreach (var fileLocationData in fileLocationDataList)
-                    {
-                        bool didCremate = fileLocationData.TryDeleteDirectory(delegate (FileLocationData fld)
-                        {
-                            FileLocationDataSet.Remove(fld);
-                        });
-                        if (didCremate)
-                        {
-                            WasCremated = true;
-                        }
-                    }
+                    var cremated = bonesSource.DeleteBones(BonesID);
+                    results.Add(cremated);
+                    if (cremated)
+                        BonesSources.Remove(bonesSource);
                 }
-                finally
+                return results.Any(r => r);
+            }
+            finally
+            {
+                if (results.Any(r => r))
                 {
-                    if (WasCremated)
-                    {
-                        BonesManager.ClearHasSaveBones();
-                        BonesManager.System.ClearEligibleSaveBonesInfoCache();
-                    }
+                    BonesManager.ClearHasSaveBones();
+                    BonesManager.System?.ClearEligibleSaveBonesInfoCache();
                 }
             }
         }
 
         public bool IsEligibleForCurrentSave(bool Strict = false)
         {
-            if (GetBonesJSON() is not SaveBonesJSON bonesJSON)
+            if (JSON is not SaveBonesJSON bonesJSON)
                 return false;
 
             if (ID != null
@@ -1127,9 +703,8 @@ namespace UD_Bones_Folder.Mod
             return true;
         }
 
-
         private string GetLevelPair()
-            => $"{nameof(SaveBonesJSON.Level)}: {GetBonesJSON().Level}"
+            => $"{nameof(SaveBonesJSON.Level)}: {JSON.Level}"
             ;
 
         private string GetZoneTierPair()
@@ -1141,11 +716,11 @@ namespace UD_Bones_Folder.Mod
             ;
 
         private string GetZoneIDPair()
-            => $"{nameof(SaveBonesJSON.ZoneID)}: {GetBonesJSON().ZoneID}"
+            => $"{nameof(SaveBonesJSON.ZoneID)}: {JSON.ZoneID}"
             ;
 
         public string GetBonesPickerLine()
-            => GetBonesJSON() != null
+            => JSON != null
             ? $"{GetName()}, {GetLevelPair()}, {GetZoneTierPair()},\n{GetZoneTerrainTypePair()}, {GetZoneIDPair()}"
             : GetName()
             ;
@@ -1426,48 +1001,10 @@ namespace UD_Bones_Folder.Mod
 
         public ModsDifferInfo GetModsDifferInfo()
         {
-            if (IsDummy)
-            {
-                return new ModsDifferInfo
-                {
-                    IsDummy = true
-                };
-            }
+            if (EnabledMods.IsNullOrEmpty())
+                EnabledMods = new(ID, ModVersion, JSON.ModsEnabled);
 
-            ModsEnabled ??= new();
-            var enabledMods = EnabledMods;
-
-            using var loadedMods = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(ModRecord.GetRunningMods());
-
-            using var bonesHasButNotAvailable = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            var availableMods = ModRecord.GetAvailableMods();
-            bonesHasButNotAvailable.RemoveAll(r => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
-
-            using var loadedButBonesMissing = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(loadedMods);
-            loadedButBonesMissing.RemoveAll(r => enabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
-
-            using var bonesHasButNotLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bonesHasButNotLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return loadedMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
-
-            using var bothHaveLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bothHaveLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return bonesHasButNotLoaded.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || loadedButBonesMissing.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
-
-            return new ModsDifferInfo
-            {
-                UnavailableWhereBonesEnabled = bonesHasButNotAvailable.Count,
-                EnabledWhereBonesDisabled = loadedButBonesMissing.Count,
-                DisabledWhereBonesEnabled = bonesHasButNotLoaded.Count,
-                MatchingMods = bothHaveLoaded.Count,
-            };
+            return ModsDifferInfo.Get(EnabledMods, IsDummy);
         }
 
         public int CompareTo(SaveBonesInfo Other)
@@ -1479,7 +1016,32 @@ namespace UD_Bones_Folder.Mod
             if (timeComp != 0)
                 return timeComp;
 
-            return FileLocationData.Type.CompareTo(Other.FileLocationData.Type);
+            var noneType = IBonesSource.SourceType.None;
+            var sourceType = BonesSources.GetBestSource(BonesID)?.Type ?? noneType;
+            var otherSourceType = Other.BonesSources.GetBestSource(BonesID)?.Type ?? noneType;
+
+            if (sourceType == noneType
+                || otherSourceType == noneType)
+                return (sourceType == noneType).CompareTo(otherSourceType == noneType);
+
+            return sourceType.CompareTo(otherSourceType);
+        }
+
+        public void Dispose()
+        {
+            ID = null;
+            Name = null;
+            Description = null;
+            SaveTime = null;
+            Info = null;
+            Version = null;
+            json = null;
+            Directory = null;
+            Size = null;
+            ModsEnabled = null;
+
+            _BonesSources.Dispose();
+            _BonesSources = null;
         }
 
         public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)

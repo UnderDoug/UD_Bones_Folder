@@ -18,6 +18,18 @@
     </helptext>
   </option-->
   <option
+        ID="UD_Bones_Folder_DebugEnableLogging"
+        DisplayText="{{Y|Bones}}: Turn on debug logging for this mod."
+        Category="Debug"
+        Type="Checkbox"
+        Default="Yes">
+    <helptext>
+      When enabled, the mod will output verbose logs to Player.log tracing program flow specifically within the mod.
+
+      The default is {{W|Enabled}}.
+    </helptext>
+  </option>
+  <option
         ID="UD_Bones_Folder_DebugEnableFinalizeDeserializationLogging"
         DisplayText="{{Y|Bones}}: Enable logging of deserialization errors during {{C|FinalizeRead}} when loading bones."
         Category="Debug"
@@ -369,6 +381,27 @@
       {{c|&#x7;}} {{Y|extremely high}} - 4x {{C|advantage}}, average {{rules|67.8}}, 50% of rolls {{Y|over}} {{rules|70}}
 
       The default is {{M|low}}.
+    </helptext>
+  </option>
+  <option
+        ID="UD_Bones_Folder_PreferredBonesFolderForSave"
+        DisplayText="Select preferred bones folder location"
+        Category="Mod: Bones"
+        Type="Combo"
+        Default="2"
+        Values="0|Both,1|Local,2|Synced">
+    <helptext>
+      Sets the preferred save location for all new bones.
+
+      Bones files with the same ID are always loaded from [{{W|Local}}] locations first, followed by [{{G|Synced}}] locations (this is how mods are loaded when they share an ID), then from other locations ([{{C|Mod}}], then [{{Y|Online}}]).
+
+      {{c|&#x7;}} {{y|Both}}    - 2 copies of every bones file will be created, one each in the two below locations.
+      {{c|&#x7;}} {{W|Local}}   - &lt;...&gt;/CavesOfQud/Bones/
+      {{c|&#x7;}} {{G|Synced}}  - &lt;...&gt;/CavesOfQud/Synced/Bones/
+      
+      Once saved, a bones file can be migrated or duplicated to other "on-disk" locations.
+
+      The default is {{G|Synced}}.
     </helptext>
   </option>
   <option

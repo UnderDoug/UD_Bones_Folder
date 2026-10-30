@@ -7,6 +7,8 @@ using Newtonsoft.Json;
 
 using UD_Bones_Folder.Mod.Serialization;
 
+using XRL.Collections;
+
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptIn)]
@@ -72,8 +74,13 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public BonesStatSet Clone(CompositeEqualityComparer<BonesStat> EqualityComparer = null, Coalescer<BonesStat> Coalescer = null)
-            => new(this, EqualityComparer ?? GetEqualityComparer(), Coalescer ?? GetCoalescer())
-            ;
+        {
+            using var clones = ScopeDisposedList<BonesStat>.GetFromPool();
+            foreach (var bonesStat in this)
+                clones.Add(bonesStat.Clone());
+
+            return new(clones, EqualityComparer ?? GetEqualityComparer(), Coalescer ?? GetCoalescer());
+        }
 
         public BonesStat GetStat(Guid UserID)
             => this.FirstOrDefault(stat => stat.UserID == UserID.ToString())
@@ -120,5 +127,13 @@ namespace UD_Bones_Folder.Mod
         public bool HasValue(Guid OsseousAshID)
             => this.Any(stat => stat.UserID == OsseousAshID.ToString())
             ;
+
+        public override void Dispose()
+        {
+            foreach (var item in this)
+                item.Dispose();
+
+            base.Dispose();
+        }
     }
 }

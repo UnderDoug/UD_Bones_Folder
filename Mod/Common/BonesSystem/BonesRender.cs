@@ -106,7 +106,7 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public BonesRender(SaveBonesInfo BonesInfo)
-            : this(BonesInfo.GetBonesJSON())
+            : this(BonesInfo.JSON)
         {
             SetIsMad(BonesInfo.IsMad);
         }
