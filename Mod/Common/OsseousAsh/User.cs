@@ -28,9 +28,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Manage,
         }
 
-        [JsonProperty]
         public Guid ID;
-        [JsonProperty]
         public string Handle;
 
         [JsonConverter(typeof(StringEnumConverter))]
@@ -55,7 +53,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             set => _Access = value;
         }
 
-        [JsonProperty]
         public string Password;
 
         public User()
