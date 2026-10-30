@@ -4,10 +4,10 @@ using Newtonsoft.Json.Converters;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
-    /*[JsonObject(MemberSerialization.OptOut
+    [JsonObject(MemberSerialization.OptOut
         , MissingMemberHandling = MissingMemberHandling.Ignore
         , ItemNullValueHandling = NullValueHandling.Ignore
-        )]*/
+        )]
     [Serializable]
     public class User : IDisposable
     {
