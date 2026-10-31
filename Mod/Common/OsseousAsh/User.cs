@@ -1,16 +1,27 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+
+using UD_Bones_Folder.Mod.Logging;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
     [JsonObject(MemberSerialization.OptOut
         , MissingMemberHandling = MissingMemberHandling.Ignore
         , ItemNullValueHandling = NullValueHandling.Ignore
+        , ItemReferenceLoopHandling = ReferenceLoopHandling.Ignore
         )]
     [Serializable]
-    public class User : IDisposable
+    public class User : IDisposable, IVomitable<User>
     {
+        #region Debug Registration
+
+
+        #endregion
+
         [Serializable]
         public enum StatusTypes
         {
@@ -31,10 +42,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public Guid ID;
         public string Handle;
 
+        [DoVomit(nameof(Status))]
         [JsonConverter(typeof(StringEnumConverter))]
         [JsonProperty(nameof(Status))]
         private StatusTypes? _Status;
 
+        [NoVomit]
         [JsonIgnore]
         public StatusTypes Status
         {
@@ -42,10 +55,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             set => _Status = value;
         }
 
+        [DoVomit(nameof(Access))]
         [JsonConverter(typeof(StringEnumConverter))]
         [JsonProperty(nameof(Access))]
         private AccessLevels? _Access;
 
+        [NoVomit]
         [JsonIgnore]
         public AccessLevels Access
         {
@@ -107,6 +122,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             var newUser = new User();
             return CopyTo(ref newUser);
         }
+
+        public User Vomit(bool ForceName = false, Indent Indent = null, [CallerMemberName] string CallingMethod = "", params object[] Parameters)
+            => ((IVomitable<User>)this)?.Vomit(
+                ForceName: ForceName,
+                Indent: Indent,
+                CallingMethod: CallingMethod,
+                Parameters: Parameters)
+            ;
 
         public void Dispose()
         {

@@ -41,12 +41,14 @@ using UD_Bones_Folder.Mod.Logging;
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
     [HasModSensitiveStaticCache]
-    [JsonObject(MemberSerialization.OptIn)]
+    [JsonObject(MemberSerialization.OptIn
+        , ItemReferenceLoopHandling = ReferenceLoopHandling.Ignore
+        )]
     [Serializable]
-    public class Host : BaseBonesSource, IComposite, IEquatable<Host>, IDisposable
+    public class Host : BaseBonesSource, IComposite, IEquatable<Host>, IVomitable<Host>, IDisposable
     {
         #region Debug Registration
-        [UD_DebugRegistry]
+        [RegistersMethodsForDebug]
         public static void doDebugRegistry(DebugMethodRegistry Registry)
             => Registry.RegisterEach(
                 Type: typeof(Host),
@@ -122,59 +124,72 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static Guid UserID => Configuration.Instance?.ID ?? Guid.Empty;
 
+        [NoVomit]
+        public bool OptIn => true;
+
         [JsonIgnore]
         private int? _HostID;
+        [DoVomit]
         [JsonIgnore]
         private int HostID => _HostID ??= CurrentHostID++;
 
         /// <summary>
         /// Name of the host, excluding protocol and any port number.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public string Name;
 
         /// <summary>
         /// Optional port number for host.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public int? Port;
 
         /// <summary>
         /// Determines http or https.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public bool Encrypted;
 
         /// <summary>
         /// The number of milliseconds to wait for a response.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public int TimeoutMS = DEFAULT_TIMEOUT;
 
         /// <summary>
         /// The maximum number number of times an upload should be attempted before being considered to have failed.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public int MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS;
 
         /// <summary>
         /// The API version this host expects to connect to.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public int Version;
 
         /// <summary>
         /// The Routes made available by the API this host will connect to.
         /// </summary>
+        [DoVomit]
         [JsonIgnore]
         public RouteSet Routes => VersionRoutes.GetFor(Version);
 
         /// <summary>
         /// Indicates whether or not this host should be utilised.
         /// </summary>
+        [DoVomit]
         [JsonProperty]
         public bool Enabled;
 
+        [DoVomit(nameof(JwtToken))]
         [JsonProperty(nameof(JwtToken))]
         private string _JwtToken;
         /// <summary>
@@ -203,13 +218,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         /// <summary>
         /// An object representation of the User as it appears on the server.
         /// </summary>
+        [DoVomit]
         //[JsonIgnore]
         [JsonProperty]
         public User User;
 
+        [DoVomit]
         [JsonIgnore]
         private bool IsBuilt;
 
+        [DoVomit]
         [JsonIgnore]
         public bool HasSession => !JwtToken.IsNullOrEmpty();
 
@@ -219,9 +237,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             : null
             ;
 
+        [DoVomit]
         [JsonIgnore]
         private bool? WrittenEnabled;
 
+        [DoVomit]
         [JsonIgnore]
         public bool IsOnCooldown => IsBuilt
             && !Enabled
@@ -229,12 +249,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             && WrittenEnabled.GetValueOrDefault()
             ;
 
+        [DoVomit]
         [JsonIgnore]
         public bool IsRunning
             => VersionRoutes.Init
             && GetServerStatus()
             ;
 
+        [DoVomit]
         [JsonIgnore]
         public bool CanUp => GetCanUp();
 
@@ -1030,9 +1052,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         {
             URI = CombineHostRoute(IncludeVersion: IncludeVersion, Route.ParseValue(RouteParams, RouteQuery));
 
-            using var indent = new Indent(1);
-            Debug.LogCaller(
-                Indent: indent,
+            using var indent = new Indent();
+            Debug.LogMethod(
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(Route), Route),
@@ -1233,9 +1255,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
             string methodName = nameof(GetServerStatusAsync);
 
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(RethrowForLinuxPrompt), RethrowForLinuxPrompt),
@@ -1251,15 +1273,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
             try
             {
-                Debug.Log($"Before {nameof(CreateWebRequest)}", Indent: indent[1]);
                 httpReq = CreateWebRequest(
                     Route: route,
                     IncludeVersion: false,
                     Timeout: timeout,
                     URI: out uRI,
                     RequireSession: false);
-
-                Debug.Log($"After {nameof(CreateWebRequest)}", Indent: indent[1]);
             }
             catch (Exception x)
             {
@@ -1346,9 +1365,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 || UserID == Guid.Empty)
                 return false;
 
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(CallingMethod), CallingMethod)
@@ -1484,8 +1503,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                         title: title.ToString(),
                         pushView: PushView);
 
-                    using var indent = new Indent(1);
-                    Debug.Log($"{nameof(confirmEmpty)}: {confirmEmpty.command}", Indent: indent);
+                    using var indent = new Indent();
+                    Debug.Log($"{nameof(confirmEmpty)}: {confirmEmpty.command}", Indent: indent[1]);
 
                     return confirmEmpty.command switch
                     {
@@ -1546,9 +1565,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 }
             }
 
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(Password), Password != null),
@@ -1565,8 +1584,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             using var user = new User(Configuration.Instance, Password);
             try
             {
-                Debug.Log($"{nameof(User)}:", Indent: indent[1]);
-                Debug.LogJson(user, Indent: indent[1]);
+                Debug.Log($"{nameof(User)}:", Indent: indent[2]);
+                Debug.LogJson(user, Indent: indent[2]);
                 httpReq = CreateWebRequest(
                     Route: route,
                     Proc: async streamWriter => await streamWriter.WriteAsync(JsonConvert.SerializeObject(new { User = user })),
@@ -1648,11 +1667,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
             finally
             {
-                Debug.Log("Attempted to register User:", Indent: indent[1]);
+                Debug.Log("Attempted to register User:", Indent: indent[2]);
                 if (user != null)
-                    Debug.LogJson(user, Indent: indent[1]);
+                    Debug.LogJson(user, Indent: indent[2]);
                 else
-                    Debug.Log("none", Indent: indent[2]);
+                    Debug.Log("none", Indent: indent[3]);
             }
             return false;
         }
@@ -1671,9 +1690,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 JwtToken = sessionToken;
             }
 
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(CatchBadRequest), CatchBadRequest),
@@ -1754,9 +1773,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (!JwtToken.IsNullOrEmpty())
                 return JwtToken;
 
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(PushView), PushView),
@@ -1772,7 +1791,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
             string callingMethod = nameof(GetSessionAsync);
 
-            Debug.YehNah($"have {nameof(password)}", password != null, Indent: indent[1]);
+            Debug.YehNah($"have {nameof(password)}", password != null, Indent: indent[2]);
             if (password == null)
             {
                 Utils.Warn($"{callingMethod} was not provided any credentials with which to authenticate {ToString()}.");
@@ -1809,13 +1828,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 var httpRes = (HttpWebResponse)httpReq.GetResponse();
                 using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
-                    Debug.Log(nameof(StreamReader), nameof(streamReader.ReadToEndAsync), Indent: indent[1]);
+                    Debug.Log(nameof(StreamReader), nameof(streamReader.ReadToEndAsync), Indent: indent[2]);
                     var result = await streamReader.ReadToEndAsync();
                     if (httpRes.StatusCode == HttpStatusCode.OK)
                     {
-                        Debug.Log(nameof(httpRes.StatusCode), httpRes.StatusCode, Indent: indent[1]);
+                        Debug.Log(nameof(httpRes.StatusCode), httpRes.StatusCode, Indent: indent[2]);
                         if (JObject.Parse(result) is JObject jObject)
                         {
+                            Debug.Log(nameof(jObject), jObject.ToString(), Indent: indent[2]);
                             try
                             {
                                 if (jObject["user"].ToObject<User>() is not User user)
@@ -1823,6 +1843,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                     Utils.Warn($"{callingMethod} failed to deserialize {nameof(jObject)}[\"user\"] to {typeof(User)}");
                                     return null;
                                 }
+                                Debug.LogJson(nameof(user), user, Indent: indent[2]);
                                 if (user.ID != UserID)
                                 {
                                     Utils.Warn($"{callingMethod} deserialized {typeof(User)} has incorrect ID:");
@@ -1830,15 +1851,17 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                     Utils.Log($"{1.Indent()}{{{UserID}}} - Expected");
                                     return null;
                                 }
+                                Debug.CheckYeh($"ID Matches!", Indent: indent[2]);
                                 user.CopyTo(ref User, SanitizePassword: true);
                                 user.Dispose();
 
                                 // -- This is just debug stuff to force it to crash-out under controlled circumstances
-                                Debug.CheckYeh(nameof(User), (User?.ID)?.ToString() ?? "MISSING_USER", Indent: indent[1]);
-                                Debug.LogJson(User, Indent: indent[1]);
+                                Vomit(Indent: indent[2]);
+                                Debug.CheckYeh(nameof(User), (User?.ID)?.ToString() ?? "MISSING_USER", Indent: indent[2]);
+                                Debug.LogJson(User, Indent: indent[2]);
                                 string fileName = "User.json";
                                 var localFileLoc = Configuration.GetOsseousAshFileLocationData(Ensure: true).FirstOrDefault(f => f.Type == FileLocationData.LocationType.Local);
-                                Debug.Log($"Writing User to {localFileLoc.WithFileName(fileName)}", Indent: indent[1]);
+                                Debug.Log($"Writing User to {localFileLoc.WithFileName(fileName)}", Indent: indent[2]);
                                 localFileLoc?.Write(fileName, User, Formatting.Indented); // `User` is serialised and written to disk just fine on its own
                                 _ = JsonConvert.SerializeObject(this, Formatting.Indented); // Crashes here trying to serialize `User` when it's a member of `Host`
                                 // -- Remove above this when the issue is resolved.
@@ -2386,9 +2409,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Predicate<PickOptionData<HostLocationPair, Task<UIUtils.CascadableResult>>> SelectImmediately
             )
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(SelectImmediately), (SelectImmediately != null ? "not " : null) + "null"),
@@ -2420,13 +2443,13 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 using var exludeHotkeys = ScopeDisposedList<char>.GetFromPoolFilledWith(options.GetHotkeys());
 
                 // ReadHostsTo(ref _Hosts);
-                Debug.Log($"{nameof(ServerUtils.AllHostsWithLocation)}", Indent: indent[1]);
+                Debug.Log($"{nameof(ServerUtils.AllHostsWithLocation)}", Indent: indent[2]);
                 using var hostLocationPairs = ScopeDisposedList<HostLocationPair>.GetFromPoolFilledWith(ServerUtils.AllHostsWithLocation());
                 foreach (var hostLocationPair in hostLocationPairs)
                 {
                     try
                     {
-                        Debug.Log($"Pair: {hostLocationPair}", Indent: indent[2]);
+                        Debug.Log($"Pair: {hostLocationPair}", Indent: indent[3]);
                         if (!hostLocationPair.IsValid())
                         {
                             Utils.Warn($"{nameof(ManageHostsOptionButtonWithSelectionAsync)} got invalid {nameof(hostLocationPair)}: {hostLocationPair}");
@@ -2460,7 +2483,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
                 if (SelectImmediately != null)
                 {
-                    Debug.Log($"{nameof(SelectImmediately)} not null", Indent: indent[2]);
+                    Debug.Log($"{nameof(SelectImmediately)} not null", Indent: indent[3]);
                     if (options.FirstOrDefault(SelectImmediately.Invoke) is CascadablePickOptionDataAsync<HostSet.HostLocationPair> selectedImmediately)
                     {
                         if (selectedImmediately.Callback?.Invoke(selectedImmediately?.Element) is Task<UIUtils.CascadableResult> resultTask)
@@ -2470,7 +2493,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 }
                 else
                 {
-                    Debug.Log($"{nameof(SelectImmediately)} is null", Indent: indent[2]);
+                    Debug.Log($"{nameof(SelectImmediately)} is null", Indent: indent[3]);
 
                     result = await UIUtils.PerformPickOptionAsync(
                         OptionDataSet: options,
@@ -2482,20 +2505,20 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
                 if (newHostLocationPair?.IsValid() is false)
                 {
-                    Debug.Log($"!{nameof(newHostLocationPair)}.{nameof(newHostLocationPair.IsValid)}; {nameof(Dispose)}", Indent: indent[1]);
+                    Debug.Log($"!{nameof(newHostLocationPair)}.{nameof(newHostLocationPair.IsValid)}; {nameof(Dispose)}", Indent: indent[2]);
                     newHostLocationPair.Dispose();
                 }
             }
             while (result.IsContinue());
 
-            Debug.Log($"foreach hostCollection in ServerUtils.Hosts", Indent: indent[1]);
+            Debug.Log($"foreach hostCollection in ServerUtils.Hosts", Indent: indent[2]);
             foreach (var hostSet in ServerUtils.Hosts)
             {
-                Debug.Log($"Write: {hostSet.LocationData}", Indent: indent[2]);
+                Debug.Log($"Write: {hostSet.LocationData}", Indent: indent[3]);
                 hostSet.Write();
             }
 
-            Debug.CheckYeh($"{nameof(ManageHostsOptionButtonWithSelectionAsync)} Finished", Indent: indent[1]);
+            Debug.CheckYeh($"{nameof(ManageHostsOptionButtonWithSelectionAsync)} Finished", Indent: indent[2]);
         }
 
         private static async Task<UIUtils.CascadableResult> PerformNewHostAsync(HostLocationPair HostConfig)
@@ -2792,9 +2815,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         private static async Task<UIUtils.CascadableResult> AskDoWhatWithHostAsync(HostSetHostPair HostParentPair)
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(HostParentPair), HostParentPair),
@@ -4048,6 +4071,15 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             ;
 
         #endregion
+
+        public Host Vomit(bool ForceName = false, Indent Indent = null, [CallerMemberName] string CallingMethod = "", params object[] Parameters)
+            => (Host)IVomitable.Vomit(
+                Object: this,
+                ForceName: ForceName,
+                Indent: Indent,
+                CallingMethod: CallingMethod,
+                Parameters: Parameters)
+            ;
 
         public static implicit operator string(Host Host)
             => Host.ToString()

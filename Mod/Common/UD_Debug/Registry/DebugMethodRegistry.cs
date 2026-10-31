@@ -44,12 +44,12 @@ namespace UD_Bones_Folder.Mod.Logging
                 return Registry;
 
             string thisMethod = CallChain(nameof(DebugMethodRegistry), nameof(GetRegistry));
-            if (ModManager.GetMethodsWithAttribute(typeof(UD_DebugRegistryAttribute)) is not List<MethodInfo> debugRegistryMethods
+            if (ModManager.GetMethodsWithAttribute(typeof(RegistersMethodsForDebugAttribute)) is not List<MethodInfo> debugRegistryMethods
                 || debugRegistryMethods.IsNullOrEmpty())
             {
                 MetricsManager.LogModError(
                     mod: ThisMod,
-                    Message: $"{thisMethod} failed to retrieve any {nameof(UD_DebugRegistryAttribute)} decorated methods");
+                    Message: $"{thisMethod} failed to retrieve any {nameof(RegistersMethodsForDebugAttribute)} decorated methods");
 
                 return Registry;
             }

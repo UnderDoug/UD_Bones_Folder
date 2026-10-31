@@ -26,7 +26,7 @@ namespace UD_Bones_Folder.Mod.Logging
     public static class Debug
     {
         #region Debug Registration
-        [UD_DebugRegistry]
+        [RegistersMethodsForDebug]
         public static void doDebugRegistry(DebugMethodRegistry Registry)
             => Registry.RegisterEachTrue(
                 Type: typeof(UD_Bones_Folder.Mod.Logging.Debug),
@@ -66,6 +66,7 @@ namespace UD_Bones_Folder.Mod.Logging
             typeof(UD_Bones_Folder.Mod.Logging.Indent),
             typeof(UD_Bones_Folder.Mod.Logging.DebugMethodRegistry),
             typeof(UD_Bones_Folder.Mod.Logging.MethodRegistryEntry),
+            typeof(UD_Bones_Folder.Mod.Logging.IVomitable<>),
         };
 
         public static string CallerString(Type CallingType, MethodBase CallingMethod)

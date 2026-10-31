@@ -33,7 +33,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
     public class HostSet : CompositeSet<Host>
     {
         #region Debug Registration
-        [UD_DebugRegistry]
+        [RegistersMethodsForDebug]
         public static void doDebugRegistry(DebugMethodRegistry Registry)
             => Registry.RegisterEach(
                 Type: typeof(HostSet),
@@ -222,9 +222,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 if (!hostSet.Hosts.IsNullOrEmpty())
                 {
-                    using var indent = new Indent(1);
+                    using var indent = new Indent();
                     Debug.LogCaller(
-                        Indent: indent,
+                        Indent: indent[1],
                         ArgPairs: new Debug.ArgPair[]
                         {
                             Debug.Arg(nameof(FileLocationData), FileLocationData),
@@ -255,9 +255,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public void WriteToFile(FileLocationData FileLocationData, string FileName)
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(FileLocationData), FileLocationData),
@@ -270,7 +270,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
             try
             {
-                Debug.LogJson(this, Indent: indent[1]);
+                Debug.LogJson(this, Indent: indent[2]);
                 FileLocationData.Write(FileName, this, Formatting.Indented);
                 return;
             }
@@ -287,9 +287,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public void Write()
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(HostSet), LocationData),

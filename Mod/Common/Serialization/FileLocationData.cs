@@ -27,7 +27,7 @@ namespace UD_Bones_Folder.Mod
     public class FileLocationData : IComposite, IEquatable<FileLocationData>, IDisposable
     {
         #region Debug Registration
-        [UD_DebugRegistry]
+        [RegistersMethodsForDebug]
         public static void doDebugRegistry(DebugMethodRegistry Registry)
             => Registry.RegisterEach(
                 Type: typeof(FileLocationData),
@@ -204,9 +204,9 @@ namespace UD_Bones_Folder.Mod
             {
                 try
                 {
-                    using var indent = new Indent(1);
+                    using var indent = new Indent();
                     Debug.LogCaller(
-                        Indent: indent,
+                        Indent: indent[1],
                         ArgPairs: new Debug.ArgPair[]
                         {
                             Debug.Arg(typeof(T).ToStringWithGenerics()),
@@ -235,9 +235,9 @@ namespace UD_Bones_Folder.Mod
 
         public async Task WriteAsync<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg(nameof(FileName), FileName),
@@ -255,8 +255,8 @@ namespace UD_Bones_Folder.Mod
                         && TryEnsureExists())
                     || Exists())
                 {
-                    Debug.Log($"{nameof(File)}.{nameof(File.WriteAllTextAsync)}", Indent: indent[1]);
-                    Debug.LogJson(Object, Indent: indent[1]);
+                    Debug.Log($"{nameof(File)}.{nameof(File.WriteAllTextAsync)}", Indent: indent[2]);
+                    Debug.LogJson(Object, Indent: indent[2]);
                     await File.WriteAllTextAsync(
                         path: WithFileName(FileName),
                         content: JsonConvert.SerializeObject(Object, Formatting));
@@ -272,7 +272,7 @@ namespace UD_Bones_Folder.Mod
                 Utils.Warn(message, x);
             }
 
-            Debug.CheckYeh($"{nameof(WriteAsync)} {FileName} Finished", Indent: indent[0]);
+            Debug.CheckYeh($"{nameof(WriteAsync)} {FileName} Finished", Indent: indent[1]);
         }
 
         public async void Write<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)

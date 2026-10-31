@@ -2879,7 +2879,7 @@ namespace UD_Bones_Folder.Mod
             : null
             ;
 
-        public static string ToStringWithGenerics(this Type Type, bool Short = false)
+        public static string ToStringWithGenerics(this Type Type, bool IncludeNamespace, bool Short)
         {
             if (Type == null)
                 return null;
@@ -2892,11 +2892,22 @@ namespace UD_Bones_Folder.Mod
 
             string name = Type.Name.Split('`')[0];
 
+            string namespaceString = IncludeNamespace ? $"{Type.Namespace}." : null;
+
             if (Short)
                 name = name.Acronymize();
 
-            return name + typeGenerics.GenericsString(Short);
+            string nullable = Nullable.GetUnderlyingType(Type) is not null
+                ? "?"
+                : null
+                ;
+
+            return $"{namespaceString}{name}{typeGenerics.GenericsString(Short)}{nullable}";
         }
+
+        public static string ToStringWithGenerics(this Type Type, bool Short = false)
+            => ToStringWithGenerics(Type, false, Short)
+            ;
 
         public static string TypeStringWithGenerics<T>(this T Object, bool Short = false)
             => (Object?.GetType() ?? typeof(T))?.ToStringWithGenerics(Short)

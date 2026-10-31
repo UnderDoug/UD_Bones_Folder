@@ -176,9 +176,9 @@ namespace UD_Bones_Folder.Mod.UI
 
         private static async void PerformMainMenuFirstShowAsync()
         {
-            using var indent = new Indent(1);
+            using var indent = new Indent();
             Debug.LogCaller(
-                Indent: indent,
+                Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
                     Debug.Arg($"{nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}", GameManager.AwakeComplete)
@@ -245,7 +245,7 @@ namespace UD_Bones_Folder.Mod.UI
                     }
                 }
 
-                /*Debug.Log($"Start Host Sessions:", Indent: indent[1]);
+                /*Debug.Log($"Start Host Sessions:", Indent: indent[2]);
                 using var hostLocationPairs = ScopeDisposedList<HostLocationPair>.GetFromPoolFilledWith(AllHostsWithLocation(p => p.Host.Enabled));
                 foreach ((var host, var location) in hostLocationPairs)
                 {
@@ -261,12 +261,12 @@ namespace UD_Bones_Folder.Mod.UI
                         if (host.Enabled
                             && await Host.FlipEnabledAsync(host))
                         {
-                            Debug.Log($"{host} disabled", Indent: indent[2]);
+                            Debug.Log($"{host} disabled", Indent: indent[3]);
                             hostSet.Write();
                             continue;
                         }
                     }
-                    Debug.Log($"{host} established session", Indent: indent[2]);
+                    Debug.Log($"{host} established session", Indent: indent[3]);
                 }*/
             }
             finally

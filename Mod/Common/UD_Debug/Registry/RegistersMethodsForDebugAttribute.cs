@@ -5,7 +5,7 @@ using System.Text;
 namespace UD_Bones_Folder.Mod.Logging
 {
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-    public class UD_DebugRegistryAttribute : Attribute
+    public class RegistersMethodsForDebugAttribute : Attribute
     {
     }
 }

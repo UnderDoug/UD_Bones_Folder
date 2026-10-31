@@ -33,7 +33,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
     public static class ServerUtils
     {
         #region Debug Registration
-        [UD_DebugRegistry]
+        [RegistersMethodsForDebug]
         public static void doDebugRegistry(DebugMethodRegistry Registry)
             => Registry.RegisterEach(
                 Type: typeof(ServerUtils),
@@ -121,8 +121,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static async Task<Rack<HostSet>> ReadHostSetsAsync()
         {
-            using var indent = new Indent(1);
-            Debug.LogCaller(Indent: indent);
+            using var indent = new Indent();
+            Debug.LogCaller(Indent: indent[1]);
 
             Rack<HostSet> hosts = null;
             foreach (var fileLocationData in Configuration.GetOsseousAshFileLocationData(Ensure: true).IteratorSafe())

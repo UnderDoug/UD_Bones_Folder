@@ -43,7 +43,7 @@ namespace UD_Bones_Folder.Mod.Logging
             Debug.PushToIndents(Channel, this);
         }
 
-        public Indent(string Channel, int Offset) 
+        public Indent(string Channel = null, int Offset = 0) 
             : this(Channel) 
         {
             BaseValue = CapIndent(BaseValue + Offset);
@@ -56,6 +56,10 @@ namespace UD_Bones_Folder.Mod.Logging
 
         public Indent(int Offset) 
             : this(Debug.GetCallingMod(), Offset) 
+        { }
+
+        public Indent(Indent Indent) 
+            : this(Indent.Channel, 0)
         { }
 
         public Indent this[int Indent]
