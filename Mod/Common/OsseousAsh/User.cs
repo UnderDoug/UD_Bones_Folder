@@ -32,8 +32,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Type: typeof(JsonConverter),
                     MethodNameValues: new()
                     {
-                    { nameof(ReadJson), false },
-                    { nameof(WriteJson), false },
+                        { nameof(ReadJson), false },
+                        { nameof(WriteJson), false },
                     });
             #endregion
 
@@ -47,6 +47,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
 
             public override bool CanWrite => !CannotWrite;
+
+            public JsonConverter()
+                : base()
+            { }
 
             public override User ReadJson(
                 JsonReader Reader,
@@ -199,7 +203,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             return CopyTo(ref newUser);
         }
 
-        public User Vomit(
+        public virtual User Vomit(
             bool ForceName = false,
             Indent Indent = null,
             [CallerMemberName] string CallingMethod = "",

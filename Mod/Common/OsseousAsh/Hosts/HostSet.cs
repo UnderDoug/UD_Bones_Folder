@@ -39,7 +39,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 Type: typeof(HostSet),
                 MethodNameValues: new()
                 {
-                    { nameof(ReadFromFileAsync), true },
+                    { nameof(ReadFromFileAsync), false },
+                    { nameof(WriteToFile), false },
+                    { nameof(Write), false },
                 });
         #endregion
 
@@ -189,14 +191,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public FileLocationData LocationData;
 
         [JsonProperty]
-        private Host[] Hosts
+        private HostJSON[] Hosts
         {
-            get => ToArray();
+            get => this.Select(Host.ToJSON).ToArray();
             set
             {
                 Clear();
                 EnsureCapacity(value?.Length ?? 0);
-                AddRange(value);
+                AddRange(value.Select(HostJSON.ToHost));
             }
         }
 
@@ -220,7 +222,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         {
             if ((await FileLocationData?.ReadFromFileAsync<HostSet>(FileName)) is HostSet hostSet)
             {
-                if (!hostSet.Hosts.IsNullOrEmpty())
+                if (!hostSet.IsNullOrEmpty())
                 {
                     using var indent = new Indent();
                     Debug.LogCaller(
@@ -264,10 +266,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Debug.Arg(nameof(FileName), FileName),
                 });
 
-            var enableds = new Dictionary<Host, bool?>();
-            foreach (var host in this)
-                host.HotSwapEnabled(ref enableds);
-
             try
             {
                 Debug.LogJson(this, Indent: indent[2]);
@@ -277,11 +275,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             catch (Exception x)
             {
                 Utils.Warn($"{nameof(HostSet)} failed to {nameof(WriteToFile)}", x);
-            }
-            finally
-            {
-                foreach (var host in this)
-                    host.HotSwapEnabled(ref enableds);
             }
         }
 

@@ -39,7 +39,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 Type: typeof(ServerUtils),
                 MethodNameValues: new()
                 {
-                    { nameof(ReadHostSetsAsync), true },
+                    { nameof(EnsureHosts), false },
+                    { nameof(ReadHostSetsAsync), false },
                 });
         #endregion
 
@@ -84,6 +85,27 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
             _ = Hosts;
             Hosts?.BuildHosts(Ping: true);
+
+            using var indent = new Indent();
+            Debug.LogCaller(Indent: indent[1]);
+
+            Debug.Log($"Test-Serializing {nameof(Host)}s...", Indent: indent[2]);
+            foreach (var hostSet in Hosts)
+            {
+                foreach (var host in hostSet)
+                {
+                    try
+                    {
+                        using (var hostJSON = host.ToJSON())
+                        {
+                            Debug.LogJson($"{nameof(Host)}[{host}])", hostJSON, Indent: indent[3]);
+                        }
+                    }
+                    catch
+                    { }
+                }
+            }
+
             _ = ReportsCache;
 
             if (Options.EnableOsseousAshDownloads)

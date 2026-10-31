@@ -33,8 +33,8 @@ namespace UD_Bones_Folder.Mod
                 Type: typeof(FileLocationData),
                 MethodNameValues: new()
                 {
-                    { nameof(ReadFromFileAsync), true },
-                    { nameof(WriteAsync), true },
+                    { nameof(ReadFromFileAsync), false },
+                    { nameof(WriteAsync), false },
                 });
         #endregion
 

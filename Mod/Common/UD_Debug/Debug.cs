@@ -564,18 +564,13 @@ namespace UD_Bones_Folder.Mod.Logging
             if (Good != null)
             {
                 if (!Good.GetValueOrDefault())
-                {
-                    append = AppendCross("");
-                }
+                    append = AppendCross("", ForLog: true);
                 else
-                {
-                    append = AppendTick("");
-                }
+                    append = AppendTick("", ForLog: true);
             }
             else
-            {
                 append = "[-] ";
-            }
+
             return Log(append + Message, Value, Indent, CallingMethod);
         }
 

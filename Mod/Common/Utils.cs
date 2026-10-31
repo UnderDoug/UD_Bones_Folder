@@ -740,12 +740,20 @@ namespace UD_Bones_Folder.Mod
             return max;
         }
 
-        public static string AppendTick(string String, bool AppendSpace = true)
-            => String + "[" + TICK + "]" + (AppendSpace ? " " : "")
+        public static string AppendTick(
+            string String,
+            bool AppendSpace = true,
+            bool ForLog = false
+            )
+            =>  $"{String}[{(ForLog ? TICK : LOG_TICK)}]{(AppendSpace ? " " : "")}"
             ;
 
-        public static string AppendCross(string String, bool AppendSpace = true)
-            => String + "[" + CROSS + "]" + (AppendSpace ? " " : "")
+        public static string AppendCross(
+            string String,
+            bool AppendSpace = true,
+            bool ForLog = false
+            )
+            => $"{String}[{(ForLog ? CROSS : LOG_CROSS)}]{(AppendSpace ? " " : "")}"
             ;
 
         public static string AppendYehNah(string String, bool Yeh, bool AppendSpace = true)

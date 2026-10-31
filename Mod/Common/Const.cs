@@ -60,7 +60,9 @@ namespace UD_Bones_Folder.Mod
         public const string CHECKED = "[■]";
 
         public const string TICK = "\u221A";  // √
+        public const string LOG_TICK = "√";
         public const string CROSS = "\u0058"; // X
+        public const string LOG_CROSS = "X"; // X
 
         public const string BULLET = "\u0007"; // •
         public const string NBSP = "\xFF"; // " "

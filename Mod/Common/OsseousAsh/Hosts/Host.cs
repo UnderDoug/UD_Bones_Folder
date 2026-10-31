@@ -41,26 +41,117 @@ using UD_Bones_Folder.Mod.Logging;
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
     [HasModSensitiveStaticCache]
-    [JsonObject(MemberSerialization.OptIn
-        , ItemReferenceLoopHandling = ReferenceLoopHandling.Ignore
-        )]
-    [Serializable]
+    [JsonConverter(typeof(Host.JsonConverter))]
     public class Host : BaseBonesSource, IComposite, IEquatable<Host>, IVomitable<Host>, IDisposable
     {
         #region Debug Registration
         [RegistersMethodsForDebug]
-        public static void doDebugRegistry(DebugMethodRegistry Registry)
-            => Registry.RegisterEach(
+        public static void doDebugRegistryTrue(DebugMethodRegistry Registry)
+            => Registry.RegisterEachFalse(
                 Type: typeof(Host),
-                MethodNameValues: new()
+                Methods: new string[]
                 {
-                    { nameof(GetServerStatusAsync), true },
-                    { nameof(GetCanUpAsync), true },
-                    { nameof(GetSessionAsync), true },
-                    { nameof(GetUserAsync), true },
-                    { nameof(CheckRegisterUserAsync), true },
+                    nameof(ManageHostsOptionButtonWithSelectionAsync),
+                    nameof(CreateWebRequest),
+                    nameof(GetServerStatusAsync),
+                    nameof(GetCanUpAsync),
+                });
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistryFalse(DebugMethodRegistry Registry)
+            => Registry.RegisterEachTrue(
+                Type: typeof(Host),
+                Methods: new string[]
+                {
+                    nameof(AskDoWhatWithHostAsync),
+                    nameof(GetSessionAsync),
+                    nameof(GetUserAsync),
+                    nameof(CheckRegisterUserAsync),
                 });
         #endregion
+
+        public class JsonConverter : JsonConverter<Host>
+        {
+            #region Debug Registration
+            [RegistersMethodsForDebug]
+            public static void doDebugRegistry(DebugMethodRegistry Registry)
+                => Registry.RegisterEach(
+                    Type: typeof(JsonConverter),
+                    MethodNameValues: new()
+                    {
+                        { nameof(ReadJson), false },
+                        { nameof(WriteJson), false },
+                    });
+            #endregion
+
+            [ThreadStatic]
+            private static bool _CannotWrite;
+
+            private bool CannotWrite
+            {
+                get => _CannotWrite;
+                set => _CannotWrite = value;
+            }
+
+            public override bool CanWrite => !CannotWrite;
+
+            public JsonConverter()
+                : base()
+            { }
+
+            public override Host ReadJson(
+                JsonReader Reader,
+                Type ObjectType,
+                Host ExistingValue,
+                bool HasExistingValue,
+                JsonSerializer Serializer
+                )
+            {
+                using var indent = new Indent();
+                Debug.LogCaller(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(ObjectType), ObjectType),
+                        Debug.Arg(nameof(HasExistingValue), HasExistingValue),
+                    });
+
+                if (Reader.TokenType == JsonToken.StartObject)
+                {
+                    ExistingValue ??= new();
+                    using (var hostJSON = new HostJSON())
+                    {
+                        Serializer.Populate(Reader, hostJSON);
+                        hostJSON.CopyTo(ref ExistingValue);
+                    }
+                    return ExistingValue;
+                }
+                return null;
+            }
+
+            public override void WriteJson(
+                JsonWriter Writer,
+                Host Value,
+                JsonSerializer Serializer
+                )
+            {
+                using var indent = new Indent();
+                Debug.LogCaller(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(Value), $"{(Value != null ? "not " : null)}null"),
+                    });
+
+                using (new Utils.PushValue<bool>(true, () => CannotWrite, v => CannotWrite = v))
+                {
+                    using (var hostJSON = Value?.ToJSON())
+                    {
+                        Serializer.Serialize(Writer, Value);
+                    }
+                }
+            }
+        }
 
         [Serializable]
         public enum WebMethods
@@ -127,70 +218,59 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         [NoVomit]
         public bool OptIn => true;
 
-        [JsonIgnore]
         private int? _HostID;
         [DoVomit]
-        [JsonIgnore]
         private int HostID => _HostID ??= CurrentHostID++;
 
         /// <summary>
         /// Name of the host, excluding protocol and any port number.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public string Name;
 
         /// <summary>
         /// Optional port number for host.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public int? Port;
 
         /// <summary>
         /// Determines http or https.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public bool Encrypted;
 
         /// <summary>
         /// The number of milliseconds to wait for a response.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public int TimeoutMS = DEFAULT_TIMEOUT;
 
         /// <summary>
         /// The maximum number number of times an upload should be attempted before being considered to have failed.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public int MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS;
 
         /// <summary>
         /// The API version this host expects to connect to.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public int Version;
 
         /// <summary>
         /// The Routes made available by the API this host will connect to.
         /// </summary>
         [DoVomit]
-        [JsonIgnore]
         public RouteSet Routes => VersionRoutes.GetFor(Version);
 
         /// <summary>
         /// Indicates whether or not this host should be utilised.
         /// </summary>
         [DoVomit]
-        [JsonProperty]
         public bool Enabled;
 
         [DoVomit(nameof(JwtToken))]
-        [JsonProperty(nameof(JwtToken))]
         private string _JwtToken;
         /// <summary>
         /// The JwtToken holding the current authentication session with this host. 
@@ -198,7 +278,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         /// <remarks>
         /// Default behaviour refreshes the token every time it's used in order to reduce the frequency at which a new session needs to be established.
         /// </remarks>
-        [JsonIgnore]
         public string JwtToken
         {
             get => _JwtToken;
@@ -216,31 +295,23 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         /// An object representation of the User as it appears on the server.
         /// </summary>
         [DoVomit]
-        //[JsonIgnore]
-        [JsonConverter(typeof(User.JsonConverter))]
-        [JsonProperty]
         public User User;
 
         [DoVomit]
-        [JsonIgnore]
         private bool IsBuilt;
 
         [DoVomit]
-        [JsonIgnore]
         public bool HasSession => !JwtToken.IsNullOrEmpty();
 
-        [JsonIgnore]
         private string BuiltString => !IsBuilt
             ? " Unbuilt"
             : null
             ;
 
         [DoVomit]
-        [JsonIgnore]
         private bool? WrittenEnabled;
 
         [DoVomit]
-        [JsonIgnore]
         public bool IsOnCooldown => IsBuilt
             && !Enabled
             && WrittenEnabled.HasValue
@@ -248,7 +319,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             ;
 
         [DoVomit]
-        [JsonIgnore]
         public bool IsRunning
             => VersionRoutes.Init
             && GetServerStatus()
@@ -258,7 +328,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         [JsonIgnore]
         public bool CanUp => GetCanUp();
 
-        [JsonIgnore]
         public ConnectionLevels ConnectionLevel
         {
             get
@@ -276,10 +345,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
-        [JsonIgnore]
         public string ConnectionColor => GetConnectionColor(ConnectionLevel);
 
-        [JsonIgnore]
         public string ServerStatusString
         {
             get
@@ -289,9 +356,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
-        [JsonIgnore]
         private Timer StatusCheckTimer;
-        [JsonIgnore]
         private TimerCallback StatusCheckCallback => delegate (object state)
         {
             if (!IsBuilt)
@@ -336,24 +401,17 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         };
 
-        [JsonIgnore]
         private List<string> BonesIDCache;
 
-        [JsonIgnore]
         private Timer BonesIDCacheTimer;
 
-        [JsonIgnore]
         public string AuthToken;
 
-        [JsonIgnore]
         private IEnumerable<Report> _ReportsCache;
-        [JsonIgnore]
         public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
-        [JsonIgnore]
         private string PendingUploadCacheKey;
 
-        [JsonIgnore]
         public Dictionary<string, PendingUpload> PendingUploads
         {
             get
@@ -386,46 +444,80 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public override string BlurbSavedVerb => "uploaded to";
 
         public Host()
-            // : base()
+            : base()
         {
+            TimeoutMS = DEFAULT_TIMEOUT;
+            MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS;
+            Version = DEFAULT_VERSION;
             Enabled = true;
             PendingUploadCacheKey = Guid.NewGuid().ToString();
-            TimeoutMS = DEFAULT_TIMEOUT;
         }
 
         public Host(
             string Name,
-            int? Port = null,
-            bool Encrypted = false,
-            string JwtToken = null,
-            int Version = DEFAULT_VERSION,
-            bool Enabled = true,
-            int TimeoutMS = DEFAULT_TIMEOUT
+            int? Port,
+            bool Encrypted,
+            int? TimeoutMS,
+            int? MaxUploadAttempts,
+            int? Version,
+            bool? Enabled,
+            string JwtToken,
+            User User
             )
             : this()
         {
             this.Name = Name;
             this.Port = Port;
             this.Encrypted = Encrypted;
+            if (TimeoutMS.HasValue)
+                this.TimeoutMS = TimeoutMS.GetValueOrDefault();
+            if (MaxUploadAttempts.HasValue)
+                this.MaxUploadAttempts = MaxUploadAttempts.GetValueOrDefault();
+            if (Version.HasValue)
+                this.Version = Version.GetValueOrDefault();
+            if (Enabled.HasValue)
+                this.Enabled = Enabled.GetValueOrDefault();
             this.JwtToken = JwtToken;
-            this.Version = Version;
-            this.Enabled = Enabled;
-            this.TimeoutMS = TimeoutMS;
+            this.User = User;
         }
 
         public Host(
             string HostName,
             string JwtToken = null,
-            int TimeoutMS = DEFAULT_TIMEOUT
+            int TimeoutMS = DEFAULT_TIMEOUT,
+            int MaxUploadAttempts = DEFAULT_MAX_UP_ATTEMPTS
             )
-            : this()
+            : this(
+                Name: null,
+                Port: null,
+                Encrypted: default,
+                TimeoutMS: TimeoutMS,
+                MaxUploadAttempts: MaxUploadAttempts,
+                Version: null,
+                Enabled: null,
+                JwtToken: JwtToken,
+                User: null)
         {
-            Parse(HostName, out Name, out Port, out Encrypted, out Version);
-            if (!JwtToken.IsNullOrEmpty())
-                this.JwtToken = JwtToken;
-
-            this.TimeoutMS = TimeoutMS;
+            Parse(
+                HostName: HostName,
+                Name: out Name,
+                Port: out Port,
+                Encrypted: out Encrypted,
+                Version: out Version);
         }
+
+        public Host(HostJSON Source)
+            : this(
+                Name: Source.Name,
+                Port: Source.Port,
+                Encrypted: Source.Encrypted,
+                TimeoutMS: Source.TimeoutMS,
+                MaxUploadAttempts: Source.MaxUploadAttempts,
+                Version: Source.Version,
+                Enabled: Source.Enabled,
+                JwtToken: Source.JwtToken,
+                User: Source.User)
+        { }
 
         #region Timeout Handling
 
@@ -714,7 +806,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             ?? Enabled
             ;
 
-        public static Host Clone(Host Host, bool? SetBuiltTo = null)
+        public static Host Clone(Host Host, bool? SetBuiltTo)
         {
             if (Host == null)
                 throw new ArgumentNullException(nameof(Host));
@@ -725,8 +817,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             return newHost;
         }
 
-        public Host Clone(bool? SetBuiltTo = null)
+        public static Host Clone(Host Host)
+            => Clone(Host, null)
+            ;
+
+        public Host Clone(bool? SetBuiltTo)
             => Clone(this, SetBuiltTo)
+            ;
+
+        public Host Clone()
+            => Clone((bool?)null)
             ;
 
         public static void CopyTo(
@@ -795,6 +895,45 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             bool ThenDispose = false
             )
             => CopyTo(this, ref Destination, SetBuiltTo, ThenDispose)
+            ;
+
+        public static Host GetFrom(HostJSON HostJSON)
+            => new(HostJSON)
+            ;
+
+        public static void CopyTo(
+            Host Source,
+            ref HostJSON Destination
+            )
+        {
+            if (Source == null)
+                return;
+
+            if (Destination == null)
+            {
+                Destination = HostJSON.GetFrom(Source);
+                return;
+            }
+
+            Destination.Name = Source.Name;
+            Destination.Port = Source.Port;
+            Destination.Encrypted = Source.Encrypted;
+            Destination.TimeoutMS = Source.TimeoutMS;
+            Destination.Enabled = Source.GetEnabledValueForMenu();
+            Destination.JwtToken = Source.JwtToken;
+            Destination.User = Source.User;
+        }
+
+        public void CopyTo(ref HostJSON Destination)
+            => CopyTo(this, ref Destination)
+            ;
+
+        public static HostJSON ToJSON(Host Host)
+            => HostJSON.GetFrom(Host)
+            ;
+
+        public HostJSON ToJSON()
+            => ToJSON(this)
             ;
 
         public void Unbuild()
@@ -1052,7 +1191,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             URI = CombineHostRoute(IncludeVersion: IncludeVersion, Route.ParseValue(RouteParams, RouteQuery));
 
             using var indent = new Indent();
-            Debug.LogMethod(
+            Debug.LogCaller(
                 Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
@@ -1853,27 +1992,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 Debug.CheckYeh($"ID Matches!", Indent: indent[2]);
                                 user.CopyTo(ref User, SanitizePassword: true);
                                 user.Dispose();
-
-                                // -- This is just debug stuff to force it to crash-out under controlled circumstances
-                                Vomit(Indent: indent[2]);
-                                Debug.CheckYeh(nameof(User), (User?.ID)?.ToString() ?? "MISSING_USER", Indent: indent[2]);
-                                Debug.LogJson(User, Indent: indent[2]);
-
-                                string fileName = "User.json";
-                                var localFileLoc = Configuration.GetOsseousAshFileLocationData(Ensure: true).FirstOrDefault(f => f.Type == FileLocationData.LocationType.Local);
-                                Debug.Log($"Writing User to {localFileLoc.WithFileName(fileName)}", Indent: indent[2]);
-                                localFileLoc?.Write(fileName, User, Formatting.Indented); // `User` is serialised and written to disk just fine on its own
-
-                                Formatting? formatting = Formatting.Indented;
-                                string formattingString = $"Formatting{(formatting.HasValue ? $" ({formatting})" : null)}";
-                                string without = $"with{(formatting.HasValue ? null : "out")}";
-
-                                Debug.LogJson(nameof(SuperUser), new SuperUser(User), formatting.GetValueOrDefault(), Indent: indent[2]); // Checking if this works.
-                                Debug.Log($"Made it past {nameof(SuperUser)} {without} {formattingString}.", Indent: indent[2]);
-
-                                Debug.LogJson(nameof(Host), this, formatting.GetValueOrDefault(), Indent: indent[2]); // Crashes here trying to serialize `User` when it's a member of `Host`
-                                Debug.Log($"Made it past {nameof(Host)} {without} {formattingString}.", Indent: indent[2]);
-                                // -- Remove above this when the issue is resolved.
                             }
                             catch (Exception x)
                             {
@@ -4081,7 +4199,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         #endregion
 
-        public Host Vomit(bool ForceName = false, Indent Indent = null, [CallerMemberName] string CallingMethod = "", params object[] Parameters)
+        public virtual Host Vomit(
+            bool ForceName = false,
+            Indent Indent = null,
+            [CallerMemberName] string CallingMethod = "",
+            params object[] Parameters
+            )
             => (Host)IVomitable.Vomit(
                 Object: this,
                 ForceName: ForceName,
