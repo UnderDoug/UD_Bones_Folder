@@ -207,11 +207,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 bool write = IsBuilt && _JwtToken != value;
                 _JwtToken = value;
                 if (write
-                    && ServerUtils.AllHostsWithLocation(p => p.Host == this)?.FirstOrDefault() is HostLocationPair pair
-                    && ServerUtils.Hosts.FirstOrDefault(hs => hs.LocationData?.SameAs(pair.FileLocationData) is true) is HostSet hostSet)
-                {
+                    && this.TryGetHostSet(out var hostSet))
                     hostSet.Write();
-                }
             }
         }
 
@@ -220,6 +217,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         /// </summary>
         [DoVomit]
         //[JsonIgnore]
+        [JsonConverter(typeof(User.JsonConverter))]
         [JsonProperty]
         public User User;
 
@@ -388,6 +386,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public override string BlurbSavedVerb => "uploaded to";
 
         public Host()
+            // : base()
         {
             Enabled = true;
             PendingUploadCacheKey = Guid.NewGuid().ToString();
@@ -747,7 +746,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
 
             Destination.PendingUploadCacheKey = Source.PendingUploadCacheKey;
-            Destination.User = Source.User?.Clone();
 
             Destination.Name = Source.Name;
             Destination.Port = Source.Port;
@@ -755,6 +753,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Destination.TimeoutMS = Source.TimeoutMS;
             Destination.Enabled = Source.Enabled;
             Destination.JwtToken = Source.JwtToken;
+            Destination.User = Source.User?.Clone();
 
             Destination.IsBuilt = Source.IsBuilt;
 
@@ -1859,11 +1858,21 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 Vomit(Indent: indent[2]);
                                 Debug.CheckYeh(nameof(User), (User?.ID)?.ToString() ?? "MISSING_USER", Indent: indent[2]);
                                 Debug.LogJson(User, Indent: indent[2]);
+
                                 string fileName = "User.json";
                                 var localFileLoc = Configuration.GetOsseousAshFileLocationData(Ensure: true).FirstOrDefault(f => f.Type == FileLocationData.LocationType.Local);
                                 Debug.Log($"Writing User to {localFileLoc.WithFileName(fileName)}", Indent: indent[2]);
                                 localFileLoc?.Write(fileName, User, Formatting.Indented); // `User` is serialised and written to disk just fine on its own
-                                _ = JsonConvert.SerializeObject(this, Formatting.Indented); // Crashes here trying to serialize `User` when it's a member of `Host`
+
+                                Formatting? formatting = Formatting.Indented;
+                                string formattingString = $"Formatting{(formatting.HasValue ? $" ({formatting})" : null)}";
+                                string without = $"with{(formatting.HasValue ? null : "out")}";
+
+                                Debug.LogJson(nameof(SuperUser), new SuperUser(User), formatting.GetValueOrDefault(), Indent: indent[2]); // Checking if this works.
+                                Debug.Log($"Made it past {nameof(SuperUser)} {without} {formattingString}.", Indent: indent[2]);
+
+                                Debug.LogJson(nameof(Host), this, formatting.GetValueOrDefault(), Indent: indent[2]); // Crashes here trying to serialize `User` when it's a member of `Host`
+                                Debug.Log($"Made it past {nameof(Host)} {without} {formattingString}.", Indent: indent[2]);
                                 // -- Remove above this when the issue is resolved.
                             }
                             catch (Exception x)

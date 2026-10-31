@@ -323,12 +323,41 @@ namespace UD_Bones_Folder.Mod.Logging
         public static Indent LogJson<T>(
             string Label,
             T Object,
+            Formatting Formatting,
             Indent Indent = null,
             [CallerMemberName] string CallingMethod = ""
             )
             => Log(
                 Label: Label,
-                Value: JsonConvert.SerializeObject(Object, Formatting.Indented),
+                Value: JsonConvert.SerializeObject(Object, Formatting),
+                Indent: Indent,
+                CallingMethod: CallingMethod)
+            ;
+
+        public static Indent LogJson<T>(
+            string Label,
+            T Object,
+            Indent Indent = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => LogJson(
+                Label: Label,
+                Object: Object,
+                Formatting: Formatting.Indented,
+                Indent: Indent,
+                CallingMethod: CallingMethod)
+            ;
+
+        public static Indent LogJson<T>(
+            T Object,
+            Formatting Formatting,
+            Indent Indent = null,
+            [CallerMemberName] string CallingMethod = ""
+            )
+            => LogJson(
+                Label: null,
+                Object: Object,
+                Formatting: Formatting,
                 Indent: Indent,
                 CallingMethod: CallingMethod)
             ;
@@ -339,8 +368,8 @@ namespace UD_Bones_Folder.Mod.Logging
             [CallerMemberName] string CallingMethod = ""
             )
             => LogJson(
-                Label: null,
                 Object: Object,
+                Formatting: Formatting.Indented,
                 Indent: Indent,
                 CallingMethod: CallingMethod)
             ;

@@ -269,6 +269,17 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             => AllHostsWithLocation(null)
             ;
 
+        public static bool TryGetHostSet(this Host Host, out HostSet HostSet)
+        {
+            HostSet = null;
+            if (AllHostsWithLocation(p => p.Host == Host)?.FirstOrDefault() is not HostLocationPair pair
+                || Hosts.FirstOrDefault(hs => hs.LocationData?.SameAs(pair.FileLocationData) is true) is not HostSet hostSet)
+                return false;
+
+            HostSet = hostSet;
+            return true;
+        }
+
         [ManageBonesPickOptionsDelegate]
         public static void OnlineBonesManagementOptions(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
         {

@@ -1133,5 +1133,31 @@ namespace UD_Bones_Folder.Mod
                 _ => 0,
             }
             ;
+
+        public readonly struct PushValue<T> : IDisposable
+        {
+            private readonly Action<T> SetValue;
+            private readonly T OldValue;
+
+            public PushValue(
+                T Value,
+                Func<T> GetValue,
+                Action<T> SetValue
+                )
+            {
+                if (GetValue == null
+                    || SetValue == null)
+                    throw new ArgumentNullException();
+
+                this.SetValue = SetValue;
+                OldValue = GetValue.Invoke();
+                SetValue.Invoke(Value);
+            }
+
+            // By using a disposable struct we avoid the overhead of allocating and freeing an instance of a finalizable class
+            public readonly void Dispose()
+                => SetValue?.Invoke(OldValue)
+                ;
+        }
     }
 }

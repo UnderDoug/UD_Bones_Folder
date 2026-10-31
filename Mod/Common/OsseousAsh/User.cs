@@ -1,9 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 
 using UD_Bones_Folder.Mod.Logging;
 
@@ -14,6 +14,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         , ItemNullValueHandling = NullValueHandling.Ignore
         , ItemReferenceLoopHandling = ReferenceLoopHandling.Ignore
         )]
+    [JsonConverter(typeof(User.JsonConverter))]
     [Serializable]
     public class User : IDisposable, IVomitable<User>
     {
@@ -21,6 +22,78 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
 
         #endregion
+
+        public class JsonConverter : JsonConverter<User>
+        {
+            #region Debug Registration
+            [RegistersMethodsForDebug]
+            public static void doDebugRegistry(DebugMethodRegistry Registry)
+                => Registry.RegisterEach(
+                    Type: typeof(JsonConverter),
+                    MethodNameValues: new()
+                    {
+                    { nameof(ReadJson), false },
+                    { nameof(WriteJson), false },
+                    });
+            #endregion
+
+            [ThreadStatic]
+            private static bool _CannotWrite;
+
+            private bool CannotWrite
+            {
+                get => _CannotWrite;
+                set => _CannotWrite = value;
+            }
+
+            public override bool CanWrite => !CannotWrite;
+
+            public override User ReadJson(
+                JsonReader Reader,
+                Type ObjectType,
+                User ExistingValue,
+                bool HasExistingValue,
+                JsonSerializer Serializer
+                )
+            {
+                using var indent = new Indent();
+                Debug.LogCaller(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(ObjectType), ObjectType),
+                        Debug.Arg(nameof(HasExistingValue), HasExistingValue),
+                    });
+
+                if (Reader.TokenType == JsonToken.StartObject)
+                {
+                    Serializer.Populate(Reader, ExistingValue ??= new());
+                    return ExistingValue;
+                }
+                return null;
+            }
+
+            public override void WriteJson(
+                JsonWriter Writer,
+                User Value,
+                JsonSerializer Serializer
+                )
+            {
+                using var indent = new Indent();
+                Debug.LogCaller(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(Value), $"{(Value != null ? "not " : null)}null"),
+                    });
+
+                using (new Utils.PushValue<bool>(true, () => CannotWrite, v => CannotWrite = v))
+                {
+                    Serializer.Serialize(Writer, Value);
+                    //JObject.FromObject(Value, Serializer).WriteTo(Writer);
+                }
+            }
+        }
 
         [Serializable]
         public enum StatusTypes
@@ -95,7 +168,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         ) : this(Config.ID, Config.Handle, null, null, Password)
         { }
 
-        public User CopyTo(ref User Other, bool SanitizePassword = false)
+        public User CopyTo(
+            ref User Other,
+            bool SanitizePassword = false
+            )
         {
             Other ??= new();
 
@@ -123,7 +199,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             return CopyTo(ref newUser);
         }
 
-        public User Vomit(bool ForceName = false, Indent Indent = null, [CallerMemberName] string CallingMethod = "", params object[] Parameters)
+        public User Vomit(
+            bool ForceName = false,
+            Indent Indent = null,
+            [CallerMemberName] string CallingMethod = "",
+            params object[] Parameters
+            )
             => ((IVomitable<User>)this)?.Vomit(
                 ForceName: ForceName,
                 Indent: Indent,
