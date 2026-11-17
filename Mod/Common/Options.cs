@@ -1,28 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using System.Threading.Tasks;
 
 using ConsoleLib.Console;
 
-using Platform.IO;
-
-using Qud.UI;
-
 using UnityEngine;
 
 using XRL;
-using XRL.Collections;
 using XRL.UI;
-using XRL.World;
 
 using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.UI;
 
 using static UD_Bones_Folder.Mod.Const;
-using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.World.Event;
 using XRL.World.Text;
@@ -40,7 +31,7 @@ namespace UD_Bones_Folder.Mod
         [OptionFlag] public static bool DebugEnableLogging;
 
         public static bool? EnableLogging
-            => XRL.UI.Options.HasOption(MOD_PREFIX + nameof(DebugEnableLogging))
+            => XRL.UI.Options.HasOption($"{MOD_PREFIX}{nameof(DebugEnableLogging)}")
             ? DebugEnableLogging
             : null
             ;
@@ -437,6 +428,7 @@ namespace UD_Bones_Folder.Mod
         {
             using var options = new CascadablePickOptionDataSetAsync<Configuration>(UIUtils.CascadableResult.CancelSilent, UIUtils.CascadableResult.CancelSilent);
             using var tB = TextBuilder.Get();
+            int defaultSelection = 0;
             do
             {
                 tB.Clear();
@@ -488,7 +480,8 @@ namespace UD_Bones_Folder.Mod
                     ColorString: "&y",
                     TileColor: "&y",
                     DetailColor: 'K'),
-                DefaultSelected: 0,
+                DefaultSelected: defaultSelection,
+                LastSelectedCallback: c => defaultSelection = c,
                 FinalSelectedCallback: UIUtils.ShowEscancellepedAsync)).IsContinue());
         }
 

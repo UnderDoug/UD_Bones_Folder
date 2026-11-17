@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
 using UD_Bones_Folder.Mod.Serialization;
 
@@ -48,6 +50,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
 
         string DisplayName { get; }
 
+        IRenderable Icon { get; }
+
         bool CanLoad { get; }
         bool CanSave { get; }
 
@@ -68,8 +72,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         IEnumerable<SaveBonesInfo> LoadInfos(IEnumerable<string> BonesIDs = null);
         Task<BonesSpec> LoadSpecAsync(string BonesID);
         BonesSpec LoadSpec(string BonesID);
-        Task<ModRecordCollection> LoadModConfigAsync(string BonesID);
-        ModRecordCollection LoadModConfig(string BonesID);
+        Task<ModRecordSet> LoadModConfigAsync(string BonesID);
+        ModRecordSet LoadModConfig(string BonesID);
         Task<BonesStats> LoadStatsAsync(string BonesID);
         BonesStats LoadStats(string BonesID);
         Task<BonesSavGz> LoadSavGzAsync(string BonesID);
@@ -105,13 +109,13 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         IEnumerable<SaveBonesInfo> ListBonesInfos();
         Task<IEnumerable<BonesSpec>> ListBonesSpecsAsync();
         IEnumerable<BonesSpec> ListBonesSpecs();
-        Task<IEnumerable<ModRecordCollection>> ListModConfigsAsync();
-        IEnumerable<ModRecordCollection> ListModConfigs();
+        Task<IEnumerable<ModRecordSet>> ListModConfigsAsync();
+        IEnumerable<ModRecordSet> ListModConfigs();
 
         Task<IEnumerable<string>> GetBonesIDsMatchingSpecAsync(BonesSpec PlayerSpec);
         IEnumerable<string> GetBonesIDsMatchingSpec(BonesSpec PlayerSpec);
-        Task<IEnumerable<ModRecordCollection>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec);
-        IEnumerable<ModRecordCollection> GetModRecordsMatchingSpec(BonesSpec PlayerSpec);
+        Task<IEnumerable<ModRecordSet>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec);
+        IEnumerable<ModRecordSet> GetModRecordsMatchingSpec(BonesSpec PlayerSpec);
 
         public virtual bool SameAs(IBonesSource Other)
             => string.Equals(SourceID, Other?.SourceID)
@@ -125,7 +129,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             {
                 IBonesSource.SourceType.Synced => "G",
                 IBonesSource.SourceType.Local => "W",
-                IBonesSource.SourceType.Mod => "C",
+                IBonesSource.SourceType.Mod => "B",
                 IBonesSource.SourceType.Online => "Y",
                 _ => "R",
             }
@@ -147,7 +151,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             ;
 
         public static bool IsOnDisk(this IBonesSource.SourceType SourceType)
-            => SourceType.IsTwixtInclusive(IBonesSource.SourceType.Local, IBonesSource.SourceType.Synced) is true
+            => SourceType.IsTwixtInclusive(IBonesSource.SourceType.Local, IBonesSource.SourceType.Synced)
             ;
 
         public static bool IsModded(this IBonesSource.SourceType SourceType)

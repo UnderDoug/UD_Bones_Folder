@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
+using ConsoleLib.Console;
+
 using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
 using UD_Bones_Folder.Mod.Serialization;
 
@@ -15,6 +17,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         public abstract IBonesSource.SourceType Type { get; }
         public abstract string SourceID { get; }
         public abstract string DisplayName { get; }
+        public abstract IRenderable Icon { get; }
         public abstract bool CanLoad { get; }
         public abstract bool CanSave { get; }
         public abstract string BlurbDisplayName { get; }
@@ -50,8 +53,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .WaitResult()
             ;
 
-        public abstract Task<ModRecordCollection> LoadModConfigAsync(string BonesID);
-        public virtual ModRecordCollection LoadModConfig(string BonesID)
+        public abstract Task<ModRecordSet> LoadModConfigAsync(string BonesID);
+        public virtual ModRecordSet LoadModConfig(string BonesID)
             => LoadModConfigAsync(BonesID)
                 .WaitResult()
             ;
@@ -179,8 +182,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .WaitResult()
             ;
 
-        public abstract Task<IEnumerable<ModRecordCollection>> ListModConfigsAsync();
-        public virtual IEnumerable<ModRecordCollection> ListModConfigs()
+        public abstract Task<IEnumerable<ModRecordSet>> ListModConfigsAsync();
+        public virtual IEnumerable<ModRecordSet> ListModConfigs()
             => ListModConfigsAsync()
                 .WaitResult()
             ;
@@ -194,8 +197,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .WaitResult()
             ;
 
-        public abstract Task<IEnumerable<ModRecordCollection>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec);
-        public virtual IEnumerable<ModRecordCollection> GetModRecordsMatchingSpec(BonesSpec PlayerSpec)
+        public abstract Task<IEnumerable<ModRecordSet>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec);
+        public virtual IEnumerable<ModRecordSet> GetModRecordsMatchingSpec(BonesSpec PlayerSpec)
             => GetModRecordsMatchingSpecAsync(PlayerSpec)
                 .WaitResult()
             ;

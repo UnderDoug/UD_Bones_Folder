@@ -12,6 +12,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public bool Success;
         public string Message;
         public bool WantTimer;
+        public bool Cancel;
 
         public string AppendStatusCodeNumber()
             => StatusCode > (HttpStatusCode)default

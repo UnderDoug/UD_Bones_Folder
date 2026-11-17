@@ -14,6 +14,7 @@ using Platform.IO;
 using Qud.UI;
 
 using UD_Bones_Folder.Mod.BonesSystem;
+using UD_Bones_Folder.Mod.Logging;
 using UD_Bones_Folder.Mod.OsseousAsh;
 
 using UnityEngine;
@@ -32,14 +33,15 @@ using static XRL.World.Parts.UD_Bones_LunarRegentAnnouncer;
 
 using Event = XRL.UI.Framework.Event;
 
-using WEvent = XRL.World.Event;
+using Debug = UD_Bones_Folder.Mod.Logging.Debug;
+using XRL.World.Text;
 
 namespace UD_Bones_Folder.Mod.UI
 {
-    [UIView(BONES_MANAGEMENT_WINDOW_ID,
-        NavCategory = "Menu",
-        UICanvas = "SaveManagement",
-        UICanvasHost = 1)]
+    [HasRegisterMethodForDebug]
+    [HasModSensitiveStaticCache]
+    [HasManageBonesPickOptionsDelegate]
+    [UIView(BONES_MANAGEMENT_WINDOW_ID, NavCategory = "Menu", UICanvas = "SaveManagement", UICanvasHost = 1)]
     public class BonesManagement : SingletonWindowBase<BonesManagement>, ControlManager.IControllerChangedEvent
     {
         public enum VisibilityModes
@@ -56,7 +58,7 @@ namespace UD_Bones_Folder.Mod.UI
             All,
         }
 
-        [ModSensitiveStaticCache(CreateEmptyInstance = true)]
+        // [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         internal static List<ManageBonesPickOptionsDelegateEntry> ManageBonesPickOptionsDelegates;
 
         public const string BONES_MANAGEMENT_WINDOW_ID = "UD_BonesFolder_BonesManagement";
@@ -252,8 +254,19 @@ namespace UD_Bones_Folder.Mod.UI
 
 
         [ModSensitiveCacheInit]
-        private static void CacheDoWhatWithHostPickOptionDataDelegates()
+        [RegisterMethodForDebug(true)]
+        private static void CacheManageBonesPickOptionDataDelegates()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
+            if (!ManageBonesPickOptionsDelegates.IsNullOrEmpty())
+            {
+                Debug.CheckNah($"{nameof(ManageBonesPickOptionsDelegates)}", $"already cached", Indent: indent[2]);
+                return;
+            }
+
+            Debug.Log($"Filling {nameof(ManageBonesPickOptionsDelegates)}", Indent: indent[2]);
             ManageBonesPickOptionsDelegates = new();
             foreach (var delegateMethod in ModManager.GetMethodsWithAttribute(typeof(ManageBonesPickOptionsDelegateAttribute), typeof(HasManageBonesPickOptionsDelegateAttribute)))
             {
@@ -266,14 +279,122 @@ namespace UD_Bones_Folder.Mod.UI
                     DelegateMethod: delegateMethod,
                     DelegateEntry: out ManageBonesPickOptionsDelegateEntry delegateEntry,
                     ModInfo: modInfo))
+                {
                     ManageBonesPickOptionsDelegates.Add(delegateEntry);
+                    Debug.CheckYeh($"Cached", delegateMethod?.MethodSignature() ?? "MISSING_METHOD", Indent: indent[3]);
+                }
+                else
+                    Debug.CheckNah($"Cached", delegateMethod?.MethodSignature() ?? "MISSING_METHOD", Indent: indent[3]);
             }
         }
 
-        internal static void InvokeDoWhatWithHostPickOptionsDelegates(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
+        [RegisterMethodForDebug(false)]
+        internal static void InvokeManageBonesPickOptionsDelegates(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
+            if (ManageBonesPickOptionsDelegates.IsNullOrEmpty())
+                CacheManageBonesPickOptionDataDelegates();
+
             foreach (var manageBonesPickOptionsDelegateEntry in ManageBonesPickOptionsDelegates.IteratorSafe())
                 manageBonesPickOptionsDelegateEntry.ProcessManageBonesPickOptions.Invoke(BonesInfo, ref Options);
+        }
+
+        [ManageBonesPickOptionsDelegate]
+        [RegisterMethodForDebug(false)]
+        public static void NativeBonesManagementOptions(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
+        {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                    Debug.Arg(nameof(Options), Options.GetNullString()),
+                });
+
+            int priority = 1;
+            Debug.Log($"Add View ({priority * 5})", Indent: indent[2]);
+            Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+            {
+                Text = "View stats",
+                Priority = priority++ * 5, // 5
+                Icon = BonesInfo.StatsIcon,
+                Hotkey = 's',
+                Callback = SaveBonesInfo.ShowBlurbAsync,
+            });
+            Debug.Log($"Add Manage Mods ({priority * 5})", Indent: indent[2]);
+            Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+            {
+                Text = "Manage relative mod configuration",
+                Priority = priority++ * 5, // 10
+                Icon = SaveBonesInfo.ManageConfigIcon,
+                Hotkey = 'm',
+                Callback = SaveBonesInfo.AskRestoreModsAsync,
+            });
+
+            // Upload Bones -> ServerUtils.OnlineBonesManagementOptions
+
+            // Download Bones -> ServerUtils.OnlineBonesManagementOptions
+
+            Debug.Log($"Add Toggle Block ({priority * 5})", Indent: indent[2]);
+            bool isBlocked = BonesInfo.IsBlocked;
+            Debug.YehNah(nameof(isBlocked), Good: isBlocked, Indent: indent[3]);
+            Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+            {
+                Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
+                Priority = priority++ * 5, // 15
+                Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
+                Hotkey = 'b',
+                Callback = SaveBonesInfo.BlockUnblockAsync,
+            });
+
+            // Report Bones -> ServerUtils.OnlineBonesManagementOptions
+
+            Debug.Log($"Add Cremate? ({priority * 5})", Indent: indent[2]);
+            bool isCrematable = BonesInfo.IsCrematable;
+            Debug.YehNah(nameof(BonesInfo.IsCrematable), Good: isCrematable, Indent: indent[3]);
+            int crematePriority = priority++ * 5;
+            if (BonesInfo.IsCrematable)
+            {
+                Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+                {
+                    Text = "Cremate",
+                    Priority = crematePriority, // 20
+                    Icon = new Renderable(
+                        Tile: "Mutations/spontaneous_combustion.bmp",
+                        ColorString: "&R",
+                        TileColor: "&R",
+                        DetailColor: 'K'),
+                    Hotkey = 'c',
+                    Callback = PerformDelete,
+                });
+            }
+        }
+
+        [ManageBonesPickOptionsDelegate]
+        [RegisterMethodForDebug(false)]
+        public static void DebugBonesManagementOptions(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
+        {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                    Debug.Arg(nameof(Options), Options.GetNullString()),
+                });
+
+            Debug.Log($"Add Debug Internals ({9999})", Indent: indent[2]);
+            Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+            {
+                Text = $"View Debug Internals".Color("K"),
+                Priority = 9999,
+                Icon = SaveBonesInfo.DebugInternalsIcon,
+                Hotkey = 'x',
+                Callback = SaveBonesInfo.ShowDebugInternalsAsync,
+            });
         }
 
         public void SetParentTransform(Component Component, Transform Transform = null)
@@ -326,6 +447,9 @@ namespace UD_Bones_Folder.Mod.UI
                     && !sourceTypes.Any(st => st.IsOnline()))
                     return false;
 
+                if (!BonesManager.IsVersionCompatible(SaveBonesInfo))
+                    return false;
+
                 return true;
             }
             catch (Exception x)
@@ -355,7 +479,7 @@ namespace UD_Bones_Folder.Mod.UI
             MainNavContext.commandHandlers ??= new();
             MainNavContext.commandHandlers.Set(CMD_INSERT, Event.Helpers.Handle(HandleDeleteAll));
             MainNavContext.commandHandlers.Set(CMD_OPTION, Event.Helpers.Handle(HandleModesButton));
-            MainNavContext.commandHandlers.Set(CMD_HELP, Event.Helpers.Handle(HandleDownloadButton));
+            //MainNavContext.commandHandlers.Set(CMD_HELP, Event.Helpers.Handle(HandleDownloadButton));
             //MainNavContext.commandHandlers.Set(???, Event.Helpers.Handle(HandleUploadButton));
 
             BackButton.gameObject.SetActive(value: true);
@@ -489,81 +613,55 @@ namespace UD_Bones_Folder.Mod.UI
                 return UIUtils.CascadableResult.CancelSilent;
 
             var options = new CascadablePickOptionDataSetAsync<SaveBonesInfo>(BonesInfo, UIUtils.CascadableResult.BackSilent, UIUtils.CascadableResult.CancelSilent);
-            var sB = WEvent.NewStringBuilder();
+            var tB = TextBuilder.Get(); //WEvent.NewStringBuilder();
             var result = UIUtils.CascadableResult.Continue;
+            int defaultSelection = 0;
+            string title = $"Manage {Grammar.MakePossessive(BonesInfo.GetName())} Bones".Colored("yellow");
             try
             {
                 do
                 {
-                    int priority = 1;
-                    sB.Clear();
+                    tB.Clear();
                     options.ClearItems(Dispose: true);
 
                     BonesInfo.GetBonesMenuDataRowStrings(IncludeVersionWarning: true)
                         .Aggregate(
-                            seed: sB,
+                            seed: tB,
                             func: (a, n) => a.Append(n).AppendLine())
                         ;
 
-                    sB.AppendLine().Append("Use the options below to manage these bones:")
+                    tB.AppendLine().Append("Use the options below to manage these bones:")
                         .AppendLineEnd();
 
-                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
+                    
+                    InvokeManageBonesPickOptionsDelegates(BonesInfo, ref options);
+
+                    if (options.IsNullOrEmpty())
                     {
-                        Text = "View stats",
-                        Priority = priority++ * 5, // 5
-                        Icon = BonesInfo.StatsIcon,
-                        Hotkey = 's',
-                        Callback = SaveBonesInfo.ShowBlurbAsync,
-                    });
-                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = "Manage relative mod configuration",
-                        Priority = priority++ * 5, // 10
-                        Icon = SaveBonesInfo.ManageConfigIcon,
-                        Hotkey = 'm',
-                        Callback = SaveBonesInfo.AskRestoreModsAsync,
-                    });
+                        tB.Clear()
+                            .Append("No options available to manage these bones.")
+                            .AppendLine()
+                            .AppendLine().Append("This is very likely to be a bug.")
+                            .AppendLine()
+                            .AppendLine().Append("Please contact ").Append(Utils.AuthorOnPlatforms).Append(" with a copy of your player log.")
+                            .AppendLine().Append("If you have a copy of these bones on disk, please send it along with your player log if you do decide to get in contact");
 
-                    // Upload Bones
+                        await Popup.NewPopupMessageAsync(
+                            message: tB.ToString(),
+                            buttons: UIUtils.BummerButton,
+                            title: title,
+                            afterRender: BonesInfo.FlippedRender);
 
-                    // Download Bones
-
-                    bool isBlocked = BonesInfo.IsBlocked;
-                    options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = $"{(!isBlocked ? "Block" : "Unblock")}{(!isBlocked ? null : " (currently unsupported)")}",
-                        Priority = priority++ * 5, // 15
-                        Icon = !isBlocked ? SaveBonesInfo.UnavailableModsIcon : SaveBonesInfo.YesAvailableModsIcon,
-                        Hotkey = 'b',
-                        Callback = SaveBonesInfo.BlockUnblockAsync,
-                    });
-
-                    // Report Bones
-
-                    if (BonesInfo.IsYou
-                        || BonesInfo.BonesSources.Any(bs => bs.Type.IsTwixtInclusive(BonesSystem.IBonesSource.SourceType.Local, BonesSystem.IBonesSource.SourceType.Synced)))
-                    {
-                        options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                        {
-                            Text = "Cremate",
-                            Priority = priority++ * 5, // 20
-                            Icon = new Renderable(
-                                Tile: "Mutations/spontaneous_combustion.bmp",
-                                ColorString: "&R",
-                                TileColor: "&R",
-                                DetailColor: 'K'),
-                            Hotkey = 'c',
-                            Callback = PerformDelete,
-                        });
+                        return UIUtils.CascadableResult.CancelSilent;
                     }
-                    InvokeDoWhatWithHostPickOptionsDelegates(BonesInfo, ref options);
 
                     result = await UIUtils.PerformPickOptionAsync(
                         OptionDataSet: options,
-                        Title: $"Manage {Grammar.MakePossessive(BonesInfo.GetName())} Bones".Colored("yellow"),
-                        Intro: sB.ToString(),
-                        IntroIcon: BonesInfo.FlippedRender);
+                        Title: title,
+                        Intro: tB.ToString(),
+                        IntroIcon: BonesInfo.FlippedRender,
+                        DefaultSelected: defaultSelection,
+                        LastSelectedCallback: c => defaultSelection = Math.Clamp(c, 0, options.Count - 1));
 
                     //Utils.Log($"AskHowManageBones.result: {result}");
                 }
@@ -578,7 +676,6 @@ namespace UD_Bones_Folder.Mod.UI
             finally
             {
                 options?.Dispose();
-                WEvent.ResetTo(sB);
             }
             return result;
         }
@@ -727,7 +824,7 @@ namespace UD_Bones_Folder.Mod.UI
                     instance?.HandleDeleteAll();
             });
 
-        public void HandleDownloadButton()
+        /*public void HandleDownloadButton()
         {
             if (!IsInsideActiveContext(BonesScroller.GetNavigationContext()))
                 return;
@@ -746,7 +843,7 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 Utils.Error(nameof(HandleDownloadButton), x);
             }
-        }
+        }*/
 
         /*public void HandleUploadButton()
         {
@@ -792,9 +889,19 @@ namespace UD_Bones_Folder.Mod.UI
         public static async Task PerformDelete(
             SaveBonesInfo BonesInfo,
             Action BeforeDeletion,
-            Action<bool> AfterDeletion
+            Action<UIUtils.CascadableResult> AfterDeletion
             )
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                    Debug.Arg(nameof(BeforeDeletion), BeforeDeletion.GetNullString()),
+                    Debug.Arg(nameof(AfterDeletion), AfterDeletion.GetNullString()),
+                });
+
             List<QudMenuItem> buttons = PopupMessage.AcceptCancelButtonWithoutHotkey;
             if (CapabilityManager.CurrentPlatformClassification() != CapabilityManager.PlatformClassification.PC)
                 buttons = PopupMessage.AcceptCancelButton;
@@ -807,37 +914,62 @@ namespace UD_Bones_Folder.Mod.UI
                     DefaultSelected: 1)
                 ).command != "Cancel")
             {
+                Debug.Log(nameof(BeforeDeletion), Indent: indent[2]);
                 BeforeDeletion?.Invoke();
 
-                bool success = BonesInfo.Cremate();
+                Debug.Log(nameof(BonesInfo.CremateAsync), Indent: indent[2]);
+                var result = await BonesInfo.CremateAsync();
 
-                AfterDeletion?.Invoke(success);
+                if (result.IsCancel())
+                    return;
 
-                string message = success
+                Debug.Log(nameof(AfterDeletion), Indent: indent[2]);
+                AfterDeletion?.Invoke(result);
+
+                if (!result.IsContinue()
+                    && !result.IsSilent())
+                {
+                    await Popup.NewPopupMessageAsync($"Cremation of {BonesInfo.GetName()}'s bones cancelled!", PopupMessage.AcceptButton);
+                    return;
+                }
+
+                string message = result.IsContinue()
                     ? "Bones Cremated!"
                     : "Failed cremating bones!"
                     ;
 
+                Debug.Log(nameof(Popup.NewPopupMessageAsync), Indent: indent[2]);
                 await Popup.NewPopupMessageAsync(message, PopupMessage.AcceptButton);
+
+                Debug.CheckYeh(Debug.CallingTypeAndMethodNames(), Indent: indent[1]);
             }
         }
 
-        public async Task<UIUtils.CascadableResult> PerformDelete(SaveBonesInfo BonesInfo)
+        public static async Task<UIUtils.CascadableResult> PerformDelete(SaveBonesInfo BonesInfo)
         {
-            bool hasOnline = BonesInfo.BonesSources.Any(bs => bs.IsOnline());
+            if (instance == null)
+            {
+                Utils.Warn($"Somehow tried to call static {nameof(BonesManagement)}.{nameof(PerformDelete)} with null {nameof(instance)}");
+                return UIUtils.CascadableResult.CancelSilent;
+            }
 
-            int selectedPos = Bones.IndexOf(BonesScroller.choices.FirstOrDefault(data => data.Id == BonesInfo.ID));
+            var bones = instance.Bones;
+            var bonesScroller = instance.BonesScroller;
+
+            int selectedPos = instance.Bones.IndexOf(bonesScroller.choices.FirstOrDefault(data => data.Id == BonesInfo.ID));
+
+            bool hadOnline = BonesInfo.BonesSources.AnyOnline();
 
             await PerformDelete(BonesInfo, null, null);
 
             if (selectedPos >= 0
-                && hasOnline)
-                if (BonesScroller.TryGetSelectionElementsAtIndex(selectedPos, Bones, out _, out BonesInfoData bonesData, out SaveManagementRow saveRow))
+                && hadOnline)
+                if (bonesScroller.TryGetSelectionElementsAtIndex(selectedPos, bones, out _, out BonesInfoData bonesData, out SaveManagementRow saveRow))
                     saveRow.SetBonesDeleteButton(bonesData, PerformSetButtonActive: true);
 
             if (BonesInfo.BonesSources.IsNullOrEmpty())
             {
-                SaveBonesInfoCache?.Remove(BonesInfo);
+                instance.SaveBonesInfoCache?.Remove(BonesInfo);
                 return UIUtils.CascadableResult.CancelSilent;
             }
 
@@ -861,9 +993,9 @@ namespace UD_Bones_Folder.Mod.UI
             await PerformDelete(
                 BonesInfo: bonesInfo,
                 BeforeDeletion: () => DisableNavContext(),
-                AfterDeletion: delegate (bool success)
+                AfterDeletion: delegate (UIUtils.CascadableResult success)
                 {
-                    if (success)
+                    if (success.IsContinue())
                     {
                         if (!bonesInfo.BonesSources.IsNullOrEmpty())
                         {

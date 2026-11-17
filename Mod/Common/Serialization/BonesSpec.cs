@@ -71,14 +71,14 @@ namespace UD_Bones_Folder.Mod
         public static string MissingTerrainType => "Mystery";
         public static string Wildcard => "*";
 
+        public string ID;
+
         [JsonIgnore]
         string IBonesFileElement.BonesID
         {
-            get => BonesID;
-            set => BonesID = value;
+            get => ID;
+            set => ID = value;
         }
-
-        public string BonesID;
 
         public int Level;
 
@@ -97,7 +97,7 @@ namespace UD_Bones_Folder.Mod
         public BonesSpec(BonesSpec Source)
             : this()
         {
-            BonesID = Source.BonesID;
+            ID = Source.ID;
             Level = Source.Level;
             ZoneID = Source.ZoneID;
             ZoneZ = Source.ZoneZ;
@@ -113,7 +113,7 @@ namespace UD_Bones_Folder.Mod
             )
             : this()
         {
-            BonesID = The.Game?.GameID;
+            ID = The.Game?.GameID;
 
             if (LunarRegent != null)
                 Level = LunarRegent.Level;
@@ -151,7 +151,7 @@ namespace UD_Bones_Folder.Mod
             )
             : this()
         {
-            BonesID = The.Game?.GameID;
+            ID = The.Game?.GameID;
 
             if (LunarRegent != null)
                 Level = LunarRegent.Level;
@@ -215,7 +215,7 @@ namespace UD_Bones_Folder.Mod
 
         public bool SameAs(BonesSpec Other)
             => Other != null
-            && BonesID == Other.BonesID
+            && ID == Other.ID
             && Level != 0
             && Level == Other.Level
             && ZoneID == Other.ZoneID
@@ -299,7 +299,7 @@ namespace UD_Bones_Folder.Mod
 
         public void Dispose()
         {
-            BonesID = null;
+            ID = null;
             Level = 0;
             ZoneID = null;
             ZoneZ = 0;

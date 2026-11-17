@@ -13,8 +13,8 @@ namespace UD_Bones_Folder.Mod.Events
         public static readonly string RegisteredEventID = nameof(AnnounceLunarRegentEvent);
 
         public AnnounceLunarRegentEvent()
-        {
-        }
+            : base()
+        { }
 
         public override int GetCascadeLevel()
             => CascadeLevel

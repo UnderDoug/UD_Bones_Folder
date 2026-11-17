@@ -12,17 +12,23 @@ using XRL.Collections;
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptIn)]
-    [JsonConverter(typeof(SetArrayConverter))]
+    [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
     [Serializable]
     public class BonesStatSet : CoalescibleSet<BonesStat>
     {
         public class SetArrayConverter : JsonConverter<BonesStatSet>
         {
-            public override BonesStatSet ReadJson(JsonReader reader, Type objectType, BonesStatSet existingValue, bool hasExistingValue, JsonSerializer serializer)
+            public override BonesStatSet ReadJson(
+                JsonReader Reader,
+                Type ObjectType,
+                BonesStatSet ExistingValue,
+                bool HasExistingValue,
+                JsonSerializer Serializer
+                )
             {
-                if (reader.TokenType == JsonToken.StartArray)
+                if (Reader.TokenType == JsonToken.StartArray)
                 {
-                    var deserialized = serializer.Deserialize<BonesStat[]>(reader);
+                    var deserialized = Serializer.Deserialize<BonesStat[]>(Reader);
                     //Utils.Log($"{nameof(BonesStatSet)}.{nameof(SetArrayConverter)}.{nameof(ReadJson)}, {nameof(deserialized)}: {deserialized?.Length ?? -1}");
 
                     return new(deserialized);
@@ -31,10 +37,14 @@ namespace UD_Bones_Folder.Mod
                 return new();
             }
 
-            public override void WriteJson(JsonWriter writer, BonesStatSet value, JsonSerializer serializer)
+            public override void WriteJson(
+                JsonWriter Writer,
+                BonesStatSet Value,
+                JsonSerializer Serializer
+                )
             {
                 //Utils.Log($"{nameof(BonesStatSet)}.{nameof(SetArrayConverter)}.{nameof(WriteJson)}, {nameof(value)}: {(value == null ? "null" : "not null")}");
-                serializer.Serialize(writer, (value ?? new()).ToArray());
+                Serializer.Serialize(Writer, (Value ?? new()).ToArray());
             }
         }
 

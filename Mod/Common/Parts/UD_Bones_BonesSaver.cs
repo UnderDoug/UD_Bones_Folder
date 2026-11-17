@@ -685,7 +685,7 @@ namespace XRL.World.Parts
             if (willDie
                 && !noAsk
                 && Popup.ShowYesNo($"You have flagged that you would like to die to make these bones.\n\n" +
-                    $"Last chance to back out, this will atually, genuinely, end your run."
+                    $"Last chance to back out, this will actually, genuinely, end your run."
                     ) != DialogResult.Yes)
                 return true;
 
@@ -766,6 +766,7 @@ namespace XRL.World.Parts
 
                 string extraDamageSeed = Utils.CallChain(nameof(MakeBones_WishHandler), nameof(UD_Bones_Folder.Mod.Extensions.GetNotResistedDamageTypes));
                 string extraDamageType = The.Player.GetNotResistedDamageTypes().GetRandomElement(BonesModeModule.SeededGenerator(extraDamageSeed));
+                // Utils.Log($"{nameof(MakeBones_WishHandler)} got {nameof(extraDamageType)}: {extraDamageType ?? "MISSING_TYPE"}");
                 if (!extraDamageType.IsNullOrEmpty())
                     extraDamageType = $" {extraDamageType}";
 
@@ -782,7 +783,7 @@ namespace XRL.World.Parts
                 bool isAccidental = BonesModeModule.SeededPerMyriadChance(accidentalSeed, 2500);
                 if (!willDie
                     || !The.Player.TakeDamage(
-                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(155, 225) / 100f)),
+                        Amount: (int)((The.Player.GetStat("Hitpoints")?.BaseValue ?? 99999) * (Stat.Random(185, 225) / 100f)),
                         Message: DamageTexts.GetRandomElementCosmetic(),
                         Attributes: $"IgnoreResist Expected Unavoidable Cosmic Umbral Vorpal{extraDamageType}",
                         Owner: killer,

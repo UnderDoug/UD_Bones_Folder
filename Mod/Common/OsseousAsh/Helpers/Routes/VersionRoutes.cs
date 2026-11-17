@@ -226,7 +226,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 RouteSet.SupportRoute(nameof(RouteSet.BonesStatSets), WebMethods.GET, "bones/:BonesID/stat-sets");
                 RouteSet.SupportRoute(nameof(RouteSet.BonesStatSet), WebMethods.GET, "bones/:BonesID/stat-sets");
 
-                RouteSet.SupportRoute(nameof(RouteSet.UpdateBonesStats), WebMethods.PUT, "bones/:BonesID/stat-sets/:Stat");
+                RouteSet.SupportRoute(nameof(RouteSet.UpdateBonesStats), WebMethods.PUT, "bones/:BonesID/stat-sets/:StatName");
 
                 RouteSet.SupportRoute(nameof(RouteSet.BonesModConfigs), WebMethods.GET, "bones/mod-configs");
                 RouteSet.SupportRoute(nameof(RouteSet.BonesModConfig), WebMethods.GET, "bones/:BonesID/mod-configs");

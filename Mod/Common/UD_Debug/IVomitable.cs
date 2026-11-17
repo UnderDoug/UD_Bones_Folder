@@ -124,7 +124,11 @@ namespace UD_Bones_Folder.Mod.Logging
                 {
                     bool valueOnly = doVomit?.ValueOnly is true;
 
-                    string label = valueOnly ? doVomit?.Label ?? member.Name : null;
+                    string label = valueOnly
+                        ? doVomit?.Label
+                            ?? member.Name
+                        : null
+                        ;
 
                     if (label != null)
                         label = $"{label}: ";

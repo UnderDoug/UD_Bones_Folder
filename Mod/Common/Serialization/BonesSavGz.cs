@@ -6,9 +6,11 @@ using Stream = System.IO.Stream;
 using MemoryStream = System.IO.MemoryStream;
 
 using UD_Bones_Folder.Mod.BonesSystem;
+using UD_Bones_Folder.Mod.Logging;
 
 namespace UD_Bones_Folder.Mod.Serialization
 {
+    [HasRegisterMethodForDebug]
     public class BonesSavGz : IBonesFileElement, IDisposable
     {
         public string BonesID { get; set; }
@@ -16,28 +18,43 @@ namespace UD_Bones_Folder.Mod.Serialization
         /// <summary>
         /// Intended for reading a bones file.
         /// </summary>
-        public Stream Stream;
+        public MemoryStream Stream;
 
         /// <summary>
         /// Intended for writing a bones file. 
         /// </summary>
         public byte[] Data;
 
-        public bool IsRead => Stream != null
+        /// <summary>
+        /// Able to read bytes from <see cref="Stream"/>.
+        /// </summary>
+        public bool CanRead => Stream != null
             ;
 
-        public bool IsWrite => Data != null
+        /// <summary>
+        /// Able to write bytes from <see cref="Data"/>.
+        /// </summary>
+        public bool CanWrite => Data != null
             ;
 
         public BonesSavGz()
             : base()
         { }
 
-        public BonesSavGz(string BonesID, Stream Stream)
+        public BonesSavGz(string BonesID, MemoryStream Stream)
             : this()
         {
             this.BonesID = BonesID;
             this.Stream = Stream;
+        }
+
+        public BonesSavGz(string BonesID, Stream Stream)
+            : this()
+        {
+            this.BonesID = BonesID;
+            this.Stream = new();
+            Stream.CopyToAsync(this.Stream).Wait();
+            Stream.Close();
         }
 
         public BonesSavGz(string BonesID, byte[] Data)
@@ -51,8 +68,16 @@ namespace UD_Bones_Folder.Mod.Serialization
         {
             Other ??= new();
             Other.BonesID = BonesID;
-            Stream.CopyTo(Other.Stream);
-            Array.Copy(Data, Other.Data, Data.Length);
+            if (Stream != null)
+            {
+                Other.Stream = new MemoryStream((int)Stream.Length);
+                Stream.CopyTo(Other.Stream);
+            }
+            if (Data != null)
+            {
+                Other.Data = new byte[Data.Length];
+                Array.Copy(Data, Other.Data, Data.Length);
+            }
             return Other;
         }
 
@@ -60,15 +85,29 @@ namespace UD_Bones_Folder.Mod.Serialization
             => CopyTo(new BonesSavGz())
             ;
 
+
+        [RegisterMethodForDebug(true)]
         public BonesSavGz EnsureSavable()
         {
-            if (IsWrite)
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
+            if (CanWrite)
+            {
+                Debug.CheckYeh(nameof(CanWrite), Indent: indent[2]);
                 return this;
+            }
 
-            if (!IsRead)
+            if (!CanRead)
+            {
+                Debug.CheckNah($"!{nameof(CanRead)}", nameof(InvalidOperationException), Indent: indent[2]);
                 throw new InvalidOperationException($"{nameof(Data)} cannot be constructed from null {nameof(Stream)}");
+            }
 
-            Data = Stream.ReadAllBytes();
+            Stream.Position = 0L;
+            Data = Stream.GetAllBytes();
+            Debug.CheckYeh($"{nameof(Stream)}.{nameof(Extensions.GetAllBytes)}", Indent: indent[2]);
+
             DisposeStream();
             return this;
         }
@@ -87,15 +126,28 @@ namespace UD_Bones_Folder.Mod.Serialization
             }
         }
 
+        [RegisterMethodForDebug(true)]
         public BonesSavGz EnsureLoadable()
         {
-            if (IsRead)
-                return this;
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
 
-            if (!IsWrite)
+            if (CanRead)
+            {
+                Stream.Position = 0L;
+                Debug.CheckYeh(nameof(CanRead), Indent: indent[2]);
+                return this;
+            }
+
+            if (!CanWrite)
+            {
+                Debug.CheckNah($"!{nameof(CanWrite)}", nameof(InvalidOperationException), Indent: indent[2]);
                 throw new InvalidOperationException($"{nameof(Stream)} cannot be constructed from null {nameof(Data)}");
+            }
 
             Stream = new MemoryStream(Data);
+            Debug.CheckYeh($"new {nameof(MemoryStream)}", Indent: indent[2]);
+
             DisposeData();
             return this;
         }
@@ -114,24 +166,34 @@ namespace UD_Bones_Folder.Mod.Serialization
             }
         }
 
-        protected void DisposeStream()
+        protected void DisposeStream(bool Clear = false)
         {
-            Stream?.Dispose();
+            Stream?.Close();
+
+            if (Clear)
+                Stream?.Dispose();
+
             Stream = null;
         }
 
-        protected void DisposeData()
+        protected void DisposeData(bool Clear = false)
         {
-            if (Data != null)
+            if (Data != null
+                && Clear)
                 Array.Clear(Data, 0, Data.Length);
             Data = null;
         }
 
-        public void Dispose()
+        public void Dispose(bool Clear)
         {
             BonesID = null;
-            DisposeStream();
-            DisposeData();
+            DisposeStream(Clear: Clear);
+            DisposeData(Clear: Clear);
+        }
+
+        public void Dispose()
+        {
+            Dispose(false);
         }
 
         public static explicit operator Stream(BonesSavGz Operand)

@@ -25,6 +25,7 @@ using static UD_Bones_Folder.Mod.Const;
 
 using Event = XRL.World.Event;
 using UD_Bones_Folder.Mod.Logging;
+using System.Reflection;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
@@ -39,10 +40,18 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 Type: typeof(HostSet),
                 MethodNameValues: new()
                 {
-                    { nameof(ReadFromFileAsync), false },
                     { nameof(WriteToFile), false },
                     { nameof(Write), false },
                 });
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistrySpecial(DebugMethodRegistry Registry)
+        {
+            Registry.RegisterEach(
+                Type: typeof(HostSet),
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(HostSet), nameof(ReadFromFileAsync)), false)
+            );
+        }
         #endregion
 
         [Serializable]
@@ -198,7 +207,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 Clear();
                 EnsureCapacity(value?.Length ?? 0);
-                AddRange(value.Select(HostJSON.ToHost));
+                AddRange(value.IteratorSafe().Select(HostJSON.ToHost));
             }
         }
 
@@ -225,7 +234,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 if (!hostSet.IsNullOrEmpty())
                 {
                     using var indent = new Indent();
-                    Debug.LogCaller(
+                    Debug.LogTypeMethod(
                         Indent: indent[1],
                         ArgPairs: new Debug.ArgPair[]
                         {
@@ -258,7 +267,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public void WriteToFile(FileLocationData FileLocationData, string FileName)
         {
             using var indent = new Indent();
-            Debug.LogCaller(
+            Debug.LogTypeMethod(
                 Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {
@@ -281,7 +290,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public void Write()
         {
             using var indent = new Indent();
-            Debug.LogCaller(
+            Debug.LogTypeMethod(
                 Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {

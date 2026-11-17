@@ -391,7 +391,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                         bool originalEnableUploads = Options.EnableOsseousAshUploads;
                         bool enableDownloads = originalEnableDownloads;
                         bool enableUploads = originalEnableUploads;
-                        int defaultSelected = 0;
+                        int defaultSelection = 0;
                         do
                         {
                             sB.Clear();
@@ -431,7 +431,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 Hotkey = 'd',
                                 Callback = e => Task.Run(delegate ()
                                 {
-                                    defaultSelected = options.IndexOf(options.FirstOrDefault(o => o.Hotkey == 'd'));
                                     enableDownloads = !enableDownloads;
                                     return UIUtils.CascadableResult.Continue;
                                 }),
@@ -444,7 +443,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 Hotkey = 'u',
                                 Callback = e => Task.Run(delegate ()
                                 {
-                                    defaultSelected = options.IndexOf(options.FirstOrDefault(o => o.Hotkey == 'u'));
                                     enableUploads = !enableUploads;
                                     return UIUtils.CascadableResult.Continue;
                                 }),
@@ -461,7 +459,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 Hotkey = 'h',
                                 Callback = async delegate (object e)
                                 {
-                                    defaultSelected = options.IndexOf(options.FirstOrDefault(o => o.Hotkey == 'u'));
                                     await Options.ManageOsseousAshHandleAsync();
                                     return UIUtils.CascadableResult.Continue;
                                 },
@@ -475,9 +472,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                             {
                                 buttons = UIUtils.ConfirmButton;
                                 buttonCallbacks = new()
-                            {
-                                { -4, () => Task.Run(() => UIUtils.CascadableResult.BackSilent) }
-                            };
+                                {
+                                    { -4, () => Task.Run(() => UIUtils.CascadableResult.BackSilent) }
+                                };
                             }
 
                             result = await UIUtils.PerformPickOptionAsync(
@@ -487,7 +484,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                                 IntroIcon: BlackAshCloudIcon,
                                 AdditionalButtons: buttons,
                                 NoBackButton: true,
-                                DefaultSelected: Math.Clamp(defaultSelected, 0, options.Count - 1),
+                                DefaultSelected: defaultSelection,
+                                LastSelectedCallback: c => defaultSelection = Math.Clamp(c, 0, options.Count - 1),
                                 ButtonCallbacks: buttonCallbacks,
                                 FinalSelectedCallback: async delegate (PickOptionData<object, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
                                 {

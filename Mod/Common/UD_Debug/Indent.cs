@@ -59,7 +59,7 @@ namespace UD_Bones_Folder.Mod.Logging
         { }
 
         public Indent(Indent Indent) 
-            : this(Indent.Channel, 0)
+            : this(Indent?.Channel, 0)
         { }
 
         public Indent this[int Indent]

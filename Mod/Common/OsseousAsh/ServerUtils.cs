@@ -26,6 +26,7 @@ using UD_Bones_Folder.Mod.Logging;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
+    [HasRegisterMethodForDebug]
     [HasModSensitiveStaticCache]
     [HasCallAfterGameLoaded]
     [HasReturnsBonesSourcesDelegate]
@@ -87,7 +88,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Hosts?.BuildHosts(Ping: true);
 
             using var indent = new Indent();
-            Debug.LogCaller(Indent: indent[1]);
+            Debug.LogTypeMethod(Indent: indent[1]);
 
             Debug.Log($"Test-Serializing {nameof(Host)}s...", Indent: indent[2]);
             foreach (var hostSet in Hosts)
@@ -144,7 +145,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public static async Task<Rack<HostSet>> ReadHostSetsAsync()
         {
             using var indent = new Indent();
-            Debug.LogCaller(Indent: indent[1]);
+            Debug.LogTypeMethod(Indent: indent[1]);
 
             Rack<HostSet> hosts = null;
             foreach (var fileLocationData in Configuration.GetOsseousAshFileLocationData(Ensure: true).IteratorSafe())
@@ -303,97 +304,81 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         }
 
         [ManageBonesPickOptionsDelegate]
+        [RegisterMethodForDebug(false)]
         public static void OnlineBonesManagementOptions(SaveBonesInfo BonesInfo, ref CascadablePickOptionDataSetAsync<SaveBonesInfo> Options)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                    Debug.Arg(nameof(Options), Options.GetNullString()),
+                });
+
             // View Stats (5)
 
             // Manage ModConfig (10)
 
+            var anyHostsMissing = BonesInfo.BonesSources.AnyHostsMissing(AllEnabledHosts());
+
+            Debug.Log($"Add Upload?", Indent: indent[2]);
+            Debug.YehNah(nameof(EnableOsseousAshUploads), Good: EnableOsseousAshUploads, Indent: indent[3]);
+            Debug.YehNah(nameof(anyHostsMissing), Good: anyHostsMissing, Indent: indent[3]);
             if (EnableOsseousAshUploads
-                && BonesInfo.BonesSources.AnyHostsMissing(AllEnabledHosts()))
+                && anyHostsMissing)
             {
-                if (BonesInfo.BonesSources.AnyHostsMissing(AllEnabledHosts(h => !h.HasPending(BonesInfo))))
+                var pendingHosts = AllEnabledHosts(h => h.HasPending(BonesInfo));
+                int numHostsPending = pendingHosts.Count();
+                string pendingString = numHostsPending > 0 ? $" ({$"{numHostsPending} pending...".Colored("C")})" : null;
+                Debug.YehNah(nameof(numHostsPending), numHostsPending, Good: numHostsPending > 0, Indent: indent[4]);
+                Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                 {
-                    Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = $"Upload",
-                        Priority = 12,
-                        Icon = Configuration.UploadIcon,
-                        Hotkey = Options.GetFirstAvailableHotkey(
-                        new char[]
-                        {
-                            'u',
-                            'U',
-                            '^',
-                        }),
-                        Callback = ManageBonesUploadAsync,
-                    });
-                }
-                else
-                {
-                    Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = $"Upload ({"pending...".Colored("C")})",
-                        Priority = 12,
-                        Icon = Configuration.UploadIcon,
-                        Hotkey = Options.GetFirstAvailableHotkey(
-                        new char[]
-                        {
-                            'u',
-                            'U',
-                            '^',
-                        }),
-                        Callback = e => Task.Run(() => UIUtils.CascadableResult.Continue),
-                    });
-                }
+                    Text = $"Upload{pendingString}",
+                    Priority = 12,
+                    Icon = Configuration.UploadIcon,
+                    Hotkey = Options.GetFirstAvailableHotkey('u', 'U', '^'),
+                    Callback = ManageBonesUploadAsync,
+                });
             }
 
-            if (BonesInfo.BonesSources.Any(bs => bs.IsOnline()))
+            Debug.Log($"Add Download?", Indent: indent[2]);
+            var anySourcesOnline = BonesInfo.BonesSources.AnyOnline();
+            var allSourcesNotOnDisk = !BonesInfo.BonesSources.AnyOnDisk();
+            Debug.YehNah(nameof(EnableOsseousAshDownloads), Good: EnableOsseousAshDownloads, Indent: indent[3]);
+            Debug.YehNah(nameof(anySourcesOnline), Good: anySourcesOnline, Indent: indent[3]);
+            Debug.YehNah(nameof(allSourcesNotOnDisk), Good: allSourcesNotOnDisk, Indent: indent[3]);
+            if (EnableOsseousAshDownloads
+                && anySourcesOnline
+                && allSourcesNotOnDisk)
             {
-                if (EnableOsseousAshDownloads
-                    && BonesInfo.BonesSources.All(bs => !bs.IsOnDisk()))
+                Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                 {
-                    Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = $"Download",
-                        Priority = 13,
-                        Icon = Configuration.DownloadIcon,
-                        Hotkey = Options.GetFirstAvailableHotkey(
-                        new char[]
-                        {
-                            'd',
-                            'D',
-                            'v',
-                            'V',
-                        }),
-                        Callback = ManageBonesDownloadAsync,
-                    });
-                }
+                    Text = $"Download",
+                    Priority = 13,
+                    Icon = Configuration.DownloadIcon,
+                    Hotkey = Options.GetFirstAvailableHotkey('d', 'D', 'v', 'V'),
+                    Callback = ManageBonesDownloadAsync,
+                });
             }
 
             // Block Bones (15)
 
+            Debug.Log($"Add Report?", Indent: indent[2]);
             bool isBlocked = BonesInfo.IsBlocked;
-            if (BonesInfo.BonesSources.Any(bs => bs.IsOnline()))
+            Debug.YehNah(nameof(anySourcesOnline), Good: anySourcesOnline, Indent: indent[3]);
+            Debug.YehNah($"!{nameof(isBlocked)}", Good: !isBlocked, Indent: indent[3]);
+            if (anySourcesOnline
+                && !isBlocked)
             {
-                if (!isBlocked)
+                Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
                 {
-                    Options.Add(new CascadablePickOptionDataAsync<SaveBonesInfo>
-                    {
-                        Text = "Report",
-                        Priority = 17,
-                        Icon = Report.ReportBonesIcon,
-                        Hotkey = Options.GetFirstAvailableHotkey(
-                        new char[]
-                        {
-                            'r',
-                            'R',
-                            'x',
-                            'X',
-                        }),
-                        Callback = SaveBonesInfo.AskForBonesReportAsync,
-                    });
-                }
+                    Text = "Report",
+                    Priority = 17,
+                    Icon = Report.ReportBonesIcon,
+                    Hotkey = Options.GetFirstAvailableHotkey('r', 'R', 'x', 'X'),
+                    Callback = SaveBonesInfo.AskForBonesReportAsync,
+                });
             }
 
             // Cremate (20)
@@ -407,174 +392,240 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             => Utils.NewLineDelimitedAggregator(Accumulator, $"{(Next.Success ? GreenDFIndentLabel : RedCrossIndentLabel)}{HostString(Next.Host)}{Next.AppendFailureMessage()}")
             ;
 
+        [RegisterAsyncMethodForDebug(true)]
         public static async Task<UIUtils.CascadableResult> ManageBonesUploadAsync(SaveBonesInfo BonesInfo)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                });
+
             string catchFlag = "top";
             //Utils.Log(catchFlag);
             try
             {
-                catchFlag = "try";
-                //Utils.Log(catchFlag);
-
+                catchFlag = "BonesInfo.GetBonesSavGzStreamAsync";
                 if (await BonesInfo.GetBonesSavGzStreamAsync() is not BonesSavGz bonesSavGz)
                 {
-                    await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
+                    Debug.CheckNah(catchFlag, Indent: indent[1]);
+                    await UIUtils.ShowBummerAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
                     return UIUtils.CascadableResult.Continue;
                 }
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
+                catchFlag = "bonesSavGz.TryEnsureSavable";
                 if (!bonesSavGz.TryEnsureSavable())
                 {
                     bonesSavGz.Dispose();
-                    await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
+                    Debug.CheckNah(catchFlag, Indent: indent[1]);
+                    await UIUtils.ShowBummerAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones appears to be missing save data.");
                     return UIUtils.CascadableResult.Continue;
                 }
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
-                catchFlag = "BonesManager.UploadBonesFileAsync";
-                //Utils.Log(catchFlag);
-
-                if (UploadBones(BonesInfo.JSON, bonesSavGz) is List<ResponseInfo> responseInfos)
+                catchFlag = "UploadBonesAsync";
+                if (await UploadBonesAsync(BonesInfo.JSON, bonesSavGz) is not List<ResponseInfo> responseInfos)
                 {
-                    if (!responseInfos.Any(ri => ri.Success))
-                    {
-                        string failures = responseInfos.Aggregate(
+                    Debug.CheckNah(catchFlag, Indent: indent[1]);
+                    await UIUtils.ShowBummerAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones failed to upload.");
+                    return UIUtils.CascadableResult.Continue;
+                }
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "responseInfos.Any => Success";
+                if (!responseInfos.Any(ri => ri.Success))
+                {
+                    string failures = responseInfos
+                        ?.Aggregate(
                             seed: (string)null,
                             func: ResponseInfoStatusNewLineDelimitedAggregator)
-                            ?? $"{RedCrossIndentLabel}No hosts";
+                        ?? $"{RedCrossIndentLabel}No hosts";
 
-                        await Popup.ShowAsync($"Something whent wrong uploading {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones:\n{failures}");
-                        return UIUtils.CascadableResult.Continue;
-                    }
-
-                    foreach (var responseInfo in responseInfos)
-                        if (responseInfo.Host is Host host)
-                            BonesInfo.BonesSources.AddDistinct(host);
-
-                    catchFlag = "successFullHosts.Aggregate";
-                    //Utils.Log(catchFlag);
-                    string hostsString = responseInfos
-                        .Where(ri => ri.Success)
-                        .Aggregate(
-                            seed: (string)null,
-                            func: ResponseInfoStatusNewLineDelimitedAggregator);
-
-                    catchFlag = "Popup.ShowAsync";
-                    //Utils.Log(catchFlag);
-                    await Popup.ShowAsync($"Uploaded {BonesInfo.Name.StartReplace()} to the following hosts:\n{hostsString}");
+                    Debug.CheckNah(catchFlag, Indent: indent[1]);
+                    await UIUtils.ShowBummerAsync($"Something whent wrong uploading {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones:\n{failures}");
                     return UIUtils.CascadableResult.Continue;
                 }
-                catchFlag = "Fell Through Upload";
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
-                // Utils.Log(catchFlag);
-                await Popup.ShowAsync($"Something whent wrong, {Grammar.MakePossessive(BonesInfo.Name.StartReplace().ToString())} bones failed to upload.");
+                catchFlag = "BonesSources.AddDistinctRange";
+                BonesInfo.BonesSources.AddDistinctRange(responseInfos.Where(ri => ri.Host != null).Select(ri => ri.Host));
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "responseInfos.Aggregate";
+                string hostsString = responseInfos
+                    .Where(ri => ri.Success)
+                    .Aggregate(
+                        seed: (string)null,
+                        func: ResponseInfoStatusNewLineDelimitedAggregator);
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "Popup.NewPopupMessageAsync";
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+                await Popup.NewPopupMessageAsync($"Uploaded {BonesInfo.Name.StartReplace()} to the following hosts:\n{hostsString}", PopupMessage.SingleButton);
+
+                Debug.CheckYeh($"{nameof(ManageBonesUploadAsync)} => {UIUtils.CascadableResult.Continue}", Indent: indent[1]);
                 return UIUtils.CascadableResult.Continue;
             }
             catch (Exception x)
             {
-                Utils.Error($"{nameof(UploadBones)} failed to upload bones to hosts at {nameof(catchFlag)} {catchFlag}", x);
+                Utils.Error($"{nameof(ManageBonesUploadAsync)} failed to {nameof(UploadBones)} to hosts [{catchFlag}]", x);
                 return UIUtils.CascadableResult.BackSilent;
             }
         }
 
+        [RegisterMethodForDebug(true)]
         public static async Task<UIUtils.CascadableResult> ManageBonesDownloadAsync(SaveBonesInfo BonesInfo)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesInfo), BonesInfo.GetNullString()),
+                });
+
             using var preferredSources = BonesManager.GetBonesSourcesFromPool(BonesSourceExtensions.IsPreferredAndWritable);
 
             string catchFlag = "top";
             //Utils.Log(catchFlag);
             try
             {
-                catchFlag = "try";
-                //Utils.Log(catchFlag);
-
                 catchFlag = "BonesInfo.LoadBonesSavGz";
-                //Utils.Log(catchFlag);
                 using var bonesSavGz = await BonesInfo.LoadBonesSavGzAsync();
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
                 catchFlag = "preferredSources.SaveBones";
-                //Utils.Log(catchFlag);
                 var results = preferredSources.SaveBones(BonesInfo.JSON, bonesSavGz);
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
-                if (!results.IsNullOrEmpty())
+                catchFlag = "results.IsNullOrEmpty";
+                if (results.IsNullOrEmpty())
                 {
-                    catchFlag = "BonesInfo.BonesSources.AddDistinct";
-                    foreach ((var bonesSource, var result) in results)
-                        if (result)
-                            BonesInfo.BonesSources.AddDistinct(bonesSource);
-
-                    catchFlag = "successString";
-                    //Utils.Log(catchFlag);
-                    var successString = results.Aggregate(
-                        seed: (string)null,
-                        func: (a, n) =>
-                        {
-                            if (!n.Value)
-                                return a;
-
-                            if (!a.IsNullOrEmpty())
-                                a += "\n";
-
-                            string extraInfo = n.Value.Type < ActionResult.ResultType.Success
-                            ? $" ({n.Value})"
-                            : null
-                            ;
-
-                            return a + $"{GreenTickIndentLabel}{n.Key?.DisplayName ?? "MISSING_SOURCE"}{extraInfo}";
-                        });
-
-                    catchFlag = "failureString";
-                    //Utils.Log(catchFlag);
-                    var failureString = results.Aggregate(
-                        seed: (string)null,
-                        func: (a, n) =>
-                        {
-                            if (n.Value)
-                                return a;
-
-                            if (!a.IsNullOrEmpty())
-                                a += "\n";
-                            return a + $"{RedCrossIndentLabel}{n.Key?.DisplayName ?? "MISSING_SOURCE"} ({n.Value})";
-                        });
-
-                    catchFlag = "Popup.ShowAsync => successString";
-                    //Utils.Log(catchFlag);
-                    await Popup.ShowAsync($"Downloaded {BonesInfo.Name.StartReplace()} to:\n{successString}");
-                    if (!failureString.IsNullOrEmpty())
-                    {
-                        catchFlag = "Popup.ShowAsync => failureString";
-                        //Utils.Log(catchFlag);
-                        await Popup.ShowAsync($"Failed to downloaded {BonesInfo.Name.StartReplace()} to:\n{failureString}");
-                    }
-
+                    Debug.CheckNah(catchFlag, Indent: indent[1]);
+                    await UIUtils.ShowBummerAsync($"Something whent wrong, {BonesInfo.Name.StartReplace()} bones appears to be missing save data.");
                     return UIUtils.CascadableResult.Continue;
                 }
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
 
-                // Utils.Log("Fell Through");
-                await Popup.ShowAsync($"Something whent wrong, {BonesInfo.Name.StartReplace()} bones appears to be missing save data.");
+                catchFlag = "BonesInfo.BonesSources.AddDistinct";
+                foreach ((var bonesSource, var result) in results)
+                    if (result)
+                        BonesInfo.BonesSources.AddDistinct(bonesSource);
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "successString";
+                var successString = results.Aggregate(
+                    seed: (string)null,
+                    func: (a, n) =>
+                    {
+                        if (!n.Value)
+                            return a;
+
+                        if (!a.IsNullOrEmpty())
+                            a += "\n";
+
+                        string extraInfo = n.Value.Type < ActionResult.ResultType.Success
+                        ? $" ({n.Value})"
+                        : null
+                        ;
+
+                        return a + $"{GreenTickIndentLabel}{n.Key?.DisplayName ?? "MISSING_SOURCE"}{extraInfo}";
+                    });
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "failureString";
+                var failureString = results.Aggregate(
+                    seed: (string)null,
+                    func: (a, n) =>
+                    {
+                        if (n.Value)
+                            return a;
+
+                        if (!a.IsNullOrEmpty())
+                            a += "\n";
+                        return a + $"{RedCrossIndentLabel}{n.Key?.DisplayName ?? "MISSING_SOURCE"} ({n.Value})";
+                    });
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                catchFlag = "Popup.NewPopupMessageAsync => successString";
+                await Popup.NewPopupMessageAsync($"Downloaded {BonesInfo.Name.StartReplace()} to:\n{successString}");
+                if (!failureString.IsNullOrEmpty())
+                {
+                    catchFlag = "UIUtils.ShowBummerAsync => failureString";
+                    Debug.YehNah(catchFlag, Indent: indent[2]);
+                    await UIUtils.ShowBummerAsync($"Failed to downloaded {BonesInfo.Name.StartReplace()} to:\n{failureString}");
+                }
+                Debug.CheckYeh(catchFlag, Indent: indent[2]);
+
+                Debug.CheckYeh($"{nameof(ManageBonesDownloadAsync)} => {UIUtils.CascadableResult.Continue}", Indent: indent[1]);
                 return UIUtils.CascadableResult.Continue;
             }
             catch (Exception x)
             {
-                BonesManager.BonesHoardError(BonesInfo.ID, preferredSources, x, true);
+                BonesManager.HoardBonesError(BonesInfo.ID, preferredSources, x, true);
                 Utils.Error($"{nameof(ManageBonesDownloadAsync)} failed to write bones to file [{catchFlag}]", x);
                 return UIUtils.CascadableResult.BackSilent;
             }
         }
 
-        public static List<ResponseInfo> UploadBones(
+        [RegisterAsyncMethodForDebug(true)]
+        public static async Task<List<ResponseInfo>> UploadBonesAsync(
             SaveBonesJSON BonesJSON,
             BonesSavGz BonesSavGz
             )
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(BonesJSON), BonesJSON.GetNullString()),
+                    Debug.Arg(nameof(BonesSavGz), BonesSavGz.GetNullString()),
+                });
+
             try
             {
+                Debug.Log($"Getting hostsWithoutThisBones...", Indent: indent[2]);
+                var hostsWithoutThisBones = AllEnabledHosts(h => !h.HasPending(BonesJSON.ID) && !h.HasBones(BonesJSON.ID));
+
+                Debug.Log($"await BonesSources.SelectBonesSourcesAsync...", Indent: indent[2]);
+                using var hostSources = await BonesSources.SelectBonesSourcesFromPoolAsync(hostsWithoutThisBones, true, false, "Upload");
+
+                if (hostSources == null)
+                {
+                    Debug.CheckNah($"{nameof(hostSources)} is null", Indent: indent[2]);
+                    return null;
+                }
+                Debug.CheckYeh($"{nameof(hostSources)} not null", Indent: indent[2]);
+
+                if (hostSources.Count < 1)
+                {
+                    Debug.CheckNah($"{nameof(hostSources)} is empty", Indent: indent[2]);
+                    Popup.NewPopupMessageAsync($"Upload of {BonesJSON.Name}'s bones cancelled!", PopupMessage.AcceptButton).WaitResult();
+                    return null;
+                }
+                Debug.CheckYeh($"{nameof(hostSources)} not empty", Indent: indent[2]);
+
                 List<ResponseInfo> successfulHosts = null;
-                foreach (var host in AllEnabledHosts().IteratorSafe())
+                Debug.Log($"Saving to each host...", Indent: indent[2]);
+                foreach (var host in hostSources.Select(bs => bs as Host))
                 {
                     ResponseInfo responseInfo = default;
                     try
                     {
-                        host.SaveBones(BonesJSON, BonesSavGz, out responseInfo);
+                        bool saved = await host.SaveBonesAsync(BonesJSON, BonesSavGz, ri => responseInfo = ri);
+                        /*bool saved = false;
+                        responseInfo = await Task.Run(() =>
+                        {
+                            saved = host.SaveBones(BonesJSON, BonesSavGz, out var responseInfo);
+                            return responseInfo;
+                        });*/
 
+                        Debug.YehNah($"{nameof(responseInfo)}", responseInfo.Message ?? "NO_RESPONSE", Good: !responseInfo.Message.IsNullOrEmpty(), Indent: indent[3]);
+                        Debug.YehNah($"{host} {nameof(saved)}?", Good: saved, Indent: indent[3]);
                         successfulHosts ??= new();
                         successfulHosts.Add(responseInfo);
                     }
@@ -593,12 +644,26 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
+        public static async Task<bool> TryUploadBonesAsync(
+            SaveBonesJSON BonesJSON,
+            BonesSavGz BonesSavGz
+            )
+            => (await UploadBonesAsync(BonesJSON, BonesSavGz)) is List<ResponseInfo> responseInfos
+            && responseInfos.Any(ri => ri.Success)
+            ;
+
+        public static List<ResponseInfo> UploadBones(
+            SaveBonesJSON BonesJSON,
+            BonesSavGz BonesSavGz
+            )
+            => UploadBonesAsync(BonesJSON, BonesSavGz).WaitResult()
+            ;
+
         public static bool TryUploadBones(
             SaveBonesJSON BonesJSON,
             BonesSavGz BonesSavGz
             )
-            => UploadBones(BonesJSON, BonesSavGz) is List<ResponseInfo> responseInfos
-            && responseInfos.Any(ri => ri.Success)
+            => TryUploadBonesAsync(BonesJSON, BonesSavGz).WaitResult()
             ;
 
         public static async Task<bool> TryReportBonesAsync(
@@ -744,7 +809,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             UIUtils.CascadableResult result;
 
             using var tB = TextBuilder.Get();
-
+            int defaultSelection = 0;
             do
             {
                 tB.Clear();
@@ -861,6 +926,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Intro: tB.AppendLineEnd().ToString(),
                     IntroIcon: Report.ReportBonesIcon,
                     AdditionalButtons: buttons,
+                    DefaultSelected: defaultSelection,
+                    LastSelectedCallback: c => defaultSelection = Math.Clamp(c, 0, options.Count - 1),
                     ButtonCallbacks: buttonCallbacks,
                     OnBackCallback: () => Task.Run(delegate ()
                     {
@@ -925,14 +992,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static BonesRecord GetBonesRecord(this SaveBonesInfo BonesInfo)
         {
-            var bonesJSON = BonesInfo.JSON.Clone();
-            var bonesSpec = bonesJSON.BonesSpec;
-            var bonesStats = bonesJSON.Stats;
-            var modConfig = bonesJSON.EnabledMods;
-
-            bonesJSON.BonesSpec = null;
-            bonesJSON.Stats = null;
-            bonesJSON.EnabledMods = null;
+            var bonesJSON = BonesInfo.JSON.CloneForUpload(
+                out var bonesSpec,
+                out var bonesStats,
+                out var modConfig
+                );
 
             return new BonesRecord
             {
@@ -948,14 +1012,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public static BonesRecord GetBonesRecord(this SaveBonesJSON BonesJSON)
         {
-            var bonesJSON = BonesJSON.Clone();
-            var bonesSpec = bonesJSON.BonesSpec;
-            var bonesStats = bonesJSON.Stats;
-            var modConfig = bonesJSON.EnabledMods;
-
-            bonesJSON.BonesSpec = null;
-            bonesJSON.Stats = null;
-            bonesJSON.EnabledMods = null;
+            var bonesJSON = BonesJSON.CloneForUpload(
+                out var bonesSpec,
+                out var bonesStats,
+                out var modConfig
+                );
 
             return new BonesRecord
             {
@@ -980,8 +1041,29 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             ?.IteratorSafe()
             ;
 
-        public static bool AnyHostsMissing(this BonesSources BonesSources, IEnumerable<Host> Hosts)
-            => BonesSources?.GetHosts()?.Any(bs => !Hosts.Any(h => bs.SameAs(h))) is true
+        public static bool AnySameAs(this IEnumerable<Host> Source, IEnumerable<Host> Hosts)
+            => Source?.Any(th => Hosts?.Any(h => th.SameAs(h)) is true) is true
             ;
+
+        public static bool NoneSameAs(this IEnumerable<Host> Source, IEnumerable<Host> Hosts)
+            => !Source.AnySameAs(Hosts)
+            ;
+
+        public static bool AnyNotSameAs(this IEnumerable<Host> Source, IEnumerable<Host> Hosts)
+            => !Utils.EitherNullOrEmpty(Source, Hosts, out bool areEqual)
+            ? Source.Any(sh => !Hosts.Any(h => sh.SameAs(h)))
+            : !areEqual
+            ;
+
+        public static bool AnyHostsMissing(this BonesSources BonesSources, IEnumerable<Host> Hosts)
+        {
+            if (BonesSources?.GetHosts() is not IEnumerable<Host> bonesSourcesHosts)
+                return false;
+
+            return bonesSourcesHosts.IsNullOrEmpty()
+                ? !Hosts.IsNullOrEmpty()
+                : bonesSourcesHosts.AnyNotSameAs(Hosts)
+                ;
+        }
     }
 }

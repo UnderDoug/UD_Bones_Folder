@@ -41,7 +41,7 @@ namespace UD_Bones_Folder.Mod.UI
             Utils.Log($"{nameof(BonesModeModule)}.{nameof(RandomizeTileIfChooseYourFighter)} called.");
             try
             {
-                if (SeededPerMyriadChance(nameof(RandomizeTileIfChooseYourFighter), 5000))
+                if (SeededPerMyriadChance(nameof(RandomizeTileIfChooseYourFighter), 8500))
                 {
                     if (TileFactory.Models is IEnumerable<PlayerModel> playerModels
                         && (Window.module.builder ?? Module.builder) is EmbarkBuilder builder)

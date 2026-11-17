@@ -35,17 +35,32 @@ namespace UD_Bones_Folder.Mod.BonesSystem.BonesSource
                 Type = ResultType.Success,
             };
 
+        public static ActionResult NewSuccess(string Message)
+            => NewSuccess()
+                .SetMessage(Message)
+            ;
+
         public static ActionResult NewPending()
             => new ActionResult
             {
                 Type = ResultType.Pending,
             };
 
+        public static ActionResult NewPending(string Message)
+            => NewPending()
+                .SetMessage(Message)
+            ;
+
         public static ActionResult NewFailed()
             => new ActionResult
             {
                 Type = ResultType.Failed,
             };
+
+        public static ActionResult NewFailed(string Message)
+            => NewFailed()
+                .SetMessage(Message)
+            ;
 
         public static ResultType LeastSuccesful(ResultType TypeX, ResultType TypeY)
             => (ResultType)Math.Min((int)TypeX, (int)TypeY)

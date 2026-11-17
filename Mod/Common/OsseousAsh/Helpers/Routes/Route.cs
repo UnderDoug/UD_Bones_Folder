@@ -120,6 +120,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Utils.Warn(Message, X);
         }
 
+        public string Failed(
+            string Doing,
+            string With,
+            string URI,
+            object Context = null,
+            [CallerMemberName] string What = ""
+            )
+            => $"{What} failed {Doing} {Method} {With} for {URI}{(Context != null ? $" {Context}" : null)}"
+            ;
+
         public void ErrorFailed(
             string Doing,
             string With,
@@ -128,7 +138,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             object Context = null,
             [CallerMemberName] string What = ""
             )
-            => Error($"{What} failed {Doing} {Method} {With} for {URI}{(Context != null ? $" {Context}" : null)}", X)
+            => Error(Failed(Doing, With, URI, Context, What), X)
             ;
 
         public void WarnFailed(
@@ -139,7 +149,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             object Context = null,
             [CallerMemberName] string What = ""
             )
-            => Warn($"{What} failed {Doing} {Method} {With} for {URI}{(Context != null ? $" {Context}" : null)}", X)
+            => Warn(Failed(Doing, With, URI, Context, What), X)
             ;
     }
 }

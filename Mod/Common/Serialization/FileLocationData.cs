@@ -19,6 +19,8 @@ using XRL;
 using XRL.Collections;
 using XRL.Core;
 using XRL.World;
+using System.Reflection;
+using HarmonyLib;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -33,9 +35,28 @@ namespace UD_Bones_Folder.Mod
                 Type: typeof(FileLocationData),
                 MethodNameValues: new()
                 {
-                    { nameof(ReadFromFileAsync), false },
-                    { nameof(WriteAsync), false },
+                    { nameof(Write), false },
                 });
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistrySpecial(DebugMethodRegistry Registry)
+        {
+            Registry.RegisterEach(
+                Type: typeof(FileLocationData),
+                Entries: new MethodRegistryEntry[]
+                {
+                    // true
+                    
+                    // false
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(ReadFromFileAsync), false),
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(ReadFromFileAsync), null, MethodGenerics: new Type[] { typeof(Configuration) }, false),
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(ReadFromFileAsync), null, MethodGenerics: new Type[] { typeof(HostSet) }, false),
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(WriteAsync), false),
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(WriteAsync), null, MethodGenerics: new Type[] { typeof(Configuration) }, false),
+                    MethodRegistryEntry.NewAsyncEntry(typeof(FileLocationData), nameof(WriteAsync), null, MethodGenerics: new Type[] { typeof(HostSet) }, false),
+                }
+            );
+        }
         #endregion
 
         [Serializable]
@@ -205,7 +226,7 @@ namespace UD_Bones_Folder.Mod
                 try
                 {
                     using var indent = new Indent();
-                    Debug.LogCaller(
+                    Debug.LogTypeMethod(
                         Indent: indent[1],
                         ArgPairs: new Debug.ArgPair[]
                         {
@@ -236,7 +257,7 @@ namespace UD_Bones_Folder.Mod
         public async Task WriteAsync<T>(string FileName, T Object, Formatting Formatting, bool Ensure = false)
         {
             using var indent = new Indent();
-            Debug.LogCaller(
+            Debug.LogTypeMethod(
                 Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {

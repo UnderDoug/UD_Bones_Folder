@@ -9,6 +9,7 @@ using Genkit;
 using UD_Bones_Folder.Mod;
 using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.Events;
+using UD_Bones_Folder.Mod.Logging;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.UI;
 
@@ -22,6 +23,7 @@ using XRL.World.ZoneParts;
 
 namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
 {
+    [HasRegisterMethodForDebug]
     [Serializable]
     public class PseudoZone : IComposite, IDisposable
     {
@@ -331,8 +333,17 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
         #endregion
         #endregion
 
+        [RegisterMethodForDebug(true)]
         public static PseudoZone FromZone(Zone Zone)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Zone), Zone?.ZoneID ?? "MISSING_ZONE"),
+                });
+
             if (Zone == null)
                 return null;
 
@@ -415,8 +426,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             return pseudoZone;
         }
 
+        [RegisterMethodForDebug(true)]
         public void PrepForFinalizeWrite()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
             foreach (var pseudoGameObject in YieldPseudoGameObjects())
             {
                 pseudoGameObject.SetSerializationProps();
@@ -424,8 +439,12 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             }
         }
 
+        [RegisterMethodForDebug(true)]
         public void UnprepForFinalizeWrite()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
             foreach (var pseudoGameObject in YieldPseudoGameObjects())
             {
                 pseudoGameObject.ResetCellForSerialization();

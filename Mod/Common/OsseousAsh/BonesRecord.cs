@@ -32,7 +32,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public SaveBonesJSON SaveBonesJSON;
         public BonesSpec BonesSpec;
         public BonesStats BonesStats;
-        public ModRecordCollection ModConfig;
+        public ModRecordSet ModConfig;
         public int Size;
 
         [JsonIgnore]
@@ -51,7 +51,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             SaveBonesJSON SaveBonesJSON,
             BonesSpec BonesSpec,
             BonesStats BonesStats,
-            ModRecordCollection ModConfig,
+            ModRecordSet ModConfig,
             byte[] SavGz
             )
             : this()
@@ -64,23 +64,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             this.ModConfig = ModConfig;
             Size = Buffer.ByteLength(SavGz);
         }
-
-        public BonesRecord(
-            Guid UserID,
-            string BonesID,
-            SaveBonesJSON SaveBonesJSON,
-            BonesSpec BonesSpec,
-            byte[] SavGz
-            )
-            : this(
-                  UserID: UserID,
-                  BonesID: BonesID,
-                  SaveBonesJSON: SaveBonesJSON,
-                  BonesSpec: BonesSpec,
-                  BonesStats: null,
-                  ModConfig: null,
-                  SavGz: SavGz)
-        { }
 
         public override string ToString()
             => $"{nameof(BonesID)}: {BonesID}, " +

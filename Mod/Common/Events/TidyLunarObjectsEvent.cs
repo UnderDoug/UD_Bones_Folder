@@ -68,6 +68,8 @@ namespace UD_Bones_Folder.Mod.Events
 
             if (Zone.WantEvent(E.GetID(), E.GetCascadeLevel()))
                 Zone.HandleEvent(E);
+
+            ModPooledEvent<TidyLunarObjectsEvent>.ResetTo(ref E);
         }
 
         public static void Send(

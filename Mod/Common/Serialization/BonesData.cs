@@ -672,10 +672,6 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public void Cremate()
-            => BonesManager?.CremateLunarRegent(BonesID)
-            ;
-
         public void Dispose()
         {
             BonesID = null;

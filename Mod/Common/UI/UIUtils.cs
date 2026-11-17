@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +19,61 @@ namespace UD_Bones_Folder.Mod.UI
 {
     public static class UIUtils
     {
+        public class SelectionPair<T>
+        {
+            public T Element;
+            public int Selected;
+            public int Max = 1;
+
+            public string Label => _GetLabel?.Invoke(Element) ?? Element.ToString();
+
+            public char[] DesiredHotkeys => Label
+                .Where(c => char.IsLetterOrDigit(c))
+                .Distinct()
+                .ToArray()
+                ;
+
+            private Func<T, string> _GetLabel;
+            public Func<T, string> GetLabel
+            {
+                set => _GetLabel = value;
+            }
+
+            public override string ToString()
+                => $"{Selected.GetCheckboxText(Max, Label)}"
+                ;
+
+            public void Select(int Amount)
+            {
+                if (Selected == Max)
+                    Selected = 0;
+                else
+                    Selected = Math.Min(Max, Selected + Amount);
+            }
+
+            public void Select()
+                => Select(1)
+                ;
+
+            public CascadableResult SelectContinue(int Amount)
+            {
+                if (Selected == Max)
+                    Selected = 0;
+                else
+                    Selected = Math.Min(Max, Selected + Amount);
+
+                return CascadableResult.Continue;
+            }
+
+            public CascadableResult SelectContinue()
+                => SelectContinue(1)
+                ;
+
+            public bool IsSelected()
+                => Selected > 0
+                ;
+        }
+
         public enum CascadableResult : int
         {
             Continue,
@@ -27,6 +83,9 @@ namespace UD_Bones_Folder.Mod.UI
             CancelSilent,
         }
 
+        /// <summary>
+        /// Returns Option:-2
+        /// </summary>
         public static List<QudMenuItem> _BackButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -37,6 +96,9 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        /// <summary>
+        /// Returns Option:-2
+        /// </summary>
         public static List<QudMenuItem> _BackancelButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -47,6 +109,9 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        /// <summary>
+        /// Returns Option:-1
+        /// </summary>
         public static List<QudMenuItem> _ExitButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -57,6 +122,9 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        /// <summary>
+        /// Returns Option:-3
+        /// </summary>
         public static List<QudMenuItem> _SaveButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -67,6 +135,9 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        /// <summary>
+        /// Returns Option:-4
+        /// </summary>
         public static List<QudMenuItem> _ConfirmButton = new List<QudMenuItem>
         {
             new QudMenuItem
@@ -77,6 +148,22 @@ namespace UD_Bones_Folder.Mod.UI
             },
         };
 
+        /// <summary>
+        /// Returns Cancel (Option:-1)
+        /// </summary>
+        public static List<QudMenuItem> _BummerButton = new List<QudMenuItem>
+        {
+            new QudMenuItem
+            {
+                text = "{{hotkey|[" + ControlManager.getCommandInputFormatted("Accept", XRL.UI.Options.ModernUI) + "]}} {{y|Bummer!}}",
+                hotkey = "Accept,Cancel",
+                command = "Cancel"
+            }
+        };
+
+        /// <summary>
+        /// Returns Option:-2
+        /// </summary>
         public static List<QudMenuItem> BackButton
         {
             get
@@ -96,6 +183,9 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        /// <summary>
+        /// Returns Option:-2
+        /// </summary>
         public static List<QudMenuItem> BackancelButton
         {
             get
@@ -115,6 +205,9 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        /// <summary>
+        /// Returns Option:-3
+        /// </summary>
         public static List<QudMenuItem> SaveButton
         {
             get
@@ -134,6 +227,9 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        /// <summary>
+        /// Returns Option:-4
+        /// </summary>
         public static List<QudMenuItem> ConfirmButton
         {
             get
@@ -153,6 +249,28 @@ namespace UD_Bones_Folder.Mod.UI
             }
         }
 
+        /// <summary>
+        /// Returns Cancel (Option:-1)
+        /// </summary>
+        public static List<QudMenuItem> BummerButton
+        {
+            get
+            {
+                if (ControlManager.activeControllerType != ControlManager.InputDeviceType.Gamepad)
+                    return _BummerButton;
+
+                return new List<QudMenuItem>
+                {
+                    new QudMenuItem
+                    {
+                        text = ControlManager.getCommandInputFormatted("Accept", XRL.UI.Options.ModernUI) + " {{y|Bummer!}}",
+                        hotkey = "Accept,Cancel",
+                        command = "Cancel"
+                    },
+                };
+            }
+        }
+
         public static async Task<TResult> PerformPickOptionAsync<T, TResult>(
             PickOptionDataSet<T, Task<TResult>> OptionDataSet,
             string Title = "",
@@ -165,15 +283,19 @@ namespace UD_Bones_Folder.Mod.UI
             Func<Task<TResult>> OnBackCallback = null,
             Func<Task<TResult>> OnEscapeCallback = null,
             Dictionary<int, Func<Task<TResult>>> ButtonCallbacks = null,
-            Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> FinalSelectedCallback = null
+            Func<PickOptionData<T, Task<TResult>>, Task<TResult>, Task<TResult>> FinalSelectedCallback = null,
+            Action<int> LastSelectedCallback = null
             )
         {
             int defaultSelected = DefaultSelected ?? OptionDataSet.GetDefaultIndex();
             defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
             ButtonCallbacks ??= new();
 
-            ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => Task.Run(() => (TResult)default)));
-            ButtonCallbacks.Add(-2, OnBackCallback ?? (() => Task.Run(() => (TResult)default)));
+            if (!ButtonCallbacks.ContainsKey(-1))
+                ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => Task.Run(() => (TResult)default)));
+
+            if (!ButtonCallbacks.ContainsKey(-2))
+                ButtonCallbacks.Add(-2, OnBackCallback ?? (() => Task.Run(() => (TResult)default)));
 
             var buttons = new List<QudMenuItem>();
 
@@ -209,6 +331,8 @@ namespace UD_Bones_Folder.Mod.UI
 
                     choice = await taskCompletionSource.Task;
 
+                    LastSelectedCallback?.Invoke(choice);
+
                     var elements = OptionDataSet?.GetElements() ?? new List<T>();
 
                     if (choice < 0)
@@ -226,7 +350,7 @@ namespace UD_Bones_Folder.Mod.UI
                     result = await optionCallBack;
 
                     if (FinalSelectedCallback != null)
-                        result = await FinalSelectedCallback(chosenOption, optionCallBack);
+                        result = await FinalSelectedCallback.Invoke(chosenOption, optionCallBack);
 
                     return result;
                 });
@@ -247,6 +371,7 @@ namespace UD_Bones_Folder.Mod.UI
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             bool NoBackButton = false,
             int? DefaultSelected = null,
+            Action<int> LastSelectedCallback = null,
             bool RespectOptionNewlines = false,
             Func<Task<CascadableResult>> OnBackCallback = null,
             Func<Task<CascadableResult>> OnEscapeCallback = null,
@@ -261,6 +386,7 @@ namespace UD_Bones_Folder.Mod.UI
                 AdditionalButtons: AdditionalButtons,
                 NoBackButton: NoBackButton,
                 DefaultSelected: DefaultSelected,
+                LastSelectedCallback: LastSelectedCallback,
                 RespectOptionNewlines: RespectOptionNewlines,
                 OnBackCallback: OnBackCallback ?? (() => Task.Run(() => OptionDataSet?.DefaultOnBackResult ?? CascadableResult.CancelSilent)),
                 OnEscapeCallback: OnEscapeCallback ?? (() => Task.Run(() => OptionDataSet?.DefaultOnEscapeResult ?? CascadableResult.BackSilent)),
@@ -276,6 +402,7 @@ namespace UD_Bones_Folder.Mod.UI
             IReadOnlyList<QudMenuItem> AdditionalButtons = null,
             bool NoBackButton = false,
             int? DefaultSelected = null,
+            Action<int> LastSelectedCallback = null,
             bool RespectOptionNewlines = false,
             Func<TResult> OnBackCallback = null,
             Func<TResult> OnEscapeCallback = null,
@@ -287,8 +414,11 @@ namespace UD_Bones_Folder.Mod.UI
             defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
             ButtonCallbacks ??= new();
 
-            ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => (TResult)default));
-            ButtonCallbacks.Add(-2, OnBackCallback ?? (() => (TResult)default));
+            if (!ButtonCallbacks.ContainsKey(-1))
+                ButtonCallbacks.Add(-1, OnEscapeCallback ?? (() => (TResult)default));
+
+            if (!ButtonCallbacks.ContainsKey(-2))
+                ButtonCallbacks.Add(-2, OnBackCallback ?? (() => (TResult)default));
 
             var buttons = new List<QudMenuItem>();
 
@@ -316,6 +446,8 @@ namespace UD_Bones_Folder.Mod.UI
                     RespectOptionNewlines: RespectOptionNewlines,
                     AllowEscape: true);
 
+                LastSelectedCallback?.Invoke(choice);
+
                 var elements = OptionDataSet.GetElements() ?? new List<T>();
 
                 if (choice < 0)
@@ -330,7 +462,7 @@ namespace UD_Bones_Folder.Mod.UI
                 }
 
                 if (FinalSelectedCallback != null)
-                    result = FinalSelectedCallback(chosenOption, result);
+                    result = FinalSelectedCallback.Invoke(chosenOption, result);
 
                 return result;
             }
@@ -463,10 +595,26 @@ namespace UD_Bones_Folder.Mod.UI
                 PostProc: (o, r) => !r.IsContinue() && !r.IsSilent() ? ++r : r);
         }
 
+        public static async Task ShowBummerAsync(
+            string Message,
+            string Title = null,
+            IRenderable Icon = null,
+            bool PushView = false
+            )
+            => await Popup.NewPopupMessageAsync(
+                message: Message,
+                buttons: BummerButton,
+                title: Title,
+                afterRender: Icon,
+                pushView: PushView,
+                PopupID: Utils.CallChain(nameof(UIUtils), nameof(ShowBummerAsync)))
+            ;
+
         public static async Task<string> AskStringAsync(
             string Message,
             string Title = null,
             string Default = "",
+            IRenderable Icon = null,
             string RestrictChars = null,
             bool ReturnNullForEscape = false,
             bool EscapeNonMarkupFormatting = true,
@@ -509,7 +657,7 @@ namespace UD_Bones_Folder.Mod.UI
                         DefaultSelected: 0,
                         contextTitle: null,
                         contextRender: null,
-                        afterRender: null,
+                        afterRender: Icon,
                         showContextFrame: true,
                         EscapeNonMarkupFormatting: EscapeNonMarkupFormatting,
                         pushView: pushView,
@@ -567,6 +715,7 @@ namespace UD_Bones_Folder.Mod.UI
         public static async Task<int?> AskNumberAsync(
             string Message,
             string Title = null,
+            IRenderable Icon = null,
             int Start = 0,
             int Min = 0,
             int Max = int.MaxValue,
@@ -604,6 +753,7 @@ namespace UD_Bones_Folder.Mod.UI
                     title: Title,
                     inputDefault: Start.ToString(),
                     DefaultSelected: 0,
+                    afterRender: Icon,
                     pushView: pushView,
                     askingNumber: true,
                     RestrictChars: RestrictChars);

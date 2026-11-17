@@ -141,10 +141,10 @@ namespace UD_Bones_Folder.Mod.Serialization.PseudoTypes
             {
                 if (x.GetStackTraceLines() is not string[] stackTraceLines
                     || stackTraceLines.IsNullOrEmpty())
-                    throw x;
+                    throw new NullReferenceException($"Missing stack trace on thrown exception during {nameof(PerformExtraction)}", x);
 
                 if (!stackTraceLines[0].Contains(Utils.CallChain(nameof(Inventory), nameof(Inventory.DeepCopy))))
-                    throw x;
+                    throw new NullReferenceException($"Non-inventory related NRE, see inner", x);
 
                 Utils.Warn($"{nameof(PseudoGameObject)} failed to Create {nameof(CrossGameObject)} for {GameObject?.DebugName ?? "MISSING_OBJECT"}, likely due to inventory issue. Reattempting with potential fix.");
                 try

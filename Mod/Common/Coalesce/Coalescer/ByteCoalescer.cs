@@ -18,25 +18,31 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public override byte CoalesceFirst(byte x, byte y)
-            => x;
+            => x
+            ;
 
         public override byte CoalesceSecond(byte x, byte y)
-            => y;
+            => y
+            ;
 
         public override byte CoalesceCombine(byte X, byte Y)
-            => (byte)(X ^ Y);
+            => (byte)(X ^ Y)
+            ;
 
         public override byte CoalesceDifference(byte X, byte Y)
-            => (byte)(X ^ ~Y);
+            => (byte)(X ^ ~Y)
+            ;
 
         public override byte CoalesceGreater(byte X, byte Y)
             => Y > X
             ? Y
-            : X;
+            : X
+            ;
 
         public override byte CoalesceLesser(byte X, byte Y)
             => Y < X
             ? Y
-            : X;
+            : X
+            ;
     }
 }

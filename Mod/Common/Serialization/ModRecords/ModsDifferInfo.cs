@@ -3,38 +3,70 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+using UD_Bones_Folder.Mod.Logging;
+
 using XRL.Collections;
 
 namespace UD_Bones_Folder.Mod
 {
-    public class ModsDifferInfo
+    public class ModsDifferInfo : IDisposable
     {
+        #region Debug Registration
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(ModsDifferInfo),
+                MethodNameValues: new()
+                {
+                    { nameof(Get), false },
+                });
+        #endregion
+
         public bool IsDummy;
-        public int UnavailableWhereBonesEnabled;
-        public int EnabledWhereBonesDisabled;
-        public int DisabledWhereBonesEnabled;
-        public int MatchingMods;
+        public ModRecordSet UnavailableWhereBonesEnabled;
+        public ModRecordSet EnabledWhereBonesDisabled;
+        public ModRecordSet DisabledWhereBonesEnabled;
+        public ModRecordSet EnabledWhereBonesEnabled;
+        public bool IsError;
+
+        public int UnavailableWhereBonesEnabledCount => UnavailableWhereBonesEnabled?.Count ?? -1;
+        public int EnabledWhereBonesDisabledCount => EnabledWhereBonesDisabled?.Count ?? -1;
+        public int DisabledWhereBonesEnabledCount => DisabledWhereBonesEnabled?.Count ?? -1;
+        public int EnabledWhereBonesEnabledCount => EnabledWhereBonesEnabled?.Count ?? -1;
+
         public int DifferLevel
         {
             get
             {
-                if (UnavailableWhereBonesEnabled < 0)
+                if (UnavailableWhereBonesEnabledCount < 0)
+                {
+                    IsError = true;
                     return -1;
-                if (DisabledWhereBonesEnabled > 0)
+                }
+
+                IsError = false;
+                if (DisabledWhereBonesEnabledCount > 0)
                     return 3;
-                if (DisabledWhereBonesEnabled > 0)
+                if (DisabledWhereBonesEnabledCount > 0)
                     return 2;
-                return EnabledWhereBonesDisabled > 0
+                return EnabledWhereBonesDisabledCount > 0
                     ? 1
                     : 0
                     ;
             }
         }
-        public bool IsRed => DifferLevel >= 2;
-        public bool IsYellow => DifferLevel == 1;
 
-        public static ModsDifferInfo Get(ModRecordCollection EnabledMods, bool IsDummy)
+        public static ModsDifferInfo Get(ModRecordSet EnabledMods, bool IsDummy)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(EnabledMods), EnabledMods != null ? EnabledMods.Count : "null"),
+                    Debug.Arg(nameof(IsDummy), IsDummy),
+                });
+
             if (IsDummy)
             {
                 return new ModsDifferInfo
@@ -43,72 +75,92 @@ namespace UD_Bones_Folder.Mod
                 };
             }
 
-            var enabledMods = EnabledMods;
+            if (EnabledMods is not ModRecordSet bonesEnabledMods)
+            {
+                Utils.Warn($"{nameof(ModsDifferInfo)}.{nameof(Get)} passed null {nameof(EnabledMods)}; Errored results will be displayed");
+                return new ModsDifferInfo
+                {
+                    IsError = true,
+                };
+            }
 
-            using var loadedMods = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(ModRecord.GetRunningMods());
-
-            using var bonesHasButNotAvailable = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
+            var runningMods = ModRecord.GetRunningMods();
             var availableMods = ModRecord.GetAvailableMods();
-            bonesHasButNotAvailable.RemoveAll(r => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
 
-            using var loadedButBonesMissing = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(loadedMods);
-            loadedButBonesMissing.RemoveAll(r => enabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
+            using var unavailableWhereBonesEnabled = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(bonesEnabledMods);
+            unavailableWhereBonesEnabled.RemoveAll(r
+                => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                );
 
-            using var bonesHasButNotLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bonesHasButNotLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return loadedMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
+            using var enabledWhereBonesDisabled = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(runningMods);
+            enabledWhereBonesDisabled.RemoveAll(r
+                => bonesEnabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                );
 
-            using var bothHaveLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bothHaveLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return bonesHasButNotLoaded.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || loadedButBonesMissing.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
+            using var disabledWhereBonesEnabled = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(bonesEnabledMods);
+            disabledWhereBonesEnabled.RemoveAll(r
+                => runningMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                || unavailableWhereBonesEnabled.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                );
+
+            using var matchingMods = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(bonesEnabledMods);
+            matchingMods.RemoveAll(r
+                => disabledWhereBonesEnabled.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                || unavailableWhereBonesEnabled.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                || enabledWhereBonesDisabled.Any(ar => ModRecord.EQComp.Equals(r, ar))
+                );
 
             return new ModsDifferInfo
             {
-                UnavailableWhereBonesEnabled = bonesHasButNotAvailable.Count,
-                EnabledWhereBonesDisabled = loadedButBonesMissing.Count,
-                DisabledWhereBonesEnabled = bonesHasButNotLoaded.Count,
-                MatchingMods = bothHaveLoaded.Count,
+                UnavailableWhereBonesEnabled = new(unavailableWhereBonesEnabled),
+                EnabledWhereBonesDisabled = new(enabledWhereBonesDisabled),
+                DisabledWhereBonesEnabled = new(disabledWhereBonesEnabled),
+                EnabledWhereBonesEnabled = new(matchingMods),
             };
         }
 
         public override string ToString()
         {
             if (IsDummy)
-                return "{{y|mods:}} {{K|N/A}}";
+                return "mods: {{K|N/A}}".Colored("y"); ;
+
+            if (IsError)
+                return "mods: {{red|error}}".Colored("y"); ;
 
             if (DifferLevel < 0)
-                return "{{y|mods:}} {{red|error}}";
+                return "mods: {{red|error}}".Colored("y"); ;
 
             if (DifferLevel == 0)
-                return "{{y|mods:}} {{green|\u00fb}}";
-
-            string output = "mods:".Colored("y");
+                return "{{green|\u00fb}}";
 
             string extras = null;
-            if (EnabledWhereBonesDisabled > 0)
-                extras = $"{extras}{(-EnabledWhereBonesDisabled).Signed()}".Colored("yellow");
+            if (EnabledWhereBonesDisabledCount > 0)
+                extras = $"{extras}{(-EnabledWhereBonesDisabledCount).Signed()}".Colored("yellow");
 
-            if (DisabledWhereBonesEnabled > 0)
+            if (DisabledWhereBonesEnabledCount > 0)
             {
                 if (!extras.IsNullOrEmpty())
-                    extras += "|".Colored("y");
-                extras = $"{extras}{DisabledWhereBonesEnabled.Signed()}".Colored("red");
+                    extras += "|";
+                extras = $"{extras}{DisabledWhereBonesEnabledCount.Signed()}".Colored("red");
             }
 
-            if (UnavailableWhereBonesEnabled > 0)
+            if (UnavailableWhereBonesEnabledCount > 0)
             {
                 if (!extras.IsNullOrEmpty())
-                    extras += "|".Colored("y");
-                extras = $"{extras}X{UnavailableWhereBonesEnabled}".Colored("red");
+                    extras += "|";
+                extras = $"{extras}X{UnavailableWhereBonesEnabledCount}".Colored("red");
             }
-            return $"{output} {extras}";
+            return $"mods: {extras}".Colored("y");
+        }
+
+        public void Dispose()
+        {
+            IsDummy = default;
+            UnavailableWhereBonesEnabled = null;
+            EnabledWhereBonesDisabled = null;
+            DisabledWhereBonesEnabled = null;
+            EnabledWhereBonesEnabled = null;
+            IsError = default;
         }
     }
 }

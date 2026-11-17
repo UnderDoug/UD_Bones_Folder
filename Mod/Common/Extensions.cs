@@ -4,21 +4,23 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Reflection.Emit;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Platform.IO;
+
+using IOStream = System.IO.Stream;
+using IOMemoryStream = System.IO.MemoryStream;
 
 using HarmonyLib;
 
 using ConsoleLib.Console;
-
 using Kobold;
-
 using UnityEngine.UI;
-
 using Genkit;
 
 using XRL;
@@ -35,20 +37,20 @@ using XRL.World.WorldBuilders;
 
 using static XRL.World.Cell;
 
-using UD_Bones_Folder.Mod.UI;
-
-using UD_Bones_Folder.Mod.Parts;
-using UD_Bones_Folder.Mod.Moderation;
-using UD_Bones_Folder.Mod.OsseousAsh;
-
 using Range = XRL.Range;
 using Event = XRL.World.Event;
-using static UD_Bones_Folder.Mod.SaveBonesInfo;
-using System.Net;
-using Newtonsoft.Json;
+
+using UD_Bones_Folder.Mod.UI;
+using UD_Bones_Folder.Mod.Moderation;
+using UD_Bones_Folder.Mod.OsseousAsh;
+using UD_Bones_Folder.Mod.Parts;
+using UD_Bones_Folder.Mod.Logging;
+
+using Debug = UD_Bones_Folder.Mod.Logging.Debug;
 
 namespace UD_Bones_Folder.Mod
 {
+    [HasRegisterMethodForDebug]
     public static class Extensions
     {
         private static OsseousAsh.Configuration Config => OsseousAsh.Configuration.Instance;
@@ -228,7 +230,7 @@ namespace UD_Bones_Folder.Mod
                 InGameTime = $"{timeSpan.Hours:D2}:{timeSpan.Minutes:D2}:{timeSpan.Seconds:D2}",
                 Turn = Game.Turns,
                 SaveTime = $"{localTimeNow.ToLongDateString()} at {localTimeNow.ToLongTimeString()}",
-                EnabledMods = ModRecordCollection.NewCurrent(),
+                EnabledMods = ModRecordSet.NewCurrent(),
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
@@ -237,7 +239,7 @@ namespace UD_Bones_Folder.Mod
                 ZoneID = zoneID,
 
                 BonesSpec = new BonesSpec(LunarRegent, zone),
-                Stats = new(),
+                BonesStats = new(),
 
                 DeathReason = deathReason.StartReplace().AddObject(LunarRegent).ToString(),
                 GenotypeName = genotype ?? species,
@@ -405,6 +407,87 @@ namespace UD_Bones_Folder.Mod
             deleteButtonTextSkin.Apply();
             return SaveRow.deleteButton.transform;
         }
+
+        #region Pseudo Debug
+
+        public static void ErrorTimestamp(this ModInfo ModInfo, object Message)
+            => ModInfo?.Error($"{DateTime.Now.Timestamp()} - {Message}")
+            ;
+
+        private static string ExceptionString(this Exception X)
+            => $"{(X != null ? $": {X}" : null)}"
+            ;
+
+        public static void Error(this ModInfo ModInfo, object Context, Exception X)
+            => ModInfo?.Error($"{Context}{X.ExceptionString()}")
+            ;
+
+        public static void ErrorTimestamp(this ModInfo ModInfo, object Context, Exception X)
+            => ModInfo?.Error($"{DateTime.Now.Timestamp()} - {Context}", X)
+            ;
+
+        public static void ErrorOnce(this ModInfo ModInfo, object Context, Exception X)
+        {
+            if (ModInfo == null)
+                return;
+
+            Utils.SingleTimeErrorMessages ??= new();
+            if (!Utils.SingleTimeErrorMessages.ContainsKey(ModInfo))
+                Utils.SingleTimeErrorMessages[ModInfo] = new();
+
+            string message = Context.ToString();
+            if (Utils.SingleTimeErrorMessages[ModInfo].Add(message))
+                ModInfo.Error($"{message}{X.ExceptionString()}");
+        }
+
+        public static void ErrorOnce(this ModInfo ModInfo, object Message)
+            => ModInfo.ErrorOnce(Message, null)
+            ;
+
+        public static void WarnTimestamp(this ModInfo ModInfo, object Message)
+            => ModInfo?.Warn($"{DateTime.Now.Timestamp()} - {Message}")
+            ;
+
+        public static void Warn(this ModInfo ModInfo, object Context, Exception X)
+            => ModInfo?.Warn($"{Context}{X.ExceptionString()}")
+            ;
+
+        public static void WarnTimestamp(this ModInfo ModInfo, object Context, Exception X)
+            => ModInfo?.Warn($"{DateTime.Now.Timestamp()} - {Context}", X)
+            ;
+
+        public static void Warn(this ModInfo ModInfo, object Message, StackTrace WithTrace)
+            => ModInfo?.Warn((WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            ;
+
+        public static void WarnOnce(this ModInfo ModInfo, object Context, Exception X)
+        {
+            Utils.SingleTimeWarnMessages ??= new();
+            if (!Utils.SingleTimeWarnMessages.ContainsKey(ModInfo))
+                Utils.SingleTimeWarnMessages[ModInfo] = new();
+
+            string message = Context.ToString();
+            if (Utils.SingleTimeWarnMessages[ModInfo].Add(message))
+                ModInfo.Warn($"{message}{X.ExceptionString()}");
+        }
+
+        public static void WarnOnce(this ModInfo ModInfo, object Message)
+            => ModInfo.WarnOnce(Message, (Exception)null)
+            ;
+
+        public static void WarnOnce(this ModInfo ModInfo, object Message, StackTrace WithTrace)
+            => ModInfo.WarnOnce(Message: (WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            ;
+
+        public static void Info(this ModInfo ModInfo, object Message)
+            => MetricsManager.LogModInfo(ModInfo, Message)
+            ;
+
+        public static void InfoTimestamp(this ModInfo ModInfo, object Message)
+            => ModInfo.Info($"{DateTime.Now.Timestamp()} - {Message}")
+            ;
+
+        #endregion
 
         public static string Colored(this string Text, string Color)
             => Color != null
@@ -1778,24 +1861,38 @@ namespace UD_Bones_Folder.Mod
             return (Object = GameObjectReference.Object) != null;
         }
 
-        public static async Task<byte[]> ReadAllBytesAsync(this System.IO.Stream Stream)
+        [RegisterAsyncMethodForDebug(true)]
+        public static async Task<byte[]> GetAllBytesAsync(this IOStream Stream)
         {
-            if (Stream is System.IO.MemoryStream inMemoryStream)
-                return inMemoryStream.ToArray();
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Stream), Stream.GetNullString()),
+                });
 
-            using (var outStream = new System.IO.MemoryStream())
+            if (Stream is IOMemoryStream memoryStream)
+            {
+                Debug.Log($"is MemoryStream", Indent: indent[1]);
+                return memoryStream.ToArray();
+            }
+
+            using (var outStream = new IOMemoryStream())
             {
                 await Stream.CopyToAsync(outStream);
+                Stream.Close();
+                Debug.Log($"new MemoryStream", Indent: indent[1]);
                 return outStream.ToArray();
             }
         }
 
-        public static byte[] ReadAllBytes(this System.IO.Stream Stream)
-            => Stream.ReadAllBytesAsync().WaitResult()
+        public static byte[] GetAllBytes(this IOStream Stream)
+            => Stream.GetAllBytesAsync().WaitResult()
             ;
 
         public static async Task<byte[]> ReadAllBytesAsync(this System.IO.StreamReader StreamReader)
-            => await StreamReader.BaseStream.ReadAllBytesAsync()
+            => await StreamReader.BaseStream.GetAllBytesAsync()
             ;
 
         public static byte[] ReadAllBytes(this System.IO.StreamReader StreamReader)
@@ -1901,6 +1998,21 @@ namespace UD_Bones_Folder.Mod
 
         public static string GetCheckboxText(this bool Value, string Label, string ValueColored = null)
             => $"{Value.GetCheckbox(ValueColored)} {Label}"
+            ;
+
+        public static string GetCheckbox(this int Value, int Max, string Colored = null)
+        {
+            if (Max <= 1)
+            {
+                bool value = Value > 0;
+                return $"[{(value ? "■".Colored(Colored) : " ")}]";
+            }
+
+            return $"[{(Value > 0 ? $"{Value}".Colored(Colored) : " ")}]";
+        }
+
+        public static string GetCheckboxText(this int Value, int Max, string Label, string ValueColored = null)
+            => $"{Value.GetCheckbox(Max, ValueColored)} {Label}"
             ;
 
         public static bool IsTwixt(this int Value, int LowerInclusive, int UpperExclusive)
@@ -2156,13 +2268,9 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<string> GetNotResistedDamageTypes(this GameObject Object)
         {
             foreach ((var statName, var stat) in Object?.Statistics.IteratorSafe())
-            {
                 if (statName.Contains("Resistance")
                     && stat.Value < 20)
-                {
                     yield return statName[..^("Resistance".Length)];
-                }
-            }
 
             if ((Object?.FireEvent("ApplyPoison") is true)
                 && (Object?.FireEvent("CanApplyPoison") is true))
@@ -2884,13 +2992,9 @@ namespace UD_Bones_Folder.Mod
             if (Type == null)
                 return null;
 
-            if (Type.GetGenericArguments() is not IEnumerable<Type> typeGenerics)
-                return !Short
-                    ? Type.Name
-                    : Type.Name.Acronymize()
-                    ;
-
             string name = Type.Name.Split('`')[0];
+
+            string genericsString = Type.GetGenericArguments()?.GenericsString(Short);
 
             string namespaceString = IncludeNamespace ? $"{Type.Namespace}." : null;
 
@@ -2902,7 +3006,7 @@ namespace UD_Bones_Folder.Mod
                 : null
                 ;
 
-            return $"{namespaceString}{name}{typeGenerics.GenericsString(Short)}{nullable}";
+            return $"{namespaceString}{name}{genericsString}{nullable}";
         }
 
         public static string ToStringWithGenerics(this Type Type, bool Short = false)
@@ -2914,14 +3018,12 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public static string Acronymize(this string String)
-        {
-            if (String.IsNullOrEmpty()
-                || String.ToLower() == String
-                || String.ToUpper() == String)
-                return String;
-
-            return String.Capitalize().Aggregate((string)null, Utils.AcronymAggregator) ?? String.ToUpper()[0].ToString();
-        }
+            => !String.IsNullOrEmpty()
+                && String.ToLower() != String
+                && String.ToUpper() != String
+            ? String.Capitalize().Aggregate((string)null, Utils.AcronymAggregator) ?? String.ToUpper()[0].ToString()
+            : String
+            ;
 
         public static bool None<T>([NotNullWhen(true)] this IEnumerable<T> Enumberable, Predicate<T> Where)
             => !Enumberable.Any(Where?.ToFunc())
@@ -2931,9 +3033,7 @@ namespace UD_Bones_Folder.Mod
         {
             if (Filter == null
                 && ThrowIfNull)
-                throw new ArgumentNullException(
-                    paramName: nameof(Filter),
-                    message: "cannot be null if " + nameof(ThrowIfNull) + " is set to " + ThrowIfNull.ToString());
+                throw new ArgumentNullException(nameof(Filter), $"cannot be null if {nameof(ThrowIfNull)} is set to {ThrowIfNull}");
 
             return delegate (T Input)
             {
@@ -3327,6 +3427,25 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
+        public static string GetNullString(this object Object)
+            => $"{(Object != null ? "not " : null)}null"
+            ;
+
+        public static string GetValueNullOrEmpty(this string String)
+        {
+            if (!String.IsNullOrEmpty())
+                return String;
+
+            return String == null
+                ? "null"
+                : "empty"
+                ;
+        }
+
+        public static string GetNullString<T>(this IEnumerable<T> Source)
+            => $"{(Source != null ? Source.Count() : "null")}"
+            ;
+
         public static string SafeJoin<T>(this IEnumerable<T> Enumerable, string Delimiter = ", ")
             => (Enumerable != null
                 && Enumerable.Count() > 0)
@@ -3351,6 +3470,44 @@ namespace UD_Bones_Folder.Mod
                 if ((!Utils.EitherNull(x, y, out bool iAreEqual)
                         && !x.Equals(y))
                     || iAreEqual)
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool ParametersMatch(this ParameterInfo[] X, ParameterInfo[] Y, bool TypeStrict = true)
+        {
+            if (Utils.EitherNullOrEmpty(X, Y, out bool areEqual))
+                return areEqual;
+
+            if (X.Length != Y.Length)
+                return false;
+
+            for (int i = 0; i < X.Length; i++)
+            {
+                ParameterInfo x = X[i];
+                ParameterInfo y = Y[i];
+                if (Utils.EitherNull(x, y, out bool iAreEqual))
+                    return iAreEqual;
+
+                if (x.IsOut != y.IsOut)
+                    return false;
+
+                if (x.IsOptional != y.IsOptional)
+                    return false;
+
+                if (x.HasDefaultValue != y.HasDefaultValue)
+                    return false;
+
+                var xType = x.ParameterType;
+                var yType = y.ParameterType;
+                if (xType != yType
+                    && TypeStrict)
+                    return false;
+
+                if (!xType.IsAssignableFrom(yType)
+                    && !yType.IsAssignableFrom(xType))
                     return false;
             }
 

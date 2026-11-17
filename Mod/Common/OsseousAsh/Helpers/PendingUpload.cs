@@ -10,11 +10,45 @@ using StreamReader = System.IO.StreamReader;
 using Newtonsoft.Json.Linq;
 
 using UD_Bones_Folder.Mod.Serialization;
+using UD_Bones_Folder.Mod.Logging;
+using HarmonyLib;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
+    [HasRegisterMethodForDebug]
     public class PendingUpload : IDisposable
     {
+        #region Debug Registration
+        /*[RegistersMethodsForDebug]
+        public static void doDebugRegistryFalse(DebugMethodRegistry Registry)
+            => Registry.RegisterEachFalse(
+                Type: typeof(PendingUpload),
+                Methods: new string[]
+                {
+                });
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistryTrue(DebugMethodRegistry Registry)
+            => Registry.RegisterEachTrue(
+                Type: typeof(PendingUpload),
+                Methods: new string[]
+                {
+                });*/
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistrySpecial(DebugMethodRegistry Registry)
+        {
+            Registry.RegisterEach(
+                Type: typeof(PendingUpload),
+                new MethodRegistryEntry(AccessTools.Method(typeof(PendingUpload), nameof(Attempt)), true),
+                new MethodRegistryEntry(AccessTools.Method(typeof(PendingUpload), nameof(CheckValid)), true),
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(PendingUpload), nameof(TryUploadAsync)), true),
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(PendingUpload), nameof(TryUploadRecordAsync)), true),
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(PendingUpload), nameof(TryUploadSavGzAsync)), true)
+            );
+        }
+        #endregion
+
         public static int MaxFileSizeInBytes => 1000 * 1000 * 4;
         private string OrphanedError => $"{nameof(PendingUpload)} ({BonesID}) has been orphaned from its {nameof(ParentHost)}.";
         private static string UploadInvalidPrefix => $"{nameof(PendingUpload)} Invalid";
@@ -49,18 +83,41 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             : base()
         { }
 
-        public ResponseInfo Attempt()
+        [RegisterMethodForDebug]
+        public ResponseInfo Attempt(bool Silent = true)
         {
-            TryUploadAsync().WaitResult();
-            return Response;
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
+            ResponseInfo responseInfo = default;
+            try
+            {
+                if (TryUploadAsync(Silent: Silent, ResponseCallback: ri => responseInfo = ri).WaitResult())
+                    return responseInfo;
+
+                return responseInfo = Response;
+            }
+            finally
+            {
+                Debug.YehNah($"Response after Attempt: {responseInfo.Message ?? "NO_RESPONSE"}", Good: responseInfo.Success, Indent: indent[1]);
+            }
         }
 
         private string UploadInvalid(string Message = null)
             => $"{UploadInvalidPrefix}{(!Message.IsNullOrEmpty() ? $"; {Message}" : null)}"
             ;
 
+        [RegisterMethodForDebug]
         public bool CheckValid(bool Silent = false)
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Silent), Silent),
+                });
+
             Response = new ResponseInfo
             {
                 Host = ParentHost,
@@ -87,9 +144,9 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 Response.Message = UploadInvalid($"{ParentHost} is not running");
                 Response.Success = false;
             }
-            if (!ParentHost.CheckRegisterUserAsync().WaitResult())
+            else
+            if (!ParentHost.CheckRegisterUserAsync(StatusCodeCallback: c => Response.StatusCode = c).WaitResult())
             {
-                Response.StatusCode = HttpStatusCode.InternalServerError;
                 Response.Message = UploadInvalid($"{ParentHost} is refusing access to User {{{Configuration.UserIDString}}}");
                 Response.Success = false;
             }
@@ -108,7 +165,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 ForceDispose = true;
             }
             else
-            if (!RecordUploaded
+            if (RecordUploaded
                 && Token == default)
             {
                 Response.Message = UploadInvalid($"{nameof(Token)} is empty or default {{{BonesID}}}");
@@ -132,24 +189,33 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 ForceDispose = true;
             }
             else
-            if (RecordUploaded
-                && TimeSinceFirstTry is TimeSpan timeSinceFirstTry
-                && timeSinceFirstTry.TotalMilliseconds >= 180000)
+            if (CheckTimeLimitExceeded(out string message, out bool success, out bool forceDispose))
             {
-                Response.Message = UploadInvalid($"{nameof(TimeSinceFirstTry)} exceeds 3 minute window: {timeSinceFirstTry.ValueUnits()}");
-                Response.Success = false;
-                ForceDispose = true;
+                Response.Message = message;
+                Response.Success = success;
+                ForceDispose = forceDispose;
             }
+
             if (Success)
             {
-                Response.Message = UploadInvalid($"{nameof(Success)} is {Success}");
+                string isSuccess = $"{nameof(Success)} is {Success}";
+                if (Response.Message.IsNullOrEmpty())
+                    Response.Message = UploadInvalid(isSuccess);
+                else
+                    Response.Message += $", {isSuccess}";
+
                 Response.Success = false;
                 ForceDispose = true;
             }
             else
             if (ForceDispose)
             {
-                Response.Message = UploadInvalid($"{nameof(ForceDispose)} is {ForceDispose}");
+                string isForceDisposed = $"{nameof(ForceDispose)} is {ForceDispose}";
+                if (Response.Message.IsNullOrEmpty())
+                    Response.Message = UploadInvalid(isForceDisposed);
+                else
+                    Response.Message += $", {isForceDisposed}";
+
                 Response.Success = false;
             }
 
@@ -158,26 +224,69 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 && !Response.Message.IsNullOrEmpty())
                 Utils.Warn($"{ParentHost?.ToString() ?? "MISSING_HOST"} :: {Response.Message}.");
 
+            Debug.YehNah($"{nameof(CheckValid)}: {Response.Message ?? "NO_MESSAGE"}", Response.Success, Indent: indent[2]);
+
             return Response.Success;
         }
 
-        public async Task<bool> TryUploadAsync(bool ForceDispose = false)
+        public bool CheckTimeLimitExceeded(out string Message, out bool Success, out bool ForceDispose)
         {
+            Message = null;
+            Success = true;
+            ForceDispose = false;
+            if (RecordUploaded
+                && TimeSinceFirstTry is TimeSpan { TotalMilliseconds: >= 180000 } timeSinceFirstTry)
+            {
+                Response.Message = UploadInvalid($"{nameof(TimeSinceFirstTry)} exceeds 3 minute window: {timeSinceFirstTry.ValueUnits()}");
+                Response.Success = false;
+                ForceDispose = true;
+                return false;
+            }
+            return true;
+        }
+
+        [RegisterAsyncMethodForDebug]
+        public async Task<bool> TryUploadAsync(
+            bool ForceDispose = false,
+            bool Silent = true,
+            Action<ResponseInfo> ResponseCallback = null
+            )
+        {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(ForceDispose), ForceDispose),
+                    Debug.Arg(nameof(Silent), Silent),
+                });
+
             if (ForceDispose)
+            {
+                Debug.CheckNah($"Arg {nameof(ForceDispose)}", ForceDispose, Indent: indent[1]);
                 this.ForceDispose = true;
+            }
 
             if (ParentHost == null)
+            {
+                Debug.CheckNah($"{nameof(ParentHost)} Null", Indent: indent[1]);
                 this.ForceDispose = true;
+            }
 
-            if (!CheckValid(Silent: true))
+            if (!CheckValid(Silent: Silent))
+            {
+                ResponseCallback?.Invoke(Response);
+                return Response.Success;
+            }
+
+            if (!await TryUploadRecordAsync(ResponseCallback))
                 return Response.Success;
 
-            if (!await TryUploadRecordAsync())
+            if (!await TryUploadSavGzAsync(ResponseCallback))
                 return Response.Success;
 
-            if (!await TryUploadSavGzAsync())
-                return Response.Success;
-
+            bool success = Response.Success;
+            // ResponseCallback?.Invoke(Response);
             if (Success
                 || this.ForceDispose)
             {
@@ -186,13 +295,24 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 string pendingSavsCount = (pendingUploads?.Count)?.ToString() ?? "NO_DICTIONARY";
                 Utils.InfoTimestamp($"Disposing of {nameof(PendingUpload)} due to {Response.Message ?? " an unknown reason"}. {nameof(PendingUploads)}: {pendingSavsCount}");
             }
-            return Response.Success;
+            return success;
         }
 
-        public async Task<bool> TryUploadRecordAsync()
+        [RegisterAsyncMethodForDebug]
+        public async Task<bool> TryUploadRecordAsync(Action<ResponseInfo> ResponseCallback = null)
         {
+            string thisMethod = nameof(TryUploadRecordAsync);
+
+            using var indent = new Indent();
             if (RecordUploaded)
             {
+                Debug.LogTypeMethod(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(RecordUploaded), RecordUploaded)
+                    });
+
                 Response = new ResponseInfo
                 {
                     Host = ParentHost,
@@ -200,31 +320,92 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Message = $"{nameof(BonesRecord)} Already Uploaded"
                 };
 
+                ResponseCallback?.Invoke(Response);
+                Debug.YehNah($"{nameof(TryUploadRecordAsync)}: {Response.Message ?? "NO_MESSAGE"}", Response.Success, Indent: indent[2]);
                 return Response.Success;
             }
 
-            if (!CheckValid(Silent: true))
-                return Response.Success;
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(RecordUploaded), RecordUploaded),
+                });
 
-            Response = await PostBonesInfoAsync();
+            if (!CheckValid(Silent: true))
+            {
+                ResponseCallback?.Invoke(Response);
+                return Response.Success;
+            }
+
+            try
+            {
+                Response = await PostBonesInfoAsync();
+                ResponseCallback?.Invoke(Response);
+            }
+            catch (WebException x)
+            {
+                ForceDispose = true;
+
+                Response.WantTimer = false;
+                Response.Message = $"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}";
+                Utils.Warn($"{thisMethod}: {Response.Message ?? "NO_MESSAGE"}", x);
+            }
+            catch (Exception x)
+            {
+                ForceDispose = true;
+
+                Response.Success = false;
+                Response.Message ??= $"Caught {x.GetType().ToStringWithGenerics()} during response from {ToString()}";
+                Utils.Error($"{thisMethod}: {Response.Message ?? "NO_MESSAGE"}", x);
+            }
+            finally
+            {
+                Debug.YehNah($"{nameof(TryUploadRecordAsync)}.{nameof(PostBonesInfoAsync)}: {Response.Message ?? "NO_MESSAGE"}", Response.Success, Indent: indent[2]);
+            }
+
             return Response.Success;
         }
 
-        public async Task<bool> TryUploadSavGzAsync()
+        [RegisterAsyncMethodForDebug]
+        public async Task<bool> TryUploadSavGzAsync(Action<ResponseInfo> ResponseCallback = null)
         {
+            string thisMethod = nameof(TryUploadSavGzAsync);
+
+            using var indent = new Indent();
             if (Success)
             {
+                Debug.LogTypeMethod(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(Success), Success)
+                    });
+
                 Response = new ResponseInfo
                 {
                     Host = ParentHost,
                     Success = true,
                     Message = $"{nameof(BonesSavGz)} Already Uploaded"
                 };
+
+                ResponseCallback?.Invoke(Response);
+                Debug.YehNah($"{thisMethod}: {Response.Message ?? "NO_MESSAGE"}", Response.Success, Indent: indent[2]);
                 return Response.Success;
             }
 
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Success), Success)
+                });
+
             if (!CheckValid(Silent: true))
+            {
+                ResponseCallback?.Invoke(Response);
                 return Response.Success;
+            }
 
             var timeSinceFirstTry = TimeSinceFirstTry;
 
@@ -233,21 +414,46 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             string timeSince = $"{timeSinceFirstTry.ValueUnits()}";
 
             Utils.InfoTimestamp($"{nameof(PendingUpload)} attempting to {nameof(TryUploadSavGzAsync)} of {bonesID} to {parentHost}, time since first try: {timeSince}");
-
-            Response = await PutBonesSavGzAsync();
-
-            if (Response.WantTimer)
+            bool success = false;
+            try
             {
-                SetUpTimer();
+                Response = await PutBonesSavGzAsync();
+                ResponseCallback?.Invoke(Response);
             }
-            else
-            if (!HasTimer())
+            catch (WebException x)
             {
                 ForceDispose = true;
-                Dispose();
-            }
 
-            return Response.Success;
+                Response.WantTimer = false;
+                Response.Message = $"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}";
+                Utils.Warn($"{thisMethod}: {Response.Message ?? "NO_MESSAGE"}", x);
+            }
+            catch (Exception x)
+            {
+                ForceDispose = true;
+
+                Response.Success = false;
+                Response.Message ??= $"Caught {x.GetType().ToStringWithGenerics()} during response from {ToString()}";
+                Utils.Error($"{thisMethod}: {Response.Message ?? "NO_MESSAGE"}", x);
+            }
+            finally
+            {
+                Debug.YehNah($"{nameof(TryUploadSavGzAsync)}.{nameof(PutBonesSavGzAsync)}: {Response.Message ?? "NO_MESSAGE"}", Response.Success, Indent: indent[2]);
+                success = Response.Success;
+                if (Response.WantTimer
+                    && !Response.Cancel)
+                {
+                    SetUpTimer();
+                }
+                else
+                if (!HasTimer()
+                    || Response.Cancel)
+                {
+                    ForceDispose = true;
+                    Dispose();
+                }
+            }
+            return success;
         }
 
         public void SetToken(Guid Token)
@@ -287,10 +493,12 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     return;
                 }
 
-                if (PendingUploads.TryGetValue(bonesID, out var pendingUpload))
-                    await pendingUpload.TryUploadAsync();
-                else
+                if (!PendingUploads.TryGetValue(bonesID, out var pendingUpload))
                     Utils.Warn($"{nameof(Timer)} passed {nameof(BonesID)} not found in {nameof(PendingUploads)} ({bonesID ?? "NO_BONES_ID"}).");
+                else
+                if (!await pendingUpload.TryUploadAsync()
+                    && pendingUpload.CheckTimeLimitExceeded(out _, out _, out _))
+                    pendingUpload.Dispose();
             }
             ;
 
@@ -329,39 +537,65 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 Host = ParentHost,
                 Success = false,
+                StatusCode = HttpStatusCode.InternalServerError,
             };
 
-            if (ParentHost.CreatePostBonesInfoRequest(this, out string uRI) is not HttpWebRequest httpReq
-                || await ParentHost.GetPostBonesInfoResponseAsync(httpReq, uRI) is not HttpWebResponse httpRes)
+            if (ParentHost.CreatePostBonesInfoRequest(this, out string uRI) is not HttpWebRequest httpReq)
                 return responseInfo;
 
-            responseInfo.StatusCode = httpRes.StatusCode;
-            using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+            HttpWebResponse httpRes = null;
+            try
             {
-                var result = await streamReader.ReadToEndAsync();
-                if (httpRes.StatusCode == HttpStatusCode.Created)
+                httpRes = await ParentHost.GetPostBonesInfoResponseAsync(httpReq, uRI, c => responseInfo.StatusCode = c);
+                if (httpRes == null)
+                    return responseInfo;
+
+                responseInfo.StatusCode = httpRes.StatusCode;
+                using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
                 {
-                    if (JObject.Parse(result) is JObject jObject
-                        && jObject["success"].ToObject<Guid>() is Guid parsedToken)
+                    var result = await streamReader.ReadToEndAsync();
+                    if (httpRes.StatusCode == HttpStatusCode.Created)
                     {
-                        SetToken(parsedToken);
+                        if (JObject.Parse(result) is JObject jObject
+                            && jObject["UploadToken"].ToObject<Guid>() is Guid parsedToken)
+                        {
+                            SetToken(parsedToken);
 
-                        responseInfo.Success = true;
-                        responseInfo.Message = $"Successfully created new BonesInfo on server at {ToString()}";
+                            responseInfo.Success = true;
+                            responseInfo.Message = $"Successfully created new BonesInfo on server at {ToString()}";
 
-                        Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {nameof(parsedToken)}: {parsedToken}");
+                            Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {nameof(parsedToken)}: {parsedToken}");
+                            Utils.Log(jObject);
+                        }
+                        else
+                        {
+                            responseInfo.Message = $"{CallingMethod} received unexpected data from {ToString()}";
+                            Utils.Warn($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {result}");
+                        }
                     }
                     else
                     {
-                        responseInfo.Message = $"{CallingMethod} received unexpected data from {ToString()}";
-                        Utils.Warn($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {result}");
+                        responseInfo.Message = $"{CallingMethod} received unexpected status code from {ToString()}";
+                        Utils.Warn($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()}");
                     }
                 }
-                else
-                {
-                    responseInfo.Message = $"{CallingMethod} received unexpected status code from {ToString()}";
-                    Utils.Warn($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()}");
-                }
+            }
+            catch (WebException x)
+            {
+                if (x.Status != WebExceptionStatus.Timeout)
+                    throw new WebException($"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}", x, x.Status, httpRes);
+
+                ForceDispose = true;
+
+                responseInfo.WantTimer = false;
+                responseInfo.Message = $"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}";
+
+                throw new WebException(responseInfo.Message, x, x.Status, httpRes);
+            }
+            catch (Exception x)
+            {
+                responseInfo.Success = false;
+                responseInfo.Message ??= $"Caught {x.GetType().ToStringWithGenerics()} during response from {ToString()}";
             }
             return responseInfo;
         }
@@ -375,10 +609,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 WantTimer = !HasTimer(),
             };
 
+            if (ParentHost.CreatePutBonesSavGzRequest(this, out string uRI) is not HttpWebRequest httpReq)
+                return responseInfo;
+
+            HttpWebResponse httpRes = null;
             try
             {
-                if (ParentHost.CreatePutBonesSavGzRequest(this, out string uRI) is not HttpWebRequest httpReq
-                    || await ParentHost.GetPutBonesSavGzResponseAsync(httpReq, uRI, Rethrow: true) is not HttpWebResponse httpRes)
+                httpRes = await ParentHost.GetPutBonesSavGzResponseAsync(httpReq, uRI, Rethrow: true);
+                if (httpRes == null)
                     return responseInfo;
 
                 responseInfo.StatusCode = httpRes.StatusCode;
@@ -397,7 +635,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                             responseInfo.Message = $"Successfully added \".sav.gz\" blob to Bones on server at {ToString()}";
                             responseInfo.WantTimer = false;
                             responseInfo.Success = true;
-                            Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {jObject}");
+                            Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - \n{jObject}");
                         }
                         else
                         {
@@ -415,25 +653,59 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             catch (WebException x)
             {
                 if (x.Status != WebExceptionStatus.Timeout)
-                    throw x;
+                    throw new WebException($"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}", x, x.Status, httpRes);
+
+                if (httpRes.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    using (var streamReader = new StreamReader(httpRes.GetResponseStream()))
+                    {
+                        var result = await streamReader.ReadToEndAsync();
+
+                        if (JObject.Parse(result) is not JObject jObject
+                            || !jObject.TryGetValue("error", out var errorToken)
+                            || errorToken.ToObject<string>() is not string errorString)
+                        {
+                            responseInfo.Message = $"{CallingMethod} received unexpected data from {ToString()}";
+                            Utils.Warn($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {result}");
+                        }
+                        else
+                        if (jObject.TryGetValue("cancel", out var cancelToken)
+                            && cancelToken.ToObject<bool>() is bool cancel
+                            && cancel)
+                        {
+                            ForceDispose = true;
+
+                            responseInfo.WantTimer = false;
+                            responseInfo.Success = false;
+                            responseInfo.Cancel = true;
+
+                            responseInfo.Message = $"Instructed to cancel pending upload of {{{BonesID}}} by server at {ToString()}";
+                            Utils.Info($"{responseInfo.Message}: {errorString} - {httpRes.StatusCode.DisplayString()} - \n{jObject}");
+                            return responseInfo;
+                        }
+                    }
+                }
 
                 ForceDispose = true;
 
                 responseInfo.WantTimer = false;
                 responseInfo.Message = $"Caught {x.GetType().Name} with {nameof(WebExceptionStatus)} {x.Status} during response from {ToString()}";
 
-                throw x;
+                throw new WebException(responseInfo.Message, x, x.Status, httpRes);
             }
             catch (Exception x)
             {
                 responseInfo.Success = false;
                 responseInfo.Message ??= $"Caught {x.GetType().ToStringWithGenerics()} during response from {ToString()}";
-            }          
-            return responseInfo;
+            }            return responseInfo;
         }
 
+        [RegisterMethodForDebug]
         protected void DisposeInternal()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
             ParentHost?.PendingUploads?.Remove(BonesID);
             ParentHost = null;
 
@@ -458,8 +730,18 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Response = default;
         }
 
+        [RegisterMethodForDebug]
         public void Dispose()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(Success), Success),
+                    Debug.Arg(nameof(ForceDispose), ForceDispose),
+                });
+
             if (Success
                 || ForceDispose)
                 DisposeInternal();

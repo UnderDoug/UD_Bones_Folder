@@ -18,6 +18,7 @@ using UD_Bones_Folder.Mod.OsseousAsh;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
 using XRL.Collections;
+using ConsoleLib.Console;
 
 namespace UD_Bones_Folder.Mod.BonesSystem
 {
@@ -37,6 +38,14 @@ namespace UD_Bones_Folder.Mod.BonesSystem
 
         public override string SourceID => Path;
         public override string DisplayName => $"{Type.Tag()} {SanitizePathForDisplay(SourceID)}";
+        public override IRenderable Icon
+            => new Renderable(
+                Tile: "items/sw_data_disc.bmp",
+                ColorString: $"&y",
+                TileColor: $"&y",
+                DetailColor: Type.GetColor()?[0] ?? 'r')
+            ;
+
         public override bool CanLoad => true;
         public override bool CanSave => true;
         public override string BlurbDisplayName => Type != IBonesSource.SourceType.None
@@ -58,6 +67,10 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             _Type = Type;
             _Path = EnsureExists(Path);
         }
+
+        public override string ToString()
+            => SanitizePathForDisplay(SourceID)
+            ;
 
         public static string SanitizePathForDisplay(string Path)
             => DataManager.SanitizePathForDisplay(Path)
@@ -153,9 +166,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             => await IODirectory.EnumerateFilesAsync(CombinePath(Directory))
             ;
 
-        public static async Task<long> GetDirectorySizeAsync(string Directory)
-            => await FileExistsAsync(Directory)
-            ? (await IODirectory.EnumerateFilesAsync(Directory)).Aggregate(0L, Utils.FileSizeAggregator)
+        public static async Task<long> GetDirectorySizeAsync(string Directory, Predicate<string> Where = null)
+            => IODirectory.Exists(Directory)
+            ? (await IODirectory.EnumerateFilesAsync(Directory))
+                .Where(f => Where?.Invoke(f) is not false)
+                .Aggregate(0L, Utils.FileSizeAggregator)
             : 0L
             ;
 
@@ -175,8 +190,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             File.Delete(CombinePath(FilePath));
         }
 
-        public async Task<long> GetBonesDirectorySizeAsync(string BonesID)
-            => await GetDirectorySizeAsync(GetBonesDirectory(BonesID))
+        public async Task<long> GetBonesDirectorySizeAsync(string BonesID, Predicate<string> Where = null)
+            => await GetDirectorySizeAsync(GetBonesDirectory(BonesID), Where)
             ;
 
         public override bool HasInfo(string BonesID)
@@ -245,7 +260,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Loading File {FileName} for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -281,7 +296,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Loading BonesInfo for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -295,7 +310,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .Select(LoadInfo)
             ;
 
-        public override async Task<ModRecordCollection> LoadModConfigAsync(string BonesID)
+        public override async Task<ModRecordSet> LoadModConfigAsync(string BonesID)
         {
             try
             {
@@ -308,7 +323,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Loading ModConfig for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -326,7 +341,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Loading BonesSpec for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -340,11 +355,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             try
             {
                 using var bonesJSON = await LoadJSONAsync(BonesID);
-                return bonesJSON?.Stats;
+                return bonesJSON?.BonesStats;
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Loading BonesStats for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -426,8 +441,8 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 if (bonesJSON == null)
                     return result.SetMessage($"{nameof(bonesJSON)} is null");
 
-                if (bonesJSON.Stats is not BonesStats bonesStats)
-                    return result.SetMessage($"{nameof(bonesJSON)}.{nameof(bonesJSON.Stats)} is null");
+                if (bonesJSON.BonesStats is not BonesStats bonesStats)
+                    return result.SetMessage($"{nameof(bonesJSON)}.{nameof(bonesJSON.BonesStats)} is null");
 
                 var userID = Configuration.Instance?.ID ?? Guid.Empty;
                 bool success = false;
@@ -436,8 +451,11 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                     success = incrementMethod.Invoke(userID);
 
                 if (!success
-                    && bonesStats.StatSetsByName.TryGetValue(StatName, out var statSet))
+                    && bonesStats.TryGetValue(StatName, out var statSet))
                     success = statSet.IncrementStat(userID);
+
+                if (!success)
+                    success = bonesStats.RequireSet(StatName).IncrementStat(userID);
 
                 if (success)
                 {
@@ -452,7 +470,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Incrementing BonesStats Stat {StatName} for {{{BonesID}}}", x);
             }
             catch (Exception x)
             {
@@ -482,7 +500,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Saving BonesInfo for {{{BonesJSON?.ID ?? "MISSING_ID"}}}", x);
             }
             catch (Exception x)
             {
@@ -520,7 +538,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
             }
             catch (ThreadInterruptedException x)
             {
-                throw x;
+                throw new ThreadInterruptedException($"Saving BonesSavGz for {{{BonesSavGz?.BonesID ?? "MISSING_ID"}}}", x);
             }
             catch (Exception x)
             {
@@ -697,7 +715,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .Select(LoadSpec)
             ;
 
-        public override async Task<IEnumerable<ModRecordCollection>> ListModConfigsAsync()
+        public override async Task<IEnumerable<ModRecordSet>> ListModConfigsAsync()
             => (await ListBonesIDsAsync())
                 .Select(LoadModConfig)
             ;
@@ -705,13 +723,13 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         public override async Task<IEnumerable<string>> GetBonesIDsMatchingSpecAsync(BonesSpec PlayerSpec)
             => (await ListBonesSpecsAsync())
                 .Where(bs => bs.IsWithinSpec(PlayerSpec))
-                .Select(bs => bs.BonesID)
+                .Select(bs => bs.ID)
             ;
 
-        public override async Task<IEnumerable<ModRecordCollection>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec)
+        public override async Task<IEnumerable<ModRecordSet>> GetModRecordsMatchingSpecAsync(BonesSpec PlayerSpec)
             => (await ListBonesSpecsAsync())
                 .Where(bs => bs.IsWithinSpec(PlayerSpec))
-                .Select(bs => LoadModConfig(bs.BonesID))
+                .Select(bs => LoadModConfig(bs.ID))
             ;
     }
 }

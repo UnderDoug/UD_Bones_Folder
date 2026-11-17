@@ -11,7 +11,7 @@ using XRL;
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptIn)]
-    public class ModRecord : ICoalescible<ModRecord>, IDisposable
+    public class ModRecord : IDisposable
     {
         public class EqualityComparer : CompositeEqualityComparer<ModRecord>
         {
@@ -20,10 +20,12 @@ namespace UD_Bones_Folder.Mod
                     || y == null
                 ? (x == null) == (y == null)
                 : x.ID == y.ID
+                    && x.SemVer == y.SemVer
                 ;
 
             public override int GetHashCode(ModRecord obj)
                 => (obj?.ID?.GetHashCode() ?? 0)
+                ^ (obj?.Version?.GetHashCode() ?? 0)
                 ;
         }
 
@@ -32,9 +34,9 @@ namespace UD_Bones_Folder.Mod
         [JsonProperty]
         public string ID;
         [JsonProperty]
-        public string DisplayName;
-        [JsonProperty]
         public string Version;
+        [JsonProperty]
+        public string Title;
 
         [JsonIgnore]
         public XRL.Version SemVer => new(Version);
@@ -43,16 +45,16 @@ namespace UD_Bones_Folder.Mod
             : base()
         { }
 
-        public ModRecord(string ID, string DisplayName, string Version)
+        public ModRecord(string ID, string Version, string Title)
             : this()
         {
             this.ID = ID;
-            this.DisplayName = DisplayName;
             this.Version = Version;
+            this.Title = Title;
         }
 
         public ModRecord(ModRecord Source)
-            : this(Source?.ID, Source?.DisplayName, Source?.Version)
+            : this(Source?.ID, Source?.Version, Source?.Title)
         { }
 
         public ModRecord Clone()
@@ -67,8 +69,8 @@ namespace UD_Bones_Folder.Mod
             if (ID == string.Empty)
                 return ID;
 
-            if (!DisplayName.IsNullOrEmpty())
-                return DisplayName;
+            if (!Title.IsNullOrEmpty())
+                return Title;
 
             return ModManager.GetModTitle(ID);
         }
@@ -93,51 +95,70 @@ namespace UD_Bones_Folder.Mod
             return output;
         }
 
-        public static ModRecord Parse(string String)
+        public static ModRecord ParseString(string String)
         {
-            if (String == null)
+            if (String.IsNullOrEmpty())
                 return null;
 
-            string[] iDNamePair = String.Split(";;");
+            if (!String.Contains("@@"))
+                String += "@@0.0.0";
 
-            string[] nameVersionPair = iDNamePair.Length > 1
-                ? iDNamePair[1].Split("@@")
-                : iDNamePair[0].Split("@@")
+            string[] versionPair = String.Split("@@");
+
+            bool rightSideTitle = versionPair[1].Contains(";;");
+
+            string[] remainingPair = rightSideTitle
+                ? versionPair[1].Split(";;")
+                : versionPair[0].Split(";;")
                 ;
 
             return new ModRecord
             {
-                ID = iDNamePair.Length > 1
-                    ? iDNamePair[0]
-                    : nameVersionPair[0]
+                ID = rightSideTitle
+                    ? versionPair[0]
+                    : remainingPair[0]
                     ,
-                DisplayName = nameVersionPair[0],
-                Version = nameVersionPair.Length > 1
-                    ? nameVersionPair[1]
-                    : "0.0.0"
+                Title = remainingPair.Length > 1
+                    ? remainingPair[1]
+                    : null
+                    ,
+                Version = rightSideTitle
+                    ? remainingPair[0]
+                    : versionPair[1]
                     ,
             };
         }
 
-        public static ModRecord Parse(ModInfo ModInfo)
+        public static string GetDisplayName(ModInfo ModInfo)
+            => ModInfo?.Manifest?.Title
+            ?? ModInfo?.WorkshopInfo?.Title
+            ?? ModInfo?.ID
+            ;
+
+        public static string GetVersion(ModInfo ModInfo)
+            => (ModInfo?.Manifest?.Version)?.ToString() is string version
+                && !version.IsNullOrEmpty()
+            ? version
+            : "0.0.0"
+            ;
+
+        public static ModRecord FromInfo(ModInfo ModInfo)
         {
             if (ModInfo == null)
-
-            if (!ModInfo.IsEnabled)
                 return null;
 
             return new ModRecord
             {
                 ID = ModInfo.ID,
-                DisplayName = ModInfo.Manifest?.Title ?? ModInfo.WorkshopInfo?.Title ?? ModInfo.ID,
-                Version = (ModInfo.Manifest?.Version)?.ToString() ?? "0.0.1",
+                Title = GetDisplayName(ModInfo),
+                Version = GetVersion(ModInfo),
             };
         }
 
         public static IEnumerable<ModRecord> GetRunningMods(Predicate<ModRecord> Where = null)
         {
             foreach (var activeMod in ModManager.ActiveMods.IteratorSafe())
-                if (Parse(activeMod) is ModRecord modRecord
+                if (FromInfo(activeMod) is ModRecord modRecord
                     && Where?.Invoke(modRecord) is not false)
                     yield return modRecord;
         }
@@ -145,21 +166,9 @@ namespace UD_Bones_Folder.Mod
         public static IEnumerable<ModRecord> GetAvailableMods(Predicate<ModRecord> Where = null)
         {
             foreach (var mod in ModManager.Mods.IteratorSafe())
-                if (Parse(mod) is ModRecord modRecord
+                if (FromInfo(mod) is ModRecord modRecord
                     && Where?.Invoke(modRecord) is not false)
                     yield return modRecord;
-        }
-
-        public string ToPairString()
-        {
-            if (ID == null)
-                return null;
-
-            return !DisplayName.IsNullOrEmpty()
-                    && ID != DisplayName
-                ? $"{ID};;{DisplayName}"
-                : ID
-                ;
         }
 
         public string ToParsableString()
@@ -169,9 +178,9 @@ namespace UD_Bones_Folder.Mod
 
             string output = ID;
             
-            if (!DisplayName.IsNullOrEmpty()
-                && ID != DisplayName)
-                output += $";;{DisplayName}";
+            if (!Title.IsNullOrEmpty()
+                && ID != Title)
+                output += $";;{Title}";
 
             if (!Version.IsNullOrEmpty())
                 output += $"@@{Version}";
@@ -182,20 +191,16 @@ namespace UD_Bones_Folder.Mod
         public void Dispose()
         {
             ID = null;
-            DisplayName = null;
+            Title = null;
             Version = null;
         }
-
-        public ModRecord Coalesce(ModRecord Other)
-            => this
-            ;
 
         public static explicit operator string(ModRecord Operand)
             => Operand?.ToParsableString()
             ;
 
         public static explicit operator ModRecord(string Operand)
-            => Parse(Operand)
+            => ParseString(Operand)
             ;
     }
 

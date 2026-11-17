@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace UD_Bones_Folder.Mod
+﻿namespace UD_Bones_Folder.Mod
 {
     public static class Const
     {

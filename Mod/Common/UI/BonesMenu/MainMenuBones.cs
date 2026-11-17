@@ -31,6 +31,7 @@ using Debug = UD_Bones_Folder.Mod.Logging.Debug;
 
 using KeyCode = UnityEngine.KeyCode;
 using UD_Bones_Folder.Mod.Logging;
+using System.Reflection;
 
 namespace UD_Bones_Folder.Mod.UI
 {
@@ -40,6 +41,25 @@ namespace UD_Bones_Folder.Mod.UI
     [HarmonyPatch]
     public static class MainMenuBones
     {
+        #region Debug Registration
+        /*[RegistersMethodsForDebug]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(MainMenuBones),
+                MethodNameValues: new()
+                {
+                });*/
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistrySpecial(DebugMethodRegistry Registry)
+        {
+            Registry.RegisterEach(
+                Type: typeof(Host),
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(MainMenuBones), nameof(PerformMainMenuFirstShowAsync)), false)
+            );
+        }
+        #endregion
+
         public static bool HasSeenMainMenu = false;
 
         public static bool AllowPromptAboutLinux = false;
@@ -177,7 +197,7 @@ namespace UD_Bones_Folder.Mod.UI
         private static async void PerformMainMenuFirstShowAsync()
         {
             using var indent = new Indent();
-            Debug.LogCaller(
+            Debug.LogTypeMethod(
                 Indent: indent[1],
                 ArgPairs: new Debug.ArgPair[]
                 {

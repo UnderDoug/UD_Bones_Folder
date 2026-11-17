@@ -11,13 +11,110 @@ using XRL.World;
 using XRL.World.Parts;
 
 using UD_Bones_Folder.Mod.OsseousAsh;
+using XRL.Collections;
+using Newtonsoft.Json.Linq;
+using XRL.World.Text;
 
 namespace UD_Bones_Folder.Mod
 {
-    [JsonObject(MemberSerialization.OptOut)]
+    [JsonObject(MemberSerialization.OptIn)]
     [Serializable]
-    public class BonesStats : IDisposable
+    public class BonesStats : StringMap<BonesStatSet>, IDisposable
     {
+        public class KVPArrayConverter : JsonConverter<KeyValuePair<string, BonesStatSet>[]>
+        {
+
+            [ThreadStatic]
+            private static bool _CannotRead;
+
+            private bool CannotRead
+            {
+                get => _CannotRead;
+                set => _CannotRead = value;
+            }
+
+            [ThreadStatic]
+            private static bool _CannotWrite;
+
+            private bool CannotWrite
+            {
+                get => _CannotWrite;
+                set => _CannotWrite = value;
+            }
+
+            public override bool CanRead => !CannotRead;
+            public override bool CanWrite => !CannotWrite;
+
+            public KVPArrayConverter()
+                : base()
+            { }
+
+            public override KeyValuePair<string, BonesStatSet>[] ReadJson(
+                JsonReader Reader,
+                Type ObjectType,
+                KeyValuePair<string, BonesStatSet>[] ExistingValue,
+                bool HasExistingValue,
+                JsonSerializer Serializer
+                )
+            {
+                try
+                {
+                    using (new Utils.PushValue<bool>(true, () => CannotRead, v => CannotRead = v))
+                    {
+                        if (Reader.TokenType == JsonToken.StartObject
+                            && JObject.Load(Reader) is JObject jObject)
+                        {
+                            using var stats = PooledList<KeyValuePair<string, BonesStatSet>>.Get();
+                            foreach ((var label, var token) in jObject)
+                                if ((token as JArray)?.ToObject<BonesStat[]>() is BonesStat[] bonesStatArray)
+                                    stats.Add(new(label, new(bonesStatArray)));
+
+                            ExistingValue = new KeyValuePair<string, BonesStatSet>[stats.Count];
+                            Array.Copy(stats.ToArray(), ExistingValue, stats.Count);
+                            return ExistingValue;
+                        }
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"{nameof(KVPArrayConverter)} failed during {nameof(ReadJson)} -> {nameof(Utils.PushValue<bool>)}, {nameof(CannotRead)}", x);
+                }
+                return ExistingValue ?? new KeyValuePair<string, BonesStatSet>[0];
+            }
+
+            public override void WriteJson(
+                JsonWriter Writer,
+                KeyValuePair<string, BonesStatSet>[] Value,
+                JsonSerializer Serializer
+                )
+            {
+                if (Value == null)
+                {
+                    Serializer.Serialize(Writer, null);
+                    return;
+                }
+                try
+                {
+                    using (new Utils.PushValue<bool>(true, () => CannotWrite, v => CannotWrite = v))
+                    {
+                        var stats = new JObject();
+
+                        foreach ((var label, var value) in Value.IteratorSafe())
+                        {
+                            var array = (value ?? new()).ToArray();
+                            var jArray = new JArray(array);
+                            stats.Add(label, jArray);
+                        }
+                        Serializer.Serialize(Writer, stats);
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Warn($"{nameof(KVPArrayConverter)} failed during {nameof(WriteJson)} -> {nameof(Utils.PushValue<bool>)}, {nameof(CannotWrite)}", x);
+                }
+            }
+        }
+
         private static Configuration Config => Configuration.Instance;
         public static Guid UserID => Config?.ID ?? Guid.Empty;
         public static string Handle => Config?.Handle;
@@ -31,36 +128,66 @@ namespace UD_Bones_Folder.Mod
             nameof(Broken),
         };
 
+        [JsonProperty]
+        public string ID;
+
         [JsonProperty(nameof(LastEncountered))]
         protected long _LastEncountered;
 
-        [JsonIgnore]
-        public DateTime LastEncountered
+        [JsonIgnore] public DateTime LastEncountered
         {
             get => new DateTime(_LastEncountered).ToLocalTime();
             set => _LastEncountered = value.ToUniversalTime().Ticks;
         }
 
-        [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
-        public BonesStatSet Encountered;
-        [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
-        public BonesStatSet Defeated;
-        [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
-        public BonesStatSet Reclaimed;
-        [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
-        public BonesStatSet Broken;
+        #region Official Stats
 
-        [JsonIgnore]
-        public Dictionary<string, BonesStatSet> StatSetsByName => new Dictionary<string, BonesStatSet>
+        // [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
+        [JsonIgnore] public BonesStatSet Encountered
         {
-            { nameof(Encountered), Encountered },
-            { nameof(Defeated), Defeated },
-            { nameof(Reclaimed), Reclaimed },
-            { nameof(Broken), Broken },
-        };
+            get => this[nameof(Encountered)];
+            set => this[nameof(Encountered)] = value;
+        }
+
+        // [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
+        [JsonIgnore] public BonesStatSet Defeated
+        {
+            get => this[nameof(Defeated)];
+            set => this[nameof(Defeated)] = value;
+        }
+
+        // [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
+        [JsonIgnore] public BonesStatSet Reclaimed
+        {
+            get => this[nameof(Reclaimed)];
+            set => this[nameof(Reclaimed)] = value;
+        }
+
+        // [JsonConverter(typeof(BonesStatSet.SetArrayConverter))]
+        [JsonIgnore] public BonesStatSet Broken
+        {
+            get => this[nameof(Broken)];
+            set => this[nameof(Broken)] = value;
+        }
+
+        #endregion
+
+        // [JsonConverter(typeof(KVPArrayConverter))]
+        [JsonProperty]
+        private Dictionary<string, BonesStatSet> Stats
+        {
+            get => new(this);
+            set
+            {
+                Clear();
+                EnsureCapacity(value?.Count ?? 0);
+                foreach (var pair in value.IteratorSafe())
+                    this[pair.Key] = pair.Value;
+            }
+        }
 
         [JsonIgnore]
-        public Dictionary<string, Func<Guid, bool>> IncrementMethodByByName => new Dictionary<string, Func<Guid, bool>>
+        public Dictionary<string, Func<Guid, bool>> IncrementMethodByByName => new()
         {
             { nameof(Encountered), IncrementEncountered },
             { nameof(Defeated), IncrementDefeated },
@@ -69,38 +196,39 @@ namespace UD_Bones_Folder.Mod
         };
 
         public BonesStats()
+            : base()
         {
+            ID = The.Game?.GameID;
             Encountered = new();
             Defeated = new();
             Reclaimed = new();
             Broken = new();
         }
 
-        public BonesStats(
-            BonesStatSet Encountered,
-            BonesStatSet Defeated,
-            BonesStatSet Reclaimed,
-            BonesStatSet Broken
-            )
-        {
-            this.Encountered = Encountered?.Clone() ?? new();
-            this.Defeated = Defeated?.Clone() ?? new();
-            this.Reclaimed = Reclaimed?.Clone() ?? new();
-            this.Broken = Broken?.Clone() ?? new();
-        }
-
         public BonesStats(BonesStats Source)
-            : this(Source?.Encountered, Source?.Defeated, Source?.Reclaimed, Source?.Broken)
+            : this()
         {
+            ID = Source?.ID;
             LastEncountered = Source.LastEncountered;
+            EnsureCapacity(Source.Count);
+            foreach ((var label, var statSet) in Source.IteratorSafe())
+                this[label] = new(statSet);
         }
 
-        public bool IncrementStat(ref BonesStatSet StatSet, Guid UserID)
-            => (StatSet ??= new()).IncrementStat(UserID);
+        public BonesStatSet RequireSet(string Name)
+        {
+            if (!ContainsKey(Name))
+                this[Name] = new();
+
+            return this[Name];
+        }
+
+        public bool IncrementStat(string Name, Guid UserID)
+            => RequireSet(Name).IncrementStat(UserID);
 
         public bool IncrementEncountered(Guid UserID)
         {
-            if (IncrementStat(ref Encountered, UserID))
+            if (IncrementStat(nameof(Encountered), UserID))
             {
                 LastEncountered = DateTime.Now.ToUniversalTime();
                 return true;
@@ -113,7 +241,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public bool IncrementDefeated(Guid UserID)
-            => IncrementStat(ref Defeated, UserID)
+            => IncrementStat(nameof(Defeated), UserID)
             ;
 
         public bool IncrementDefeated()
@@ -121,7 +249,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public bool IncrementReclaimed(Guid UserID)
-            => IncrementStat(ref Reclaimed, UserID)
+            => IncrementStat(nameof(Reclaimed), UserID)
             ;
 
         public bool IncrementReclaimed()
@@ -129,94 +257,94 @@ namespace UD_Bones_Folder.Mod
             ;
 
         public bool IncrementBroken(Guid UserID)
-            => IncrementStat(ref Broken, UserID)
+            => IncrementStat(nameof(Broken), UserID)
             ;
 
         public bool IncrementBroken()
             => IncrementBroken(UserID)
             ;
 
-        public int GetStatValue(ref BonesStatSet StatSet, Guid UserID)
-            => (StatSet ??= new()).GetStatValue(UserID)
+        public int GetStatValue(string Name, Guid UserID)
+            => RequireSet(Name).GetStatValue(UserID)
             ;
 
         public int GetEncounteredValue(Guid UserID)
-            => GetStatValue(ref Encountered, UserID)
+            => GetStatValue(nameof(Encountered), UserID)
             ;
 
         public int GetDefeatedValue(Guid UserID)
-            => GetStatValue(ref Defeated, UserID)
+            => GetStatValue(nameof(Defeated), UserID)
             ;
 
         public int GetReclaimedValue(Guid UserID)
-            => GetStatValue(ref Reclaimed, UserID)
+            => GetStatValue(nameof(Reclaimed), UserID)
             ;
 
         public int GetBrokenValue(Guid UserID)
-            => GetStatValue(ref Broken, UserID)
+            => GetStatValue(nameof(Broken), UserID)
             ;
 
-        public BonesStat GetStat(ref BonesStatSet StatSet, Guid UserID)
-            => (StatSet ??= new()).GetStat(UserID)
+        public BonesStat GetStat(string Name, Guid UserID)
+            => RequireSet(Name).GetStat(UserID)
             ;
 
         public BonesStat GetEncountered(Guid UserID)
-            => GetStat(ref Encountered, UserID)
+            => GetStat(nameof(Encountered), UserID)
             ;
 
         public BonesStat GetDefeated(Guid UserID)
-            => GetStat(ref Defeated, UserID)
+            => GetStat(nameof(Defeated), UserID)
             ;
 
         public BonesStat GetReclaimed(Guid UserID)
-            => GetStat(ref Reclaimed, UserID)
+            => GetStat(nameof(Reclaimed), UserID)
             ;
 
         public BonesStat GetBroken(Guid UserID)
-            => GetStat(ref Broken, UserID)
+            => GetStat(nameof(Broken), UserID)
             ;
 
-        public int GetStatTotal(ref BonesStatSet StatSet)
-            => (StatSet ??= new()).GetStatTotal()
+        public int GetStatTotal(string Name)
+            => RequireSet(Name).GetStatTotal()
             ;
 
         public int GetEncounteredTotal()
-            => GetStatTotal(ref Encountered)
+            => GetStatTotal(nameof(Encountered))
             ;
 
         public int GetDefeatedTotal()
-            => GetStatTotal(ref Defeated)
+            => GetStatTotal(nameof(Defeated))
             ;
 
         public int GetReclaimedTotal()
-            => GetStatTotal(ref Reclaimed)
+            => GetStatTotal(nameof(Reclaimed))
             ;
 
         public int GetBrokenTotal()
-            => GetStatTotal(ref Broken)
+            => GetStatTotal(nameof(Broken))
             ;
 
-        public double GetPercentOfStat(ref BonesStatSet StatSet, Guid UserID)
-            => GetStatTotal(ref StatSet) is int statTotal
+        public double GetPercentOfStat(string Name, Guid UserID)
+            => GetStatTotal(Name) is int statTotal
                 && statTotal != 0
-            ? GetStatValue(ref StatSet, UserID) / (double)statTotal
+            ? GetStatValue(Name, UserID) / (double)statTotal
             : 0
             ;
 
         public double GetPercentOfEncountered(Guid UserID)
-            => GetPercentOfStat(ref Encountered, UserID)
+            => GetPercentOfStat(nameof(Encountered), UserID)
             ;
 
         public double GetPercentOfDefeated(Guid UserID)
-            => GetPercentOfStat(ref Defeated, UserID)
+            => GetPercentOfStat(nameof(Defeated), UserID)
             ;
 
         public double GetPercentOfReclaimed(Guid UserID)
-            => GetPercentOfStat(ref Reclaimed, UserID)
+            => GetPercentOfStat(nameof(Reclaimed), UserID)
             ;
 
         public double GetPercentOfBroken(Guid UserID)
-            => GetPercentOfStat(ref Broken, UserID)
+            => GetPercentOfStat(nameof(Broken), UserID)
             ;
 
         private string GetPercentageString(double Amount)
@@ -397,15 +525,13 @@ namespace UD_Bones_Folder.Mod
 
         public void Dispose()
         {
+            ID = null;
             _LastEncountered = 0L;
-            Encountered?.Dispose();
-            Encountered = null;
-            Defeated?.Dispose();
-            Defeated = null;
-            Reclaimed?.Dispose();
-            Reclaimed = null;
-            Broken?.Dispose();
-            Broken = null;
+
+            foreach ((var _, var statSet) in this)
+                statSet?.Dispose();
+
+            Clear();
         }
     }
 
@@ -413,6 +539,10 @@ namespace UD_Bones_Folder.Mod
     {
         public static StringBuilder AppendBonesStatsBlurb(this StringBuilder SB, BonesStats BonesStats, string RegentName)
             => SB.Append(BonesStats?.GetBlurb(RegentName))
+            ;
+
+        public static TextBuilder AppendBonesStatsBlurb(this TextBuilder TB, BonesStats BonesStats, string RegentName)
+            => TB.Append(BonesStats?.GetBlurb(RegentName))
             ;
     }
 }

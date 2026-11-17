@@ -171,14 +171,12 @@ namespace UD_Bones_Folder.Mod.UI
                 Utils.Log($"{1.Indent()}{method.Name}");
                 foreach (var attribute in method.GetCustomAttributes<BonesModeModuleActionAttribute>())
                 {
-                    var modInfo = ModManager.GetMod(method.DeclaringType.Assembly);
+                    var modInfo = ModManager.GetMod(method.DeclaringType.Assembly) ?? Utils.ThisMod;
                     if (!typeof(AbstractBuilderModuleWindowBase).IsAssignableFrom(attribute.TargetWindow))
                     {
-                        Utils.Warn(
-                            ModInfo: modInfo,
-                            Message: $"{method.DeclaringType.Name}.{method.Name} has {attribute.GetType().Name} with invalid " +
-                                $"{nameof(attribute.TargetWindow)} argument: {attribute.TargetWindow.Name}, " +
-                                $"cannot be assigned to {nameof(Type)} {nameof(AbstractBuilderModuleWindowBase)} and will be skipped.");
+                        modInfo.Warn($"{method.DeclaringType.Name}.{method.Name} has {attribute.GetType().Name} with invalid " +
+                            $"{nameof(attribute.TargetWindow)} argument: {attribute.TargetWindow.Name}, " +
+                            $"cannot be assigned to {nameof(Type)} {nameof(AbstractBuilderModuleWindowBase)} and will be skipped.");
                         continue;
                     }
 
@@ -201,10 +199,8 @@ namespace UD_Bones_Folder.Mod.UI
                         }
                         if (method.ReturnType != typeof(void))
                         {
-                            Utils.Warn(
-                                ModInfo: modInfo,
-                                Message: $"{method.DeclaringType.Name}.{method.Name} returns {method.ReturnType.Name} instead of {typeof(void)}. " +
-                                    $"This return value won't be utilised by the {Utils.ModTitle} mod.");
+                            modInfo.Warn($"{method.DeclaringType.Name}.{method.Name} returns {method.ReturnType.Name} instead of {typeof(void)}. " +
+                                $"This return value won't be utilised by the {Utils.ModTitle} mod.");
                         }
                         string key = attribute.TargetWindow?.Name ?? "All";
                         if (!BuilderModuleDelegates.TryGetValue(key, out var delegates))
@@ -2505,17 +2501,7 @@ namespace UD_Bones_Folder.Mod.UI
                     fakeElapsedTicks = newWallTime;
                 });
 
-                if (Game.WallTime == null)
-                {
-                    Game.WallTime = new Stopwatch();
-                    Game.WallTime.Start();
-                }
-                else
-                {
-                    Game._walltime += Game.WallTime.ElapsedTicks;
-                    Game.WallTime.Reset();
-                    Game.WallTime.Start();
-                }
+                BonesManager.EnsureWallTime(Game);
 
                 fakeElapsedTicks -= Game._walltime;
                 if (fakeElapsedTicks > 0)

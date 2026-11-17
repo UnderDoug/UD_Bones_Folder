@@ -1,22 +1,22 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Linq;
+using Newtonsoft.Json;
 
 using HarmonyLib;
 
 using XRL;
+using XRL.Collections;
 using XRL.Wish;
 
 using UD_Bones_Folder.Mod;
 using static UD_Bones_Folder.Mod.Options;
 using static UD_Bones_Folder.Mod.Const;
 using static UD_Bones_Folder.Mod.Utils;
-using Newtonsoft.Json;
-using XRL.Collections;
 
 namespace UD_Bones_Folder.Mod.Logging
 {
@@ -35,6 +35,8 @@ namespace UD_Bones_Folder.Mod.Logging
                     nameof(LogCritical),
                 });
         #endregion
+
+        public static bool IsDevelopment => true;
 
         public static bool SilenceLogging = false;
 
@@ -55,7 +57,7 @@ namespace UD_Bones_Folder.Mod.Logging
         public static DebugMethodRegistry DoDebugRegistry => DebugMethodRegistry.Instance;
 
         public static bool DoDebugSetting
-            => (EnableLogging is not false) // is true) for pre-options elements.
+            => (EnableLogging is not false) // true) for pre-options elements.
             && !SilenceLogging
             ;
 
@@ -70,7 +72,7 @@ namespace UD_Bones_Folder.Mod.Logging
         };
 
         public static string CallerString(Type CallingType, MethodBase CallingMethod)
-            => CallingType.Name + "." + CallingMethod.Name
+            => $"{CallingType.Name}.{CallingMethod.Name}"
             ;
 
         public static string CallerSignatureString(Type CallingType, MethodBase CallingMethod)
@@ -87,8 +89,6 @@ namespace UD_Bones_Folder.Mod.Logging
                 }) +
             ")"
             ;
-
-        private static Stack<Indent> DefaultIndents => IndentsByChannel[""] ??= new();
 
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static StringMap<Stack<Indent>> IndentsByChannel = new();
@@ -201,29 +201,23 @@ namespace UD_Bones_Folder.Mod.Logging
             return false;
         }
 
+        public static bool Do([CallerMemberName] string CallingMethod = "")
+            => DebugMethodRegistry.GetDoDebug(CallingMethod)
+            ;
+
         public static string CallingTypeAndMethodNames(
             bool AppendSpace = false,
-            bool TrimModPrefix = true,
+            bool IncludeSuperTypes = true,
             bool ConvertGenerics = false
             )
-        {
-            if (TryGetCallingTypeAndMethod(out Type declaringType, out MethodBase methodBase))
-            {
-                string declaringTypeName = ConvertGenerics
-                    ? declaringType.ToStringWithGenerics()
-                    : declaringType.Name;
-
-                if (TrimModPrefix)
-                    declaringTypeName = declaringTypeName.Replace(ThisMod.ID + "_", "");
-
-                return CallChain(declaringTypeName, methodBase.Name) + (AppendSpace ? " " : "");
-            }
-            return null;
-        }
+            => TryGetCallingTypeAndMethod(out Type declaringType, out MethodBase methodBase)
+            ? CallChain(declaringType.GetTypeName(IncludeSuperTypes: IncludeSuperTypes, ConvertGenerics: ConvertGenerics), methodBase.Name) + (AppendSpace ? " " : "")
+            : null
+            ;
 
         public static string CallingMethodName(bool AppendSpace = false)
             => TryGetCallingTypeAndMethod(out _, out MethodBase methodBase)
-            ? methodBase.Name + (AppendSpace ? " " : "")
+            ? $"{methodBase.Name}{(AppendSpace ? " " : "")}"
             : null
             ;
 
@@ -443,7 +437,19 @@ namespace UD_Bones_Folder.Mod.Logging
             => Arg(null, Value)
             ;
 
-        public static Indent LogCaller(
+        public static ArgPair ArgOut(string Name)
+            => Arg($"out {Name}")
+            ;
+
+        public static ArgPair ArgRef(string Name, object Value)
+            => Arg($"ref {Name}", Value)
+            ;
+
+        public static ArgPair ArgRef(string Name)
+            => ArgRef($"ref {Name}", null)
+            ;
+
+        public static Indent LogTypeMethod(
             string MessageAfter,
             Indent Indent = null,
             [CallerMemberName] string CallingMethod = "",
@@ -470,12 +476,12 @@ namespace UD_Bones_Folder.Mod.Logging
             return Log($"{CallingTypeAndMethodNames(ConvertGenerics: true)}{output}", Indent, CallingMethod);
         }
 
-        public static Indent LogCaller(
+        public static Indent LogTypeMethod(
             Indent Indent = null,
             [CallerMemberName] string CallingMethod = "",
             params ArgPair[] ArgPairs
             )
-            => LogCaller(null, Indent, CallingMethod, ArgPairs)
+            => LogTypeMethod(null, Indent, CallingMethod, ArgPairs)
             ;
 
         public static Indent LogMethod(
@@ -619,11 +625,16 @@ namespace UD_Bones_Folder.Mod.Logging
 
         private static string SafeInvoke<T>(this Func<string, string> PostProc, Func<T, string> Proc, T Element, string NoArg)
         {
-            string proc = Proc?.Invoke(Element) ?? Element?.ToString() ?? NoArg;
-            if (PostProc != null)
-                proc = PostProc(proc);
-            return proc;
+            string proc = Proc?.Invoke(Element)
+                ?? Element?.ToString()
+                ?? NoArg
+                ;
+            return PostProc?.Invoke(proc) ?? proc;
         }
+
+        private static string SafeInvoke<T>(this Func<string, string> PostProc, T Element, string NoArg)
+            => PostProc.SafeInvoke(null, Element, NoArg)
+            ;
 
         public static Indent Loggregrate<T>(
             IEnumerable<T> Source,
@@ -634,10 +645,16 @@ namespace UD_Bones_Folder.Mod.Logging
             [CallerMemberName] string CallingMethod = ""
             )
             => Source.IsNullOrEmpty()
-            ? Log(PostProc?.Invoke(Empty) ?? Empty, Indent: Indent, CallingMethod)
+            ? Log(
+                Message: PostProc.SafeInvoke(Empty, Empty),
+                Indent: Indent,
+                CallingMethod: CallingMethod)
             : Source.Aggregate(
                 seed: Indent,
-                func: (a, n) => Log(PostProc.SafeInvoke(Proc, n, "NO_ELEMENT"), Indent: a, CallingMethod))
+                func: (a, n) => Log(
+                    Message: PostProc.SafeInvoke(Proc, n, "NO_ELEMENT"),
+                    Indent: a,
+                    CallingMethod: CallingMethod))
             ;
 
         public static Indent LogTime(
@@ -694,7 +711,10 @@ namespace UD_Bones_Folder.Mod.Logging
                 ")"
             ;
 
-        public static string MethodSignature<T>(this T MethodBase, bool IndicateNull = false)
+        public static string MethodSignature<T>(
+            this T MethodBase,
+            bool IndicateNull = false
+            )
             where T : MethodBase
         {
             if (MethodBase is null)
@@ -714,7 +734,49 @@ namespace UD_Bones_Folder.Mod.Logging
                 MethodBase.GetParameters().ParamsString();
         }
 
-        public static bool SuperficiallyEquivalent<Tx, Ty>(this Tx X, Ty Y)
+        public static string GetTypeName(
+            this Type Type,
+            bool IncludeSuperTypes = false,
+            bool IncludeNamespace = false,
+            bool ConvertGenerics = true
+            )
+        {
+            if (Type == null)
+                return "NO_TYPE";
+
+            string name = ConvertGenerics
+                ? Type.ToStringWithGenerics()
+                : Type.Name;
+
+            if (IncludeSuperTypes)
+            {
+                var superType = Type;
+                while (superType.DeclaringType != null
+                    && superType != superType.DeclaringType)
+                {
+                    superType = superType.DeclaringType;
+                    string superTypeName = ConvertGenerics
+                        ? superType.ToStringWithGenerics()
+                        : superType.Name;
+                    name = CallChain(superTypeName, name);
+                }
+            }
+
+            if (IncludeNamespace)
+                return CallChain(Type.Namespace, name);
+
+            return name;
+        }
+
+        public static string GetDeclaringTypeName(
+            this MethodBase MethodBase,
+            bool IncludeSuperTypes = false,
+            bool IncludeNamespace = false
+            )
+            => MethodBase?.DeclaringType?.GetTypeName(IncludeSuperTypes, IncludeNamespace)
+            ;
+
+        public static bool IsSuperficiallyEquivalent<Tx, Ty>(this Tx X, Ty Y)
             where Tx : MethodBase
             where Ty : MethodBase
             => X?.Name == Y?.Name
@@ -722,7 +784,7 @@ namespace UD_Bones_Folder.Mod.Logging
             && Equals(X?.DeclaringType?.Assembly, Y?.DeclaringType?.Assembly)
             ;
 
-        public static bool MatchingGenerics<Tx, Ty>(this Tx X, Ty Y)
+        public static bool HasMatchingGenerics<Tx, Ty>(this Tx X, Ty Y)
             where Tx : MethodBase
             where Ty : MethodBase
         {
@@ -732,26 +794,27 @@ namespace UD_Bones_Folder.Mod.Logging
             if (X.ContainsGenericParameters != Y.ContainsGenericParameters)
                 return false;
 
-            if (X.IsConstructor || Y.IsConstructor)
+            if (X.IsConstructor
+                || Y.IsConstructor)
                 return X.IsConstructor == Y.IsConstructor;
 
-            Type[] xGenerics = X.GetGenericArguments();
-            Type[] yGenerics = Y.GetGenericArguments();
+            var xGenerics = X.GetGenericArguments();
+            var yGenerics = Y.GetGenericArguments();
 
             return xGenerics.ElementsMatch(yGenerics);
         }
 
-        public static bool MatchingParams<Tx, Ty>(this Tx X, Ty Y)
+        public static bool HasMatchingParams<Tx, Ty>(this Tx X, Ty Y, bool TypeStrict = true)
             where Tx : MethodBase
             where Ty : MethodBase
         {
             if (EitherNull(X, Y, out bool areEqual))
                 return areEqual;
 
-            Type[] xParams = X.GetParameters()?.Select(p => p.ParameterType)?.ToArray();
-            Type[] yParams = Y.GetParameters()?.Select(p => p.ParameterType)?.ToArray();
+            var xParams = X.GetParameters();
+            var yParams = Y.GetParameters();
 
-            return xParams.ElementsMatch(yParams);
+            return xParams.ParametersMatch(yParams, TypeStrict);
         }
 
         #endregion

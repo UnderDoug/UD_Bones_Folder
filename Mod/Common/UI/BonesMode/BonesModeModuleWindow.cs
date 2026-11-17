@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Text;
 
+using ConsoleLib.Console;
+
 using UnityEngine;
 
 using XRL;
@@ -20,6 +22,17 @@ namespace UD_Bones_Folder.Mod.UI
         UICanvasHost: 1)]
     public class BonesModeModuleWindow : EmbarkBuilderModuleWindowPrefabBase<BonesModeModule, HorizontalScroller>
     {
+        public static string RandomBonesTile => "Items/sw_bones_1.bmp,Items/sw_bones_2.bmp,Items/sw_bones_3.bmp,Items/sw_bones_4.bmp,Items/sw_bones_5.bmp,Items/sw_bones_6.bmp,Items/sw_bones_7.bmp,Items/sw_bones_8.bmp".CachedCommaExpansion().GetRandomElementCosmetic();
+
+        public static IRenderable RandomBonesRenderable
+            => new Renderable
+            {
+                Tile = RandomBonesTile,
+                DetailColor = 'K',
+                TileColor = "&y",
+            }
+            ;
+        
         // don't remove this. It's what allows the first call to UpdateControls() to actually update the controls.
         public EmbarkBuilderModuleWindowDescriptor windowDescriptor;
 
@@ -58,7 +71,7 @@ namespace UD_Bones_Folder.Mod.UI
             {
                 Id = GetType().FullName,
                 Title = "Bones Mode",
-                IconPath = "Items/sw_bones_1.bmp,Items/sw_bones_2.bmp,Items/sw_bones_3.bmp,Items/sw_bones_4.bmp,Items/sw_bones_5.bmp,Items/sw_bones_6.bmp,Items/sw_bones_7.bmp,Items/sw_bones_8.bmp".CachedCommaExpansion().GetRandomElementCosmetic(),
+                IconPath = RandomBonesTile,
                 IconDetailColor = The.Color.Black,
                 IconForegroundColor = The.Color.Gray,
             };

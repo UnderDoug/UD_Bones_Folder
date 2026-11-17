@@ -18,21 +18,27 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public override T CoalesceFirst(T x, T y)
-            => x;
+            => x
+            ;
 
         public override T CoalesceSecond(T x, T y)
-            => y;
+            => y
+            ;
 
         public override T CoalesceGreater(T x, T y)
-            => CoalesceGreaterInternal(x, y);
+            => CoalesceGreaterInternal(x, y)
+            ;
 
         public override T CoalesceLesser(T x, T y)
-            => CoalesceLesserInternal(x, y);
+            => CoalesceLesserInternal(x, y)
+            ;
 
         public override T CoalesceCombine(T x, T y)
-            => throw Nonsense_NotSupportedException();
+            => throw Nonsense_NotSupportedException()
+            ;
 
         public override T CoalesceDifference(T x, T y)
-            => throw Nonsense_NotSupportedException();
+            => throw Nonsense_NotSupportedException()
+            ;
     }
 }

@@ -1,17 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+
+using HarmonyLib;
 
 using ConsoleLib.Console;
 using Genkit;
-using HarmonyLib;
 using HistoryKit;
 using Kobold;
-using Newtonsoft.Json;
 using Qud.UI;
 
 using XRL;
@@ -34,11 +36,10 @@ using ConversationContext = XRL.World.Conversations.DelegateContext;
 
 using UD_Bones_Folder.Mod.Moderation;
 using UD_Bones_Folder.Mod.Serialization;
-
-using static UD_Bones_Folder.Mod.Const;
 using UD_Bones_Folder.Mod.BonesSystem;
 using UD_Bones_Folder.Mod.OsseousAsh;
-using System.Diagnostics.CodeAnalysis;
+
+using static UD_Bones_Folder.Mod.Const;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -123,21 +124,14 @@ namespace UD_Bones_Folder.Mod
         {
             Comparison = 0;
 
-            bool xNull = X is null;
-            bool yNull = Y is null;
+            bool xNotNull = X is not null;
+            bool yNotNull = Y is not null;
 
-            if (!xNull
-                && !yNull)
+            if (xNotNull
+                && yNotNull)
                 return false;
 
-            if (!xNull
-                && yNull)
-                Comparison = 1;
-
-            if (xNull
-                && !yNull)
-                Comparison = -1;
-
+            Comparison = xNotNull.CompareTo(yNotNull);
             return true;
         }
 
@@ -153,6 +147,23 @@ namespace UD_Bones_Folder.Mod
             AreEqual = (X.Length > 0) == (Y.Length > 0);
             return X.Length > 0
                 || Y.Length > 0
+                ;
+        }
+
+        public static bool EitherNullOrEmpty<Tx, Ty>(
+            [NotNullWhen(false)] IEnumerable<Tx> X,
+            [NotNullWhen(false)] IEnumerable<Ty> Y,
+            out bool AreEqual
+            )
+        {
+            if (EitherNull(X, Y, out AreEqual))
+                return AreEqual;
+
+            int xCount = X.Count();
+            int yCount = Y.Count();
+            AreEqual = (xCount > 0) == (yCount > 0);
+            return xCount > 0
+                || yCount > 0
                 ;
         }
 
@@ -226,144 +237,72 @@ namespace UD_Bones_Folder.Mod
         public static Dictionary<ModInfo, HashSet<string>> SingleTimeErrorMessages = new();
         public static Dictionary<ModInfo, HashSet<string>> SingleTimeWarnMessages = new();
 
-        public static void Error(ModInfo ModInfo, object Message)
-            => (ModInfo ?? ThisMod).Error(Message)
-            ;
-
         public static void Error(object Message)
-            => Error(ModInfo: null, Message)
+            => ThisMod.Error(Message)
             ;
 
         public static void ErrorTimestamp(object Message)
-            => Error($"{DateTime.Now.Timestamp()} - {Message}")
+            => ThisMod.ErrorTimestamp(Message)
             ;
 
         private static string ExceptionString(this Exception X)
             => $"{(X != null ? $": {X}" : null)}"
             ;
 
-        public static void Error(ModInfo ModInfo, object Context, Exception X)
-            => Error(ModInfo, $"{Context}{X.ExceptionString()}")
-            ;
-
         public static void Error(object Context, Exception X)
-            => Error(ModInfo: null, Context, X)
+            => ThisMod.Error(Context, X)
             ;
 
         public static void ErrorTimestamp(object Context, Exception X)
-            => Error($"{DateTime.Now.Timestamp()} - {Context}", X)
+            => ThisMod.ErrorTimestamp(Context, X)
             ;
-
-        public static void ErrorOnce(ModInfo ModInfo, object Message)
-        {
-            ModInfo ??= ThisMod;
-            SingleTimeErrorMessages ??= new();
-            if (!SingleTimeErrorMessages.ContainsKey(ModInfo))
-                SingleTimeErrorMessages[ModInfo] = new();
-
-            string message = Message.ToString();
-            if (SingleTimeErrorMessages[ModInfo].Add(message))
-                ModInfo.Error(message);
-        }
 
         public static void ErrorOnce(object Message)
-            => ErrorOnce(ModInfo: null, Message)
+            => ThisMod.ErrorOnce(Message)
             ;
-
-        public static void ErrorOnce(ModInfo ModInfo, object Context, Exception X)
-        {
-            ModInfo ??= ThisMod;
-            SingleTimeErrorMessages ??= new();
-            if (!SingleTimeErrorMessages.ContainsKey(ModInfo))
-                SingleTimeErrorMessages[ModInfo] = new();
-
-            string message = Context.ToString();
-            if (SingleTimeErrorMessages[ModInfo].Add(message))
-                ModInfo.Error($"{message}{X.ExceptionString()}");
-        }
 
         public static void ErrorOnce(object Context, Exception X)
-            => ErrorOnce(ModInfo: null, Context, X)
-            ;
-
-        public static void Warn(ModInfo ModInfo, object Message)
-            => (ModInfo ?? ThisMod).Warn(Message)
+            => ThisMod.ErrorOnce(Context, X)
             ;
 
         public static void Warn(object Message)
-            => Warn(ModInfo: null, Message)
+            => ThisMod.Warn(Message)
             ;
 
         public static void WarnTimestamp(object Message)
-            => Warn($"{DateTime.Now.Timestamp()} - {Message}")
-            ;
-
-        public static void Warn(ModInfo ModInfo, object Context, Exception X)
-            => Warn(ModInfo, $"{Context}{X.ExceptionString()}")
+            => ThisMod.WarnTimestamp(Message)
             ;
 
         public static void Warn(object Context, Exception X)
-            => Warn(ModInfo: null, Context, X)
+            => ThisMod.Warn(Context, X)
             ;
 
         public static void WarnTimestamp(object Context, Exception X)
-            => Warn($"{DateTime.Now.Timestamp()} - {Context}", X)
-            ;
-
-        public static void Warn(ModInfo ModInfo, object Message, StackTrace WithTrace)
-            => Warn(ModInfo: ModInfo, Message: (WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            => ThisMod.WarnTimestamp(Context, X)
             ;
 
         public static void Warn(object Message, StackTrace WithTrace)
-            => Warn(ModInfo: null, Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
+            => ThisMod.Warn(Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
             ;
-
-        public static void WarnOnce(ModInfo ModInfo, object Message)
-        {
-            ModInfo ??= ThisMod;
-            SingleTimeWarnMessages ??= new();
-            if (!SingleTimeWarnMessages.ContainsKey(ModInfo))
-                SingleTimeWarnMessages[ModInfo] = new();
-
-            string message = Message.ToString();
-            if (SingleTimeWarnMessages[ModInfo].Add(message))
-                ModInfo.Warn(message);
-        }
 
         public static void WarnOnce(object Message)
-            => WarnOnce(ModInfo: null, Message)
+            => ThisMod.WarnOnce(Message)
             ;
-
-        public static void WarnOnce(ModInfo ModInfo, object Context, Exception X)
-        {
-            ModInfo ??= ThisMod;
-            SingleTimeWarnMessages ??= new();
-            if (!SingleTimeWarnMessages.ContainsKey(ModInfo))
-                SingleTimeWarnMessages[ModInfo] = new();
-
-            string message = Context.ToString();
-            if (SingleTimeWarnMessages[ModInfo].Add(message))
-                ModInfo.Warn($"{message}{X.ExceptionString()}");
-        }
 
         public static void WarnOnce(object Context, Exception X)
-            => WarnOnce(ModInfo: null, Context, X)
-            ;
-
-        public static void WarnOnce(ModInfo ModInfo, object Message, StackTrace WithTrace)
-            => WarnOnce(ModInfo: ModInfo, Message: (WithTrace ?? new StackTrace(1)).FramesToString(Count: 5, SkipLines: 0, TextLineBefore: $"{Message}:"))
+            => ThisMod.WarnOnce(Context, X)
             ;
 
         public static void WarnOnce(object Message, StackTrace WithTrace)
-            => WarnOnce(ModInfo: null, Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
+            => ThisMod.WarnOnce(Message: Message, WithTrace: WithTrace ?? new StackTrace(1))
             ;
 
         public static void Info(object Message)
-            => MetricsManager.LogModInfo(ThisMod, Message)
+            => ThisMod.Info(Message)
             ;
 
         public static void InfoTimestamp(object Message)
-            => Info($"{DateTime.Now.Timestamp()} - {Message}")
+            => ThisMod.InfoTimestamp(Message)
             ;
 
         public static void Log(object Message)
@@ -1156,13 +1095,13 @@ namespace UD_Bones_Folder.Mod
                 if (GetValue == null
                     || SetValue == null)
                     throw new ArgumentNullException();
-
+                
                 this.SetValue = SetValue;
                 OldValue = GetValue.Invoke();
                 SetValue.Invoke(Value);
             }
 
-            // By using a disposable struct we avoid the overhead of allocating and freeing an instance of a finalizable class
+            // disposable struct avoids the overhead of allocating and freeing an instance of a finalizable class
             public readonly void Dispose()
                 => SetValue?.Invoke(OldValue)
                 ;

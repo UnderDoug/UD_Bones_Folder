@@ -154,20 +154,20 @@ namespace UD_Bones_Folder.Mod
         [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public bool? Downloaded;
 
-        [JsonIgnore] private BonesStats _Stats;
-        public BonesStats Stats
-        {
-            get => _Stats ??= new();
-            set => _Stats = value;
-        }
+        [JsonProperty] public BonesStats BonesStats;
 
-        [JsonIgnore] public long Size;
+        [JsonProperty(nameof(Size))] private long? _Size;
+        [JsonIgnore] public long Size
+        {
+            get => _Size.GetValueOrDefault();
+            set => _Size = value;
+        }
 
         [JsonIgnore] private bool CharIconSwapped;
         [JsonIgnore] private string OriginalCharIcon;
 
-        // [JsonIgnore] private List<string> _ModsEnabled; // Base class member; to rememebr it exists
-        [JsonProperty] public ModRecordCollection EnabledMods;
+        // [JsonIgnore] private List<string> _ModsEnabled; // Base class member; to remember it exists
+        [JsonProperty] public ModRecordSet EnabledMods;
 
         [JsonIgnore] public string BonesID
         {
@@ -201,7 +201,7 @@ namespace UD_Bones_Folder.Mod
                 InGameTime = $"{0:D2}:{0:D2}:{0:D2}",
                 Turn = 0,
                 SaveTime = $"{DateTime.Now.ToLongDateString()} at {DateTime.Now.ToLongTimeString()}",
-                EnabledMods = ModRecordCollection.NewEmpty(),
+                EnabledMods = ModRecordSet.NewEmpty(),
 
                 ModVersion = Utils.ThisMod.Manifest.Version.ToString(),
 
@@ -210,7 +210,7 @@ namespace UD_Bones_Folder.Mod
                 ZoneID = "BonesWorld.11.22.1.1.10",
 
                 BonesSpec = new BonesSpec(),
-                Stats = new(),
+                BonesStats = new(),
 
                 DeathReason = $"They don't exist yet",
                 GenotypeName = "Future",
@@ -240,15 +240,15 @@ namespace UD_Bones_Folder.Mod
 
             DateTime saveTimeValue = SaveBonesInfo.GetSaveTime(SaveBonesJSON);
 
-            SaveBonesJSON.BonesSpec ??= new BonesSpec
+            /*SaveBonesJSON.BonesSpec ??= new BonesSpec
             {
                 Level = SaveBonesJSON.Level,
                 ZoneID = SaveBonesJSON.ZoneID,
-            };
+            };*/
 
-            var saveBonesInfo = new SaveBonesInfo
+            return new SaveBonesInfo
             {
-                json = SaveBonesJSON,
+                JSON = SaveBonesJSON,
                 Directory = Directory,
                 Size = $"Total size: {saveSize}",
                 ID = SaveBonesJSON.ID,
@@ -262,8 +262,6 @@ namespace UD_Bones_Folder.Mod
 
                 IsDummy = IsDummy,
             };
-
-            return saveBonesInfo;
         }
 
         public static SaveBonesInfo CreateInfoFrom(
@@ -277,11 +275,10 @@ namespace UD_Bones_Folder.Mod
                 .AddSource(BonesSource)
             ;
 
-        public SaveBonesInfo CreateInfoFrom(IBonesSource BonesSource)
+        public SaveBonesInfo CreateInfoWithSource(IBonesSource BonesSource)
             => CreateInfoFrom(
                 SaveBonesJSON: this,
-                Directory: BonesSource.SourceID,
-                SaveSize: Size)
+                BonesSource: BonesSource)
             ;
 
         public virtual SaveBonesJSON MarkAsOnline(Host Host)
@@ -377,9 +374,9 @@ namespace UD_Bones_Folder.Mod
 
             Other.Downloaded = Downloaded;
 
-            Other.Stats = new(Stats);
+            Other.BonesStats = new(BonesStats);
 
-            Other.Size = Size;
+            Other._Size = _Size;
 
             Other.CharIconSwapped = CharIconSwapped;
             Other.OriginalCharIcon = OriginalCharIcon;
@@ -388,6 +385,30 @@ namespace UD_Bones_Folder.Mod
             Other.EnabledMods = new(EnabledMods);
 
             return Other;
+        }
+
+        public SaveBonesJSON CloneForUpload(
+            out BonesSpec BonesSpec,
+            out BonesStats BonesStats,
+            out ModRecordSet EnabledMods
+            )
+        {
+            var bonesJSON = CopyTo(new());
+            BonesSpec = bonesJSON.BonesSpec;
+            BonesStats = bonesJSON.BonesStats;
+            EnabledMods = bonesJSON.EnabledMods;
+
+            BonesSpec.ID = bonesJSON.BonesID;
+            BonesStats.ID = bonesJSON.BonesID;
+            EnabledMods.ID = bonesJSON.BonesID;
+
+            bonesJSON.BonesSpec = null;
+            bonesJSON.BonesStats = null;
+            bonesJSON.EnabledMods = null;
+
+            bonesJSON._Size = null;
+
+            return bonesJSON;
         }
 
         public SaveBonesJSON Clone()
@@ -430,9 +451,9 @@ namespace UD_Bones_Folder.Mod
 
             Downloaded = null;
 
-            Stats = null;
+            BonesStats = null;
 
-            Size = 0;
+            _Size = null;
 
             CharIconSwapped = false;
             OriginalCharIcon = null;

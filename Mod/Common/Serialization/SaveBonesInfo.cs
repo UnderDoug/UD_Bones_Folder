@@ -32,6 +32,11 @@ using UD_Bones_Folder.Mod.UI;
 using XRL.World.Text;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
+using UD_Bones_Folder.Mod.Logging;
+
+using Debug = UD_Bones_Folder.Mod.Logging.Debug;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace UD_Bones_Folder.Mod
 {
@@ -41,7 +46,30 @@ namespace UD_Bones_Folder.Mod
         , IBonesFileElement
         , IComparable<SaveBonesInfo>
         , IDisposable
+        , IVomitable<SaveBonesInfo>
     {
+        #region Debug Registration
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistry(DebugMethodRegistry Registry)
+            => Registry.RegisterEach(
+                Type: typeof(SaveBonesInfo),
+                MethodNameValues: new()
+                {
+                    { nameof(GetModsDifferInfo), false },
+                });
+
+
+        [RegistersMethodsForDebug]
+        public static void doDebugRegistrySpecial(DebugMethodRegistry Registry)
+        {
+            Registry.RegisterEach(
+                Type: typeof(SaveBonesInfo),
+                // true
+                new MethodRegistryEntry(DebugMethodRegistry.GetAsyncMethod(typeof(SaveBonesInfo), nameof(RestoreModsLoadedAsync)), false)
+            );
+        }
+        #endregion
+
         public class SaveBonesInfoComparer : IComparer<SaveBonesInfo>
         {
             public bool Ascending;
@@ -115,6 +143,11 @@ namespace UD_Bones_Folder.Mod
             TileColor: "&y",
             DetailColor: 'c');
 
+        public static IRenderable DebugInternalsIcon = GameObjectFactory
+            .Factory
+            ?.GetBlueprintIfExists("Mirror Bug")
+            ?.GetRenderable();
+
         public static IRenderable YesAvailableModsIcon = new Renderable(UnavailableModsIcon).setDetailColor('y');
 
         public bool IsYou
@@ -131,7 +164,11 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public SaveBonesJSON JSON => json as SaveBonesJSON;
+        public SaveBonesJSON JSON
+        {
+            get => json as SaveBonesJSON;
+            set => json = value;
+        }
 
         public string UserHandle => JSON?.Handle;
 
@@ -144,19 +181,57 @@ namespace UD_Bones_Folder.Mod
         public string GenotypeName => JSON?.GenotypeName ?? "Human";
         public string SubtypeName => JSON?.SubtypeName ?? "Adventurer";
 
-        public BonesSpec BonesSpec => JSON?.BonesSpec;
+        public BonesSpec BonesSpec
+        {
+            get
+            {
+                if (JSON == null)
+                    return null;
 
-        public BonesStats Stats => JSON?.Stats;
+                return JSON.BonesSpec ??= new();
+            }
+            protected set
+            {
+                if (JSON != null)
+                    JSON.BonesSpec = value;
+            }
+        }
+
+        public BonesStats Stats
+        {
+            get
+            {
+                if (JSON == null)
+                    return null;
+
+                return JSON.BonesStats ??= new();
+            }
+            protected set
+            {
+                if (JSON != null)
+                    JSON.BonesStats = value;
+            }
+        }
 
         private bool? _IsMad;
         public bool IsMad => _IsMad ??= (JSON?.IsCharIconSwapped() is true)
             || !GameObjectFactory.Factory.HasBlueprint(JSON?.Blueprint ?? "MISSING_BLUEPRINT")
             ;
 
-        public ModRecordCollection EnabledMods
+        public ModRecordSet EnabledMods
         {
-            get => JSON?.EnabledMods;
-            set => JSON.EnabledMods = value;
+            get
+            {
+                if (JSON == null)
+                    return null;
+
+                return JSON.EnabledMods ??= new();
+            }
+            protected set
+            {
+                if (JSON != null)
+                    JSON.EnabledMods = value;
+            }
         }
 
         private ModsDifferInfo _ModsDiffer;
@@ -188,6 +263,7 @@ namespace UD_Bones_Folder.Mod
                 return SavGzBak;
             }
         }
+
         public string TaggedDisplayDirectory => BonesSources.GetBestSource(BonesID).DisplayName;
 
         public bool IsDummy;
@@ -197,8 +273,7 @@ namespace UD_Bones_Folder.Mod
 
         public bool IsCrematable
             => !IsDummy
-            && (IsYou
-                || BonesSources.Any(bs => bs.IsOnDisk()))
+            && BonesSources.Any(IsSourceCrematable)
             ;
 
         public bool IsDownloaded
@@ -400,22 +475,55 @@ namespace UD_Bones_Folder.Mod
 
         public async Task<BonesSavGz> LoadBonesSavGzAsync()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
             using var bonesSources = BonesManager.GetBonesSourcesFromPool().Intersect(BonesSources);
+            // using var bonesSources = BonesManager.GetBonesSourcesFromPool(bs => BonesSources.Any(tbs => BonesSources.DefaultEQC.Equals(bs, tbs)));
+
+            _ = Debug.YehNah(nameof(bonesSources), bonesSources.GetNullString(), Good: bonesSources.Count > 0, Indent: indent[2])[1];
             return await bonesSources.GetBonesSavGzAsync(ID);
         }
 
         public async Task<BonesSavGz> GetBonesSavGzStreamAsync()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
             if (await LoadBonesSavGzAsync() is not BonesSavGz bonesSavGz)
                 return null;
 
             if (!bonesSavGz.TryEnsureLoadable())
             {
+                Debug.CheckNah($"{nameof(bonesSavGz)}.{nameof(bonesSavGz.TryEnsureLoadable)}", Indent: indent[1]);
                 bonesSavGz.Dispose();
                 return null;
             }
 
+            Debug.CheckYeh($"{nameof(bonesSavGz)}.{nameof(bonesSavGz.TryEnsureLoadable)}", Indent: indent[1]);
             return bonesSavGz;
+        }
+
+        public async Task<bool> TryGetBonesSavGzStreamAsync(Action<BonesSavGz> SuccessCallback)
+        {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(indent[1]);
+
+            if (SuccessCallback == null)
+            {
+                Debug.CheckNah(nameof(SuccessCallback), "null", Indent: indent[1]);
+                return false;
+            }
+
+            if (await GetBonesSavGzStreamAsync() is not BonesSavGz bonesSavGz)
+            {
+                Debug.CheckNah(nameof(bonesSavGz), "null", Indent: indent[1]);
+                return false;
+            }
+
+            SuccessCallback.Invoke(bonesSavGz);
+            Debug.CheckYeh(nameof(bonesSavGz), nameof(SuccessCallback), Indent: indent[1]);
+            return true;
         }
 
         public IEnumerable<string> GetDebugLines()
@@ -471,63 +579,60 @@ namespace UD_Bones_Folder.Mod
 
         public string GetBlurbString()
         {
-            var sB = Event.NewStringBuilder();
+            var tB = TextBuilder.Get();
 
-            sB.Append("These bones ");
+            tB.Append("These bones ");
             if (IsYou)
-                sB.Append("are yours");
+                tB.Append("are yours");
             else
-                sB.Append("come from ").Append(UserHandle);
-            sB.Append(".");
+                tB.Append("come from ").Append(UserHandle);
+            tB.Append(".");
 
             var preferredBonesSource = BonesSources.FirstOrDefault() ?? BonesPile.DummyFolder;
 
-            sB.AppendLine()
+            tB.AppendLine()
                 .AppendLine().Append("They ");
 
             if (preferredBonesSource.Type != IBonesSource.SourceType.None)
-                sB.Append("were ");
+                tB.Append("were ");
 
-            sB.Append(preferredBonesSource.BlurbSavedVerb).Append(" ");
+            tB.Append(preferredBonesSource.BlurbSavedVerb).Append(" ");
 
-            sB.Append(preferredBonesSource.BlurbDisplayName)
+            tB.Append(preferredBonesSource.BlurbDisplayName)
                 .Append(" on ").Append(GetSaveTimeString()).Append(", ")
                 .AppendRule(SaveTimeValue.TimeAgo("ago")).Append(".")
                 .AppendLine();
 
             if ((BonesSources?.Count ?? 0) > 1)
             {
-                sB.AppendLine().Append("There is also a copy ");
+                tB.AppendLine().Append("There is also a copy ");
 
                 if (BonesSources.Count == 2)
                 {
                     var otherLocation = BonesSources[1];
-                    sB.Append(otherLocation.BlurbSavedVerb).Append(" ").Append(otherLocation.BlurbDisplayName);
+                    tB.Append(otherLocation.BlurbSavedVerb).Append(" ").Append(otherLocation.BlurbDisplayName);
                 }
                 else
                 {
-                    sB.Append("in the following additional locations:");
+                    tB.Append("in the following additional locations:");
                     for (int i = 1; i < BonesSources.Count; i++)
-                        sB.AppendLine()
+                        tB.AppendLine()
                             .Append(BonesSources[i].BlurbSavedVerb);
                 }
-                sB.AppendLine();
+                tB.AppendLine();
             }
 
-            sB.AppendLine()
+            tB.AppendLine()
                 .Append("They are from version ").AppendRule(GetModVersion()).Append(" of the ").AppendColored("Y", Utils.ModTitle).Append(" mod");
             if (GetModVersion() == Utils.ModVersion)
-            {
-                sB.Append(", which is the current one.");
-            }
-            else
-                sB.Append(".");
-            sB.AppendLine();
-
-            sB.AppendLine().AppendBonesStatsBlurb(Stats, Name)
+                tB.Append(", which is the current one");
+            tB.Append(".")
+                .AppendLine()
+                .AppendLine().AppendBonesStatsBlurb(Stats, Name)
                 .AppendLine();
 
-            bool showModConfigLine = true;
+            bool showModConfigLine = !ModsDiffer.IsDummy
+                && !ModsDiffer.IsError;
             if (GetModVersion() is XRL.Version infoVersion
                 && Utils.ModVersion is XRL.Version modVersion)
             {
@@ -538,7 +643,7 @@ namespace UD_Bones_Folder.Mod
                     || buildVersionDiffers)
                 {
                     showModConfigLine = false;
-                    sB.AppendLine().Append("Based on the ").AppendRule("version difference").Append(" between the ").AppendColored("Y", Utils.ModTitle)
+                    tB.AppendLine().Append("Based on the ").AppendRule("version difference").Append(" between the ").AppendColored("Y", Utils.ModTitle)
                         .Append(" mod (").AppendRule(modVersion).Append("), ")
                         .Append("and these bones (").AppendRule(infoVersion).Append("), they are ineligible to be loaded.")
                         .AppendLine();
@@ -547,19 +652,27 @@ namespace UD_Bones_Folder.Mod
                 if (versionDiff > 0)
                 {
                     showModConfigLine = false;
-                    sB.AppendLine().Append("Based on your current mod configuration, and the version disparty, these bones are weighted ")
-                        .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordCollection.BaseBonesWeight).Append(".")
+                    tB.AppendLine().Append("Based on your current mod configuration, and the version disparty, these bones are weighted ")
+                        .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordSet.BaseBonesWeight).Append(".")
                         .AppendLine();
                 }
             }
             if (showModConfigLine)
             {
-                sB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
-                    .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordCollection.BaseBonesWeight).Append(".")
+                tB.AppendLine().Append("Based on your current mod configuration, these bones are weighted ")
+                    .AppendRule((EnabledMods.GetBonesWeight() ?? 0).ToString()).Append(", compared to the default of ").Append(ModRecordSet.BaseBonesWeight).Append(".")
                     .AppendLine();
             }
+            else
+            {
+                if (ModsDiffer.IsDummy)
+                    tB.AppendLine().Append("These bones are a placeholder and contain no data. As such, they have no mod configuration based weight for being loaded.");
+                else
+                    tB.AppendLine().Append("These bones have a malformed or corrupt mod configuration and, as such, cannot be weighted for encounter.");
+                tB.AppendLine();
+            }
 
-            return Event.FinalizeString(sB);
+            return tB.ToString();
         }
 
         public async Task<UIUtils.CascadableResult> ShowBlurbAsync()
@@ -636,33 +749,292 @@ namespace UD_Bones_Folder.Mod
             return UIUtils.CascadableResult.Continue;
         }
 
-        public bool Cremate()
-        {
-            if (!IsCrematable)
-                return false;
+        public bool IsSourceCrematable(IBonesSource BonesSource)
+            => IsYou
+            || (BonesSource?.IsOnDisk() is true)
+            ;
 
-            using var bonesSources = BonesSources.CloneFromPool();
+        public async Task<UIUtils.CascadableResult> CremateAsync(bool PickSources = true, [CallerMemberName] string CallingMethod = "")
+        {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(CallingMethod), CallingMethod),
+                });
+
+            if (!IsCrematable)
+            {
+                Debug.CheckNah($"not {nameof(IsCrematable)}", Indent: indent[2]);
+                return UIUtils.CascadableResult.BackSilent;
+            }
+
+            using var bonesSources = PickSources
+                ? await BonesSources.SelectBonesSourcesFromPoolAsync(BonesSources.Where(IsSourceCrematable), DefaultValue: true, FirstDefaultOnly: false, Action: "Cremate")
+                : BonesSources.CloneFromPool()
+                ;
+
+            if (bonesSources == null)
+            {
+                Debug.CheckNah($"{nameof(bonesSources)} is null", Indent: indent[2]);
+                return UIUtils.CascadableResult.CancelSilent;
+            }
+
+            if (bonesSources.Count < 1)
+            {
+                Debug.CheckNah($"{nameof(bonesSources)} is empty", Indent: indent[2]);
+                return UIUtils.CascadableResult.Back;
+            }
+
             var results = ScopeDisposedList<ActionResult>.GetFromPool();
+            Debug.Log($"Deleting from {bonesSources.Count.Things("bones source")}", Indent: indent[2]);
+            bool any = false;
             try
             {
                 foreach (var bonesSource in bonesSources)
                 {
-                    var cremated = bonesSource.DeleteBones(BonesID);
+                    var cremated = await bonesSource.DeleteBonesAsync(BonesID);
                     results.Add(cremated);
                     if (cremated)
                         BonesSources.Remove(bonesSource);
+
+                    Debug.YehNah(bonesSource.DisplayName.Strip(), cremated, Good: cremated, Indent: indent[3]);
                 }
-                return results.Any(r => r);
+                any = results.Any(r => r);
+                Debug.YehNah(Debug.CallingTypeAndMethodNames(), Good: any, Indent: indent[1]);
+                return any
+                    ? UIUtils.CascadableResult.Continue
+                    : UIUtils.CascadableResult.BackSilent
+                    ;
             }
             finally
             {
-                if (results.Any(r => r))
+                if (any)
                 {
                     BonesManager.ClearHasSaveBones();
                     BonesManager.System?.ClearEligibleSaveBonesInfoCache();
                 }
             }
         }
+
+        public bool CremateFromAllSources()
+            => CremateAsync(false).WaitResult().ToBool()
+            ;
+
+        public static async Task<UIUtils.CascadableResult> ShowDebugInternalsAsync(SaveBonesInfo SaveBonesInfo)
+            => await SaveBonesInfo.ShowDebugInternalsAsync()
+            ;
+
+        public async Task<UIUtils.CascadableResult> ShowDebugInternalsAsync()
+        {
+            SoundManager.PlayUISound("Sounds/UI/ui_notification", 1f, Combat: false, Interface: true);
+
+            using var tB = TextBuilder.Get();
+
+            foreach (var line in GetDebugInternals("-d"))
+                tB.Append(line).AppendLine();
+
+            tB.AppendLineEnd();
+
+            await Popup.NewPopupMessageAsync(
+                message: Markup.Transform(tB.ToString()),
+                buttons: UIUtils.BackancelButton,
+                contextTitle: $"Bones File Debug Internals".Colored("yellow"),
+                afterRender: FlippedRender,
+                PopupID: $"{nameof(SaveBonesInfo)}.{nameof(ShowDebugInternalsAsync)}::{ID}");
+
+            return UIUtils.CascadableResult.Continue;
+        }
+
+        private static IEnumerable<string> GetDebugInternals(
+            IVomitable Vomitable,
+            int Indent = 0,
+            params object[] Parameters
+            )
+        {
+            using var outputs = ScopeDisposedList<string>.GetFromPool();
+            foreach ((var member, var doVomit) in IVomitable.GetVomitMembers(Vomitable, Parameters))
+            {
+                try
+                {
+                    bool valueOnly = doVomit?.ValueOnly is true;
+
+                    string label = valueOnly
+                        ? doVomit?.Label
+                            ?? member.Name
+                        : null
+                        ;
+
+                    if (label != null)
+                        label = $"{label}: ";
+
+                    if (member is FieldInfo field)
+                    {
+                        var fieldValue = field.GetValue(Vomitable);
+
+                        if (fieldValue is IVomitable vomitableField)
+                        {
+                            var fieldDebugInternals = GetDebugInternals(vomitableField, Indent + 1, Parameters);
+                            string fieldDebugInternalsEmpty = fieldDebugInternals.IsNullOrEmpty() ? $" {fieldValue?.ToString() ?? "null"}" : null;
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}:{fieldDebugInternalsEmpty}");
+                            foreach (var fieldOutput in fieldDebugInternals)
+                                outputs.Add(fieldOutput);
+                        }
+                        else
+                        if (fieldValue is IVomitable[] vomitableArray)
+                        {
+                            string vomitArrayEmpty = vomitableArray.IsNullOrEmpty() ? $" {fieldValue?.ToString() ?? "null"}, empty" : $" {vomitableArray.Length}";
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}:{vomitArrayEmpty}");
+                            foreach (var vomitable in vomitableArray)
+                            {
+                                var vomitableDebugInternals = GetDebugInternals(vomitable, Indent + 2, Parameters);
+                                string vomitableDebugInternalsEmpty = vomitableArray.IsNullOrEmpty() ? $" empty" : null;
+                                outputs.Add($"{(Indent + 1).Indent(NBSP: true)}{fieldValue?.ToString()}:{vomitableDebugInternalsEmpty}");
+                                foreach (var vomitableDebugInternal in vomitableDebugInternals)
+                                    outputs.Add(vomitableDebugInternal);
+                            }
+                        }
+                        else
+                        if (fieldValue is IRenderable fieldRender)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {GetDebugInternalsString(fieldRender) ?? "null"}");
+                        }
+                        else
+                        if (fieldValue is ModRecordSet fieldModRecords)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {GetDebugInternalsString(fieldModRecords) ?? "null"}");
+                        }
+                        else
+                        if (fieldValue is BonesSpec fieldBonesSpec)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {GetDebugInternalsString(fieldBonesSpec) ?? "null"}");
+                        }
+                        else
+                        if (fieldValue is BonesStats fieldBonesStats)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {GetDebugInternalsString(fieldBonesStats) ?? "null"}");
+                        }
+                        else
+                        if (fieldValue is SaveBonesJSON fieldBonesJSON)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {GetDebugInternalsString(fieldBonesJSON) ?? "null"}");
+                        }
+                        else
+                        if (fieldValue is object[] objectArray)
+                        {
+                            string vomitArrayEmpty = objectArray.IsNullOrEmpty() ? $" {fieldValue?.ToString() ?? "null"}, empty" : $" {objectArray.Length}";
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}:{vomitArrayEmpty}");
+                            foreach (var fieldObject in objectArray)
+                                outputs.Add($"{(Indent + 1).Indent(NBSP: true)}{fieldObject?.ToString() ?? "null"}");
+                        }
+                        else
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? field.Name}: {fieldValue?.ToString() ?? "null"}");
+                    }
+                    else
+                    if (member is PropertyInfo property)
+                    {
+                        var propValue = property.GetValue(Vomitable);
+
+                        if (propValue is IVomitable vomitableProp)
+                        {
+                            var propDebugInternals = GetDebugInternals(vomitableProp, Indent + 1, Parameters);
+                            string propDebugInternalsEmpty = propDebugInternals.IsNullOrEmpty() ? $" {propValue?.ToString() ?? "null"}" : null;
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}:{propDebugInternalsEmpty}");
+                            foreach (var propOutput in propDebugInternals)
+                                outputs.Add(propOutput);
+                        }
+                        else
+                        if (propValue is IVomitable[] vomitableArray)
+                        {
+                            string vomitArrayEmpty = vomitableArray.IsNullOrEmpty() ? $" {propValue?.ToString() ?? "null"}, empty" : $" {vomitableArray.Length}";
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}:{vomitArrayEmpty}");
+                            foreach (var vomitable in vomitableArray)
+                            {
+                                var vomitableDebugInternals = GetDebugInternals(vomitable, Indent + 2, Parameters);
+                                string vomitableDebugInternalsEmpty = vomitableArray.IsNullOrEmpty() ? $" empty" : null;
+                                outputs.Add($"{(Indent + 1).Indent(NBSP: true)}{propValue?.ToString()}:{vomitableDebugInternalsEmpty}");
+                                foreach (var vomitableDebugInternal in vomitableDebugInternals)
+                                    outputs.Add(vomitableDebugInternal);
+                            }
+                        }
+                        else
+                        if (propValue is IRenderable propRender)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {GetDebugInternalsString(propRender) ?? "null"}");
+                        }
+                        else
+                        if (propValue is ModRecordSet propModRecords)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {GetDebugInternalsString(propModRecords) ?? "null"}");
+                        }
+                        else
+                        if (propValue is BonesSpec propBonesSpec)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {GetDebugInternalsString(propBonesSpec) ?? "null"}");
+                        }
+                        else
+                        if (propValue is BonesStats propBonesStats)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {GetDebugInternalsString(propBonesStats) ?? "null"}");
+                        }
+                        else
+                        if (propValue is SaveBonesJSON propBonesJSON)
+                        {
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {GetDebugInternalsString(propBonesJSON) ?? "null"}");
+                        }
+                        else
+                        if (propValue is object[] objectArray)
+                        {
+                            string vomitArrayEmpty = objectArray.IsNullOrEmpty() ? $" {propValue?.ToString() ?? "null"}, empty" : $" {objectArray.Length}";
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}:{vomitArrayEmpty}");
+                            foreach (var propObject in objectArray)
+                                outputs.Add($"{(Indent + 1).Indent(NBSP: true)}{propObject?.ToString() ?? "null"}");
+                        }
+                        else
+                            outputs.Add($"{Indent.Indent(NBSP: true)}{label ?? property.Name}: {propValue?.ToString() ?? "null"}");
+                    }
+                }
+                catch (Exception x)
+                {
+                    Utils.Error($"{typeof(SaveBonesInfo)} failed to {nameof(GetDebugInternals)} for {nameof(member)} {member.Name}", x);
+                }
+            }
+
+            foreach (var output in outputs)
+                yield return output;
+        }
+
+        private static string GetDebugInternalsString(IRenderable Renderable)
+            => Renderable?.getTile() ?? "NO_TILE"
+            ;
+
+        private static string GetDebugInternalsString(ModRecordSet ModRecordSet)
+            => ModRecordSet.GetNullString()
+            ;
+
+        private static string GetDebugInternalsString(BonesSpec BonesSpec)
+            => BonesSpec.GetNullString()
+            ;
+
+        private static string GetDebugInternalsString(BonesStats BonesStats)
+            => BonesStats.GetNullString()
+            ;
+
+        private static string GetDebugInternalsString(SaveBonesJSON BonesJSON)
+            => BonesJSON.GetNullString()
+            ;
+
+        private IEnumerable<string> GetDebugInternals(
+            int Indent,
+            params object[] Parameters
+            )
+            => GetDebugInternals(this, Indent, Parameters)
+            ;
+
+        private IEnumerable<string> GetDebugInternals(params object[] Parameters)
+            => GetDebugInternals(this, 0, Parameters)
+            ;
 
         public bool IsEligibleForCurrentSave(bool Strict = false)
         {
@@ -712,7 +1084,7 @@ namespace UD_Bones_Folder.Mod
             ;
 
         private string GetZoneTerrainTypePair()
-            => $"{nameof(BonesSpec.ZoneTerrainType)}: {(BonesSpec.ZoneTerrainType.IsNullOrEmpty() ? "none" : BonesSpec.ZoneTerrainType)}"
+            => $"TerrainType: {(BonesSpec.ZoneTerrainType.IsNullOrEmpty() ? "none" : BonesSpec.ZoneTerrainType)}"
             ;
 
         private string GetZoneIDPair()
@@ -721,7 +1093,7 @@ namespace UD_Bones_Folder.Mod
 
         public string GetBonesPickerLine()
             => JSON != null
-            ? $"{GetName()}, {GetLevelPair()}, {GetZoneTierPair()},\n{GetZoneTerrainTypePair()}, {GetZoneIDPair()}"
+            ? $"{GetName()}, {GetLevelPair()}, {GetZoneTierPair()},\n[{BonesSources.GetSourceTypesColorString()}], {GetZoneTerrainTypePair()}, {JSON.ZoneID}"
             : GetName()
             ;
 
@@ -757,42 +1129,87 @@ namespace UD_Bones_Folder.Mod
 
         public async Task<bool> RestoreModsLoadedAsync()
         {
-            var enabledMods = EnabledMods;
+            using var indent = new Indent();
 
-            if (enabledMods.IsNullOrEmpty())
-                return false;
-
-            var loadedMods = ModRecord.GetRunningMods();
-
-            using var bonesHasButNotAvailable = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            var availableMods = ModRecord.GetAvailableMods();
-            bonesHasButNotAvailable.RemoveAll(r => availableMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
-
-            using var loadedButBonesMissing = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(loadedMods);
-            loadedButBonesMissing.RemoveAll(r => enabledMods.Any(ar => ModRecord.EQComp.Equals(r, ar)));
-
-            using var bonesHasButNotLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bonesHasButNotLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return loadedMods.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
-
-            using var bothHaveLoaded = ScopeDisposedList<ModRecord>.GetFromPoolFilledWith(enabledMods);
-            bothHaveLoaded.RemoveAll(delegate (ModRecord r)
-            {
-                return bonesHasButNotLoaded.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || bonesHasButNotAvailable.Any(ar => ModRecord.EQComp.Equals(r, ar))
-                    || loadedButBonesMissing.Any(ar => ModRecord.EQComp.Equals(r, ar));
-            });
-
-            UIUtils.CascadableResult result = UIUtils.CascadableResult.Continue;
             using var tB = TextBuilder.Get();
             string title = "Mod Configuration Comparison".Colored("yellow");
-            if (!bonesHasButNotAvailable.IsNullOrEmpty()
-                || !bothHaveLoaded.IsNullOrEmpty()
-                || !loadedButBonesMissing.IsNullOrEmpty()
-                || !bonesHasButNotLoaded.IsNullOrEmpty())
+            if (ModsDiffer.IsError)
+            {
+                Debug.LogTypeMethod(
+                    Indent: indent[1],
+                    ArgPairs: new Debug.ArgPair[]
+                    {
+                        Debug.Arg(nameof(ModsDiffer), nameof(ModsDiffer.IsError)),
+                    });
+
+                tB.Append("There was an error loading this Bones' enabled mods.")
+                    .AppendLine()
+                    .AppendLine().Append("If this bones file comes from online, it's possible some of the data was lost during transfer.")
+                    .AppendLine().Append("If it originates from \"on-disk\" then its \"save info\" is likely corrupt.")
+                    .AppendLine()
+                    .AppendLine().Append("Please consider reporting these bones if they're online and this issue persists.");
+
+                await Popup.NewPopupMessageAsync(
+                    message: tB.ToString(),
+                    buttons: PopupMessage.SingleButton,
+                    title: title,
+                    afterRender: ModConfigIcon);
+
+                return false;
+            }
+
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(EnabledMods), EnabledMods != null ? EnabledMods.Count : "null"),
+                    Debug.Arg(nameof(ModsDiffer), $"{(ModsDiffer.IsDummy ? null : "not ")}{nameof(ModsDiffer.IsDummy)}"),
+                });
+
+            var unavailableWhereBonesEnabled = ModsDiffer.UnavailableWhereBonesEnabled;
+            var enabledWhereBonesDisabled = ModsDiffer.EnabledWhereBonesDisabled;
+            var disabledWhereBonesEnabled = ModsDiffer.DisabledWhereBonesEnabled;
+            var enabledWhereBonesEnabled = ModsDiffer.EnabledWhereBonesEnabled;
+
+            Debug.Log(nameof(unavailableWhereBonesEnabled), Indent: indent[2]);
+            if (Debug.Do())
+                Debug.Loggregrate(
+                    Source: unavailableWhereBonesEnabled,
+                    Proc: r => r.ID,
+                    Empty: "none",
+                    PostProc: s => $": {s}",
+                    Indent: indent[3]);
+
+            Debug.Log(nameof(enabledWhereBonesDisabled), Indent: indent[2]);
+            if (Debug.Do())
+                Debug.Loggregrate(
+                Source: enabledWhereBonesDisabled,
+                Proc: r => r.ID,
+                Empty: "none",
+                PostProc: s => $": {s}",
+                Indent: indent[3]);
+
+            Debug.Log(nameof(disabledWhereBonesEnabled), Indent: indent[2]);
+            if (Debug.Do())
+                Debug.Loggregrate(
+                Source: disabledWhereBonesEnabled,
+                Proc: r => r.ID,
+                Empty: "none",
+                PostProc: s => $": {s}",
+                Indent: indent[3]);
+
+            Debug.Log(nameof(enabledWhereBonesEnabled), Indent: indent[2]);
+            if (Debug.Do())
+                Debug.Loggregrate(
+                Source: enabledWhereBonesEnabled,
+                Proc: r => r.ID,
+                Empty: "none",
+                PostProc: s => $": {s}",
+                Indent: indent[3]);
+
+            UIUtils.CascadableResult result = UIUtils.CascadableResult.Continue;
+            int defaultSelection = 0;
+            if (ModsDiffer?.IsDummy is false)
             {
                 using var options = new CascadablePickOptionDataSetAsync<IEnumerable<ModRecord>>(UIUtils.CascadableResult.CancelSilent, UIUtils.CascadableResult.CancelSilent);
                 do
@@ -800,21 +1217,21 @@ namespace UD_Bones_Folder.Mod
                     tB.Clear();
                     options.ClearItems(Dispose: true);
 
-                    if (!bonesHasButNotAvailable.IsNullOrEmpty())
+                    if (!unavailableWhereBonesEnabled.IsNullOrEmpty())
                     {
                         tB.AppendColored("red", "Attention").Append(": one or more mods enabled in this bones file are ")
                             .AppendColored("red", "not available");
 
-                        if (bonesHasButNotAvailable.Count > 9)
+                        if (unavailableWhereBonesEnabled.Count > 9)
                             tB.Append(".").AppendLine().Append("Use the menu option below to view the entire list.");
                         else
                             tB.Append("; they'll be listed at the bottom.");
                         
                         tB.AppendLineEnd();
                     }
-                    if (!loadedButBonesMissing.IsNullOrEmpty())
+                    if (!enabledWhereBonesDisabled.IsNullOrEmpty())
                     {
-                        loadedButBonesMissing
+                        enabledWhereBonesDisabled
                             .Select(r => r.ToString())
                             .Aggregate(
                                 seed: tB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
@@ -822,18 +1239,18 @@ namespace UD_Bones_Folder.Mod
                                 func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("yellow", n))
                             .AppendLineEnd();
                     }
-                    if (!bonesHasButNotLoaded.IsNullOrEmpty())
+                    if (!disabledWhereBonesEnabled.IsNullOrEmpty())
                     {
-                        bonesHasButNotLoaded
+                        disabledWhereBonesEnabled
                             .Select(r => r.ToString())
                             .Aggregate(
                                 seed: tB.AppendLine().Append("These ").AppendColored("black", "disabled").Append(" mods are ").AppendColored("red", "enabled").Append(" in this bones file:"),
                                 func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("red", n))
                             .AppendLineEnd();
                     }
-                    if (!bothHaveLoaded.IsNullOrEmpty())
+                    if (!enabledWhereBonesEnabled.IsNullOrEmpty())
                     {
-                        bothHaveLoaded
+                        enabledWhereBonesEnabled
                             .Select(r => r.ToString())
                             .Aggregate(
                                 seed: tB.AppendLine().Append("These ").AppendColored("green", "enabled").Append(" mods are ")
@@ -841,17 +1258,17 @@ namespace UD_Bones_Folder.Mod
                                 func: (a, n) => a.AppendLine().AppendColored("y", ":").Append(" ").AppendColored("green", n))
                             .AppendLineEnd();
                     }
-                    if (!bonesHasButNotAvailable.IsNullOrEmpty()
-                        && bonesHasButNotAvailable.Count < 10)
+                    if (!unavailableWhereBonesEnabled.IsNullOrEmpty()
+                        && unavailableWhereBonesEnabled.Count < 10)
                     {
-                        tB.AppendUnavailableMods(bonesHasButNotAvailable)
+                        tB.AppendUnavailableMods(unavailableWhereBonesEnabled)
                             .AppendLineEnd();
                     }
-                    if (!bonesHasButNotLoaded.IsNullOrEmpty())
+                    if (!disabledWhereBonesEnabled.IsNullOrEmpty())
                     {
                         options.Add(new CascadablePickOptionDataAsync<IEnumerable<ModRecord>>
                         {
-                            Element = bonesHasButNotLoaded,
+                            Element = disabledWhereBonesEnabled,
                             Text = "Restart {{yellow|adding enabled}} mods from bones file's mod configuration",
                             Hotkey = 'a',
                             Icon = new Renderable(
@@ -862,11 +1279,11 @@ namespace UD_Bones_Folder.Mod
                             Callback = (e) => Task.Run(() => EnableMods(e)),
                         });
                     }
-                    if (!loadedButBonesMissing.IsNullOrEmpty())
+                    if (!enabledWhereBonesDisabled.IsNullOrEmpty())
                     {
                         options.Add(new CascadablePickOptionDataAsync<IEnumerable<ModRecord>>
                         {
-                            Element = loadedButBonesMissing,
+                            Element = enabledWhereBonesDisabled,
                             Text = "Restart {{red|using}} bones file's {{red|entire}} (available) mod configuration",
                             Hotkey = 'u',
                             Icon = new Renderable(
@@ -877,29 +1294,29 @@ namespace UD_Bones_Folder.Mod
                             Callback = (e) => Task.Run(() 
                                 => (UIUtils.CascadableResult)Math.Min(
                                     val1: (int)DisableMods(e),
-                                    val2: (int)EnableMods(bonesHasButNotLoaded))
+                                    val2: (int)EnableMods(disabledWhereBonesEnabled))
                                 ),
                         });
                     }
-                    if (!bonesHasButNotAvailable.IsNullOrEmpty()
-                        && bonesHasButNotAvailable.Count > 9)
+                    if (!unavailableWhereBonesEnabled.IsNullOrEmpty()
+                        && unavailableWhereBonesEnabled.Count > 9)
                     {
-                        int unavailableCount = bonesHasButNotAvailable.Count;
-                        var sB2 = Event.NewStringBuilder()
+                        int unavailableCount = unavailableWhereBonesEnabled.Count;
+                        using var tb2 = TextBuilder.Get()
                             .Append("Show ").Append(unavailableCount).Append(" ").AppendColored("red", "unavailable")
                             .AppendThings(unavailableCount, " mod").Append(" ").AppendColored("red", "enabled").Append(" in this bones file");
                         options.Add(new CascadablePickOptionDataAsync<IEnumerable<ModRecord>>
                         {
-                            Element = bonesHasButNotAvailable,
-                            Text = Event.FinalizeString(sB2),
+                            Element = unavailableWhereBonesEnabled,
+                            Text = tb2.ToString(),
                             Hotkey = 'x',
                             Icon = UnavailableModsIcon,
                             Callback = async delegate (IEnumerable<ModRecord> element)
                             {
-                                string message = Event.FinalizeString(Event.NewStringBuilder().AppendUnavailableMods(element));
+                                using var tb3 = TextBuilder.Get().AppendUnavailableMods(element);
 
                                 await Popup.NewPopupMessageAsync(
-                                    message: message,
+                                    message: tb3.ToString(),
                                     title: unavailableCount.Things("unavailable mod").Colored("red"),
                                     afterRender: UnavailableModsIcon);
 
@@ -914,7 +1331,8 @@ namespace UD_Bones_Folder.Mod
                             Title: title,
                             Intro: tB.ToString(),
                             IntroIcon: ModConfigIcon,
-                            DefaultSelected: !options.IsNullOrEmpty() ? 0 : -1,
+                            DefaultSelected: !options.IsNullOrEmpty() ? defaultSelection : -1,
+                            LastSelectedCallback: c => defaultSelection = Math.Clamp(c, 0, options.Count - 1),
                             FinalSelectedCallback: async delegate (PickOptionData<IEnumerable<ModRecord>, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
                             {
                                 var result = await r?.AwaitResultIfNotIsCompletedSuccessfully();
@@ -1001,6 +1419,14 @@ namespace UD_Bones_Folder.Mod
 
         public ModsDifferInfo GetModsDifferInfo()
         {
+            using var indent = new Indent();
+            Debug.LogTypeMethod(
+                Indent: indent[1],
+                ArgPairs: new Debug.ArgPair[]
+                {
+                    Debug.Arg(nameof(EnabledMods), EnabledMods != null ? EnabledMods.Count : "null"),
+                });
+
             if (EnabledMods.IsNullOrEmpty())
                 EnabledMods = new(ID, ModVersion, JSON.ModsEnabled);
 
@@ -1035,14 +1461,28 @@ namespace UD_Bones_Folder.Mod
             SaveTime = null;
             Info = null;
             Version = null;
-            json = null;
+            JSON = null;
             Directory = null;
             Size = null;
             ModsEnabled = null;
 
-            _BonesSources.Dispose();
+            _BonesSources?.Dispose();
             _BonesSources = null;
         }
+
+        public virtual SaveBonesInfo Vomit(
+            bool ForceName = false,
+            Indent Indent = null,
+            [CallerMemberName] string CallingMethod = "",
+            params object[] Parameters
+            )
+            => (SaveBonesInfo)IVomitable.Vomit(
+                Object: this,
+                ForceName: ForceName,
+                Indent: Indent,
+                CallingMethod: CallingMethod,
+                Parameters: Parameters)
+            ;
 
         public static bool operator >(SaveBonesInfo x, SaveBonesInfo y)
             => DateTime.Compare(

@@ -61,7 +61,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 )
             {
                 using var indent = new Indent();
-                Debug.LogCaller(
+                Debug.LogTypeMethod(
                     Indent: indent[1],
                     ArgPairs: new Debug.ArgPair[]
                     {
@@ -84,7 +84,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 )
             {
                 using var indent = new Indent();
-                Debug.LogCaller(
+                Debug.LogTypeMethod(
                     Indent: indent[1],
                     ArgPairs: new Debug.ArgPair[]
                     {

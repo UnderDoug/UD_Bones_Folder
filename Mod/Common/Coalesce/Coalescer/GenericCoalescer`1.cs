@@ -21,8 +21,7 @@ namespace UD_Bones_Folder.Mod
         { }
 
         private NotSupportedException UseTypeDefined_NotSupportedException()
-            => new (
-                message: $"{CallChain(typeof(ICoalescible<T>).ToStringWithGenerics(), nameof(ICoalescible<T>.Coalesce))} " +
+            => new($"{CallChain(typeof(ICoalescible<T>).ToStringWithGenerics(), nameof(ICoalescible<T>.Coalesce))} " +
                     $"set to {CallChain(nameof(Coalescence.CoalesceMethod), CoalesceMethod.TypeDefined.ToString())} " +
                     $"should handle {nameof(Coalesce)} for this {GetType().ToStringWithGenerics()}.");
 

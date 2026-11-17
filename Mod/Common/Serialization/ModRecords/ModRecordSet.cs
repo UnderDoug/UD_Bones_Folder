@@ -13,55 +13,62 @@ using XRL;
 namespace UD_Bones_Folder.Mod
 {
     [JsonObject(MemberSerialization.OptIn)]
-    public class ModRecordCollection : CoalescibleSet<ModRecord>, IBonesFileElement
+    public class ModRecordSet : CoalescibleSet<ModRecord>, IBonesFileElement
     {
         public static int BaseBonesWeight = 1000;
 
         [JsonProperty]
-        public string BonesID;
-        [JsonProperty]
-        public string BonesModVersion;
-
-        [JsonProperty]
-        public ModRecord[] Records
-        {
-            get => Items;
-            set => Items = value;
-        }
+        public string ID;
 
         [JsonIgnore]
         string IBonesFileElement.BonesID
         {
-            get => BonesID;
-            set => BonesID = value;
+            get => ID;
+            set => ID = value;
         }
 
-        public ModRecordCollection()
+        [JsonProperty(nameof(IBonesFileElement.BonesID))]
+        string _BonesID { set => ID = value; }
+
+        [JsonProperty]
+        public string BonesModVersion;
+
+        [JsonProperty]
+        private ModRecord[] Records
+        {
+            get => ToArray();
+            set
+            {
+                Clear();
+                EnsureCapacity(value?.Length ?? 0);
+                AddRange(value.IteratorSafe());
+            }
+        }
+
+        public ModRecordSet()
             : base(ModRecord.EQComp, Coalescer<ModRecord>.Default)
         { }
 
-        public ModRecordCollection(string BonesID)
+        public ModRecordSet(string BonesID)
             : this()
         {
-            this.BonesID = BonesID;
+            this.ID = BonesID;
         }
 
-        public ModRecordCollection(string BonesID, string BonesModVersion, IEnumerable<string> ModsEnabled)
+        public ModRecordSet(string BonesID, string BonesModVersion, IEnumerable<string> ModsEnabled)
             : base(ModsEnabled?.Count() ?? 4, ModRecord.EQComp, Coalescer<ModRecord>.Default)
         {
-            this.BonesID = BonesID;
+            this.ID = BonesID;
             this.BonesModVersion = BonesModVersion;
             foreach (var modEnabled in ModsEnabled.IteratorSafe())
-                if (ModRecord.Parse(modEnabled) is ModRecord modRecord)
+                if (ModRecord.ParseString(modEnabled) is ModRecord modRecord)
                     if (!Add(modRecord))
                         modRecord.Dispose();
         }
 
-        public ModRecordCollection(string BonesID, string BonesModVersion, IEnumerable<ModRecord> ModRecords)
+        public ModRecordSet(IEnumerable<ModRecord> ModRecords)
             : base(ModRecords?.Count() ?? 4, ModRecord.EQComp, Coalescer<ModRecord>.Default)
         {
-            this.BonesID = BonesID;
-            this.BonesModVersion = BonesModVersion;
             foreach (var modRecord in ModRecords.IteratorSafe())
             {
                 var newModRecord = modRecord.Clone();
@@ -70,22 +77,29 @@ namespace UD_Bones_Folder.Mod
             }
         }
 
-        public ModRecordCollection(ModRecordCollection Source)
-            : this(Source?.BonesID, Source?.BonesModVersion, Source)
+        public ModRecordSet(string BonesID, string BonesModVersion, IEnumerable<ModRecord> ModRecords)
+            : this(ModRecords)
+        {
+            ID = BonesID;
+            this.BonesModVersion = BonesModVersion;
+        }
+
+        public ModRecordSet(ModRecordSet Source)
+            : this(Source?.ID, Source?.BonesModVersion, Source)
         {
             EqualityComparer = Source?.EqualityComparer ?? ModRecord.EQComp;
             Coalescer = Source?.Coalescer ?? Coalescer<ModRecord>.Default;
         }
 
-        public static ModRecordCollection NewEmpty()
+        public static ModRecordSet NewEmpty()
             => new(Guid.Empty.ToString(), Utils.ModVersion.ToString(), ModRecord.GetRunningMods())
             ;
 
-        public static ModRecordCollection NewCurrent()
+        public static ModRecordSet NewCurrent()
             => new(The.Game.GameID, Utils.ModVersion.ToString(), ModRecord.GetRunningMods())
             ;
 
-        public static int? GetBonesWeight(ModRecordCollection EnabledMods)
+        public static int? GetBonesWeight(ModRecordSet EnabledMods)
         {
             if (EnabledMods.IsNullOrEmpty())
                 return null;
@@ -94,11 +108,11 @@ namespace UD_Bones_Folder.Mod
 
             var modsDiffer = ModsDifferInfo.Get(EnabledMods, false);
 
-            saveWeight += modsDiffer.EnabledWhereBonesDisabled * -1;
-            saveWeight += modsDiffer.DisabledWhereBonesEnabled * -2;
-            saveWeight += modsDiffer.UnavailableWhereBonesEnabled * -4;
+            saveWeight += modsDiffer.EnabledWhereBonesDisabledCount * -1;
+            saveWeight += modsDiffer.DisabledWhereBonesEnabledCount * -2;
+            saveWeight += modsDiffer.UnavailableWhereBonesEnabledCount * -4;
 
-            saveWeight += modsDiffer.MatchingMods * 3;
+            saveWeight += modsDiffer.EnabledWhereBonesEnabledCount * 3;
 
             /*if (Stats.Encountered is BonesStatSet encountered)
             {

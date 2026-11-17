@@ -21,10 +21,12 @@ namespace UD_Bones_Folder.Mod
         { }
 
         public override T CoalesceFirst(T x, T y)
-            => x;
+            => x
+            ;
 
         public override T CoalesceSecond(T x, T y)
-            => y;
+            => y
+            ;
 
         public override T CoalesceCombine(T x, T y)
         {
@@ -84,6 +86,7 @@ namespace UD_Bones_Folder.Mod
 
         private InvalidCastException UnderlyingType_InvalidCastException()
             => new(typeof(T).ToStringWithGenerics() + " is not of specified underlying " +
-                nameof(Type) + " " + typeof(U).ToStringWithGenerics() + ".");
+                nameof(Type) + " " + typeof(U).ToStringWithGenerics() + ".")
+            ;
     }
 }
