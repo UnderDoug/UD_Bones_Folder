@@ -288,7 +288,7 @@ namespace UD_Bones_Folder.Mod.UI
             )
         {
             int defaultSelected = DefaultSelected ?? OptionDataSet.GetDefaultIndex();
-            defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
+            defaultSelected = Math.Clamp(defaultSelected, 0, Math.Max(0, OptionDataSet.Count - 1));
             ButtonCallbacks ??= new();
 
             if (!ButtonCallbacks.ContainsKey(-1))
@@ -411,7 +411,7 @@ namespace UD_Bones_Folder.Mod.UI
             )
         {
             int defaultSelected = DefaultSelected ?? OptionDataSet.GetDefaultIndex();
-            defaultSelected = Math.Clamp(defaultSelected, 0, OptionDataSet.Count - 1);
+            defaultSelected = Math.Clamp(defaultSelected, 0, Math.Max(0, OptionDataSet.Count - 1));
             ButtonCallbacks ??= new();
 
             if (!ButtonCallbacks.ContainsKey(-1))

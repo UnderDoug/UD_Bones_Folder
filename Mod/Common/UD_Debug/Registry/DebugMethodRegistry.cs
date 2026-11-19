@@ -33,9 +33,10 @@ namespace UD_Bones_Folder.Mod.Logging
 
         public const BindingFlags BINDING_FLAGS_ALL_DECLARED = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
+        public static readonly object _MethodRegistryLock = new();
         // [ModSensitiveStaticCache(CreateEmptyInstance = false)]
         private static DebugMethodRegistry _Instance;
-        public static DebugMethodRegistry Instance => GetRegistry(ref _Instance);
+        public static DebugMethodRegistry Instance => GetRegistry();
 
         private static bool _GotRegistry = false;
 
@@ -53,136 +54,138 @@ namespace UD_Bones_Folder.Mod.Logging
             || value
             ;
 
-        public static DebugMethodRegistry GetRegistry(ref DebugMethodRegistry Registry)
+        public static DebugMethodRegistry GetRegistry()
         {
-            Registry ??= new();
-
-            if (_GotRegistry)
-                return Registry;
-
-            string thisMethod = CallChain(nameof(DebugMethodRegistry), nameof(GetRegistry));
-
-            var methodAttributeType = typeof(RegisterAsyncMethodForDebugAttribute);
-            var classAttributeType = typeof(HasRegisterMethodForDebugAttribute);
-            //Utils.Log(thisMethod);
-            if (ModManager.GetMethodsWithAttribute(methodAttributeType, classAttributeType) is not List<MethodInfo> asyncSelfRegistrationMethods
-                || asyncSelfRegistrationMethods.IsNullOrEmpty())
-                Info($"{thisMethod} didn't find any {methodAttributeType.ToStringWithGenerics()} decorated methods");
-            else
+            lock (_MethodRegistryLock)
             {
-                //Utils.Log($"{1.Indent()}{nameof(asyncSelfRegistrationMethods)}: {asyncSelfRegistrationMethods.GetNullString()}");
-                foreach (var asyncSelfRegistrationMethod in asyncSelfRegistrationMethods)
-                {
-                    var attributes = asyncSelfRegistrationMethod.GetCustomAttributes<RegisterAsyncMethodForDebugAttribute>();
-                    var declaringType = asyncSelfRegistrationMethod.DeclaringType;
-                    var mod = ModManager.GetMod(declaringType.Assembly) ?? ThisMod;
-                    // var parameters = asyncSelfRegistrationMethod.GetParameters().Select(pi => pi.ParameterType).ToArray();
-                    string methodName = asyncSelfRegistrationMethod.Name;
-                    string fullMethod = CallChain(declaringType.ToStringWithGenerics(), asyncSelfRegistrationMethod.MethodSignature(true));
+                if (_GotRegistry)
+                    return _Instance;
 
-                    //Utils.Log($"{2.Indent()}registering {methodName} for {attributes.Count().Things("attribute")}");
-                    foreach (var attribute in attributes)
-                    {
-                        var doDebug = attribute.DoDebug;
-                        try
-                        {
-                            if (attribute.MethodGenerics is not Type[] methodGenerics
-                                || methodGenerics.IsNullOrEmpty())
-                            {
-                                Registry.Register(MethodRegistryEntry.NewAsyncEntry(declaringType, methodName, doDebug, SelfRegistered: true));
-                                //Utils.Log($"{3.Indent()}Registered non-generic");
-                            }
-                            else
-                            {
-                                Registry.Register(MethodRegistryEntry.NewAsyncEntry(declaringType, methodName, null, attribute.MethodGenerics, doDebug, SelfRegistered: true));
-                                string genericsString = attribute.MethodGenerics.Aggregate((string)null, (a,n) => CommaSpaceDelimitedAggregator(a, n.ToStringWithGenerics()));
-                                //Utils.Log($"{3.Indent()}Registered as generic <{genericsString}>");
-                            }
-                        }
-                        catch (Exception x)
-                        {
-                            mod.Error($"{thisMethod} failed to {nameof(RegisterAsyncMethod)} {fullMethod}: {x}");
-                        }
-                    }
-                }
-            }
+                _Instance ??= new();
+                string thisMethod = CallChain(nameof(DebugMethodRegistry), nameof(GetRegistry));
 
-            methodAttributeType = typeof(RegisterMethodForDebugAttribute);
-            if (ModManager.GetMethodsWithAttribute(methodAttributeType, classAttributeType) is not List<MethodInfo> selfRegistrationMethods
-                || selfRegistrationMethods.IsNullOrEmpty())
-                Info($"{thisMethod} didn't find any {methodAttributeType.ToStringWithGenerics()} decorated methods");
-            else
-            {
-                //Utils.Log($"{1.Indent()}{nameof(selfRegistrationMethods)}: {selfRegistrationMethods.GetNullString()}");
-                foreach (var selfRegistrationMethod in selfRegistrationMethods)
+                var methodAttributeType = typeof(RegisterAsyncMethodForDebugAttribute);
+                var classAttributeType = typeof(HasRegisterMethodForDebugAttribute);
+                //Utils.Log(thisMethod);
+                if (ModManager.GetMethodsWithAttribute(methodAttributeType, classAttributeType) is not List<MethodInfo> asyncSelfRegistrationMethods
+                    || asyncSelfRegistrationMethods.IsNullOrEmpty())
+                    Info($"{thisMethod} didn't find any {methodAttributeType.ToStringWithGenerics()} decorated methods");
+                else
                 {
-                    var attributes = selfRegistrationMethod.GetCustomAttributes<RegisterMethodForDebugAttribute>();
-                    var declaringType = selfRegistrationMethod.DeclaringType;
-                    var mod = ModManager.GetMod(declaringType.Assembly) ?? ThisMod;
-                    string fullMethod = CallChain(declaringType.ToStringWithGenerics(), selfRegistrationMethod.MethodSignature(true));
-                    //Utils.Log($"{2.Indent()}registering {selfRegistrationMethod.Name} for {attributes.Count().Things("attribute")}");
-                    foreach (var attribute in attributes)
+                    //Utils.Log($"{1.Indent()}{nameof(asyncSelfRegistrationMethods)}: {asyncSelfRegistrationMethods.GetNullString()}");
+                    foreach (var asyncSelfRegistrationMethod in asyncSelfRegistrationMethods)
                     {
-                        var doDebug = attribute.DoDebug;
-                        try
+                        var attributes = asyncSelfRegistrationMethod.GetCustomAttributes<RegisterAsyncMethodForDebugAttribute>();
+                        var declaringType = asyncSelfRegistrationMethod.DeclaringType;
+                        var mod = ModManager.GetMod(declaringType.Assembly) ?? ThisMod;
+                        // var parameters = asyncSelfRegistrationMethod.GetParameters().Select(pi => pi.ParameterType).ToArray();
+                        string methodName = asyncSelfRegistrationMethod.Name;
+                        string fullMethod = CallChain(declaringType.ToStringWithGenerics(), asyncSelfRegistrationMethod.MethodSignature(true));
+
+                        //Utils.Log($"{2.Indent()}registering {methodName} for {attributes.Count().Things("attribute")}");
+                        foreach (var attribute in attributes)
                         {
-                            if (attribute.MethodGenerics is Type[] methodGenerics
-                                && !methodGenerics.IsNullOrEmpty())
+                            var doDebug = attribute.DoDebug;
+                            try
                             {
-                                string genericsString = methodGenerics.Aggregate((string)null, (a, n) => CommaSpaceDelimitedAggregator(a, n?.Name ?? "MISSING"));
-                                try
+                                if (attribute.MethodGenerics is not Type[] methodGenerics
+                                    || methodGenerics.IsNullOrEmpty())
                                 {
-                                    Registry.Register(new(selfRegistrationMethod.MakeGenericMethod(methodGenerics), doDebug, SelfRegistered: true));
+                                    _Instance.Register(MethodRegistryEntry.NewAsyncEntry(declaringType, methodName, doDebug, SelfRegistered: true));
+                                    //Utils.Log($"{3.Indent()}Registered non-generic");
+                                }
+                                else
+                                {
+                                    _Instance.Register(MethodRegistryEntry.NewAsyncEntry(declaringType, methodName, null, attribute.MethodGenerics, doDebug, SelfRegistered: true));
+                                    string genericsString = attribute.MethodGenerics.Aggregate((string)null, (a, n) => CommaSpaceDelimitedAggregator(a, n.ToStringWithGenerics()));
                                     //Utils.Log($"{3.Indent()}Registered as generic <{genericsString}>");
                                 }
-                                catch (Exception x)
+                            }
+                            catch (Exception x)
+                            {
+                                mod.Error($"{thisMethod} failed to {nameof(RegisterAsyncMethod)} {fullMethod}: {x}");
+                            }
+                        }
+                    }
+                }
+
+                methodAttributeType = typeof(RegisterMethodForDebugAttribute);
+                if (ModManager.GetMethodsWithAttribute(methodAttributeType, classAttributeType) is not List<MethodInfo> selfRegistrationMethods
+                    || selfRegistrationMethods.IsNullOrEmpty())
+                    Info($"{thisMethod} didn't find any {methodAttributeType.ToStringWithGenerics()} decorated methods");
+                else
+                {
+                    //Utils.Log($"{1.Indent()}{nameof(selfRegistrationMethods)}: {selfRegistrationMethods.GetNullString()}");
+                    foreach (var selfRegistrationMethod in selfRegistrationMethods)
+                    {
+                        var attributes = selfRegistrationMethod.GetCustomAttributes<RegisterMethodForDebugAttribute>();
+                        var declaringType = selfRegistrationMethod.DeclaringType;
+                        var mod = ModManager.GetMod(declaringType.Assembly) ?? ThisMod;
+                        string fullMethod = CallChain(declaringType.ToStringWithGenerics(), selfRegistrationMethod.MethodSignature(true));
+                        //Utils.Log($"{2.Indent()}registering {selfRegistrationMethod.Name} for {attributes.Count().Things("attribute")}");
+                        foreach (var attribute in attributes)
+                        {
+                            var doDebug = attribute.DoDebug;
+                            try
+                            {
+                                if (attribute.MethodGenerics is Type[] methodGenerics
+                                    && !methodGenerics.IsNullOrEmpty())
                                 {
-                                    mod.Error($"{thisMethod} failed to make {fullMethod} into generic method with types {genericsString ?? "MISSING_TYPES"}: {x}");
+                                    string genericsString = methodGenerics.Aggregate((string)null, (a, n) => CommaSpaceDelimitedAggregator(a, n?.Name ?? "MISSING"));
+                                    try
+                                    {
+                                        _Instance.Register(new(selfRegistrationMethod.MakeGenericMethod(methodGenerics), doDebug, SelfRegistered: true));
+                                        //Utils.Log($"{3.Indent()}Registered as generic <{genericsString}>");
+                                    }
+                                    catch (Exception x)
+                                    {
+                                        mod.Error($"{thisMethod} failed to make {fullMethod} into generic method with types {genericsString ?? "MISSING_TYPES"}: {x}");
+                                    }
+                                    continue;
                                 }
+                                _Instance.Register(new(selfRegistrationMethod, doDebug, SelfRegistered: true));
+                                //Utils.Log($"{3.Indent()}Registered non-generic");
+                            }
+                            catch (Exception x)
+                            {
+                                mod.Error($"{thisMethod} failed to {nameof(RegisterAsyncMethod)} {fullMethod}: {x}");
+                            }
+                        }
+                    }
+                }
+
+                if (ModManager.GetMethodsWithAttribute(typeof(RegistersMethodsForDebugAttribute)) is not List<MethodInfo> debugRegistryMethods
+                    || debugRegistryMethods.IsNullOrEmpty())
+                {
+                    Error($"{thisMethod} failed to retrieve any {nameof(RegistersMethodsForDebugAttribute)} decorated methods");
+                    return _Instance;
+                }
+                foreach (var debugRegistryMethod in debugRegistryMethods)
+                {
+                    try
+                    {
+                        var methodToInvoke = debugRegistryMethod;
+                        var mod = ModManager.GetMod(debugRegistryMethod.DeclaringType.Assembly) ?? ThisMod;
+                        string fullMethod = CallChain(debugRegistryMethod.DeclaringType.ToStringWithGenerics(), debugRegistryMethod.MethodSignature(true));
+                        if (methodToInvoke.ContainsGenericParameters)
+                        {
+                            if (debugRegistryMethod.GetGenericArguments() is not Type[] genericArgs
+                                || debugRegistryMethod.MakeGenericMethod(genericArgs) is not MethodInfo madeMethod)
+                            {
+                                mod.Warn($"Generic method {fullMethod} found during {thisMethod}");
                                 continue;
                             }
-                            Registry.Register(new(selfRegistrationMethod, doDebug, SelfRegistered: true));
-                            //Utils.Log($"{3.Indent()}Registered non-generic");
+                            methodToInvoke = madeMethod;
                         }
-                        catch (Exception x)
-                        {
-                            mod.Error($"{thisMethod} failed to {nameof(RegisterAsyncMethod)} {fullMethod}: {x}");
-                        }
+                        methodToInvoke.Invoke(null, new object[] { _Instance });
                     }
-                }
-            }
-
-            if (ModManager.GetMethodsWithAttribute(typeof(RegistersMethodsForDebugAttribute)) is not List<MethodInfo> debugRegistryMethods
-                || debugRegistryMethods.IsNullOrEmpty())
-            {
-                Error($"{thisMethod} failed to retrieve any {nameof(RegistersMethodsForDebugAttribute)} decorated methods");
-                return Registry;
-            }
-            foreach (var debugRegistryMethod in debugRegistryMethods)
-            {
-                try
-                {
-                    var methodToInvoke = debugRegistryMethod;
-                    var mod = ModManager.GetMod(debugRegistryMethod.DeclaringType.Assembly) ?? ThisMod;
-                    string fullMethod = CallChain(debugRegistryMethod.DeclaringType.ToStringWithGenerics(), debugRegistryMethod.MethodSignature(true));
-                    if (methodToInvoke.ContainsGenericParameters)
+                    catch (Exception x)
                     {
-                        if (debugRegistryMethod.GetGenericArguments() is not Type[] genericArgs
-                            || debugRegistryMethod.MakeGenericMethod(genericArgs) is not MethodInfo madeMethod)
-                        {
-                            mod.Warn($"Generic method {fullMethod} found during {thisMethod}");
-                            continue;
-                        }
-                        methodToInvoke = madeMethod;
+                        MetricsManager.LogException(thisMethod, x, GAME_MOD_EXCEPTION);
                     }
-                    methodToInvoke.Invoke(null, new object[] { Registry });
                 }
-                catch (Exception x)
-                {
-                    MetricsManager.LogException(thisMethod, x, GAME_MOD_EXCEPTION);
-                }
+                return _Instance;
             }
-            return Registry;
         }
 
         [ModSensitiveCacheInit]
@@ -195,70 +198,75 @@ namespace UD_Bones_Folder.Mod.Logging
 
         public static bool GetDoDebug(string CallingMethod = null)
         {
-            if (!DoDebugSetting)
-                return false;
-
-            if (CallingMethod.IsNullOrEmpty()
-                || Instance.IsNullOrEmpty())
-                return DoDebugSetting;
-
-            if (!Instance.Contains(CallingMethod))
+            lock (_MethodRegistryLock)
             {
-                // WarnOnce($"{nameof(DebugMethodRegistry)}.{nameof(Instance)} does not contain {CallingMethod}");
-                return DoDebugSetting;
-            }
+                if (!DoDebugSetting)
+                    return false;
 
-            try
-            {
-                if (!TryGetCallingTypeAndMethod(out _, out var callingMethodBase))
+                if (CallingMethod.IsNullOrEmpty()
+                    || Instance.IsNullOrEmpty())
+                    return DoDebugSetting;
+
+                if (!Instance.Contains(CallingMethod))
                 {
-                    // WarnOnce($"{nameof(DebugMethodRegistry)} {nameof(TryGetCallingTypeAndMethod)} for {CallingMethod} but failed");
+                    // WarnOnce($"{nameof(DebugMethodRegistry)}.{nameof(Instance)} does not contain {CallingMethod}");
                     return DoDebugSetting;
                 }
 
-                if (!Instance.TryGetValue(callingMethodBase, out bool? registryMethodValue, out bool? registryMethodGenericValue))
+                try
                 {
-                    // WarnOnce($"{nameof(DebugMethodRegistry)}.{nameof(Instance)}.{nameof(TryGetValue)} for {callingMethodBase.Name} but failed");
-                    return DoDebugSetting;
-                }
+                    if (!TryGetCallingTypeAndMethod(out _, out var callingMethodBase))
+                    {
+                        // WarnOnce($"{nameof(DebugMethodRegistry)} {nameof(TryGetCallingTypeAndMethod)} for {CallingMethod} but failed");
+                        return DoDebugSetting;
+                    }
 
-                if (registryMethodValue.GetValueOrDefault())
-                {
+                    if (!Instance.TryGetValue(callingMethodBase, out bool? registryMethodValue, out bool? registryMethodGenericValue))
+                    {
+                        // WarnOnce($"{nameof(DebugMethodRegistry)}.{nameof(Instance)}.{nameof(TryGetValue)} for {callingMethodBase.Name} but failed");
+                        return DoDebugSetting;
+                    }
+
+                    if (registryMethodValue.GetValueOrDefault())
+                    {
+                        // WarnOnce($"{nameof(DebugMethodRegistry)} got {nameof(registryMethodValue)} {registryMethodValue} for {callingMethodBase.Name}");
+                        return DoDebugSetting;
+                    }
+
+                    if (registryMethodGenericValue.GetValueOrDefault())
+                    {
+                        // WarnOnce($"{nameof(DebugMethodRegistry)} got {nameof(registryMethodGenericValue)} {registryMethodGenericValue} for {callingMethodBase.Name}");
+                        return DoDebugSetting;
+                    }
                     // WarnOnce($"{nameof(DebugMethodRegistry)} got {nameof(registryMethodValue)} {registryMethodValue} for {callingMethodBase.Name}");
-                    return DoDebugSetting;
                 }
-
-                if (registryMethodGenericValue.GetValueOrDefault())
+                catch (Exception x)
                 {
-                    // WarnOnce($"{nameof(DebugMethodRegistry)} got {nameof(registryMethodGenericValue)} {registryMethodGenericValue} for {callingMethodBase.Name}");
-                    return DoDebugSetting;
+                    MetricsManager.LogException(CallChain(nameof(DebugMethodRegistry), nameof(GetDoDebug)), x, GAME_MOD_EXCEPTION);
                 }
-                // WarnOnce($"{nameof(DebugMethodRegistry)} got {nameof(registryMethodValue)} {registryMethodValue} for {callingMethodBase.Name}");
+                return false;
             }
-            catch (Exception x)
-            {
-                MetricsManager.LogException(CallChain(nameof(DebugMethodRegistry), nameof(GetDoDebug)), x, GAME_MOD_EXCEPTION);
-            }
-            return false;
         }
 
         public static void LogRegistry()
         {
-            string debug = "DEBUG ";
-            string thisMod = $"[{ThisMod.DisplayTitleStripped}] - ";
-            string callChain = CallChain(nameof(DebugMethodRegistry), nameof(LogRegistry));
-            if (!Instance.IsNullOrEmpty())
+            lock (_MethodRegistryLock)
             {
-                UnityEngine.Debug.Log($"{debug}{thisMod}Start of {callChain}");
+                string debug = "DEBUG ";
+                string thisMod = $"[{ThisMod.DisplayTitleStripped}] - ";
+                string callChain = CallChain(nameof(DebugMethodRegistry), nameof(LogRegistry));
+                if (!Instance.IsNullOrEmpty())
+                {
+                        UnityEngine.Debug.Log($"{debug}{thisMod}Start of {callChain}");
 
-                foreach (var methodEntry in Instance.OrderBy(dmr => dmr.GetTypeAndMethodName(true, true)))
-                    UnityEngine.Debug.Log($"{debug}{methodEntry.ToString(IncludeSourceMod: true, FullSignature: true, IncludeNamespace: true)}");
+                        foreach (var methodEntry in Instance.OrderBy(dmr => dmr.GetTypeAndMethodName(true, true)))
+                            UnityEngine.Debug.Log($"{debug}{methodEntry.ToString(IncludeSourceMod: true, FullSignature: true, IncludeNamespace: true)}");
 
-                UnityEngine.Debug.Log($"{debug}{thisMod}End of {callChain}");
+                        UnityEngine.Debug.Log($"{debug}{thisMod}End of {callChain}");
+                }
+                else
+                    UnityEngine.Debug.Log($"{debug}{thisMod}{callChain} called but {nameof(Instance)} not ready");
             }
-            else
-                UnityEngine.Debug.Log($"{debug}{thisMod}{callChain} called but {nameof(Instance)} not ready");
-
         }
 
         public DebugMethodRegistry Register(MethodRegistryEntry RegisterEntry)

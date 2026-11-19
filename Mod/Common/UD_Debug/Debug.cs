@@ -17,6 +17,7 @@ using UD_Bones_Folder.Mod;
 using static UD_Bones_Folder.Mod.Options;
 using static UD_Bones_Folder.Mod.Const;
 using static UD_Bones_Folder.Mod.Utils;
+using System.Collections.Concurrent;
 
 namespace UD_Bones_Folder.Mod.Logging
 {
@@ -35,6 +36,102 @@ namespace UD_Bones_Folder.Mod.Logging
                     nameof(LogCritical),
                 });
         #endregion
+
+        /*public class Batch : PooledList<Batch.Entry>
+        {
+            public abstract class Entry
+            {
+                public string Label;
+                public object Value;
+                public Indent Indent;
+                public string CallingMethod;
+
+                public Entry()
+                { }
+
+                public Entry(string Label, object Value, Indent Indent, [CallerMemberName] string CallingMethod = "")
+                    : this()
+                {
+                    this.Label = Label;
+                    this.Value = Value;
+                    this.Indent = Indent;
+                    this.CallingMethod = CallingMethod;
+                }
+
+                public Entry(string Message, Indent Indent, [CallerMemberName] string CallingMethod = "")
+                    : this(null, Message, Indent, CallingMethod)
+                { }
+            }
+
+            protected static ConcurrentBag<Batch> UnusedPool = new();
+
+            private readonly string Channel = "";
+
+            protected bool Pooled;
+
+            public Batch()
+            { }
+
+            public Indent GetIndent(int Offset = 0)
+                => new Indent(Channel, Offset)
+                ;
+
+            protected static Batch GetFromPool()
+            {
+                lock (UnusedPool)
+                {
+                    if (UnusedPool.TryTake(out var result)
+                        // && result != null
+                        )
+                    {
+                        result.Reuse();
+                        return result;
+                    }
+                }
+                return new Batch();
+            }
+
+            protected void Reuse()
+            {
+                if (!Pooled)
+                    throw new Exception($"Attempt to reuse {GetType()?.ToStringWithGenerics() ?? nameof(Batch)} not in pool");
+
+                Pooled = false;
+            }
+
+            public override void Dispose()
+            {
+                foreach (var entry in this)
+                {
+                    if (Do(entry.CallingMethod))
+                    {
+                        string output = Label;
+                        if (!(Value?.ToString()).IsNullOrEmpty())
+                        {
+                            if (output != null)
+                                output += ": ";
+
+                            output += Value;
+                        }
+
+                        foreach (var line in (output?.Split(Environment.NewLine)).IteratorSafe())
+                            UnityEngine.Debug.Log($"{Indent}{line}");
+
+                        return Indent;
+                    }
+                }
+
+                if (!Pooled)
+                {
+                    lock (UnusedPool)
+                    {
+                        base.Dispose();
+                        Pooled = true;
+                        UnusedPool.Add(this);
+                    }
+                }
+            }
+        }*/
 
         public static bool IsDevelopment => true;
 
@@ -64,6 +161,7 @@ namespace UD_Bones_Folder.Mod.Logging
         public static List<Type> DebugTypes = new()
         {
             typeof(UD_Bones_Folder.Mod.Logging.Debug),
+            AccessTools.FirstInner(typeof(UD_Bones_Folder.Mod.Logging.Debug), t => t.Name.StartsWith($"<{nameof(Loggregrate)}")),
             typeof(UD_Bones_Folder.Mod.Logging.Debug.ArgPair),
             typeof(UD_Bones_Folder.Mod.Logging.Indent),
             typeof(UD_Bones_Folder.Mod.Logging.DebugMethodRegistry),
@@ -90,6 +188,7 @@ namespace UD_Bones_Folder.Mod.Logging
             ")"
             ;
 
+        public static readonly object _IndentsByChannelLock = new();
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         private static StringMap<Stack<Indent>> IndentsByChannel = new();
 
@@ -100,8 +199,12 @@ namespace UD_Bones_Folder.Mod.Logging
             ;
 
         public static Stack<Indent> GetIndents(string Channel)
-            => IndentsByChannel[Channel ?? ""] ??= new()
-            ;
+        {
+            lock (_IndentsByChannelLock)
+            {
+                return IndentsByChannel[Channel ?? ""] ??= new();
+            }
+        }
 
         public static Stack<Indent> GetIndents()
             => GetIndents(null)
@@ -135,8 +238,11 @@ namespace UD_Bones_Folder.Mod.Logging
 
         public static void PushToIndents(string Channel, Indent Indent)
         {
-            LastIndentChannel = Channel ?? "";
-            GetIndents(LastIndentChannel).Push(Indent);
+            lock (_IndentsByChannelLock)
+            {
+                LastIndentChannel = Channel ?? "";
+                GetIndents(LastIndentChannel).Push(Indent);
+            }
         }
 
         public static void PushToIndents(Indent Indent)
@@ -147,33 +253,42 @@ namespace UD_Bones_Folder.Mod.Logging
         [ModSensitiveCacheInit]
         public static void InitIndents()
         {
-            IndentsByChannel ??= new();
-            IndentsByChannel.Clear();
-            ResetIndents(ThisMod.ID);
-            ResetIndents("");
+            lock (_IndentsByChannelLock)
+            {
+                IndentsByChannel ??= new();
+                IndentsByChannel.Clear();
+                ResetIndents(ThisMod.ID);
+                ResetIndents("");
+            }
         }
 
         public static Stack<Indent> ResetIndents(string Channel)
         {
-            while (!GetIndents(Channel).IsNullOrEmpty())
-                DiscardIndent(Channel);
+            lock (_IndentsByChannelLock)
+            {
+                while (!GetIndents(Channel).IsNullOrEmpty())
+                    DiscardIndent(Channel);
 
-            GetNewIndent(Channel);
-            return GetIndents(Channel);
+                GetNewIndent(Channel);
+                return GetIndents(Channel);
+            }
         }
 
         public static Indent DiscardIndent(string Channel, Indent Indent)
         {
-            do
+            lock (_IndentsByChannelLock)
             {
-                if (!GetIndents(Channel).TryPop(out var indent))
-                    ResetIndents(Channel);
+                do
+                {
+                    if (!GetIndents(Channel).TryPop(out var indent))
+                        ResetIndents(Channel);
 
-                indent.Clear();
+                    indent.Clear();
+                }
+                while (GetIndents(Channel).Contains(Indent));
+
+                return GetLastIndent(Channel);
             }
-            while (GetIndents(Channel).Contains(Indent));
-
-            return GetLastIndent(Channel);
         }
 
         public static Indent DiscardIndent(string Channel)
@@ -186,19 +301,22 @@ namespace UD_Bones_Folder.Mod.Logging
 
         public static bool HasIndent(Indent Indent, out string Channel)
         {
-            Channel = null;
-            foreach ((var channel, var indents) in IndentsByChannel)
+            lock (_IndentsByChannelLock)
             {
-                foreach (var indent in indents)
+                Channel = null;
+                foreach ((var channel, var indents) in IndentsByChannel)
                 {
-                    if (indent == Indent)
+                    foreach (var indent in indents)
                     {
-                        Channel = channel;
-                        return true;
+                        if (indent == Indent)
+                        {
+                            Channel = channel;
+                            return true;
+                        }
                     }
                 }
+                return false;
             }
-            return false;
         }
 
         public static bool Do([CallerMemberName] string CallingMethod = "")
@@ -294,7 +412,7 @@ namespace UD_Bones_Folder.Mod.Logging
             Indent Indent = null,
             [CallerMemberName] string CallingMethod = ""
             )
-            => DebugMethodRegistry.GetDoDebug(CallingMethod)
+            => Do(CallingMethod)
             ? LogCritical(
                 Label: Label,
                 Value: Value,

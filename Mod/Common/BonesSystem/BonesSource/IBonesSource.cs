@@ -72,10 +72,10 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         IEnumerable<SaveBonesInfo> LoadInfos(IEnumerable<string> BonesIDs = null);
         Task<BonesSpec> LoadSpecAsync(string BonesID);
         BonesSpec LoadSpec(string BonesID);
-        Task<ModRecordSet> LoadModConfigAsync(string BonesID);
-        ModRecordSet LoadModConfig(string BonesID);
         Task<BonesStats> LoadStatsAsync(string BonesID);
         BonesStats LoadStats(string BonesID);
+        Task<ModRecordSet> LoadModConfigAsync(string BonesID);
+        ModRecordSet LoadModConfig(string BonesID);
         Task<BonesSavGz> LoadSavGzAsync(string BonesID);
         BonesSavGz LoadSavGz(string BonesID);
 

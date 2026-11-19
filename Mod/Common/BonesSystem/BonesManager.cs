@@ -525,8 +525,9 @@ namespace UD_Bones_Folder.Mod
             ;
 
         [RegisterMethodForDebug(true)]
-        public static bool SaveBonesFile(SaveBonesJSON BonesJSON, BonesSavGz BonesSavGz)
+        public static async Task<bool> SaveBonesFileAsync(SaveBonesJSON BonesJSON, BonesSavGz BonesSavGz)
         {
+            await ServerUtils.WebContext;
             using var indent = new Indent();
             Debug.LogTypeMethod(
                 Indent: indent[1],
@@ -543,7 +544,45 @@ namespace UD_Bones_Folder.Mod
             {
                 using (var failedSources = ScopeDisposedList<KeyValuePair<IBonesSource, Exception>>.GetFromPool())
                 {
-                    foreach (var bonesSource in bonesSources.GetHoardableSources())
+                    using var hoardableSources = ScopeDisposedList<IBonesSource>.GetFromPoolFilledWith(bonesSources.GetHoardableSources());
+                    Debug.YehNah($"{nameof(hoardableSources)}({hoardableSources.Count})", Indent: indent[2]);
+                    using var saveBatch = PooledBatch<ActionResult>.GetWith(hoardableSources.Select(bs => bs.SaveBonesAsync(BonesJSON, BonesSavGz)));
+                    Debug.YehNah($"{nameof(saveBatch)}({saveBatch.Count})", Indent: indent[2]);
+                    using var saveResults = await saveBatch;
+                    Debug.YehNah($"{nameof(saveResults)}({saveResults.Count})", Indent: indent[2]);
+                    for (int i = 0; i < hoardableSources.Count && i < saveResults.Count; i++)
+                    {
+                        var bonesSource = hoardableSources[i];
+                        Debug.Log($"Processing {nameof(bonesSource)} {bonesSource?.DisplayName?.Strip() ?? "MISSING_SOURCE"}", Indent: indent[2]);
+                        var saveResult = saveResults[i];
+
+                        if (saveResult.Succeeded)
+                        {
+                            sourceResults.Add(new(bonesSource, saveResult.Result));
+                            if (bonesSource is BonesFolder folderSource)
+                            {
+                                try
+                                {
+                                    MemoryHelper.GCCollect();
+                                    CheckBonesSave(folderSource.GetFullSavGzFilePathFor(BonesJSON.ID));
+                                }
+                                catch (Exception x)
+                                {
+                                    failedSources.Add(new(bonesSource, x));
+                                    continue;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (!bonesSource.IsOnline())
+                                failedSources.Add(new(bonesSource, saveResult.Exception));
+                            else
+                                Utils.Error($"{bonesSource.DisplayName} failed to {nameof(bonesSource.SaveBones)}", saveResult.Exception);
+                        }
+                    }
+
+                    /*foreach (var bonesSource in bonesSources.GetHoardableSources())
                     {
                         try
                         {
@@ -569,7 +608,7 @@ namespace UD_Bones_Folder.Mod
                             else
                                 Utils.Error($"{bonesSource.DisplayName} failed to {nameof(bonesSource.SaveBones)}", x);
                         }
-                    }
+                    }*/
 
                     if (!failedSources.IsNullOrEmpty())
                         HoardBonesError(BonesJSON.ID, failedSources, true);
@@ -593,11 +632,12 @@ namespace UD_Bones_Folder.Mod
                     Empty: $"no bones sources",
                     PostProc: s => $"{1.Indent()}: {s}");
             }
+            BonesSavGz?.Dispose();
             return anySuccess;
         }
 
         [RegisterMethodForDebug(true)]
-        public Task HoardBones(
+        public async Task HoardBonesAsync(
             IDeathEvent DeathEvent,
             GameObject LunarRegent,
             bool DoStatus = true
@@ -613,7 +653,7 @@ namespace UD_Bones_Folder.Mod
                     Debug.Arg(nameof(DoStatus), DoStatus),
                 });
 
-            string thisMethod = nameof(HoardBones);
+            string thisMethod = nameof(HoardBonesAsync);
 
             string abort(string Reason)
                 => $"Abort {thisMethod}: {Reason}"
@@ -625,19 +665,34 @@ namespace UD_Bones_Folder.Mod
                 var saveTask = The.Game.SaveTask;
 
                 if (saveTask?.IsCompleted is false)
-                    return ReturnSaveTaskNullWithLogMessage(abort($"{nameof(SaveTask)} is not null and not complete"));
+                {
+                    _ = ReturnSaveTaskNullWithLogMessage(abort($"{nameof(SaveTask)} is not null and not complete"));
+                    return;
+                }
 
                 if (The.Game is not XRLGame game)
-                    return ReturnSaveTaskNullWithLogMessage(abort($"{Utils.CallChain(nameof(The), nameof(The.Game))} is null"));
+                {
+                    _ = ReturnSaveTaskNullWithLogMessage(abort($"{Utils.CallChain(nameof(The), nameof(The.Game))} is null"));
+                    return;
+                }
 
                 if (!game.Running)
-                    return ReturnSaveTaskNullWithLogMessage(abort($"!{Utils.CallChain(nameof(The), nameof(The.Game), nameof(The.Game.Running))}"));
+                {
+                    _ = ReturnSaveTaskNullWithLogMessage(abort($"!{Utils.CallChain(nameof(The), nameof(The.Game), nameof(The.Game.Running))}"));
+                    return;
+                }
 
                 if (LunarRegent?.CurrentZone is not Zone currentZone)
-                    return ReturnSaveTaskNullWithLogMessage(abort($"{nameof(currentZone)} is null"));
+                {
+                    _ = ReturnSaveTaskNullWithLogMessage(abort($"{nameof(currentZone)} is null"));
+                    return;
+                }
 
                 if (SerializationWriter.Get() is not SerializationWriter writer)
-                    return ReturnSaveTaskNullWithLogMessage(abort($"failed to get {nameof(SerializationWriter)}"));
+                {
+                    _ = ReturnSaveTaskNullWithLogMessage(abort($"failed to get {nameof(SerializationWriter)}"));
+                    return;
+                }
 
                 PrepareZoneObjectsForNextRun(currentZone, GameID, LunarRegent);
 
@@ -650,6 +705,8 @@ namespace UD_Bones_Folder.Mod
                 Debug.Log(nameof(status), DoStatus, Indent: indent[2]);
                 if (DoStatus)
                     status = Loading.StartTask("Hoarding Bones");
+
+                var originalContext = The.CurrentContext;
                 try
                 {
                     EnsureWallTime(game);
@@ -695,18 +752,17 @@ namespace UD_Bones_Folder.Mod
                             gZipStream.Write(buffer, 0, (int)writer.Stream.Length);
                         }
                         Debug.Log($"using new {nameof(BonesSavGz)}", Indent: indent[2]);
-                        using (var bonesSavGz = new BonesSavGz(The.Game.GameID, memoryStream.ToArray()))
-                        {
-                            SaveBonesFile(saveBonesJSON, bonesSavGz);
-                        }
+                        var bonesSavGz = new BonesSavGz(The.Game.GameID, memoryStream.ToArray());
+                        _ = SaveBonesFileAsync(saveBonesJSON, bonesSavGz);
                     }
-                    return null;
+                    return;
                 }
                 catch (Exception x)
                 {
                     SerializationWriter.Release(writer);
                     HoardBonesError(The.Game.GameID, bonesSources, x, true);
-                    return SaveTask = Task.FromException(x);
+                    SaveTask = Task.FromException(x);
+                    return;
                 }
                 finally
                 {
@@ -714,6 +770,7 @@ namespace UD_Bones_Folder.Mod
                     MemoryHelper.GCCollectMax();
                     _HasSaveBones = null;
                     status.Dispose();
+                    await originalContext;
                 }
             }
         }
@@ -762,7 +819,8 @@ namespace UD_Bones_Folder.Mod
             bool RestoreBackup = false
             )
         {
-            Utils.Error($"Error trying to {nameof(HoardBones)}", X);
+            await The.GameContext;
+            Utils.Error($"Error trying to {nameof(HoardBonesAsync)}", X);
 
             int sourceCount = FailedSources.Count();
             string sourcesCountString = sourceCount.Things(nameof(BonesFolder));
@@ -804,8 +862,8 @@ namespace UD_Bones_Folder.Mod
                     Empty: $"no sources",
                     PostProc: s => $"{1.Indent()}: {s}");
 
-                tB.Append(Utils.ModTitle).Append(" has attempted to restore a backup:")
-                    .AppendLine().Append(resultStrings)
+                tB.Append(Utils.ModTitle).Append(" has attempted to restore backup(s):")
+                    .AppendLine().Append(resultStrings.Aggregate((string)null, (a,n) => Utils.NewLineDelimitedAggregator(a, $"{NBSP.ThisManyTimes(2)}: {n}".Strip())))
                     .AppendLine()
                     .AppendLine();
             }
@@ -815,12 +873,14 @@ namespace UD_Bones_Folder.Mod
             await Popup.ShowFailAsync(tB.ToString());
         }
 
-        private static void HoardBonesError(
+        private static async void HoardBonesError(
             string BonesID,
             IEnumerable<KeyValuePair<IBonesSource, Exception>> FailedSources,
             bool RestoreBackup = false
             )
         {
+            await The.GameContext;
+
             using var tB = TextBuilder.Get("There was a fatal exception attempting to save some bones. ").Append(Utils.ThisMod.DisplayTitle).Append(" attempted to recover them.")
                 .AppendLine().Append("You ought to check out your bones folder(s) for recent changes:");
             
@@ -828,7 +888,7 @@ namespace UD_Bones_Folder.Mod
             using var resultStrings = ScopeDisposedList<string>.GetFromPool();
             foreach ((var source, var x) in FailedSources)
             {
-                Utils.Error($"Error trying to {nameof(HoardBones)} for {source.DisplayName} ", x);
+                Utils.Error($"Error trying to {nameof(HoardBonesAsync)} for {source.DisplayName} ", x);
                 tB.AppendLine()
                     .AppendLine().Append(source.DisplayName.Strip()).Append(":")
                     .AppendLine();
@@ -836,14 +896,14 @@ namespace UD_Bones_Folder.Mod
                 if (x is UnauthorizedAccessException
                     || x is IOException)
                 {
-                    tB.Append("There was a permission error while trying to ").Append(nameof(HoardBones)).Append(".")
+                    tB.Append("There was a permission error while trying to ").Append(nameof(HoardBonesAsync)).Append(".")
                         .AppendLine().Append(NBSP).Append(NBSP).Append(ColorUtility.EscapeFormatting(x.Message))
                         .AppendLine()
                         .AppendLine();
                 }
                 else
                 {
-                    tB.Append("There was an error while trying to ").Append(nameof(HoardBones)).Append(".")
+                    tB.Append("There was an error while trying to ").Append(nameof(HoardBonesAsync)).Append(".")
                         .AppendLine().Append(NBSP).Append(NBSP).Append("Exception type: ").Append(x.GetType());
 
                     if (source is BonesFolder folderSource)

@@ -90,7 +90,7 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         protected void Reuse()
         {
             if (!Pooled)
-                throw new Exception("Attempt to reuse ScopeDisposedList not in pool");
+                throw new Exception($"Attempt to reuse {nameof(BonesSources)} not in pool");
 
             Pooled = false;
         }

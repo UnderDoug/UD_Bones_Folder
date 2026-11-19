@@ -23,6 +23,8 @@ using XRL.Language;
 using UD_Bones_Folder.Mod.Serialization;
 using UD_Bones_Folder.Mod.BonesSystem.BonesSource;
 using UD_Bones_Folder.Mod.Logging;
+using System.Threading;
+using System.Globalization;
 
 namespace UD_Bones_Folder.Mod.OsseousAsh
 {
@@ -45,6 +47,25 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 });
         #endregion
 
+        public static Thread WebThread;
+        public static bool ThreadStarted;
+
+        private static SynchronizationContext _WebSynchronizationContext;
+        public static SynchronizationContext WebContext => _WebSynchronizationContext;
+
+        public static readonly object _PendingUploadCacheLock = new();
+        // [ThreadStatic]
+        public static Dictionary<string, Dictionary<string, PendingUpload>> PendingUploadCache = new();
+
+        public static readonly object _WebTasksLock = new();
+        public static Queue<PendingWebTask<ActionResult>> WebTasks = new();
+
+        public static readonly object _TasksLock = new();
+        public static Queue<Task> Tasks = new();
+
+        public static readonly object _ActionsLock = new();
+        public static Queue<Action> Actions = new();
+
         public static string RedCrossIndentLabel => $"{Const.NBSP}{Const.NBSP}{Const.CROSS.Colored("red")}{Const.NBSP}";
         public static string GreenDFIndentLabel => $"{Const.NBSP}{Const.NBSP}{Const.DF.Colored("green")}{Const.NBSP}";
         public static string GreenTickIndentLabel => $"{Const.NBSP}{Const.NBSP}{Const.TICK.Colored("green")}{Const.NBSP}";
@@ -57,26 +78,121 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         [ModSensitiveStaticCache(CreateEmptyInstance = true)]
         internal static List<DoWhatWithHostPickOptionsDelegateEntry> DoWhatWithHostPickOptionsDelegates;
 
+        private static readonly object _ReportsCacheLock = new();
         private static IEnumerable<Report> _ReportsCache;
         public static IEnumerable<Report> ReportsCache
         {
             get
             {
-                if (_ReportsCache == null)
+                lock (_ReportsCacheLock)
                 {
-                    var cachedReports = Hosts.CacheReports();
-                    _ReportsCache = cachedReports;
-                }
+                    if (_ReportsCache == null)
+                    {
+                        var cachedReports = Hosts.CacheReports();
+                        _ReportsCache = cachedReports;
+                    }
 
-                return _ReportsCache;
+                    return _ReportsCache;
+                }
             }
         }
-
 
         [BonesSourcesDelegate(IBonesSource.SourceType.Online)]
         public static IEnumerable<IBonesSource> OnlineBonesSources()
             => AllEnabledHosts()
             ;
+
+        [ModSensitiveCacheInit]
+        public static Thread StartWebThread()
+        {
+            UnityEngine.Application.quitting += Quitting;
+            Utils.Info("Starting web thread...");
+            WebThread = new (WebThreadStart)
+            {
+                Name = "UD_Bones_Folder Web Thread",
+                CurrentCulture = CultureInfo.InvariantCulture,
+                Priority = ThreadPriority.BelowNormal,
+            };
+            WebThread.Start();
+            ThreadStarted = true;
+            Utils.Info("Web thread started!");
+            return WebThread;
+        }
+
+        public static async void WebThreadStart()
+        {
+            try
+            {
+                var synchronizationContext = new SynchronizationContext();
+                SynchronizationContext.SetSynchronizationContext(synchronizationContext);
+                _WebSynchronizationContext = synchronizationContext;
+
+                bool skipActions = false;
+                while (true)
+                {
+                    // Something?
+
+                    if (!skipActions)
+                    {
+                        skipActions = true;
+                        bool processWebAction = false;
+
+                        PendingWebTask<ActionResult> action = null;
+                        lock (_WebTasksLock)
+                        {
+                            WebTasks ??= new();
+                            processWebAction = WebTasks.TryDequeue(out action);
+                        }
+
+                        if (processWebAction)
+                        {
+                            await action.CompleteAsync();
+                            continue;
+                        }
+                    }
+                    skipActions = false;
+
+                    bool processTask = false;
+
+                    Task task = null;
+                    lock (_TasksLock)
+                    {
+                        Tasks ??= new();
+                        processTask = Tasks.TryDequeue(out task);
+                    }
+
+                    if (processTask)
+                    {
+                        await task;
+                        continue;
+                    }
+
+                    lock (_ActionsLock)
+                    {
+                        Actions ??= new();
+                        if (Actions.TryDequeue(out var action))
+                        {
+                            action?.Invoke();
+                        }
+                    }
+                }
+            }
+            catch (ThreadInterruptedException)
+            {
+                Utils.Info("Web thread shut down...");
+            }
+            catch (Exception x)
+            {
+                Utils.Error(x);
+            }
+        }
+
+        public static void Quitting()
+        {
+            foreach ((var _, var pendingUploadCache) in PendingUploadCache.IteratorSafe())
+                foreach ((var _, var pendingUpload) in pendingUploadCache)
+                    pendingUpload.Dispose();
+        }
 
         [ModSensitiveCacheInit]
         public static void EnsureHosts()
@@ -251,7 +367,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         public static void ClearLocalReportsCache()
         {
             //Utils.Log($"ClearReportsCache - {nameof(GameManager)}.{nameof(GameManager.AwakeComplete)}: {GameManager.AwakeComplete}");
-            _ReportsCache = null;
+            lock (_ReportsCacheLock)
+            {
+                _ReportsCache = null;
+            }
         }
 
         public static IEnumerable<Host> AllHosts(Predicate<Host> Where)
@@ -586,8 +705,11 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Debug.Arg(nameof(BonesSavGz), BonesSavGz.GetNullString()),
                 });
 
+            var originalContext = The.CurrentContext;
             try
             {
+                await WebContext;
+
                 Debug.Log($"Getting hostsWithoutThisBones...", Indent: indent[2]);
                 var hostsWithoutThisBones = AllEnabledHosts(h => !h.HasPending(BonesJSON.ID) && !h.HasBones(BonesJSON.ID));
 
@@ -641,6 +763,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             {
                 Utils.Error($"{nameof(UploadBones)} failed to upload Bones with BonesID {BonesJSON?.ID ?? "NO_BONES_ID"}", x);
                 return null;
+            }
+            finally
+            {
+                await originalContext;
             }
         }
 

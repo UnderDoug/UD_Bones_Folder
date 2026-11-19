@@ -218,7 +218,7 @@ namespace XRL.World.Parts
                     bool success = true;
                     try
                     {
-                        BonesManager.HoardBones(E, lunarRegent)?.Wait();
+                        BonesManager.HoardBonesAsync(E, lunarRegent)?.Wait();
                     }
                     catch (Exception x)
                     {

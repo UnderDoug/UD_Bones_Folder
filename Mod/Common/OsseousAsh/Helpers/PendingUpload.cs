@@ -290,10 +290,13 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (Success
                 || this.ForceDispose)
             {
-                var pendingUploads = PendingUploads;
-                Dispose();
-                string pendingSavsCount = (pendingUploads?.Count)?.ToString() ?? "NO_DICTIONARY";
-                Utils.InfoTimestamp($"Disposing of {nameof(PendingUpload)} due to {Response.Message ?? " an unknown reason"}. {nameof(PendingUploads)}: {pendingSavsCount}");
+                lock (ParentHost._PendingUploadsLock)
+                {
+                    var pendingUploads = PendingUploads;
+                    Dispose();
+                    string pendingSavsCount = (pendingUploads?.Count)?.ToString() ?? "NO_DICTIONARY";
+                    Utils.InfoTimestamp($"Disposing of {nameof(PendingUpload)} due to {Response.Message ?? " an unknown reason"}, {nameof(PendingUploads)}: {pendingSavsCount}");
+                }
             }
             return success;
         }
@@ -493,9 +496,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     return;
                 }
 
-                if (!PendingUploads.TryGetValue(bonesID, out var pendingUpload))
-                    Utils.Warn($"{nameof(Timer)} passed {nameof(BonesID)} not found in {nameof(PendingUploads)} ({bonesID ?? "NO_BONES_ID"}).");
-                else
+                PendingUpload pendingUpload = null;
+                lock (ParentHost._PendingUploadsLock)
+                {
+                    if (!PendingUploads.TryGetValue(bonesID, out pendingUpload))
+                    {
+                        Utils.Warn($"{nameof(Timer)} passed {nameof(BonesID)} not found in {nameof(PendingUploads)} ({bonesID ?? "NO_BONES_ID"}).");
+                        return;
+                    }
+                }
+
                 if (!await pendingUpload.TryUploadAsync()
                     && pendingUpload.CheckTimeLimitExceeded(out _, out _, out _))
                     pendingUpload.Dispose();
@@ -510,7 +520,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 return null;
             }
 
-            Utils.InfoTimestamp($"Starting timer to attempts {nameof(PendingUpload)} of {{{BonesID}}} to {ParentHost}. {nameof(PendingUploads)}: {PendingUploads.Count}");
+            lock (ParentHost._PendingUploadsLock)
+                Utils.InfoTimestamp($"Starting timer to attempts {nameof(PendingUpload)} of {{{BonesID}}} to {ParentHost}. {nameof(PendingUploads)}: {PendingUploads.Count}");
 
             return new(GetTimerCallback(),
                 state: BonesID,
@@ -565,7 +576,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                             responseInfo.Message = $"Successfully created new BonesInfo on server at {ToString()}";
 
                             Utils.Info($"{responseInfo.Message} - {httpRes.StatusCode.DisplayString()} - {nameof(parsedToken)}: {parsedToken}");
-                            Utils.Log(jObject);
+                            // Utils.Log(jObject);
                         }
                         else
                         {
@@ -706,7 +717,10 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             using var indent = new Indent();
             Debug.LogTypeMethod(indent[1]);
 
-            ParentHost?.PendingUploads?.Remove(BonesID);
+            if (ParentHost != null)
+                lock (ParentHost._PendingUploadsLock)
+                    ParentHost?.PendingUploads?.Remove(BonesID);
+
             ParentHost = null;
 
             BonesID = null;

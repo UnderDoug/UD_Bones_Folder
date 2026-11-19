@@ -219,7 +219,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         private static int CurrentHostID = 0;
 
-        public static Dictionary<string, Dictionary<string, PendingUpload>> PendingUploadCache = new();
+        public static Dictionary<string, Dictionary<string, PendingUpload>> PendingUploadCache
+        {
+            get
+            {
+                lock (ServerUtils._PendingUploadCacheLock)
+                {
+                    return ServerUtils.PendingUploadCache ??= new();
+                }
+            }
+        }
 
         public static string status => nameof(status);
         public static string canUp => nameof(canUp);
@@ -341,6 +350,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             && !Enabled
             && WrittenEnabled.HasValue
             && WrittenEnabled.GetValueOrDefault()
+            && StatusCheckTimer != null
             ;
 
         [DoVomit]
@@ -381,6 +391,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
+        private readonly object _StatusCheckTimerLock = new();
         private Timer StatusCheckTimer;
         private TimerCallback StatusCheckCallback => delegate (object state)
         {
@@ -426,25 +437,29 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         };
 
-        private List<string> BonesIDCache;
+        private readonly object _BonesIDCacheLock = new();
+        private List<string> BonesIDCache = new();
 
         private Timer BonesIDCacheTimer;
 
-        public string AuthToken;
-
+        private readonly object _ReportsCacheLock = new();
         private IEnumerable<Report> _ReportsCache;
         public IEnumerable<Report> ReportsCache => _ReportsCache ??= GetBonesReports();
 
         private string PendingUploadCacheKey;
 
+        public readonly object _PendingUploadsLock = new();
         public Dictionary<string, PendingUpload> PendingUploads
         {
             get
             {
-                if (!PendingUploadCache.ContainsKey(PendingUploadCacheKey))
-                    PendingUploadCache[PendingUploadCacheKey] = new();
+                lock (ServerUtils._PendingUploadCacheLock)
+                {
+                    if (!PendingUploadCache.ContainsKey(PendingUploadCacheKey))
+                        PendingUploadCache[PendingUploadCacheKey] = new();
 
-                return PendingUploadCache[PendingUploadCacheKey];
+                    return PendingUploadCache[PendingUploadCacheKey];
+                }
             }
         }
 
@@ -573,41 +588,52 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             StatusCheckTimer = null;
         }
 
+        private void ClearStatusCheckTimer(int Indent = 0)
+        {
+            lock (_StatusCheckTimerLock)
+            {
+                ClearStatusCheckTimer(ref StatusCheckTimer, Indent);
+            }
+        }
+
         public void ManuallyClearStatusCheckTimer(string ReasonForOverride = "manually overridden")
         {
-            if (!WrittenEnabled.HasValue)
+            lock (_StatusCheckTimerLock)
             {
-                Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
-                ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
-                return;
-            }
+                if (!WrittenEnabled.HasValue)
+                {
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {GetHostNameWithProtocol()} lacks a {nameof(WrittenEnabled)} value - Clearing timer");
+                    ClearStatusCheckTimer(Indent: 1);
+                    return;
+                }
 
-            if (!Enabled
-                && WrittenEnabled.GetValueOrDefault())
-            {
-                Enabled = true;
-                try
+                if (!Enabled
+                    && WrittenEnabled.GetValueOrDefault())
                 {
-                    if (IsRunning)
+                    Enabled = true;
+                    try
                     {
-                        WrittenEnabled = null;
-                        Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {ReasonForOverride}");
-                        ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
+                        if (IsRunning)
+                        {
+                            WrittenEnabled = null;
+                            Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: {ReasonForOverride}");
+                            ClearStatusCheckTimer(Indent: 1);
+                        }
+                        else
+                            Enabled = false;
                     }
-                    else
+                    catch (Exception x)
+                    {
+                        Utils.ErrorTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
                         Enabled = false;
+                    }
                 }
-                catch (Exception x)
+                else
                 {
-                    Utils.ErrorTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)} Checking Status", x);
-                    Enabled = false;
+                    Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
+                        $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
+                    ClearStatusCheckTimer(Indent: 1);
                 }
-            }
-            else
-            {
-                Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}] {nameof(StatusCheckCallback)}: " +
-                    $"{GetHostNameWithProtocol()} is already enabled, or {nameof(WrittenEnabled)} is false - Clearing timer");
-                ClearStatusCheckTimer(ref StatusCheckTimer, Indent: 1);
             }
         }
 
@@ -641,6 +667,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             }
         }
 
+        private void SetupStatusCheckTimer(int Indent = 0)
+        {
+            lock (_StatusCheckTimerLock)
+            {
+                SetupStatusCheckTimer(ref StatusCheckTimer, this, Indent);
+            }
+        }
+
         private bool HandleTimeoutWebException(WebException X, string URI, int? Timeout)
         {
             if (X.Status == WebExceptionStatus.Timeout)
@@ -650,7 +684,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     inner = $" Inner: {iX}";
                 Utils.InfoTimestamp($"[{nameof(HostID)}: {HostID}{BuiltString}] Timed out getting status from {URI} ({GetTimeoutString(Timeout)}).{inner}");
                 if (IsBuilt)
-                    SetupStatusCheckTimer(ref StatusCheckTimer, this, Indent: 1);
+                    SetupStatusCheckTimer(Indent: 1);
 
                 return true;
             }
@@ -667,28 +701,45 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 period: 300000);
         }
 
+        private void SetUpBonesIDCacheTimer(TimerCallback TimerCallback)
+        {
+            lock (_BonesIDCacheLock)
+            {
+                SetUpBonesIDCacheTimer(ref BonesIDCacheTimer, ref BonesIDCache, TimerCallback);
+            }
+        }
+
         private static void ClearBonesIDCache(ref List<string> BonesIDCache)
         {
             BonesIDCache ??= new();
             BonesIDCache.Clear();
         }
 
+        public void ClearBonesIDCache()
+        {
+            lock (_BonesIDCacheLock)
+                ClearBonesIDCache(ref BonesIDCache);
+        }
+
         private static void ClearBonesIDCacheTimer(ref Timer BonesIDCacheTimer, int Indent = 0)
         {
-            BonesIDCacheTimer?.Dispose();
+            BonesIDCacheTimer.Dispose();
             BonesIDCacheTimer = null;
         }
 
-        public void ClearBonesIDCache()
-            => ClearBonesIDCache(ref BonesIDCache)
-            ;
+        private void ClearBonesIDCacheTimer(int Indent = 0)
+        {
+            lock (_BonesIDCacheLock)
+                ClearBonesIDCacheTimer(ref BonesIDCacheTimer, Indent);
+        }
 
         #endregion
 
         public void ClearReportsCache()
         {
             // OsseousAsh.ClearReportsCache();
-            _ReportsCache = null;
+            lock (_ReportsCacheLock)
+                _ReportsCache = null;
         }
 
         public static void Parse(string HostName, out string Name, out int? Port, out bool Encrypted, out int Version)
@@ -906,14 +957,21 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (Destination.WrittenEnabled.HasValue)
                 Destination.WrittenEnabled = Source.Enabled;
 
-            if (Source.StatusCheckTimer is not null)
+            if (Destination.IsBuilt)
             {
-                Destination.Enabled = Source.WrittenEnabled.GetValueOrDefault();
-                ClearStatusCheckTimer(ref Destination.StatusCheckTimer);
-                SetupStatusCheckTimer(ref Destination.StatusCheckTimer, Destination);
+                lock (Source._StatusCheckTimerLock)
+                {
+                    if (Source.StatusCheckTimer is not null)
+                    {
+                        Destination.Enabled = Source.WrittenEnabled.GetValueOrDefault();
+                        lock (Destination._StatusCheckTimerLock)
+                        {
+                            ClearStatusCheckTimer(ref Destination.StatusCheckTimer);
+                            SetupStatusCheckTimer(ref Destination.StatusCheckTimer, Destination);
+                        }
+                    }
+                }
             }
-
-            Destination.AuthToken = Source.AuthToken;
 
             Destination.SessionWarningIssued = Source.SessionWarningIssued;
 
@@ -980,8 +1038,8 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
         {
             IsBuilt = false;
             ClearStatusCheckTimer(ref StatusCheckTimer);
-            ClearBonesIDCacheTimer(ref BonesIDCacheTimer);
-            ClearBonesIDCache(ref BonesIDCache);
+            ClearBonesIDCacheTimer();
+            ClearBonesIDCache();
         }
 
         public void Build(bool Ping = false)
@@ -992,18 +1050,15 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 _ = IsRunning;
                 ClearReportsCache();
             }
-            ClearBonesIDCache(ref BonesIDCache);
-            SetUpBonesIDCacheTimer(
-                BonesIDCacheTimer: ref BonesIDCacheTimer,
-                BonesIDCache: ref BonesIDCache,
-                TimerCallback: delegate (object state)
+            ClearBonesIDCache();
+            SetUpBonesIDCacheTimer(delegate (object state)
+            {
+                if (state is List<string> bonesIDCache)
                 {
-                    if (state is List<string> bonesIDCache)
-                    {
-                        ClearBonesIDCache(ref bonesIDCache);
-                        BonesIDCache = bonesIDCache;
-                    }
-                });
+                    ClearBonesIDCache(ref bonesIDCache);
+                    BonesIDCache = bonesIDCache;
+                }
+            });
         }
 
         public int? GetTimeout()
@@ -1369,18 +1424,21 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         private void ClearPending(bool SkipFinalAttempt = true)
         {
-            using var pendingBonesIDs = ScopeDisposedList<string>.GetFromPoolFilledWith(PendingUploads.Keys);
-            foreach (var pendingBonesID in pendingBonesIDs)
+            lock (_PendingUploadsLock)
             {
-                if (PendingUploads.TryGetValue(pendingBonesID, out var pendingUpload))
+                using var pendingBonesIDs = ScopeDisposedList<string>.GetFromPoolFilledWith(PendingUploads.Keys);
+                foreach (var pendingBonesID in pendingBonesIDs)
                 {
-                    if (SkipFinalAttempt)
-                        pendingUpload.ForceDispose = true;
+                    if (PendingUploads.TryGetValue(pendingBonesID, out var pendingUpload))
+                    {
+                        if (SkipFinalAttempt)
+                            pendingUpload.ForceDispose = true;
 
-                    pendingUpload.Dispose();
+                        pendingUpload.Dispose();
+                    }
+
+                    PendingUploads.Remove(pendingBonesID);
                 }
-
-                PendingUploads.Remove(pendingBonesID);
             }
         }
 
@@ -1760,13 +1818,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         #endregion
         #region User
-
-        public string ConsumeAuthToken()
-        {
-            var authToken = AuthToken;
-            AuthToken = null;
-            return authToken;
-        }
 
         public async Task<string> AskWhatPasswordAsync(
             string Purpose,
@@ -2743,7 +2794,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             => Name.GetHashCode()
             ^ (Port?.GetHashCode() ?? 0)
             ^ Encrypted.GetHashCode()
-            ^ (AuthToken?.GetHashCode() ?? 0)
             ^ Enabled.GetHashCode()
             ;
 
@@ -2759,9 +2809,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             => Task.Run(delegate ()
             {
                 if (Host.WrittenEnabled.HasValue)
-                    return (Host.WrittenEnabled = !Host.WrittenEnabled.GetValueOrDefault()).GetValueOrDefault()
-                        || true; // always true, but flip it first.
+                {
+                    if (Host.WrittenEnabled.GetValueOrDefault())
+                        Host.WrittenEnabled = null;
+                    else
+                        Host.WrittenEnabled = !Host.WrittenEnabled.GetValueOrDefault();
 
+                    return true;
+                }
                 return (Host.Enabled = !Host.Enabled) || true; // always true, but flip it first.
             })
             ;
@@ -3580,14 +3635,16 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     FinalSelectedCallback: async delegate (PickOptionData<Host, Task<UIUtils.CascadableResult>> o, Task<UIUtils.CascadableResult> r)
                     {
                         var result = (await r?.AwaitResultIfNotIsCompletedSuccessfully());
-                        if (result is not UIUtils.CascadableResult.Continue
-                            && !(await AskSureLoseUnsavedAsync(host, oldHost)))
-                            r = Task.Run(() => UIUtils.CascadableResult.Continue);
-                        else
-                        if (result is not UIUtils.CascadableResult.Continue
-                            && o?.Element == null)
-                            oldHost.CopyTo(ref host, SetBuiltTo: true, ThenDispose: true);
-
+                        if (result is not UIUtils.CascadableResult.BackSilent)
+                        {
+                            if (result is not UIUtils.CascadableResult.Continue
+                                && !(await AskSureLoseUnsavedAsync(host, oldHost)))
+                                r = Task.Run(() => UIUtils.CascadableResult.Continue);
+                            else
+                            if (result is not UIUtils.CascadableResult.Continue
+                                && o?.Element == null)
+                                oldHost.CopyTo(ref host, SetBuiltTo: true, ThenDispose: true);
+                        }
                         return await UIUtils.ShowEscancellepedAsync(o, r);
                     });
             }
@@ -3803,7 +3860,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         private static async Task<bool> AskSureLoseUnsavedAsync(Host Host, Host OldHost)
             => Host is null // Utils.LogReturn($"Host is null", Host is null)
-            || Host.SameAs(OldHost) // Utils.LogReturn($"Host.SameAs(OldHost)", Host.SameAs(OldHost))
+            || Host.SameAs(OldHost/*, IgnoreDisabled: true*/) // Utils.LogReturn($"Host.SameAs(OldHost)", Host.SameAs(OldHost))
             || (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes
             //|| Utils.LogReturn($"Are you sure? DialogResult.Yes", (await Popup.ShowYesNoCancelAsync("Your unsaved changes will be lost.\n\nAre you sure?")) == DialogResult.Yes)
             ;
@@ -3816,14 +3873,14 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                 await ShowCancelledModifyHost();
                 return UIUtils.CascadableResult.Continue;
             }
-            var sB = Event.NewStringBuilder($"You've made the following changes to host {OldHost.GetHostNameWithProtocol()}:");
-            sB.AppendLine();
+            using var tB = TextBuilder.Get($"You've made the following changes to host {OldHost.GetHostNameWithProtocol()}:");
+            tB.AppendLine();
 
             bool any = false;
             if (OldHost.Name != ModifiedHost.Name)
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Name),
                     Value: $"\"{OldHost.Name}\" \u001a \"{ModifiedHost.Name}\"");
             }
@@ -3831,7 +3888,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (OldHost.Port != ModifiedHost.Port)
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Port),
                     Value: $"\"{(OldHost.Port)?.ToString() ?? ""}\" \u001a \"{(ModifiedHost.Port)?.ToString() ?? ""}\"");
             }
@@ -3839,7 +3896,7 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (OldHost.Encrypted != ModifiedHost.Encrypted)
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Encrypted),
                     Value: $"{OldHost.Encrypted.GetCheckbox()} \u001a {ModifiedHost.Encrypted.GetCheckbox()}");
             }
@@ -3847,15 +3904,15 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (OldHost.TimeoutMS != ModifiedHost.TimeoutMS)
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.TimeoutMS),
-                    Value: $"\"{OldHost.GetTimeoutString()}\" \u001a \"{ModifiedHost.GetTimeoutString()}\"");
+                    Value: $"\"{OldHost.GetTimeoutString()}\" \u001a \"{ModifiedHost.GetEnabledValueForMenu()}\"");
             }
 
             if (OldHost.Version != ModifiedHost.Version)
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Version),
                     Value: $"\"{OldHost.Version}\" \u001a \"{ModifiedHost.Version}\"");
             }
@@ -3871,23 +3928,23 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             if (OldHost.GetEnabledValueForMenu() != ModifiedHost.GetEnabledValueForMenu())
             {
                 any = true;
-                sB.AppendLine().AppendPair(
+                tB.AppendLine().AppendPair(
                     Key: nameof(ModifiedHost.Enabled),
                     Value: $"{OldHost.GetEnabledCheckbox()} \u001a {ModifiedHost.GetEnabledCheckbox()}");
             }
 
             if (!any)
-                sB.AppendLine().Append("No changes, this is an errored state to be in.");
+                tB.AppendLine().Append("No changes, this is an errored state to be in.");
 
-            sB.AppendLine();
-            sB.AppendLine().Append("New host:");
-            sB.AppendLine().Append(ModifiedHost.GetHostNameWithProtocol())
+            tB.AppendLine();
+            tB.AppendLine().Append("New host:");
+            tB.AppendLine().Append(ModifiedHost.GetHostNameWithProtocol())
                 .AppendLine()
                 .AppendLine().AppendPair("Server Status", ModifiedHost.ServerStatusString)
                 .AppendLine()
                 .AppendLine().Append("Is this correct?");
 
-            var confirmResult = await Popup.ShowYesNoCancelAsync(Event.FinalizeString(sB));
+            var confirmResult = await Popup.ShowYesNoCancelAsync(tB.ToString());
 
             switch (confirmResult)
             {
@@ -3914,25 +3971,36 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             Name = null;
             Port = null;
             Encrypted = false;
-            AuthToken = null;
             Version = 0;
             Enabled = false;
             JwtToken = null;
             WrittenEnabled = false;
-            ClearStatusCheckTimer(ref StatusCheckTimer);
-            ClearBonesIDCacheTimer(ref BonesIDCacheTimer);
-            BonesIDCache?.Clear();
-            BonesIDCache = null;
+            ClearStatusCheckTimer();
+            ClearBonesIDCacheTimer();
+            lock (_BonesIDCacheLock)
+            {
+                BonesIDCache.Clear();
+                BonesIDCache = null;
+            }
             if (DisposePending)
             {
-                foreach (var pendingUpload in (PendingUploads?.Values).IteratorSafe())
-                    pendingUpload.Dispose();
+                if (PendingUploadCache != null)
+                {
+                    lock (PendingUploadCache)
+                    {
+                        lock (_PendingUploadsLock)
+                        {
+                            foreach (var pendingUpload in (PendingUploads?.Values).IteratorSafe())
+                                pendingUpload.Dispose();
+                        }
 
-                if (PendingUploadCache.ContainsKey(PendingUploadCacheKey))
-                    PendingUploadCache.Remove(PendingUploadCacheKey);
+                        if (PendingUploadCache.ContainsKey(PendingUploadCacheKey))
+                            PendingUploadCache.Remove(PendingUploadCacheKey);
+                    }
+                }
             }
             PendingUploadCacheKey = null;
-            AuthToken = null;
+            ClearReportsCache();
             SessionWarningIssued = false;
             User?.Dispose();
             User = null;
@@ -4545,46 +4613,60 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             var responseInfo = new ResponseInfo
             {
                 Host = this,
-                StatusCode = HttpStatusCode.InternalServerError,
                 Success = false,
-                Message = "Host is not running",
+                Message = "Unknown Response",
             };
 
             if (!IsRunning)
             {
                 Debug.Log($"{nameof(Host)} not running", Indent: indent[2]);
+                responseInfo.StatusCode = HttpStatusCode.ServiceUnavailable;
+                responseInfo.Message = "Host is not running";
                 ResponseCallback?.Invoke(responseInfo);
                 return false;
             }
 
+            await ServerUtils.WebContext;
             string bonesID = BonesJSON.BonesID;
-            if (PendingUploads.TryGetValue(bonesID, out var pendingUpload))
+            PendingUpload pendingUpload = null;
+            lock (_PendingUploadsLock)
             {
-                if (pendingUpload.BonesRecord.SaveBonesJSON.SaveTimeValue >= BonesJSON.SaveTimeValue)
+                if (PendingUploads.TryGetValue(bonesID, out pendingUpload))
                 {
-                    Debug.CheckYeh($"{nameof(PendingUploads)} contains newer {{{bonesID}}}, returning true without new {nameof(PendingUpload)}", Indent: indent[2]);
-                    responseInfo.StatusCode = HttpStatusCode.NotModified;
-                    responseInfo.Message = "Host already has newer bones with this ID";
-                    ResponseCallback?.Invoke(responseInfo);
-                    return true;
+                    if (pendingUpload.BonesRecord.SaveBonesJSON.SaveTimeValue >= BonesJSON.SaveTimeValue)
+                    {
+                        Debug.CheckYeh($"{nameof(PendingUploads)} contains newer {{{bonesID}}}, returning true without new {nameof(PendingUpload)}", Indent: indent[2]);
+                        responseInfo.StatusCode = HttpStatusCode.NotModified;
+                        responseInfo.Message = "Host already has newer bones with this ID";
+                        ResponseCallback?.Invoke(responseInfo);
+                        return true;
+                    }
+
+                    Debug.YehNah($"{nameof(PendingUploads)} contains older {{{bonesID}}}, disposing old", Indent: indent[2]);
+                    pendingUpload.ForceDispose = true;
+                    pendingUpload.Dispose();
                 }
 
-                Debug.YehNah($"{nameof(PendingUploads)} contains older {{{bonesID}}}, disposing old", Indent: indent[2]);
-                pendingUpload.ForceDispose = true;
-                pendingUpload.Dispose();
+                PendingUploads[bonesID] = new PendingUpload
+                {
+                    ParentHost = this,
+                    BonesID = bonesID,
+                    BonesRecord = BonesJSON.GetBonesRecord(),
+                    BonesSavGz = BonesSavGz.Clone(),
+                };
+                Debug.YehNah($"{nameof(PendingUploads)} assigned new {nameof(PendingUpload)} for {{{bonesID}}}", Indent: indent[2]);
+                pendingUpload = PendingUploads[bonesID];
             }
 
-            PendingUploads[bonesID] = new PendingUpload
+            if (pendingUpload == null)
             {
-                ParentHost = this,
-                BonesID = bonesID,
-                BonesRecord = BonesJSON.GetBonesRecord(),
-                BonesSavGz = BonesSavGz.Clone(),
-            };
-            Debug.YehNah($"{nameof(PendingUploads)} assigned new {nameof(PendingUpload)} for {{{bonesID}}}", Indent: indent[2]);
+                responseInfo.Message = $"Host failed to produce new {nameof(PendingUpload)}";
+                ResponseCallback?.Invoke(responseInfo);
+                return false;
+            }
 
             //responseInfo = PendingUploads[bonesID].Attempt(Silent: true);
-            var result = await PendingUploads[bonesID].TryUploadAsync(Silent: true, ResponseCallback: ri => responseInfo = ri);
+            var result = await pendingUpload.TryUploadAsync(Silent: true, ResponseCallback: ri => responseInfo = ri);
             ResponseCallback?.Invoke(responseInfo);
             Debug.YehNah($"Response after TryUploadAsync: {responseInfo.Message ?? "NO_RESPONSE"}", Good: responseInfo.Success, Indent: indent[2]);
             return true;
@@ -4595,22 +4677,58 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
             ResponseInfo responseInfo = default;
             var saved = await SaveBonesAsync(BonesJSON, BonesSavGz, ri => responseInfo = ri);
             var result = ActionResult.NewFailed();
-            if (PendingUploads.TryGetValue(BonesJSON.ID, out var pendingUpload))
+            lock (_PendingUploadsLock)
             {
-                if (!pendingUpload.ForceDispose
-                    && !pendingUpload.Success)
-                    return result.SetPending()
-                        .SetMessage($"Bones upload pending, {responseInfo.Message}");
+                if (PendingUploads.TryGetValue(BonesJSON.ID, out var pendingUpload))
+                {
+                    if (!pendingUpload.ForceDispose
+                        && !pendingUpload.Success)
+                        return result.SetPending()
+                            .SetMessage($"Bones upload pending, {responseInfo.Message}");
 
-                saved = false;
+                    saved = false;
+                }
             }
-
             if (saved)
                 return result.SetSuccess()
                     .SetMessage("Bones uploaded");
 
             return result
                 .SetMessage($"Bones upload failed - {responseInfo.StatusCode.DisplayString()} - {responseInfo.Message}");
+            
+            /*
+            // var originalContext = The.CurrentContext;
+            await ServerUtils.WebContext;
+            lock (ServerUtils.WebActions)
+            {
+                ServerUtils.WebActions.Enqueue(new PendingWebAction<ActionResult>
+                {
+                    CompletionSource = new TaskCompletionSource<ActionResult>(),
+                    Task = Task.Run(async () =>
+                    {
+                        ResponseInfo responseInfo = default;
+                        var saved = await SaveBonesAsync(BonesJSON, BonesSavGz, ri => responseInfo = ri);
+                        var result = ActionResult.NewFailed();
+                        if (PendingUploads.TryGetValue(BonesJSON.ID, out var pendingUpload))
+                        {
+                            if (!pendingUpload.ForceDispose
+                                && !pendingUpload.Success)
+                                return result.SetPending()
+                                    .SetMessage($"Bones upload pending, {responseInfo.Message}");
+
+                            saved = false;
+                        }
+
+                        if (saved)
+                            return result.SetSuccess()
+                                .SetMessage("Bones uploaded");
+
+                        return result
+                            .SetMessage($"Bones upload failed - {responseInfo.StatusCode.DisplayString()} - {responseInfo.Message}");
+                    })
+                });
+            }
+            return ActionResult.NewPending($"Bones added to upload queue for {DisplayName}");*/
         }
 
         public override async Task<ActionResult> BlockBonesAsync(string BonesID)
@@ -5014,24 +5132,34 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
 
         public override async Task<IEnumerable<string>> ListBonesIDsAsync()
         {
-            BonesIDCache ??= new();
-            if (BonesIDCache.IsNullOrEmpty())
+            lock (_BonesIDCacheLock)
             {
-                try
-                {
-                    BonesIDCache.AddRange(await GetBonesIDsAsync());
-                }
-                catch (Exception x)
-                {
-                    Utils.Warn($"{nameof(ListBonesIDs)} failed to {nameof(GetBonesIDsAsync)}", x);
-                    return Enumerable.Empty<string>();
-                }
+                BonesIDCache ??= new();
+                if (!BonesIDCache.IsNullOrEmpty())
+                    return BonesIDCache;
             }
-            return BonesIDCache;
+
+            IEnumerable<string> bonesIDs = null;
+            try
+            {
+                bonesIDs = await GetBonesIDsAsync();
+            }
+            catch (Exception x)
+            {
+                Utils.Warn($"{nameof(ListBonesIDs)} failed to {nameof(GetBonesIDsAsync)}", x);
+            }
+
+            lock (_BonesIDCacheLock)
+            {
+                ClearBonesIDCache();
+                BonesIDCache.AddRange(bonesIDs.IteratorSafe());
+                return BonesIDCache;
+            }
         }
 
         private async Task<IEnumerable<SaveBonesJSON>> GetSaveBonesJSONsAsync()
         {
+            string thisMethod = nameof(GetSaveBonesJSONsAsync);
             using var indent = new Indent();
             Debug.LogTypeMethod(
                 Indent: indent[1],
@@ -5040,7 +5168,6 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     Debug.Arg(nameof(BonesIDCache), BonesIDCache.GetNullString()),
                 });
 
-            ClearBonesIDCache(ref BonesIDCache);
             var bonesJSONs = await GetEnumerableFromRouteAsync<SaveBonesJSON>(
                 Route: Routes.BonesInfos,
                 Parameters: new RouteParam[1]
@@ -5048,10 +5175,43 @@ namespace UD_Bones_Folder.Mod.OsseousAsh
                     new(nameof(UserID), UserID),
                 });
 
-            BonesIDCache.AddRange(bonesJSONs.Select(b => b.ID).Distinct());
-            Debug.Arg(nameof(BonesIDCache), BonesIDCache.GetNullString()).Log(Indent: indent[2]);
-            // Debug.LogJson(bonesJSONs, Indent: indent[2]);
-            return bonesJSONs;
+            Debug.LogJson(nameof(bonesJSONs), bonesJSONs, Indent: indent[2]);
+
+            IEnumerable<string> distinctIDs = null;
+            try
+            {
+                static string getID(SaveBonesJSON BonesJSON)
+                    => BonesJSON.ID
+                    ;
+
+                distinctIDs = bonesJSONs.Select(getID).Distinct();
+            }
+            catch (Exception x)
+            {
+                Debug.CheckNah($"{thisMethod} encountered {x.TypeStringWithGenerics()} trying to Select(b => b.ID).Distinct()", Indent: indent[1]);
+                return bonesJSONs;
+            }
+            if (distinctIDs == null)
+            {
+                Debug.CheckNah($"{thisMethod} got null {nameof(distinctIDs)} after Select(b => b.ID).Distinct()", Indent: indent[1]);
+            }
+            lock (_BonesIDCacheLock)
+            {
+                ClearBonesIDCache();
+                try
+                {
+                    BonesIDCache.AddRange(distinctIDs);
+                }
+                catch (Exception x)
+                {
+                    BonesIDCache = new();
+                    BonesIDCache.AddRange(distinctIDs);
+                    Debug.YehNah($"{thisMethod} encountered {x.TypeStringWithGenerics()} trying to {nameof(BonesIDCache)}.{nameof(BonesIDCache.AddRange)}", Indent: indent[1]);
+                }
+                Debug.Arg(nameof(BonesIDCache), BonesIDCache.GetNullString()).Log(Indent: indent[2]);
+                // Debug.LogJson(bonesJSONs, Indent: indent[2]);
+                return bonesJSONs;
+            }
         }
 
         public async Task<IEnumerable<SaveBonesInfo>> GetSaveBonesInfosAsync()

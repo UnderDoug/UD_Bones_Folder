@@ -47,18 +47,6 @@ namespace UD_Bones_Folder.Mod.BonesSystem
                 .WaitResult()
             ;
 
-        public abstract Task<BonesSpec> LoadSpecAsync(string BonesID);
-        public virtual BonesSpec LoadSpec(string BonesID)
-            => LoadSpecAsync(BonesID)
-                .WaitResult()
-            ;
-
-        public abstract Task<ModRecordSet> LoadModConfigAsync(string BonesID);
-        public virtual ModRecordSet LoadModConfig(string BonesID)
-            => LoadModConfigAsync(BonesID)
-                .WaitResult()
-            ;
-
         public abstract Task<BonesStats> LoadStatsAsync(string BonesID);
         public virtual BonesStats LoadStats(string BonesID)
             => LoadStatsAsync(BonesID)
@@ -68,6 +56,18 @@ namespace UD_Bones_Folder.Mod.BonesSystem
         public abstract Task<BonesSavGz> LoadSavGzAsync(string BonesID);
         public virtual BonesSavGz LoadSavGz(string BonesID)
             => LoadSavGzAsync(BonesID)
+                .WaitResult()
+            ;
+
+        public abstract Task<BonesSpec> LoadSpecAsync(string BonesID);
+        public virtual BonesSpec LoadSpec(string BonesID)
+            => LoadSpecAsync(BonesID)
+                .WaitResult()
+            ;
+
+        public abstract Task<ModRecordSet> LoadModConfigAsync(string BonesID);
+        public virtual ModRecordSet LoadModConfig(string BonesID)
+            => LoadModConfigAsync(BonesID)
                 .WaitResult()
             ;
 
